@@ -64,6 +64,17 @@ a.l{color:#7db3ff}
     <button type="button" style="width:100%;margin-top:8px" id="pruefen">Verbindung prüfen</button>
     <div class="klein">Fiktives Polizeidashboard für den GTA-RP-Server IdentityValley. Kein Angebot einer echten Polizeibehörde.</div>
   </form>
+  <form class="karte hide" id="wechselForm" autocomplete="off">
+    <h1>Startpasswort ändern</h1>
+    <p class="hinweis">Bevor du das Verwaltungsportal nutzen kannst, musst du dein Startpasswort ändern.</p>
+    <label for="neuPw">Neues Passwort (mindestens 8 Zeichen)</label>
+    <input id="neuPw" type="password" autocomplete="new-password" minlength="8" required>
+    <label for="neuPw2">Neues Passwort bestätigen</label>
+    <input id="neuPw2" type="password" autocomplete="new-password" minlength="8" required>
+    <div class="fehler" id="wechselFehler" role="alert"></div>
+    <button type="submit" class="p" style="width:100%;margin-top:12px">Passwort speichern</button>
+    <button type="button" style="width:100%;margin-top:8px" id="wechselAbbrechen">Abbrechen</button>
+  </form>
 </div>
 
 <div id="app" class="hide">
@@ -101,39 +112,64 @@ async function api(pfad, optionen) {
 }
 
 /* ---------- Anmeldung ---------- */
-
+let startpasswort = null;
 $('#loginForm').addEventListener('submit', async e => {
   e.preventDefault();
   $('#fehler').textContent = '';
-  const passwort = $('#pw').value;
   try {
     const a = await api('/login', {
       method: 'POST',
-      body: JSON.stringify({ dienstnummer: $('#dnr').value, passwort })
+      body: JSON.stringify({ dienstnummer: $('#dnr').value, passwort: $('#pw').value })
     });
-    /* Erst die Oberfläche aufbauen, dann den Passwortwechsel anbieten.
-       Vorher gibt es das Element für das Fenster noch nicht. */
-    const offen = !!a.mussPasswortAendern;
+    if (a.mussPasswortAendern) {
+      startpasswort = $('#pw').value;
+      $('#pw').value = '';
+      $('#loginForm').classList.add('hide');
+      $('#wechselForm').classList.remove('hide');
+      $('#neuPw').focus();
+      return;
+    }
+    $('#pw').value = '';
     await starten();
-    if (offen) await passwortWechseln(passwort);
   } catch (err) { $('#fehler').textContent = err.message; }
+});
+
+$('#wechselForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('#wechselFehler').textContent = '';
+  const neu = $('#neuPw').value;
+  if (neu !== $('#neuPw2').value) {
+    $('#wechselFehler').textContent = 'Die Passwörter stimmen nicht überein.';
+    return;
+  }
+  try {
+    await api('/passwort', {
+      method: 'POST',
+      body: JSON.stringify({ alt: startpasswort, neu })
+    });
+    startpasswort = null;
+    $('#neuPw').value = '';
+    $('#neuPw2').value = '';
+    $('#wechselForm').classList.add('hide');
+    $('#loginForm').classList.remove('hide');
+    await starten();
+  } catch (err) { $('#wechselFehler').textContent = err.message; }
+});
+
+$('#wechselAbbrechen').addEventListener('click', async () => {
+  startpasswort = null;
+  await api('/logout', { method: 'POST' }).catch(() => {});
+  $('#wechselForm').classList.add('hide');
+  $('#loginForm').classList.remove('hide');
+  $('#pw').value = '';
+  $('#neuPw').value = '';
+  $('#neuPw2').value = '';
 });
 
 $('#abmelden').addEventListener('click', async () => {
   await api('/logout', { method: 'POST' });
   location.reload();
 });
-
-async function passwortWechseln(alt) {
-  const neu = prompt('Dein Startpasswort muss geändert werden.\nNeues Passwort (mindestens 8 Zeichen):');
-  if (!neu) return;
-  try {
-    await api('/passwort', { method: 'POST', body: JSON.stringify({ alt, neu }) });
-    alert('Passwort gespeichert.');
-  } catch (err) {
-    alert('Passwort konnte nicht geändert werden: ' + err.message);
-  }
-}
 
 /* Prüf-Knopf: fragt den Server, ob er antwortet. Zeigt das Ergebnis im Formular. */
 $('#pruefen').addEventListener('click', async () => {
@@ -213,17 +249,13 @@ function tabelle(kopf, zeilen) {
 /* ---------- Bereiche ---------- */
 
 function vDash() {
-  const p = D.personal;
-  const offen = D.kuendigungen.filter(function (k) {
-    return ['waffe','copnet','emd','ic','discord','dienstgegenstaende'].some(function (f) { return /offen/i.test(k[f] || ''); });
-  }).length;
-  const diszFaelle = D.disziplin.filter(function (d) { return (d.massnahmen || []).length; }).length;
-
+  /* Aggregierte Kennzahlen kommen vom Server, auch ohne Recht auf Personalakten. */
+  const summary = D.dashboard.summary || {};
   const kpi = [
-    ['Personal', p.length],
-    ['Kündigungen', D.kuendigungen.length],
-    ['offene Rückgaben', offen],
-    ['Disziplinarfälle', diszFaelle]
+    ['Personal', summary.personal ?? 0],
+    ['Kündigungen', summary.kuendigungen ?? 0],
+    ['offene Rückgaben', summary.offeneRueckgaben ?? 0],
+    ['Disziplinarfälle', summary.disziplinFaelle ?? 0]
   ];
   const kacheln = '<div class="kacheln">' + kpi.map(function (k) {
     return '<div class="kachel"><b>' + k[1] + '</b><span>' + k[0] + '</span></div>';
