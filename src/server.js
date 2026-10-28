@@ -1,5 +1,6 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
+import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -358,6 +359,68 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
       [req.user.id, `Personal ${b.personalnummer} angelegt`]);
     res.json(rows[0]);
   } catch (e) { next(e); }
+});
+
+/* Geschützter CopNet-Zugang: AES-256-GCM, eigener Schlüssel aus Render-
+   Umgebungsvariablen, keine Passwörter in Bootstrap oder allgemeinen Logs. */
+function copnetSchluessel() {
+  const raw = process.env.COPNET_ENCRYPTION_KEY || '';
+  if (!/^[a-f0-9]{64}$/i.test(raw)) {
+    throw Object.assign(new Error('Verschlüsselungsschlüssel nicht konfiguriert'), { httpStatus: 503 });
+  }
+  return Buffer.from(raw, 'hex');
+}
+function copnetVerschluesseln(plain) {
+  if (!plain) return '';
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', copnetSchluessel(), iv);
+  const ct = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
+  return [iv.toString('base64'),cipher.getAuthTag().toString('base64'),ct.toString('base64')].join('.');
+}
+function copnetEntschluesseln(verschluesselt) {
+  if (!verschluesselt) return '';
+  const [iv,tag,ct] = String(verschluesselt).split('.');
+  if (!iv || !tag || !ct) throw new Error('Ungültiges Verschlüsselungsformat');
+  const decipher = createDecipheriv('aes-256-gcm', copnetSchluessel(), Buffer.from(iv,'base64'));
+  decipher.setAuthTag(Buffer.from(tag,'base64'));
+  return Buffer.concat([decipher.update(Buffer.from(ct,'base64')),decipher.final()]).toString('utf8');
+}
+async function requireSensitivePersonnel(req,res,next) {
+  try {
+    const row = (await db.query('SELECT sensibel FROM roles WHERE name=$1',[req.user.rolle])).rows[0];
+    if (!row?.sensibel) return res.status(403).json({error:'Zugriff auf Zugangsdaten nicht erlaubt'});
+    next();
+  } catch(err) { next(err); }
+}
+app.get('/api/copnet/:nr',requireLogin,requireRight('pers',1),requireSensitivePersonnel,async(req,res,next)=>{
+  try{
+    const nr=Number(req.params.nr);
+    if(!Number.isSafeInteger(nr)||nr<1)return res.status(400).json({error:'Ungültige Personalnummer'});
+    const found=(await db.query('SELECT personalnummer FROM personal WHERE personalnummer=$1',[nr])).rows;
+    if(!found.length)return res.status(404).json({error:'Person nicht gefunden'});
+    const row=(await db.query('SELECT dienstnummer,passwort_verschluesselt FROM copnet_zugaenge WHERE personalnummer=$1',[nr])).rows[0];
+    res.json({dienstnummer:row?.dienstnummer||'',passwort:copnetEntschluesseln(row?.passwort_verschluesselt||'')});
+  }catch(e){next(e)}
+});
+app.put('/api/copnet/:nr',requireLogin,requireRight('pers',2),requireSensitivePersonnel,async(req,res,next)=>{
+  try{
+    const nr=Number(req.params.nr);
+    if(!Number.isSafeInteger(nr)||nr<1)return res.status(400).json({error:'Ungültige Personalnummer'});
+    const dn=String(req.body.dienstnummer||'').trim();
+    const pw=String(req.body.passwort||'');
+    if(dn.length>120||pw.length>500)return res.status(400).json({error:'Zugangsdaten zu lang'});
+    const verschluesselt=copnetVerschluesseln(pw);
+    const {rows}=await db.query(
+      `INSERT INTO copnet_zugaenge (personalnummer,dienstnummer,passwort_verschluesselt)
+         SELECT personalnummer,$2,$3 FROM personal WHERE personalnummer=$1
+         ON CONFLICT (personalnummer) DO UPDATE SET dienstnummer=EXCLUDED.dienstnummer,
+           passwort_verschluesselt=EXCLUDED.passwort_verschluesselt,aktualisiert=now()
+         RETURNING personalnummer`,[nr,dn,verschluesselt]);
+    if(!rows.length)return res.status(404).json({error:'Person nicht gefunden'});
+    await db.query("INSERT INTO log (user_id,aktion,art) VALUES ($1,$2,'edit')",
+      [req.user.id,'CopNet-Zugang bei Personalnummer '+nr+' aktualisiert']);
+    res.json({ok:true});
+  }catch(e){next(e)}
 });
 
 /* Sonderfunktionen zuweisen und entziehen */

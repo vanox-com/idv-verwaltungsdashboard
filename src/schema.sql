@@ -138,6 +138,14 @@ FROM (VALUES
 WHERE EXISTS (SELECT 1 FROM einmalig)
   AND p.personalnummer = v.nr;
   
+/* Zugangsdaten getrennt von Personalakten und allgemeinem Dashboard speichern. */
+CREATE TABLE IF NOT EXISTS copnet_zugaenge (
+  personalnummer integer PRIMARY KEY REFERENCES personal(personalnummer) ON DELETE CASCADE,
+  dienstnummer text NOT NULL DEFAULT '',
+  passwort_verschluesselt text NOT NULL DEFAULT '',
+  aktualisiert timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS raenge (
   name       text PRIMARY KEY,
   abk        text,
