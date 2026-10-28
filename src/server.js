@@ -370,6 +370,20 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
     }
     daten.dashboard.gruppen = [...gruppen].map(([name,anzahl])=>({name,anzahl}))
       .sort((a,b)=>b.anzahl-a.anzahl||a.name.localeCompare(b.name,'de'));
+    // Beschäftigungsarten und Mitarbeitergruppen getrennt auswerten.
+    const dienstgruppen=['Mittlerer Dienst','Gehobener Dienst','Polizeirat','Leitungsdienst','Nicht zugeordnet'];
+    const arten=['Hauptberuf','Nebenberuf'];
+    const matrix=dienstgruppen.map(gruppe=>({gruppe,hauptberuf:0,nebenberuf:0,gesamt:0}));
+    const nachGruppe=new Map(matrix.map(z=>[z.gruppe,z]));
+    const summen={hauptberuf:0,nebenberuf:0,gesamt:0};
+    for(const p of personal.rows){
+      const art=p.beschaeftigungsart==='Nebenberuf'?'nebenberuf':'hauptberuf';
+      const gruppe=nachGruppe.has(p.gruppe)?p.gruppe:'Nicht zugeordnet';
+      const zeile=nachGruppe.get(gruppe);
+      zeile[art]++; zeile.gesamt++;
+      summen[art]++; summen.gesamt++;
+    }
+    daten.dashboard.beschaeftigung={summen,gruppen:matrix};
     daten.dashboard.inaktiv = berechtigt('pers') ? personal.rows
       .filter(p=>['Abgemeldet','Suspendiert','Inaktiv'].includes(p.status))
       .map(p=>({nummer:p.personalnummer,name:personenName(p),status:p.status,dienstgrad:p.dienstgrad||''}))
