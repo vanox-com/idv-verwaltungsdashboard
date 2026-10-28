@@ -1107,8 +1107,27 @@ document.addEventListener('click',event=>{
 const DIS_TITEL=['Mündliche Verwarnung','1. Abmahnung','2. Abmahnung','3. Abmahnung','Sonstige Maßnahme 1','Sonstige Maßnahme 2'];
 function disAkte(nr){
   const e=(D.disziplin||[]).find(x=>Number(x.nr)===nr)||{};
-  return {slots:Array.from({length:6},(_,i)=>Array.isArray(e.slots)?e.slots[i]||null:null),
-    bemerkung:e.bemerkung||''};
+  // Bisherige Importwerte kommen aus einer älteren Tabelle (3 Felder pro
+  // Maßnahme). Nur anzeigen, nicht beim Start überschreiben.
+  const alt={};
+  if(Array.isArray(e.massnahmen))e.massnahmen.forEach(x=>{
+    if(Number.isInteger(x.spalte) && x.spalte>=0 && x.spalte<18)alt[x.spalte]=String(x.wert||'');
+  });
+  const datum=v=>{
+    if(!v)return '';
+    if(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v))return v;
+    if(/^[0-9]{4,6}$/.test(v)){
+      const n=Number(v);
+      if(n>=30000 && n<=65000)return new Date(Date.UTC(1899,11,30)+n*86400000).toISOString().slice(0,10);
+    }
+    return '';
+  };
+  const legacy=Array.from({length:6},(_,i)=>{
+    const check=alt[i*3],t=alt[i*3+1]||'',d=datum(alt[i*3+2]||'');
+    return check!=null||t||d?{done:check==='true',t,u:'',d}:null;
+  });
+  return {slots:Array.isArray(e.slots)&&e.slots.length===6
+    ?e.slots.map(x=>x||null):legacy,bemerkung:e.bemerkung||''};
 }
 function vDis(){
   const personen=D.personal||[], schreiben=can('dis',2);
