@@ -299,7 +299,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
 
     if (!berechtigt('pers')) {
       /* Funktions- und Disziplinansichten benötigen Namen, aber keine Personalakte. */
-      daten.personal = (berechtigt('sonder') || berechtigt('dis') || berechtigt('bef'))
+      daten.personal = (berechtigt('sonder') || berechtigt('dis') || berechtigt('bef') || berechtigt('rout'))
         ? daten.personal.map(p => ({
             personalnummer: p.personalnummer, vorname: p.vorname, nachname: p.nachname,
             ...(berechtigt('dis') ? { dienstgrad: p.dienstgrad } : {}),
