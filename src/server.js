@@ -913,10 +913,9 @@ async function anlaesseDaten(kind){
     const date=raw instanceof Date ? raw.toISOString().slice(0,10) : String(raw).slice(0,10);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date))continue;
     const year=Number(date.slice(0,4)),month=Number(date.slice(5,7)),dom=Number(date.slice(8,10));
-    let age=y-year;
-    if(today.getUTCMonth()+1<month||(today.getUTCMonth()+1===month&&today.getUTCDate()<dom))age--;
     let next=new Date(Date.UTC(y,month-1,dom));
     if(next.getTime()<today.getTime())next=new Date(Date.UTC(y+1,month-1,dom));
+    const age=next.getUTCFullYear()-year;
     const rest=Math.round((next.getTime()-today.getTime())/day);
     if(rest<0||rest>60||(kind==='jub'&&age<1))continue;
     result.push({
