@@ -68,6 +68,65 @@ CREATE TABLE IF NOT EXISTS personal (
   rsa               text
 );
 
+/* POR-Freigaben und Fristbeginn aus der ursprünglichen HTML. 
+   Ergänzung ist wiederholbar und überschreibt keine späteren Änderungen. */
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS letzte_befoerderung date;
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS por_status text NOT NULL DEFAULT 'offen';
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS por_notiz text NOT NULL DEFAULT '';
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS por_am date;
+
+/* Einmaliger Übertrag der ursprünglichen Daten für bestehende Dienstnummern. */
+UPDATE personal AS p SET letzte_befoerderung = datum.d
+FROM (VALUES
+  (1, DATE '2025-05-04'),
+  (2, DATE '2026-10-22'),
+  (3, DATE '2026-06-03'),
+  (4, DATE '2026-04-12'),
+  (5, DATE '2026-06-19'),
+  (6, DATE '2026-10-18'),
+  (7, DATE '2026-07-08'),
+  (8, DATE '2026-10-18'),
+  (9, DATE '2026-05-10'),
+  (10, DATE '2026-09-30'),
+  (11, DATE '2026-10-16'),
+  (12, DATE '2026-08-12'),
+  (13, DATE '2026-09-12'),
+  (14, DATE '2026-09-30'),
+  (15, DATE '2026-09-13'),
+  (16, DATE '2026-04-08'),
+  (17, DATE '2026-09-20'),
+  (18, DATE '2026-10-18'),
+  (19, DATE '2025-11-22'),
+  (20, DATE '2026-10-10'),
+  (21, DATE '2026-09-30'),
+  (22, DATE '2026-09-28'),
+  (23, DATE '2026-10-10'),
+  (24, DATE '2026-10-18'),
+  (25, DATE '2026-09-23'),
+  (26, DATE '2026-10-11'),
+  (27, DATE '2026-10-11'),
+  (28, DATE '2026-09-13'),
+  (29, DATE '2026-09-03'),
+  (30, DATE '2026-10-15'),
+  (31, DATE '2026-05-31'),
+  (32, DATE '2026-10-15'),
+  (33, DATE '2026-10-24'),
+  (34, DATE '2026-10-21'),
+  (35, DATE '2026-10-25'),
+  (36, DATE '2026-10-25'),
+  (37, DATE '2026-09-13'),
+  (39, DATE '2026-10-18'),
+  (40, DATE '2026-09-20'),
+  (41, DATE '2026-09-30'),
+  (42, DATE '2026-10-04'),
+  (43, DATE '2026-10-25'),
+  (51, DATE '2026-10-24'),
+  (53, DATE '2026-10-19'),
+  (54, DATE '2026-10-24'),
+  (55, DATE '2026-10-20')
+) AS datum(nr,d)
+WHERE p.personalnummer = datum.nr AND p.letzte_befoerderung IS NULL;
+
 CREATE TABLE IF NOT EXISTS raenge (
   name       text PRIMARY KEY,
   abk        text,
