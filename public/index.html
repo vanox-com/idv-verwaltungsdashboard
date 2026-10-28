@@ -270,6 +270,7 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .rank-with-insignia{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;min-height:25px}
 .rank-insignia{flex:none;display:inline-block;vertical-align:middle;overflow:visible;
  filter:drop-shadow(0 1px 1px rgba(0,0,0,.38))}
+.pers-rank-preview{margin:11px 0 3px}
 </style>
 </head>
 <body>
@@ -809,6 +810,7 @@ function personalAnzeigen(nr) {
   }
   dialog.innerHTML = '<h2>' + esc([p.vorname,p.nachname].filter(Boolean).join(' ')) + '</h2>' +
     '<div class="mut">Personalakte · IdentityValley</div>' +
+    '<div class="pers-rank-preview">'+rangMitAbzeichen(p.dienstgrad,1.25)+'</div>' +
     '<div class="pers-detail">' + items.map(([k,v]) => '<div class="item"><small>' + k + '</small>' + esc(v == null || v === '' ? '–' : v) + '</div>').join('') + '</div>' +
     (ME.sensibel ? '<section class="copnet-box"><h3>CopNet-Zugangsdaten</h3><div id="copnetArea" aria-live="polite">Zugangsdaten werden geschützt geladen …</div></section>' : '') +
     '<div class="actions"><button type="button" id="persAbbrechen">Schließen</button>' +
@@ -1343,7 +1345,7 @@ function vDis(){
       '</div></div>':'').join('');
     const name=[p.vorname,p.nachname].filter(Boolean).join(' ');
     return '<tr class="dis-row" data-dis-name="'+esc((nr+' '+name+' '+(p.dienstgrad||'')).toLowerCase())+'">'+
-      '<td>'+nr+'</td><td>'+esc(name)+'</td><td>'+esc(p.dienstgrad||'–')+'</td>'+
+      '<td>'+nr+'</td><td>'+esc(name)+'</td><td>'+rangMitAbzeichen(p.dienstgrad)+'</td>'+
       '<td>'+(ms||'<span class="mut">Keine</span>')+'</td><td>'+esc(akte.bemerkung||'')+'</td>'+
       '<td>'+(schreiben?'<button type="button" data-dis-person="'+nr+'">Eintragen / Bearbeiten</button>':'')+'</td></tr>';
   }).join('');
@@ -1993,7 +1995,7 @@ function userAusnahmenAnzeigen(dialog,u){
       '</select></label>';
   }).join('');
   section.innerHTML='<h3>Individuelle Berechtigungen</h3>'+
-    '<p class="mut">Änderungen gelten sofort und nur für diese Dienstnummer. „Von Rolle übernehmen“ entfernt die Ausnahme.</p>'+
+    '<p class="mut">Änderungen gelten sofort und nur für diese Dienstnummer. „Von Rolle übernehmen“ entfernt die Ausnahme. Für POR-Freigaben braucht die Person zudem Leserecht im Modul Beförderungen; nur „Bearbeiten“ bei POR erlaubt Freigaben.</p>'+
     '<div class="user-exception-grid">'+labels+'</div><p id="userOverrideInfo" role="status" class="mut"></p>';
   dialog.appendChild(section);
 }
