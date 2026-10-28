@@ -1697,18 +1697,6 @@ function personalFiltern() {
 }
 
 function personalDialogSchliessen() {
-  if(!neu && p.status!=='Gekündigt'){
-    felder.splice(2,0,
-      '<div class="full personal-kuendigung" id="personalKuendigungFeld" hidden>'+
-      '<label for="p_kuendigungsgrund">Kündigungsgrund</label>'+
-      '<textarea id="p_kuendigungsgrund" rows="3" maxlength="1000" '+
-        'placeholder="Grund für die Kündigung eingeben"></textarea>'+
-      '<p class="mut">Beim Speichern wird automatisch ein Kündigungsvorgang angelegt. '+
-      'Bereits bestehende Vorgänge bleiben unverändert.</p>'+
-      (!can('kue',2)?'<p class="fehler">Für die Kündigung brauchst du zusätzlich '+
-        '„Kündigungen → Bearbeiten“.</p>':'')+
-      '</div>');
-  }
   const dialog = $('#personalDialog');
   if (dialog.open) dialog.close();
   copnetGeladen = null; copnetNummer = null;
@@ -1931,6 +1919,18 @@ function personalBearbeiten(nr) {
       '<div><label><input id="p_waffenschein" type="checkbox" style="width:auto" ' + (p.waffenschein ? 'checked' : '') + '> Waffenschein vorhanden</label></div>',
       '<div><label><input id="p_spind" type="checkbox" style="width:auto" ' + (p.spind ? 'checked' : '') + '> Spind vorhanden</label></div>',
       '<div class="full"><label for="p_bemerkung">Bemerkung</label><input id="p_bemerkung" value="' + esc(p.bemerkung || '') + '"></div>');
+  }
+  if(!neu && p.status!=='Gekündigt'){
+    felder.splice(2,0,
+      '<div class="full personal-kuendigung" id="personalKuendigungFeld" hidden>'+
+      '<label for="p_kuendigungsgrund">Kündigungsgrund</label>'+
+      '<textarea id="p_kuendigungsgrund" rows="3" maxlength="1000" '+
+        'placeholder="Grund für die Kündigung eingeben"></textarea>'+
+      '<p class="mut">Beim Speichern wird automatisch ein Kündigungsvorgang angelegt. '+
+      'Bereits bestehende Vorgänge bleiben unverändert.</p>'+
+      (!can('kue',2)?'<p class="fehler">Für die Kündigung brauchst du zusätzlich '+
+        '„Kündigungen → Bearbeiten“.</p>':'')+
+      '</div>');
   }
   const dialog = $('#personalDialog');
   if (dialog.open) dialog.close();
