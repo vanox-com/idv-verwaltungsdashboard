@@ -457,7 +457,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
          Notizen, Geburtstage oder Urlaubsdaten im Netzwerk ankommen. */
       daten.personal = daten.personal.map(p => ({
         personalnummer: p.personalnummer, vorname: p.vorname, nachname: p.nachname,
-        gruppe: p.gruppe, status: p.status, dienstgrad: p.dienstgrad,
+        gruppe: p.gruppe, beschaeftigungsart: p.beschaeftigungsart, status: p.status, dienstgrad: p.dienstgrad,
         nebenjob: p.nebenjob, eintrittsdatum: p.eintrittsdatum,
         waffenschein: p.waffenschein, spind: p.spind,
         ...(berechtigt('bef') ? {
