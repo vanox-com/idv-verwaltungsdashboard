@@ -798,6 +798,144 @@ app.post('/api/checklisten/reset',requireLogin,requireRight('chk',2),async(req,r
   }catch(err){next(err);}
 });
 
+
+/* ---------- Sperrfristen, Blacklist und Jubiläen ---------- */
+function rpValidation(message) {
+  return Object.assign(new Error(message), { httpStatus: 400 });
+}
+function rpText(v, max, label, required = false) {
+  if (typeof v !== 'string') throw rpValidation(label + ' muss Text sein');
+  const t = v.trim();
+  if (t.length > max || (required && !t)) throw rpValidation(label + ' fehlt oder ist zu lang');
+  return t;
+}
+function rpDate(v, label) {
+  if (v == null || v === '') return null;
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) throw rpValidation(label + ': ungültiges Datum');
+  const d = new Date(v + 'T00:00:00Z');
+  if (!Number.isFinite(d.getTime()) || d.toISOString().slice(0,10) !== v) throw rpValidation(label + ': ungültiges Datum');
+  return v;
+}
+function rpId(raw) {
+  const id = Number(raw);
+  if (!Number.isSafeInteger(id) || id < 1) throw rpValidation('Ungültige Eintragsnummer');
+  return id;
+}
+function rpError(err, next, res) {
+  if (err.httpStatus) return res.status(err.httpStatus).json({error:err.message});
+  return next(err);
+}
+app.get('/api/sperrfristen', requireLogin, requireRight('sperr', 1), async(req,res,next) => {
+  try {
+    const {rows} = await db.query('SELECT id,vorname,nachname,art,grund,von,bis,bemerkung FROM sperrfristen ORDER BY erstellt DESC,id DESC');
+    res.json(rows);
+  } catch(e) { next(e); }
+});
+app.post('/api/sperrfristen', requireLogin, requireRight('sperr', 2), async(req,res,next) => {
+  try {
+    const b=req.body||{};
+    const vorname=rpText(b.vorname,120,'Vorname');
+    const nachname=rpText(b.nachname,120,'Nachname',true);
+    const art=rpText(b.art,30,'Art',true);
+    if(!['Bewerber','Praktikant'].includes(art)) throw rpValidation('Ungültige Sperrfrist-Art');
+    const grund=rpText(b.grund,1500,'Grund'), bemerkung=rpText(b.bemerkung,2000,'Bemerkung');
+    const von=rpDate(b.von,'Gültig von'),bis=rpDate(b.bis,'Gültig bis');
+    if(von&&bis&&bis<von) throw rpValidation('Enddatum liegt vor dem Beginn');
+    const {rows}=await db.query(
+      'INSERT INTO sperrfristen (vorname,nachname,art,grund,von,bis,bemerkung) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+      [vorname,nachname,art,grund,von,bis,bemerkung]);
+    await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",
+      [req.user.id,'Sperrfrist angelegt: '+vorname+' '+nachname]);
+    res.status(201).json({ok:true,id:rows[0].id});
+  }catch(e){rpError(e,next,res);}
+});
+app.delete('/api/sperrfristen/:id', requireLogin, requireRight('sperr', 2), async(req,res,next) => {
+  try{
+    const {rows}=await db.query('DELETE FROM sperrfristen WHERE id=$1 RETURNING vorname,nachname',[rpId(req.params.id)]);
+    if(!rows.length)return res.status(404).json({error:'Sperrfrist nicht gefunden'});
+    await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'del')",
+      [req.user.id,'Sperrfrist gelöscht: '+rows[0].vorname+' '+rows[0].nachname]);
+    res.json({ok:true});
+  }catch(e){rpError(e,next,res);}
+});
+app.get('/api/blacklist', requireLogin, requireRight('bl',1), async(req,res,next)=>{
+  try{
+    const {rows}=await db.query('SELECT id,personalnummer,vorname,nachname,datum,ablauf,handy,bemerkung FROM blacklist ORDER BY erstellt DESC,id DESC');
+    res.json(rows);
+  }catch(e){next(e);}
+});
+app.post('/api/blacklist', requireLogin, requireRight('bl',2), async(req,res,next)=>{
+  try{
+    const b=req.body||{};
+    const nummer=rpText(b.personalnummer,30,'Personalnummer');
+    const vorname=rpText(b.vorname,120,'Vorname',true);
+    const nachname=rpText(b.nachname,120,'Nachname',true);
+    const datum=rpDate(b.datum,'Datum'),ablauf=rpDate(b.ablauf,'Ablauf');
+    if(datum&&ablauf&&ablauf<datum)throw rpValidation('Ablauf liegt vor dem Eintragungsdatum');
+    const handy=rpText(b.handy,150,'Handy'),bemerkung=rpText(b.bemerkung,2000,'Bemerkung');
+    const {rows}=await db.query(
+      'INSERT INTO blacklist (personalnummer,vorname,nachname,datum,ablauf,handy,bemerkung) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+      [nummer,vorname,nachname,datum,ablauf,handy,bemerkung]);
+    await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",
+      [req.user.id,'Blacklist-Eintrag angelegt: '+vorname+' '+nachname]);
+    res.status(201).json({ok:true,id:rows[0].id});
+  }catch(e){rpError(e,next,res);}
+});
+app.delete('/api/blacklist/:id',requireLogin,requireRight('bl',2),async(req,res,next)=>{
+  try{
+    const {rows}=await db.query('DELETE FROM blacklist WHERE id=$1 RETURNING vorname,nachname',[rpId(req.params.id)]);
+    if(!rows.length)return res.status(404).json({error:'Blacklist-Eintrag nicht gefunden'});
+    await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'del')",
+      [req.user.id,'Blacklist-Eintrag gelöscht: '+rows[0].vorname+' '+rows[0].nachname]);
+    res.json({ok:true});
+  }catch(e){rpError(e,next,res);}
+});
+
+/* Ausschließlich minimal benötigte Namen, Rang und Termin ausliefern.
+   Keine gesamte Personalakte an Rollen ohne Personalberechtigung senden. */
+function berlinTodayUtc(){
+  const parts = new Intl.DateTimeFormat('en-GB',{
+    timeZone:'Europe/Berlin',day:'2-digit',month:'2-digit',year:'numeric'
+  }).formatToParts(new Date());
+  const get=type=>Number(parts.find(p=>p.type===type).value);
+  return new Date(Date.UTC(get('year'),get('month')-1,get('day')));
+}
+async function anlaesseDaten(kind){
+  const column=kind==='geb'?'geburtsdatum':'eintrittsdatum';
+  const {rows}=await db.query(
+    'SELECT personalnummer,vorname,nachname,dienstgrad,'+column+
+    ' AS ereignis FROM personal WHERE status IS DISTINCT FROM $1 AND '+column+
+    ' IS NOT NULL ORDER BY personalnummer',['Gekündigt']);
+  const today=berlinTodayUtc(),y=today.getUTCFullYear(),day=86400000;
+  const result=[];
+  for(const r of rows){
+    const raw=r.ereignis;
+    const date=raw instanceof Date ? raw.toISOString().slice(0,10) : String(raw).slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date))continue;
+    const year=Number(date.slice(0,4)),month=Number(date.slice(5,7)),dom=Number(date.slice(8,10));
+    let next=new Date(Date.UTC(y,month-1,dom));
+    if(next.getTime()<today.getTime())next=new Date(Date.UTC(y+1,month-1,dom));
+    const age=next.getUTCFullYear()-year;
+    const rest=Math.round((next.getTime()-today.getTime())/day);
+    if(rest<0||rest>60||(kind==='jub'&&age<1))continue;
+    result.push({
+      personalnummer:r.personalnummer,
+      name:[r.vorname,r.nachname].filter(Boolean).join(' '),
+      dienstgrad:r.dienstgrad||'',
+      datum:date,
+      jahre:age,
+      tage:rest
+    });
+  }
+  return result.sort((a,b)=>a.tage-b.tage||a.name.localeCompare(b.name,'de'));
+}
+app.get('/api/geburtstage',requireLogin,requireRight('geb',1),async(req,res,next)=>{
+  try{res.json(await anlaesseDaten('geb'))}catch(e){next(e)}
+});
+app.get('/api/dienstjubilaeen',requireLogin,requireRight('jub',1),async(req,res,next)=>{
+  try{res.json(await anlaesseDaten('jub'))}catch(e){next(e)}
+});
+
 /* ---------- Benutzerverwaltung: ausschließlich Admin ---------- */
 
 function nurAdmin(req, res, next) {
@@ -887,7 +1025,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
     const rolle = req.params.rolle, modul = req.params.modul;
     const stufe = req.body?.stufe;
     const erlaubteModule = new Set(['dash', 'pers', 'bef', 'rout', 'sonder', 'dis',
-      'kue', 'chk', 'rl', 'org', 'bl', 'log']);
+      'kue', 'chk', 'rl', 'org', 'sperr', 'geb', 'jub', 'bl', 'log']);
     if (rolle === 'Administrator')
       return res.status(403).json({ error: 'Administratorrechte sind fest' });
     if (!erlaubteModule.has(modul) || ![0, 1, 2].includes(stufe))
