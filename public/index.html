@@ -271,6 +271,13 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .rank-insignia{flex:none;display:inline-block;vertical-align:middle;overflow:visible;
  filter:drop-shadow(0 1px 1px rgba(0,0,0,.38))}
 .pers-rank-preview{margin:11px 0 3px}
+
+/* Personalakten: verknüpfte Dokumente */
+.personnel-document-link{display:inline-flex;align-items:center;gap:5px;overflow-wrap:anywhere;
+  text-decoration:underline;text-underline-offset:3px}
+.personnel-document-link:hover{color:#d2e8ff}
+.personnel-document-missing{display:block;overflow-wrap:anywhere}
+.personnel-document-missing small{display:block;font-size:11px;color:var(--mut);margin-top:2px}
 </style>
 </head>
 <body>
@@ -790,6 +797,35 @@ function personalSelect(name, id, werte, wert) {
     '</select></div>';
 }
 
+/* Bestehende Dokumentnamen beibehalten; Links stehen in separaten Datenfeldern.
+   Ältere JSON- und Direktlink-Werte ebenfalls öffnen können. */
+function personalDokumentDaten(wert,link){
+  let name=String(wert||'').trim(),url=String(link||'').trim();
+  if(name.startsWith('{')){
+    try {
+      const obj=JSON.parse(name);
+      if(obj && typeof obj==='object' && !Array.isArray(obj)){
+        name=String(obj.t||'').trim();
+        if(!url)url=String(obj.u||'').trim();
+      }
+    }catch(e){}
+  }
+  if(!url && /^https:\/\//i.test(name)){url=name;name='';}
+  try{
+    const u=new URL(url);
+    if(u.protocol!=='https:'||!u.hostname.includes('.')||u.username||u.password)return {name,url:''};
+    url=u.href;
+  }catch(e){url='';}
+  return {name,url};
+}
+function personalDokumentLink(feld,w,v){
+  const doc=personalDokumentDaten(w,v),name=doc.name||feld;
+  return doc.url
+    ?'<a class="l personnel-document-link" href="'+esc(doc.url)+'" target="_blank" rel="noopener noreferrer" '+
+      'title="Dokument in neuem Tab öffnen">'+esc(name)+' <span aria-hidden="true">↗</span></a>'
+    :'<span class="personnel-document-missing">'+esc(doc.name||'–')+
+      (doc.name?'<small>Dokumentenlink noch nicht hinterlegt</small>':'')+'</span>';
+}
 function personalAnzeigen(nr) {
   if (!can('pers')) return;
   const p = (D.personal || []).find(p => Number(p.personalnummer) === Number(nr));
@@ -811,7 +847,12 @@ function personalAnzeigen(nr) {
   dialog.innerHTML = '<h2>' + esc([p.vorname,p.nachname].filter(Boolean).join(' ')) + '</h2>' +
     '<div class="mut">Personalakte · IdentityValley</div>' +
     '<div class="pers-rank-preview">'+rangMitAbzeichen(p.dienstgrad,1.25)+'</div>' +
-    '<div class="pers-detail">' + items.map(([k,v]) => '<div class="item"><small>' + k + '</small>' + esc(v == null || v === '' ? '–' : v) + '</div>').join('') + '</div>' +
+    '<div class="pers-detail">' + items.map(([k,v]) =>
+      '<div class="item"><small>' + k + '</small>' +
+      ((k==='Arbeitsvertrag'||k==='Ernennungsurkunde')
+        ? personalDokumentLink(k,v,k==='Arbeitsvertrag'?p.arbeitsvertrag_url:p.ernennungsurkunde_url)
+        : esc(v == null || v === '' ? '–' : v)) + '</div>'
+    ).join('') + '</div>' +
     (ME.sensibel ? '<section class="copnet-box"><h3>CopNet-Zugangsdaten</h3><div id="copnetArea" aria-live="polite">Zugangsdaten werden geschützt geladen …</div></section>' : '') +
     '<div class="actions"><button type="button" id="persAbbrechen">Schließen</button>' +
     (can('pers',2) ? '<button type="button" class="p" data-edit-person="' + Number(nr) + '">Bearbeiten</button>' : '') + '</div>';
@@ -948,8 +989,12 @@ function personalBearbeiten(nr) {
   if (ME.sensibel) {
     felder.push(personalFeld('Handy','p_handy',p.handy),
       personalFeld('Geburtsdatum','p_geburtsdatum',datum(p.geburtsdatum),'date'),
-      personalFeld('Arbeitsvertrag','p_arbeitsvertrag',p.arbeitsvertrag),
-      personalFeld('Ernennungsurkunde','p_ernennungsurkunde',p.ernennungsurkunde),
+      personalFeld('Arbeitsvertrag – Dokumentname','p_arbeitsvertrag',p.arbeitsvertrag),
+      personalFeld('Arbeitsvertrag – Google-Docs-Link','p_arbeitsvertrag_url',p.arbeitsvertrag_url,'url',
+        'maxlength="2048" placeholder="https://docs.google.com/document/d/..."'),
+      personalFeld('Ernennungsurkunde – Dokumentname','p_ernennungsurkunde',p.ernennungsurkunde),
+      personalFeld('Ernennungsurkunde – Google-Docs-Link','p_ernennungsurkunde_url',p.ernennungsurkunde_url,'url',
+        'maxlength="2048" placeholder="https://docs.google.com/document/d/..."'),
       personalFeld('Urlaub von','p_urlaub_von',datum(p.urlaub_von),'date'),
       personalFeld('Urlaub bis','p_urlaub_bis',datum(p.urlaub_bis),'date'),
       personalFeld('Urlaubstage','p_urlaub_tage',p.urlaub_tage,'number','min="0"'),
@@ -999,7 +1044,7 @@ async function personalSpeichern(event, neu, nr) {
     }
   }
   if (ME.sensibel) {
-    for (const f of ['handy','geburtsdatum','arbeitsvertrag','ernennungsurkunde','urlaub_von','urlaub_bis','bemerkung','rsa'])
+    for (const f of ['handy','geburtsdatum','arbeitsvertrag','ernennungsurkunde','arbeitsvertrag_url','ernennungsurkunde_url','urlaub_von','urlaub_bis','bemerkung','rsa'])
       body[f] = wert('p_' + f);
     body.urlaub_tage = wert('p_urlaub_tage') ? Number(wert('p_urlaub_tage')) : null;
     body.waffenschein = $('#p_waffenschein').checked;
