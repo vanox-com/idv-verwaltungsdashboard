@@ -158,19 +158,31 @@ $('#pw').addEventListener('keydown', function (e) {
 /* ---------- Aufbau ---------- */
 
 async function starten() {
+  let antwort;
   try {
-    const antwort = await api('/bootstrap');
-    ME = antwort.user; D = antwort.daten;
+    antwort = await api('/bootstrap');
   } catch (err) {
     if (/Nicht angemeldet|Passwortwechsel/.test(err.message)) { showLogin(); return; }
-    throw err;
+    /* Jeder andere Fehler wird sichtbar gemacht, statt still zu bleiben. */
+    meldung('Der Aufbau ist fehlgeschlagen: ' + err.message, true);
+    return;
   }
+  ME = antwort.user; D = antwort.daten;
   $('#login').classList.add('hide');
   $('#app').classList.remove('hide');
   $('#meName').textContent = ME.anzeigename;
   $('#meRolle').textContent = ME.rolle + (ME.sensibel ? ' · Personaldaten' : '');
   zeichneMenue();
   zeichne();
+}
+
+/* Schreibt eine Meldung an die Stelle, die man gerade sieht. */
+function meldung(text, istFehler) {
+  const leer = $('#logZeile');
+  if (leer) { leer.textContent = ''; }
+  const feld = $('#fehler');
+  if (feld) { feld.style.color = istFehler ? '#fca5a5' : '#8ea0b8'; feld.textContent = text; }
+  console.log(text);
 }
 
 function showLogin() {
@@ -335,8 +347,13 @@ async function vLog_() {
 /* ---------- Start ---------- */
 
 (async () => {
-  const u = await fetch('/api/me').catch(() => null);
-  if (u && u.ok) { await starten(); } else { showLogin(); }
+  try {
+    const u = await fetch('/api/me');
+    if (u.ok) { await starten(); } else { showLogin(); }
+  } catch (e) {
+    showLogin();
+    meldung('Server nicht erreichbar: ' + e.message, true);
+  }
 })();
 </script>
 </body>
