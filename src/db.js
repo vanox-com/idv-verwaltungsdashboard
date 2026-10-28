@@ -24,6 +24,7 @@ export async function initDb() {
   await db.query(sql);
   await seedBenutzer();
   await originalDokumentLinksUebernehmen();
+  await excelPersonalLinksUebernehmen();
 }
 
 /*
@@ -85,4 +86,38 @@ async function originalDokumentLinksUebernehmen() {
     anzahl+=r.rowCount;
   }
   if(anzahl)console.log('Dokumentlinks aus Original erfolgreich ergänzt: '+anzahl);
+}
+
+/* Links der hochgeladenen Original-Excel: privates kompaktes Format
+   `<Personalnummer><a|e>:<Google-Doc-ID>`; keine Dokument-IDs im GitHub-Code.
+   Eindeutige Zuordnung über Personalnummer plus Dokumenttyp. Nur bestehende
+   Dokumentnamen werden verlinkt; bereits gespeicherte URLs nie überschrieben. */
+async function excelPersonalLinksUebernehmen() {
+  const raw=process.env.PERSONAL_XLSX_IDS_IMPORT;
+  if (!raw) return;
+  const entries=raw.split(';').filter(Boolean);
+  if (entries.length > 250) throw new Error('Excel-Linkimport: zu viele Einträge');
+  const gesehen=new Set();
+  let hinzugefuegt=0,uebersprungen=0;
+  for (const entry of entries) {
+    const m=/^([1-9][0-9]{0,5})([ae]):([a-zA-Z0-9_-]{15,120})$/.exec(entry);
+    if (!m) throw new Error('Excel-Linkimport: fehlerhaftes Eintragsformat');
+    const [ ,nummer,typ,id]=m;
+    const key=nummer+':'+typ;
+    if (gesehen.has(key)) throw new Error('Excel-Linkimport: doppelte Zuordnung');
+    gesehen.add(key);
+    const feld=typ==='a'?'arbeitsvertrag':'ernennungsurkunde';
+    const url='https://docs.google.com/document/d/'+id+'/edit';
+    // Kein Zugriff auf andere Personalfelder und kein Überschreiben bestehender Links.
+    const result=await db.query(
+      'UPDATE personal SET '+feld+'_url=$1 WHERE personalnummer=$2 '+
+      'AND lower(btrim(COALESCE('+feld+",''))) LIKE $3 "+
+      'AND COALESCE('+feld+"_url,'')=''",
+      [url,Number(nummer),typ==='a'?'%arbeitsvertrag%':'%ernennungsurkunde%']
+    );
+    if (result.rowCount) hinzugefuegt++;
+    else uebersprungen++;
+  }
+  if(hinzugefuegt)console.log('Excel-Personal-Dokumentlinks ergänzt: '+hinzugefuegt);
+  if(uebersprungen)console.log('Excel-Personal-Dokumentlinks unverändert: '+uebersprungen);
 }
