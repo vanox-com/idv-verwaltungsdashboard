@@ -1090,16 +1090,24 @@ function chkFehler(res,next,e){
   next(e);
 }
 app.post('/api/checklisten',requireLogin,requireRight('chk',2),async(req,res,next)=>{
+  let valid;
+  try{valid=chkValidieren(req.body)}catch(e){return chkFehler(res,next,e)}
+  const client=await db.connect().catch(next);
+  if(!client)return;
   try{
-    const {name,aufgaben}=chkValidieren(req.body);
-    const {rows}=await db.query(
+    await client.query('BEGIN');
+    const {rows}=await client.query(
       'INSERT INTO checklisten(name,aufgaben,sortierung) VALUES($1,$2::jsonb,'+
       'COALESCE((SELECT MAX(sortierung)+1 FROM checklisten),0)) RETURNING name,aufgaben,sortierung',
-      [name,JSON.stringify(aufgaben)]);
-    await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",
-      [req.user.id,'Checkliste angelegt: '+name]);
+      [valid.name,JSON.stringify(valid.aufgaben)]);
+    await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",
+      [req.user.id,'Checkliste angelegt: '+valid.name]);
+    await client.query('COMMIT');
     res.status(201).json(rows[0]);
-  }catch(e){chkFehler(res,next,e)}
+  }catch(e){
+    await client.query('ROLLBACK').catch(()=>{});
+    chkFehler(res,next,e);
+  }finally{client.release()}
 });
 app.put('/api/checklisten/:name',requireLogin,requireRight('chk',2),async(req,res,next)=>{
   const alt=String(req.params.name||'');
