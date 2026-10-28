@@ -214,6 +214,15 @@ CREATE TABLE IF NOT EXISTS checklisten (
   sortierung integer NOT NULL DEFAULT 0
 );
 
+/* Gemeinsamer Fortschritt der Checklisten; Aufgaben selbst unverändert. */
+CREATE TABLE IF NOT EXISTS checklisten_status (
+  name text NOT NULL REFERENCES checklisten(name) ON DELETE CASCADE,
+  punkt integer NOT NULL CHECK (punkt >= 0),
+  erledigt boolean NOT NULL DEFAULT false,
+  aktualisiert timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(name,punkt)
+);
+
 CREATE TABLE IF NOT EXISTS dashboard (
   id         serial PRIMARY KEY,
   art        text NOT NULL,               -- personal, vorlage, info, link
