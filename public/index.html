@@ -515,6 +515,135 @@ a.l{color:#a9d1fa;text-underline-offset:3px}
  #inhalt>h1{font-size:23px}
 }
 @media(prefers-reduced-motion:reduce){button,aside a{transition:none}}
+
+/* GRAPHIT & SILBER – das vom Nutzer bereitgestellte Logo bleibt unverändert.
+   Graue Flächen statt Marineblau, zurückhaltende helle Akzente. */
+:root{
+  --bg:#191b1e;
+  --panel:#292c30;
+  --line:#444a50;
+  --txt:#f3f4f5;
+  --mut:#b2b9bf;
+  --acc:#68737d;
+  color-scheme:dark;
+}
+body{background:#191b1e;color:#f1f2f4}
+#app{background:linear-gradient(140deg,#1b1d20 0%,#222529 72%,#1d2023 100%)}
+aside{
+  background:linear-gradient(180deg,#15171a 0%,#1b1e22 54%,#14171a 100%);
+  border-right:1px solid #494f55;
+  box-shadow:4px 0 24px rgba(0,0,0,.17)
+}
+aside .sidebar-brand{border-bottom:1px solid #454b51}
+.idv-sidebar-logo,.idv-login-logo{mix-blend-mode:screen}
+.sidebar-brand-caption{color:#bcc2c8}
+aside .sidebar-gruppe-taste{color:#aeb6be}
+aside .sidebar-gruppe-taste:hover,aside .sidebar-gruppe-taste.active{
+  background:#2d3237;color:#f2f4f6
+}
+.sidebar-gruppe-zahl{color:#c3cbd2}
+.sidebar-gruppe-chevron{color:#9ca7b0}
+aside .sidebar-gruppe-inhalt a{color:#bac2cb}
+aside .sidebar-gruppe-inhalt a:hover{background:#30353b;color:#fff}
+aside .sidebar-gruppe-inhalt a.on{
+  background:linear-gradient(90deg,#41474e,#343940);
+  border-color:#5a646e;border-left-color:#d0d6dc;
+  color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.025)
+}
+aside .sidebar-gruppe-inhalt .nav-icon,
+aside .sidebar-gruppe-inhalt a.on .nav-icon{color:#d1d6db}
+aside .me{
+  border-top:1px solid #4b5055;
+  background:linear-gradient(180deg,transparent,rgba(255,255,255,.025))
+}
+aside .me button{
+  background:#33383d;border-color:#5a636b;color:#eef0f2
+}
+.workspace-main{background:transparent}
+.workspace-topbar{border-bottom:1px solid #484d52}
+.workspace-topbar-icon{
+  background:linear-gradient(145deg,#464d55,#30343a);
+  border:1px solid #747d86;color:#e3e7eb
+}
+.workspace-topbar-title strong{color:#bac2cb}
+.workspace-topbar-title span{color:#f4f5f6}
+.workspace-topbar-caption{color:#abb3bd}
+.workspace-status-dot{background:#9cc5ae;box-shadow:0 0 0 4px rgba(156,197,174,.08)}
+#inhalt>h1::after{background:linear-gradient(90deg,#c1c8d0,transparent)}
+.hello{
+  background:linear-gradient(105deg,#34383e,#272a2f);
+  border-color:#535960;color:#f2f3f4
+}
+.hello:before{background:#afb8c1}
+.hello .eyebrow{color:#c6ccd2}
+.hello p,.hello .hello-date{color:#bac0c7}
+.box,.kachel,.org-bereich,.textbaustein-karte{
+  background:linear-gradient(180deg,#2b2e33,#26292e);
+  border-color:#494f56;color:#edf0f2;
+  box-shadow:0 7px 25px rgba(0,0,0,.09)
+}
+.kachel{border-top-color:#9ba5ae}
+.kachel b{color:#fff}
+.kachel span{color:#bcc4cc}
+.tw{background:#272a2e;border-color:#4b5158}
+table{color:#ecedef}
+th{background:#383d43;color:#c9d0d7;border-bottom-color:#51575d}
+td{color:#e0e4e8;border-bottom-color:#40464d}
+tr:hover td{background:#353a40}
+.tag{background:#3a3e43;color:#e7eaec;border:1px solid #50565b}
+.tag.ok{background:#293e34;color:#b3dfc0;border-color:#456c52}
+.tag.warn{background:#473d2e;color:#f0d6a6;border-color:#67543d}
+.tag.bad{background:#493538;color:#edb5b9;border-color:#745156}
+button{background:#363b41;border-color:#59616a;color:#f1f3f5}
+button.p{background:linear-gradient(110deg,#69737e,#535c66);border-color:#89939e;color:#fff}
+button:hover:not(:disabled){filter:brightness(1.15)}
+input,select,textarea{
+  background:#292e33;color:#f4f5f6;border-color:#626b74
+}
+input::placeholder,textarea::placeholder{color:#a0aab5}
+a.l,.personnel-document-link{color:#d2dae2}
+input:focus-visible,button:focus-visible,select:focus-visible,textarea:focus-visible,
+a:focus-visible,summary:focus-visible{outline:2px solid #d1d7dd;outline-offset:2px}
+#textEditorDialog,#userRightsDialog,#orgDialog{
+  background:#292c30;color:#f3f5f6;border-color:#626970
+}
+#login{background-color:#15171a;background-image:none}
+#login::before{
+  content:"";position:absolute;inset:0;z-index:-2;pointer-events:none;
+  background:url('/assets/idv-police-wallpaper.svg') center/cover no-repeat;
+  filter:grayscale(1) brightness(.6) contrast(.95);opacity:.68
+}
+#login::after{
+  content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:linear-gradient(90deg,rgba(14,15,17,.84),rgba(24,26,29,.57) 49%,rgba(14,15,17,.75)),
+    linear-gradient(0deg,rgba(12,13,15,.8),transparent 55%,rgba(17,19,21,.26))
+}
+#login .login-top-left{border-left-color:#bfc6cc}
+#login .login-top-right:after,.login-bottom-left:before{background:#adb6bf}
+#login .login-top,#login .login-bottom{color:#d3d7dc}
+#login .login-brand p{color:#d1d5d9}
+#login .karte{
+  background:rgba(29,31,35,.92);
+  border:1px solid #646b72;
+  box-shadow:0 25px 80px rgba(0,0,0,.5)
+}
+#login .karte h2{color:#fafafa}
+#login .karte p.hinweis,#login .klein{color:#c4c9ce}
+#login .karte label{color:#d4d8dc}
+#login .karte input{
+  background:#30353b;border-color:#626970;color:#fff
+}
+#login .karte #pruefen{color:#d3d9df}
+#login .karte #pruefen:hover{color:white}
+#login .klein{border-top-color:#52585e}
+#login .karte button.p{
+  background:linear-gradient(110deg,#767f89,#5b646e);
+  border-color:#949da6
+}
+@media(max-width:820px){
+  aside{border-right:0;border-bottom:1px solid #4c5258}
+}
+
 </style>
 </head>
 <body>
