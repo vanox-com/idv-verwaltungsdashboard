@@ -555,15 +555,43 @@ app.post('/api/kuendigung', requireLogin, requireRight('kue', 2), async (req, re
   } catch (e) { next(e); }
 });
 
-/* Statuswechsel in der Kündigungsliste */
+/* Statuswechsel in der Kündigungsliste. Werte serverseitig prüfen. */
 app.patch('/api/kuendigung/:id', requireLogin, requireRight('kue', 2), async (req, res, next) => {
   try {
-    const erlaubt = ['waffe', 'copnet', 'emd', 'ic', 'discord', 'dienstgegenstaende', 'anzeige'];
-    const feld = erlaubt.find(k => k in req.body);
-    if (!feld) return res.status(400).json({ error: 'Unbekanntes Feld' });
-    await db.query(`UPDATE kuendigungen SET ${feld} = $1 WHERE id = $2`, [req.body[feld], req.params.id]);
+    const erlaubte = {
+      waffe: ['Offen', 'Informiert'],
+      copnet: ['Offen', 'Entfernt'],
+      emd: ['Offen', 'Entfernt'],
+      ic: ['Offen', 'Entfernt'],
+      discord: ['Offen', 'Entfernt'],
+      dienstgegenstaende: ['Offen', 'Entfernt'],
+      anzeige: ['Nein', 'Ja']
+    };
+    const keys = Object.keys(req.body || {});
+    if (keys.length !== 1 || !Object.hasOwn(erlaubte, keys[0]))
+      return res.status(400).json({ error: 'Ungültiges Feld' });
+    const feld = keys[0], status = req.body[feld];
+    if (!erlaubte[feld].includes(status))
+      return res.status(400).json({ error: 'Ungültiger Status' });
+    const { rows } = await db.query(
+      `UPDATE kuendigungen SET ${feld} = $1 WHERE id = $2 RETURNING id`,
+      [status, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Kündigung nicht gefunden' });
     await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'edit')`,
-      [req.user.id, `Kündigung ${req.params.id}: ${feld} → ${req.body[feld]}`]);
+      [req.user.id, `Kündigung ${req.params.id}: ${feld} → ${status}`]);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+/* Entfernen ausschließlich nach Bestätigung im Frontend und Berechtigung auf dem Server. */
+app.delete('/api/kuendigung/:id', requireLogin, requireRight('kue', 2), async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      'DELETE FROM kuendigungen WHERE id = $1 RETURNING id, vorname, nachname', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Kündigung nicht gefunden' });
+    await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'del')`,
+      [req.user.id, `Kündigung gelöscht: ${rows[0].vorname || ''} ${rows[0].nachname || ''} (ID ${rows[0].id})`]);
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
