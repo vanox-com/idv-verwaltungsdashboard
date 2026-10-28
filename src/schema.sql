@@ -68,6 +68,76 @@ CREATE TABLE IF NOT EXISTS personal (
   rsa               text
 );
 
+/* POR-Freigabe und ursprüngliche Beförderungsfristen.
+   Schema-Migration ist wiederholbar und überschreibt keine vorhandenen Werte. */
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS letzte_befoerderung date;
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS naechste_befoerderung date;
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS por_status text NOT NULL DEFAULT 'offen';
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS por_notiz text NOT NULL DEFAULT '';
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS por_am date;
+
+CREATE TABLE IF NOT EXISTS migrationen (
+  name text PRIMARY KEY,
+  ausgefuehrt timestamptz NOT NULL DEFAULT now()
+);
+WITH einmalig AS (
+  INSERT INTO migrationen (name) VALUES ('original-last-due-20261028')
+  ON CONFLICT DO NOTHING RETURNING name
+)
+UPDATE personal AS p
+SET letzte_befoerderung = COALESCE(p.letzte_befoerderung, v.letzte),
+    naechste_befoerderung = COALESCE(p.naechste_befoerderung, v.faellig)
+FROM (VALUES
+  (1, DATE '2025-05-04', NULL),
+  (2, DATE '2026-10-22', NULL),
+  (3, DATE '2026-06-03', NULL),
+  (4, DATE '2026-04-12', NULL),
+  (5, DATE '2026-06-19', NULL),
+  (6, DATE '2026-10-18', NULL),
+  (7, DATE '2026-07-08', NULL),
+  (8, DATE '2026-10-18', NULL),
+  (9, DATE '2026-05-10', NULL),
+  (10, DATE '2026-09-30', DATE '2026-11-11'),
+  (11, DATE '2026-10-16', NULL),
+  (12, DATE '2026-08-12', DATE '2026-09-23'),
+  (13, DATE '2026-09-12', DATE '2026-10-03'),
+  (14, DATE '2026-09-30', NULL),
+  (15, DATE '2026-09-13', DATE '2026-10-04'),
+  (16, DATE '2026-04-08', NULL),
+  (17, DATE '2026-09-20', DATE '2026-11-01'),
+  (18, DATE '2026-10-18', DATE '2026-11-08'),
+  (19, DATE '2025-11-22', NULL),
+  (20, DATE '2026-10-10', DATE '2026-10-31'),
+  (21, DATE '2026-09-30', DATE '2026-11-11'),
+  (22, DATE '2026-09-28', DATE '2026-10-19'),
+  (23, DATE '2026-10-10', DATE '2026-10-31'),
+  (24, DATE '2026-10-18', DATE '2026-11-08'),
+  (25, DATE '2026-09-23', DATE '2026-11-04'),
+  (26, DATE '2026-10-11', DATE '2026-11-10'),
+  (27, DATE '2026-10-11', DATE '2026-11-01'),
+  (28, DATE '2026-09-13', DATE '2026-09-27'),
+  (29, DATE '2026-09-03', NULL),
+  (30, DATE '2026-10-15', DATE '2026-11-05'),
+  (31, DATE '2026-05-31', NULL),
+  (32, DATE '2026-10-15', DATE '2026-11-05'),
+  (33, DATE '2026-10-24', DATE '2026-11-07'),
+  (34, DATE '2026-10-21', DATE '2026-11-11'),
+  (35, DATE '2026-10-25', DATE '2026-11-08'),
+  (36, DATE '2026-10-25', DATE '2026-11-08'),
+  (37, DATE '2026-09-13', DATE '2026-10-04'),
+  (39, DATE '2026-10-18', DATE '2026-11-08'),
+  (40, DATE '2026-09-20', NULL),
+  (41, DATE '2026-09-30', NULL),
+  (42, DATE '2026-10-04', DATE '2026-10-18'),
+  (43, DATE '2026-10-25', DATE '2026-11-08'),
+  (51, DATE '2026-10-24', DATE '2026-12-05'),
+  (53, DATE '2026-10-19', DATE '2026-11-09'),
+  (54, DATE '2026-10-24', NULL),
+  (55, DATE '2026-10-20', DATE '2026-11-03')
+) AS v(nr, letzte, faellig)
+WHERE EXISTS (SELECT 1 FROM einmalig)
+  AND p.personalnummer = v.nr;
+  
 CREATE TABLE IF NOT EXISTS raenge (
   name       text PRIMARY KEY,
   abk        text,
