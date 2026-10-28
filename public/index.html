@@ -1729,7 +1729,7 @@ function vPers() {
     const status = '<span class="tag ' + (p.status === 'Aktiv' ? 'ok' : 'warn') + '">' + esc(p.status || '–') + '</span>';
     const handy = ME.sensibel ? esc(p.handy || '–') : '<span class="tag">geschützt</span>';
     const bearbeitung = schreiben ? ' <button type="button" class="pers-link" data-edit-person="' + nummer + '">Bearbeiten</button>' : '';
-    return '<tr class="pers-row" data-name="' + esc([p.personalnummer,p.vorname,p.nachname,p.dienstgrad,p.nebenjob].join(' ').toLowerCase()) + '" data-group="' + esc(p.gruppe || '') + '" data-status="' + esc(p.status || '') + '">' +
+    return '<tr class="pers-row" data-name="' + esc([p.personalnummer,p.vorname,p.nachname,p.dienstgrad,p.nebenjob].join(' ').toLowerCase()) + '" data-group="' + esc(p.gruppe || '') + '" data-status="' + esc(p.status || '') + '" data-art="' + esc(p.beschaeftigungsart || 'Hauptberuf') + '">' +
       '<td>' + nummer + '</td>' +
       '<td><button class="pers-link" type="button" data-show-person="' + nummer + '">' + name + '</button></td>' +
       '<td>' + rangMitAbzeichen(p.dienstgrad) + '</td><td>' + esc(p.gruppe || '–') + '</td><td>' + esc(p.beschaeftigungsart || (p.gruppe === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf')) + '</td>' +
