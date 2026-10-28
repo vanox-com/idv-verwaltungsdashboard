@@ -1059,8 +1059,11 @@ function vBef() {
     const nr = Number(p.personalnummer), days = Math.round((Date.parse(termin+'T00:00:00Z')-Date.parse(heute+'T00:00:00Z'))/86400000);
     const status = days<=0 ? 'fällig seit '+(-days)+' Tagen' : 'in '+days+' Tagen';
     const st = (p.por_status === 'genehmigt'?'ok':p.por_status === 'beantragt'?'warn':p.por_status === 'abgelehnt'?'bad':'');
+    const antragAendern=can('por',2) ||
+      (verwalten && !['genehmigt','abgelehnt'].includes(p.por_status));
     const action =
-      (can('por',2) ? '<button type="button" data-por-person="'+nr+'">POR</button> ' : '') +
+      (antragAendern ? '<button type="button" data-por-person="'+nr+'">'+
+        (can('por',2)?'POR-Freigabe':'POR beantragen')+'</button> ' : '') +
       (verwalten && days<=0 && p.por_status === 'genehmigt' ?
         '<button type="button" class="p" data-promote-person="'+nr+'">Befördern</button>' : '');
     return '<tr><td>'+esc(p.vorname+' '+p.nachname)+'</td><td>'+rangMitAbzeichen(p.dienstgrad)+'</td>' +
@@ -1081,11 +1084,11 @@ function vBef() {
 }
 function aktBem(name) { const r = (D.raenge||[]).find(x=>x.name===name); return r ? r.bemerkung||'' : ''; }
 function porBearbeiten(nr) {
-  if(!can('bef',1)||!can('por',2))return;
+  if(!can('bef',1)||(!can('por',2)&&!can('bef',2)))return;
   const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nr);if(!p)return;
   const d=$('#porDialog');
-  const options=POR_STATUS.map(([status,label])=>'<option value="'+status+'"'+((p.por_status||'offen')===status?' selected':'')+'>'+label+'</option>').join('');
-  d.innerHTML='<h2>POR-Genehmigung</h2><p class="mut">'+esc(p.vorname+' '+p.nachname)+' · Nr. '+nr+' · '+esc(p.dienstgrad||'')+'</p>' +
+  const options=POR_STATUS.filter(([status])=>can('por',2)||['offen','beantragt'].includes(status)).map(([status,label])=>'<option value="'+status+'"'+((p.por_status||'offen')===status?' selected':'')+'>'+label+'</option>').join('');
+  d.innerHTML='<h2>'+(can('por',2)?'POR-Genehmigung':'POR-Antrag')+'</h2><p class="mut">'+esc(p.vorname+' '+p.nachname)+' · Nr. '+nr+' · '+esc(p.dienstgrad||'')+'</p>' +
     '<label for="porStatus">Status</label><select id="porStatus">'+options+'</select>' +
     '<label for="porNotiz">Notiz zur Freigabe (optional)</label><input id="porNotiz" value="'+esc(p.por_notiz||'')+'">' +
     '<label for="porDatum">Genehmigt am</label><input id="porDatum" type="date" value="'+esc(p.por_am?String(p.por_am).slice(0,10):new Date().toISOString().slice(0,10))+'">' +
