@@ -350,7 +350,6 @@ aside .sidebar-gruppe-taste{width:100%;display:flex;align-items:center;justify-c
 aside .sidebar-gruppe-taste:hover,aside .sidebar-gruppe-taste.active{
   background:#1d2c3e;color:#d6e6f8}
 .sidebar-gruppe-ende{display:flex;align-items:center;gap:7px;flex-shrink:0}
-.sidebar-gruppe-zahl{font-weight:650;font-size:10px;color:#94b4d5}
 .sidebar-gruppe-chevron{width:14px;height:14px;transition:transform .16s}
 .sidebar-gruppe-taste[aria-expanded="true"] .sidebar-gruppe-chevron{transform:rotate(180deg)}
 .sidebar-gruppe-inhalt{padding:2px 0 5px 7px}
@@ -431,12 +430,6 @@ aside .sidebar-gruppe-taste{
 }
 aside .sidebar-gruppe-taste:hover{background:rgba(143,164,182,.09);color:#e2edf6}
 aside .sidebar-gruppe-taste.active{color:#b7e8f2;background:rgba(93,192,211,.072)}
-.sidebar-gruppe-zahl{
-  display:inline-grid;place-items:center;min-width:19px;height:19px;
-  color:#a8b9c9;background:rgba(202,218,237,.065);
-  border:1px solid rgba(178,200,220,.1);
-  border-radius:6px;font-size:10px;
-}
 .sidebar-gruppe-chevron{color:#91a2b0}
 .sidebar-gruppe-inhalt{padding:0 0 6px 8px}
 aside .sidebar-gruppe-inhalt a{
@@ -1125,7 +1118,7 @@ function zeichneMenue() {
       '" data-nav-group="'+g.id+'" aria-expanded="'+offen+
       '" aria-controls="nav-items-'+g.id+'">'+
       '<span>'+esc(g.titel)+'</span>'+
-      '<span class="sidebar-gruppe-ende"><span class="sidebar-gruppe-zahl">'+sichtbar.length+'</span>'+
+      '<span class="sidebar-gruppe-ende">'+
       '<svg class="sidebar-gruppe-chevron" viewBox="0 0 24 24" aria-hidden="true" fill="none" '+
         'stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span></button>'+
       '<div id="nav-items-'+g.id+'" class="sidebar-gruppe-inhalt"'+(offen?'':' hidden')+'>'+
