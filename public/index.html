@@ -367,281 +367,395 @@ aside .sidebar-gruppe-taste:focus-visible{outline:2px solid #8cbaee;outline-offs
  .sidebar-gruppe-chevron{transition:none}
 }
 
-/* 2026 Brand refresh: originales Polizei–IdentityValley-Logo.
-   Bestehende Module, Datentabellen und ACL bleiben unverändert. */
+/* GRAPHITE / SIGNAL — 2026
+   Moderne neutrale Basispalette mit wenigen, gezielten Farbakzenten.
+   Das vom Nutzer gelieferte Polizeilogo wird nicht verändert. */
 :root{
-  --bg:#111b28;
-  --panel:#1b2939;
-  --line:#34485c;
-  --txt:#eef4fa;
-  --mut:#a0b2c7;
-  --acc:#537fae;
+  --bg:#171a1f;
+  --panel:#24282f;
+  --line:#39424c;
+  --txt:#f1f5f9;
+  --mut:#a8b4c2;
+  --acc:#69c5e7;
+  --signal:#75d7c4;
+  --violet:#b8a8f5;
+  --amber:#f0bd84;
+  --ok:#75d7b5;
+  --warn:#edbd7f;
+  --bad:#ed8d9d;
+  color-scheme:dark;
 }
-body{background:#111b28;line-height:1.56}
-#app{background:linear-gradient(135deg,#111d2b 0%,#142233 68%,#121d2c 100%)}
+body{
+  background:#171a1f;
+  color:var(--txt);
+  font:14px/1.58 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+#app{
+  background:
+    radial-gradient(ellipse at 100% 0%,rgba(66,137,158,.135),transparent 42%),
+    radial-gradient(ellipse at 65% 80%,rgba(107,93,157,.075),transparent 45%),
+    #191d23;
+}
 aside{
-  width:274px;
-  padding:15px 13px 13px;
-  background:linear-gradient(180deg,#0c151f 0%,#101c2c 53%,#0b1420 100%);
-  border-right:1px solid #34516d;
-  box-shadow:4px 0 28px rgba(0,0,0,.13);
+  width:267px;
+  background:linear-gradient(180deg,#14191f 0%,#171c23 55%,#13171d 100%);
+  border-right:1px solid #353e49;
+  box-shadow:7px 0 32px rgba(0,0,0,.16);
+  padding:15px 13px;
+  position:sticky;top:0;height:100dvh;
+  display:flex;flex-direction:column;overflow-y:auto;
 }
 aside .sidebar-brand{
-  display:flex;flex-direction:column;gap:0;align-items:center;
-  border-bottom:1px solid #304358;
-  border-radius:0;
-  margin:0 2px 12px;
-  padding:2px 2px 14px;
+  display:flex;flex-direction:column;align-items:center;
+  gap:0;margin:0 1px 13px;padding:2px 3px 16px;
+  border-bottom:1px solid rgba(177,198,214,.15);
 }
-.idv-sidebar-logo{display:block;width:100%;max-width:248px;height:auto;aspect-ratio:255/100;object-fit:contain}
+.idv-sidebar-logo{
+  display:block;width:100%;max-width:240px;height:auto;
+  object-fit:contain;aspect-ratio:255/100;
+  filter:drop-shadow(0 10px 17px rgba(0,0,0,.3));
+}
+.idv-login-logo{mix-blend-mode:screen}
+.idv-sidebar-logo{mix-blend-mode:screen}
 .sidebar-brand-caption{
-  color:#85a6c6;font-size:9px;letter-spacing:.13em;font-weight:700;
-  text-align:center;margin-top:-4px
+  font-size:9px;letter-spacing:.17em;font-weight:750;
+  text-align:center;color:#a9c1d4;margin-top:-2px;
 }
-aside #menu{gap:5px}
+aside #menu{gap:7px}
 aside .sidebar-gruppe-taste{
-  border-radius:7px;padding:10px 12px;
-  color:#9eb6ce;font-size:10.5px;
-  transition:color .16s,background .16s;
+  border:0;background:transparent;color:#a2acb8;
+  padding:11px 10px;letter-spacing:.11em;font-size:10px;
+  font-weight:750;border-radius:9px;min-height:37px;
+  transition:background-color .2s,color .2s;
 }
-aside .sidebar-gruppe-taste:hover,aside .sidebar-gruppe-taste.active{
-  background:#1c3046;color:#d9eaff
+aside .sidebar-gruppe-taste:hover{background:rgba(143,164,182,.09);color:#e2edf6}
+aside .sidebar-gruppe-taste.active{color:#b7e8f2;background:rgba(93,192,211,.072)}
+.sidebar-gruppe-zahl{
+  display:inline-grid;place-items:center;min-width:19px;height:19px;
+  color:#a8b9c9;background:rgba(202,218,237,.065);
+  border:1px solid rgba(178,200,220,.1);
+  border-radius:6px;font-size:10px;
 }
-.sidebar-gruppe-inhalt{padding-left:7px}
+.sidebar-gruppe-chevron{color:#91a2b0}
+.sidebar-gruppe-inhalt{padding:0 0 6px 8px}
 aside .sidebar-gruppe-inhalt a{
   display:flex;align-items:center;gap:12px;
-  min-height:38px;border-radius:7px;
-  border:1px solid transparent;
-  border-left:3px solid transparent;
-  padding:8px 10px;
-  margin:2px 0;
-  font-size:13px;color:#aebfd1;
-  transition:background .15s,color .15s,border-color .15s;
+  padding:9px 12px;margin:3px 0;min-height:41px;
+  color:#b9c6d3;font-size:13px;
+  border-radius:10px;
+  border:1px solid transparent;border-left:3px solid transparent;
+  transition:background-color .18s,transform .18s,color .18s,border-color .18s;
 }
-aside .sidebar-gruppe-inhalt a:hover{background:#20374d;color:#f2f8ff}
+aside .sidebar-gruppe-inhalt a:hover{
+  color:#f6faff;background:rgba(164,189,210,.105);
+  transform:translateX(2px);
+}
 aside .sidebar-gruppe-inhalt a.on{
-  background:linear-gradient(90deg,#254967,#203449);
-  border-color:#345b7d;border-left-color:#90c5f1;
-  box-shadow:inset 0 0 0 1px rgba(134,181,222,.05);
-  color:#fff
+  color:#f7fdff;
+  background:linear-gradient(96deg,rgba(67,153,176,.27),rgba(77,114,140,.13));
+  border-color:rgba(125,212,224,.2);
+  border-left-color:#78d4df;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 4px 16px rgba(0,0,0,.13);
 }
-aside .sidebar-gruppe-inhalt .nav-icon{width:17px;height:17px;color:#acc5dd}
+aside .sidebar-gruppe-inhalt .nav-icon{
+  width:18px;height:18px;color:#a3b5c5;
+  transition:color .18s;
+}
+aside .sidebar-gruppe-inhalt a.on .nav-icon{color:#8be5e8}
 aside .me{
-  border-top:1px solid #34485d;
-  margin-top:auto;padding:18px 12px 5px;
-  background:linear-gradient(180deg,transparent,rgba(34,57,80,.16));
-  border-radius:7px
+  margin-top:auto;padding:16px 11px 5px;
+  border-top:1px solid rgba(187,208,224,.15);
+  border-radius:8px;
 }
-aside .me b{font-size:13px}
-aside .me button{min-height:40px;background:#1c3044;border-color:#38536c}
-.workspace-main{min-width:0;padding:0 clamp(18px,3vw,44px) 38px;max-width:1800px}
+aside .me b{color:#f5f8fb;font-weight:720}
+aside .me span{color:#abbac9}
+aside .me button{
+  background:#272e36;color:#d4e0ea;
+  border:1px solid #465360;min-height:41px;
+  margin-top:10px!important;
+}
+.workspace-main{
+  padding:0 clamp(20px,3vw,47px) 46px;
+  max-width:1800px;flex:1;min-width:0;
+}
 .workspace-topbar{
-  display:flex;align-items:center;gap:12px;min-height:78px;
-  margin:0 0 28px;padding:17px 2px;
-  border-bottom:1px solid #33485d
+  display:flex;align-items:center;gap:13px;
+  min-height:83px;margin-bottom:29px;
+  padding:16px 3px;
+  border-bottom:1px solid rgba(182,202,219,.15);
 }
 .workspace-topbar-icon{
   display:grid;place-items:center;
-  width:40px;height:40px;flex-shrink:0;border:1px solid #4d7191;
-  background:linear-gradient(145deg,#223e56,#1a2d41);
-  color:#b8d8f1;font-size:12px;letter-spacing:.04em;font-weight:800;border-radius:10px
+  width:43px;height:43px;flex-shrink:0;border-radius:12px;
+  background:linear-gradient(145deg,rgba(104,205,213,.26),rgba(95,99,153,.2));
+  border:1px solid rgba(139,221,234,.34);
+  color:#baf0f0;
+  box-shadow:0 7px 25px rgba(43,130,147,.095);
+  font-weight:850;font-size:12px;letter-spacing:.045em;
 }
-.workspace-topbar-title{display:flex;flex-direction:column;line-height:1.4;min-width:0}
-.workspace-topbar-title strong{font-size:10px;letter-spacing:.13em;color:#88b2db}
-.workspace-topbar-title span{font-size:15px;font-weight:650;color:#e8f4ff}
-.workspace-topbar-caption{margin-left:auto;display:inline-flex;align-items:center;gap:8px;color:#9aacc0;
-  font-size:10px;letter-spacing:.075em;white-space:nowrap}
-.workspace-status-dot{width:7px;height:7px;flex-shrink:0;border-radius:50%;
-  background:#75c6a3;box-shadow:0 0 0 4px rgba(117,198,163,.09)}
-#inhalt>h1{margin:0 0 20px;font-size:clamp(22px,2.25vw,28px);letter-spacing:-.025em;font-weight:740}
-#inhalt>h1::after{content:"";display:block;width:45px;height:2px;margin-top:11px;
-  background:linear-gradient(90deg,#85b4e1,transparent)}
-.box,.kachel{
-  border-color:#374e64;background:linear-gradient(180deg,#1c2b3d,#1a2838);
-  border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.075);
+.workspace-topbar-title{display:flex;flex-direction:column;line-height:1.48}
+.workspace-topbar-title strong{
+  font-size:10px;letter-spacing:.15em;color:#8dd7db;font-weight:760;
 }
-.kachel{border-top:2px solid #6a9bc5;min-height:100px}
-.kachel b{font-size:30px;color:#f7fbff}
-.kachel span{color:#b0c2d3}
-.tw{border-radius:9px;border-color:#3c5064}
-th{background:#23364b;color:#bdd1e5}
-td{color:#d9e5f1}
-tr:hover td{background:#294055}
-.tag{border-radius:6px;border:1px solid rgba(156,188,217,.12)}
-button{min-height:36px;transition:filter .15s,background-color .15s,border-color .15s}
-button.p{background:linear-gradient(105deg,#477aad,#355e90);border-color:#689bca;color:#fff}
-button:not(:disabled):hover{filter:brightness(1.13)}
-button:disabled{opacity:.58;cursor:not-allowed}
-input,select,textarea{border-color:#456077;color:#f0f6fd}
-input:focus-visible,button:focus-visible,select:focus-visible,textarea:focus-visible,
-a:focus-visible,summary:focus-visible{outline:2px solid #9ec9f5;outline-offset:2px}
-a.l{color:#a9d1fa;text-underline-offset:3px}
-.org-bereich,.textbaustein-karte{border-color:#3d5268}
-#login{background-color:#070e18}
-#login:before{background:linear-gradient(90deg,rgba(5,12,22,.85),rgba(9,17,29,.46) 45%,rgba(7,13,22,.65)),
-  linear-gradient(0deg,rgba(6,13,24,.72),transparent 42%,rgba(9,18,29,.12))}
-.login-center{width:min(470px,100%);margin:22px auto 27px}
-.login-brand{margin-bottom:15px;display:flex;flex-direction:column;align-items:center}
-.idv-login-logo{display:block;width:310px;max-width:88vw;height:auto;aspect-ratio:255/100;object-fit:contain;
-  filter:drop-shadow(0 14px 28px rgba(0,0,0,.26))}
-.login-brand p{font-size:10px;letter-spacing:.33em;color:#cbdcf0;font-weight:700;margin:-3px 0 5px}
-#login .karte{background:rgba(13,23,36,.88);border:1px solid rgba(160,193,226,.4);
-  box-shadow:0 25px 80px rgba(0,0,0,.47);border-radius:12px;padding:32px 33px 27px}
-#login .karte h2{font-size:25px;letter-spacing:-.026em}
-#login .karte input{background:#17263a;border-color:#49647e}
-#login .karte button.p{font-size:14px}
-@media(max-width:950px){
- aside{width:240px}
- .idv-sidebar-logo{max-width:215px}
- .workspace-topbar-caption{font-size:9px}
+.workspace-topbar-title span{color:#f2f6fb;font-size:16px;font-weight:725}
+.workspace-topbar-caption{
+  display:flex;gap:9px;align-items:center;
+  margin-left:auto;color:#adb8c5;
+  font-size:10px;letter-spacing:.075em;white-space:nowrap;
 }
-@media(max-width:820px){
- aside{position:static;width:100%;height:auto;padding:12px 15px;box-shadow:none}
- aside .sidebar-brand{align-items:flex-start;padding:0 0 8px;margin:0 0 5px;width:100%}
- .idv-sidebar-logo{width:205px;max-width:62vw}
- .sidebar-brand-caption{margin-left:5px}
- aside #menu{width:100%}
- aside .me{width:100%;margin:10px 0 0}
- .workspace-main{padding:0 16px 28px}
- .workspace-topbar{min-height:66px;margin-bottom:20px;padding:11px 2px}
- .workspace-topbar-caption{display:none}
+.workspace-status-dot{
+  width:8px;height:8px;border-radius:50%;background:#76d6b6;
+  box-shadow:0 0 0 5px rgba(118,214,182,.09),0 0 13px rgba(118,214,182,.24);
 }
-@media(max-width:480px){
- #login .karte{padding:25px 21px 23px}
- .idv-login-logo{width:285px}
- .workspace-topbar-icon{width:35px;height:35px}
- .workspace-topbar-title strong{font-size:9px}
- .workspace-topbar-title span{font-size:14px}
- #inhalt>h1{font-size:23px}
+main h1,#inhalt>h1{
+  font-size:clamp(23px,2.2vw,29px);
+  margin:0 0 22px;color:#f6f9fc;
+  font-weight:775;letter-spacing:-.035em;
 }
-@media(prefers-reduced-motion:reduce){button,aside a{transition:none}}
-
-/* GRAPHIT & SILBER – das vom Nutzer bereitgestellte Logo bleibt unverändert.
-   Graue Flächen statt Marineblau, zurückhaltende helle Akzente. */
-:root{
-  --bg:#191b1e;
-  --panel:#292c30;
-  --line:#444a50;
-  --txt:#f3f4f5;
-  --mut:#b2b9bf;
-  --acc:#68737d;
-  color-scheme:dark;
+#inhalt>h1::after{
+  content:"";display:block;margin-top:12px;
+  height:3px;width:47px;border-radius:5px;
+  background:linear-gradient(90deg,#7ae0dd,#8fbbfb);
 }
-body{background:#191b1e;color:#f1f2f4}
-#app{background:linear-gradient(140deg,#1b1d20 0%,#222529 72%,#1d2023 100%)}
-aside{
-  background:linear-gradient(180deg,#15171a 0%,#1b1e22 54%,#14171a 100%);
-  border-right:1px solid #494f55;
-  box-shadow:4px 0 24px rgba(0,0,0,.17)
-}
-aside .sidebar-brand{border-bottom:1px solid #454b51}
-.idv-sidebar-logo,.idv-login-logo{mix-blend-mode:screen}
-.sidebar-brand-caption{color:#bcc2c8}
-aside .sidebar-gruppe-taste{color:#aeb6be}
-aside .sidebar-gruppe-taste:hover,aside .sidebar-gruppe-taste.active{
-  background:#2d3237;color:#f2f4f6
-}
-.sidebar-gruppe-zahl{color:#c3cbd2}
-.sidebar-gruppe-chevron{color:#9ca7b0}
-aside .sidebar-gruppe-inhalt a{color:#bac2cb}
-aside .sidebar-gruppe-inhalt a:hover{background:#30353b;color:#fff}
-aside .sidebar-gruppe-inhalt a.on{
-  background:linear-gradient(90deg,#41474e,#343940);
-  border-color:#5a646e;border-left-color:#d0d6dc;
-  color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.025)
-}
-aside .sidebar-gruppe-inhalt .nav-icon,
-aside .sidebar-gruppe-inhalt a.on .nav-icon{color:#d1d6db}
-aside .me{
-  border-top:1px solid #4b5055;
-  background:linear-gradient(180deg,transparent,rgba(255,255,255,.025))
-}
-aside .me button{
-  background:#33383d;border-color:#5a636b;color:#eef0f2
-}
-.workspace-main{background:transparent}
-.workspace-topbar{border-bottom:1px solid #484d52}
-.workspace-topbar-icon{
-  background:linear-gradient(145deg,#464d55,#30343a);
-  border:1px solid #747d86;color:#e3e7eb
-}
-.workspace-topbar-title strong{color:#bac2cb}
-.workspace-topbar-title span{color:#f4f5f6}
-.workspace-topbar-caption{color:#abb3bd}
-.workspace-status-dot{background:#9cc5ae;box-shadow:0 0 0 4px rgba(156,197,174,.08)}
-#inhalt>h1::after{background:linear-gradient(90deg,#c1c8d0,transparent)}
+#inhalt h2{letter-spacing:-.018em}
 .hello{
-  background:linear-gradient(105deg,#34383e,#272a2f);
-  border-color:#535960;color:#f2f3f4
+  position:relative;overflow:hidden;
+  background:
+    radial-gradient(ellipse at 85% 0%,rgba(102,175,184,.21),transparent 52%),
+    linear-gradient(112deg,#30363e,#262c34 70%,#28323b);
+  border:1px solid rgba(141,196,204,.26);
+  border-radius:18px;padding:28px 31px;margin-bottom:23px;
+  box-shadow:0 16px 35px rgba(0,0,0,.14);
 }
-.hello:before{background:#afb8c1}
-.hello .eyebrow{color:#c6ccd2}
-.hello p,.hello .hello-date{color:#bac0c7}
-.box,.kachel,.org-bereich,.textbaustein-karte{
-  background:linear-gradient(180deg,#2b2e33,#26292e);
-  border-color:#494f56;color:#edf0f2;
-  box-shadow:0 7px 25px rgba(0,0,0,.09)
+.hello:before{background:linear-gradient(#74e1d7,#8eabf6);width:4px}
+.hello .eyebrow{color:#93e1d7}
+.hello h1{color:#fbfdff;font-size:clamp(25px,2.7vw,34px);letter-spacing:-.05em}
+.hello p{color:#c3cfdb}
+.hello .hello-date{color:#abbeca}
+.kacheln{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:24px}
+.kachel{
+  position:relative;overflow:hidden;min-height:154px;
+  border:1px solid rgba(169,193,213,.19);
+  border-top:1px solid rgba(207,223,237,.14);
+  border-radius:17px;padding:19px 20px;
+  background:linear-gradient(140deg,#303640,#262c34 83%);
+  box-shadow:0 12px 27px rgba(0,0,0,.13),inset 0 1px 0 rgba(255,255,255,.045);
+  transition:transform .2s,box-shadow .2s,border-color .2s;
 }
-.kachel{border-top-color:#9ba5ae}
-.kachel b{color:#fff}
-.kachel span{color:#bcc4cc}
-.tw{background:#272a2e;border-color:#4b5158}
-table{color:#ecedef}
-th{background:#383d43;color:#c9d0d7;border-bottom-color:#51575d}
-td{color:#e0e4e8;border-bottom-color:#40464d}
-tr:hover td{background:#353a40}
-.tag{background:#3a3e43;color:#e7eaec;border:1px solid #50565b}
-.tag.ok{background:#293e34;color:#b3dfc0;border-color:#456c52}
-.tag.warn{background:#473d2e;color:#f0d6a6;border-color:#67543d}
-.tag.bad{background:#493538;color:#edb5b9;border-color:#745156}
-button{background:#363b41;border-color:#59616a;color:#f1f3f5}
-button.p{background:linear-gradient(110deg,#69737e,#535c66);border-color:#89939e;color:#fff}
-button:hover:not(:disabled){filter:brightness(1.15)}
+.kachel:before{
+  content:"";position:absolute;inset:auto -43px -62px auto;width:165px;height:165px;
+  border-radius:50%;pointer-events:none;opacity:.75;
+  background:radial-gradient(circle,rgba(100,193,207,.16),transparent 68%);
+}
+.kachel.tone-violet:before{background:radial-gradient(circle,rgba(171,146,238,.19),transparent 68%)}
+.kachel.tone-amber:before{background:radial-gradient(circle,rgba(234,171,104,.16),transparent 68%)}
+.kachel.tone-rose:before{background:radial-gradient(circle,rgba(231,133,157,.16),transparent 68%)}
+.kachel:hover{
+  transform:translateY(-3px);border-color:rgba(149,219,223,.4);
+  box-shadow:0 19px 38px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.05);
+}
+.kachel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.kachel-head span:first-child{
+  color:#b9c5d1;font-size:12px;font-weight:660;
+}
+.kachel-icon{
+  width:35px;height:35px;display:grid;place-items:center;
+  border-radius:11px;background:rgba(118,212,226,.135);
+  border:1px solid rgba(125,216,221,.16);color:#89e0e9;
+}
+.kachel-icon .nav-icon{width:18px;height:18px}
+.kachel.tone-violet .kachel-icon{background:rgba(176,156,237,.14);color:#c7b7ff;border-color:rgba(176,156,237,.2)}
+.kachel.tone-amber .kachel-icon{background:rgba(239,181,121,.14);color:#f6c994;border-color:rgba(239,181,121,.2)}
+.kachel.tone-rose .kachel-icon{background:rgba(233,144,165,.14);color:#f4b0c1;border-color:rgba(233,144,165,.2)}
+.kachel b{display:block;position:relative;font-weight:770;line-height:1.06;
+  font-size:clamp(31px,3vw,39px);letter-spacing:-.055em;margin:13px 0 9px;color:#fff}
+.kachel small{color:#8e9eaf;font-size:10px;letter-spacing:.045em}
+.box{
+  border:1px solid rgba(163,189,209,.17);
+  border-radius:15px;
+  padding:20px;
+  background:linear-gradient(170deg,#292f37,#242a32);
+  box-shadow:0 9px 24px rgba(0,0,0,.095),inset 0 1px 0 rgba(255,255,255,.023);
+}
+.box h3{
+  font-size:15px;letter-spacing:-.016em;
+  margin:0 0 17px;color:#f0f6fb;
+}
+.grid2{gap:16px}
+.tw{
+  border:1px solid rgba(155,184,203,.24);
+  border-radius:13px;overflow:auto;background:#262c34;
+  box-shadow:0 8px 24px rgba(0,0,0,.07);
+}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{
+  background:#343b45;color:#bdcbd8;
+  font-size:10.5px;font-weight:760;letter-spacing:.075em;
+  text-transform:uppercase;border-bottom:1px solid rgba(164,192,213,.17);
+  padding:13px 12px;
+}
+td{
+  color:#e0e9f1;padding:12px;
+  border-bottom:1px solid rgba(166,191,208,.1);
+}
+tbody tr:nth-child(even){background:rgba(255,255,255,.017)}
+tr:hover td{background:rgba(104,184,193,.08)}
+.tag{
+  display:inline-block;border:1px solid rgba(166,192,214,.14);
+  border-radius:7px;background:#38414b;
+  color:#e3e9ef;font-size:11.5px;padding:4px 9px;
+}
+.tag.ok{background:#25453c;color:#9ff0cb;border-color:#3d6d5a}
+.tag.warn{background:#56412d;color:#f8d4a0;border-color:#765b3d}
+.tag.bad{background:#593742;color:#ffc0cc;border-color:#7b515f}
+.dashboard-progress{
+  height:7px;overflow:hidden;background:#3b454e;
+  border-radius:12px;border:0;
+}
+.dashboard-progress i{background:linear-gradient(90deg,#53b7bd,#8ed8e0);border-radius:12px}
+.dashboard-group-head{color:#d3e0ec}
+.dashboard-line{border-bottom-color:rgba(160,189,206,.12)}
+.dashboard-link{border-color:rgba(161,190,214,.13)}
+.dashboard-link a:hover{color:#a1eef1}
+button{
+  background:#353c45;color:#edf4fa;border:1px solid #515f6e;
+  border-radius:9px;
+  min-height:38px;box-shadow:0 1px 2px rgba(0,0,0,.09);
+  transition:background .16s,border-color .16s,transform .16s,box-shadow .16s;
+}
+button:hover:not(:disabled){
+  filter:none;background:#424d59;border-color:#7296a7;
+  box-shadow:0 4px 14px rgba(0,0,0,.12);
+}
+button.p{
+  background:linear-gradient(115deg,#51b5c4,#4d91be);
+  border-color:#79c8d7;color:#071821;font-weight:770;
+  box-shadow:0 5px 16px rgba(57,164,183,.17);
+}
+button.p:hover:not(:disabled){
+  background:linear-gradient(115deg,#79dce2,#6aadd3);
+  border-color:#9ee9e9;
+  box-shadow:0 8px 20px rgba(57,164,183,.24);
+}
+button:active:not(:disabled){transform:translateY(1px)}
+button:disabled{opacity:.56;cursor:not-allowed}
 input,select,textarea{
-  background:#292e33;color:#f4f5f6;border-color:#626b74
+  background:#252b33;border:1px solid #566372;
+  border-radius:9px;color:#f0f7fb;
 }
-input::placeholder,textarea::placeholder{color:#a0aab5}
-a.l,.personnel-document-link{color:#d2dae2}
-input:focus-visible,button:focus-visible,select:focus-visible,textarea:focus-visible,
-a:focus-visible,summary:focus-visible{outline:2px solid #d1d7dd;outline-offset:2px}
-#textEditorDialog,#userRightsDialog,#orgDialog{
-  background:#292c30;color:#f3f5f6;border-color:#626970
+input::placeholder,textarea::placeholder{color:#929fae}
+input:focus-visible,button:focus-visible,select:focus-visible,
+textarea:focus-visible,a:focus-visible,summary:focus-visible{
+  outline:2px solid #91e6e7;outline-offset:2px;
 }
-#login{background-color:#15171a;background-image:none}
-#login::before{
+a.l,.personnel-document-link{color:#99dce9;text-underline-offset:3px}
+.org-bereich,.textbaustein-karte{border-color:rgba(162,188,209,.2)}
+#textEditorDialog,#orgDialog,#userRightsDialog,#personalDialog,#sfDialog,#porDialog{
+  background:#292f37;color:#f1f5f9;border:1px solid #657786;
+  border-radius:16px;
+  box-shadow:0 25px 75px rgba(0,0,0,.46);
+}
+dialog::backdrop{background:rgba(8,12,18,.78);backdrop-filter:blur(5px)}
+#login{
+  background:#11161b;
+  background-image:none;
+  isolation:isolate;
+}
+#login:before{
   content:"";position:absolute;inset:0;z-index:-2;pointer-events:none;
   background:url('/assets/idv-police-wallpaper.svg') center/cover no-repeat;
-  filter:grayscale(1) brightness(.6) contrast(.95);opacity:.68
+  filter:grayscale(.75) brightness(.7) contrast(1.06);opacity:.8;
 }
-#login::after{
+#login:after{
   content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
-  background:linear-gradient(90deg,rgba(14,15,17,.84),rgba(24,26,29,.57) 49%,rgba(14,15,17,.75)),
-    linear-gradient(0deg,rgba(12,13,15,.8),transparent 55%,rgba(17,19,21,.26))
+  background:
+    radial-gradient(ellipse at 15% 80%,rgba(74,167,172,.25),transparent 43%),
+    radial-gradient(ellipse at 100% 0%,rgba(108,110,180,.22),transparent 45%),
+    linear-gradient(90deg,rgba(10,15,20,.88),rgba(23,28,35,.46) 48%,rgba(11,17,23,.74));
 }
-#login .login-top-left{border-left-color:#bfc6cc}
-#login .login-top-right:after,.login-bottom-left:before{background:#adb6bf}
-#login .login-top,#login .login-bottom{color:#d3d7dc}
-#login .login-brand p{color:#d1d5d9}
+.login-center{
+  width:min(468px,100%);margin:20px auto 25px;
+  display:flex;flex-direction:column;align-items:center;
+}
+.login-brand{display:flex;flex-direction:column;align-items:center;margin-bottom:17px}
+.idv-login-logo{
+  display:block;width:320px;max-width:90vw;height:auto;aspect-ratio:255/100;object-fit:contain;
+  mix-blend-mode:screen;filter:drop-shadow(0 15px 32px rgba(0,0,0,.37));
+}
+.login-brand p{font-size:10px;color:#bde5e5;letter-spacing:.26em;font-weight:800;margin:-1px 0 4px}
+.login-top,.login-bottom{color:#d1dce5}
+.login-top-left{border-left-color:#7bd2dc}
+.login-top-right:after,.login-bottom-left:before{background:#8fd7dc}
 #login .karte{
-  background:rgba(29,31,35,.92);
-  border:1px solid #646b72;
-  box-shadow:0 25px 80px rgba(0,0,0,.5)
+  background:rgba(30,37,47,.87);
+  border:1px solid rgba(163,202,215,.34);
+  border-radius:19px;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 26px 85px rgba(0,0,0,.46),inset 0 1px 0 rgba(255,255,255,.05);
+  padding:34px 34px 29px;
 }
-#login .karte h2{color:#fafafa}
-#login .karte p.hinweis,#login .klein{color:#c4c9ce}
-#login .karte label{color:#d4d8dc}
+#login .karte h2{color:#f7fbff;font-size:26px}
+#login .karte p.hinweis{color:#b2c2d1}
+#login .karte label{color:#d5e1eb}
 #login .karte input{
-  background:#30353b;border-color:#626970;color:#fff
+  background:rgba(28,36,45,.85);border:1px solid #667987;color:#fff;border-radius:10px;
 }
-#login .karte #pruefen{color:#d3d9df}
-#login .karte #pruefen:hover{color:white}
-#login .klein{border-top-color:#52585e}
+#login .karte input:focus-visible{outline-color:#8be7e2}
 #login .karte button.p{
-  background:linear-gradient(110deg,#767f89,#5b646e);
-  border-color:#949da6
+  background:linear-gradient(115deg,#68c5cf,#68acd1);
+  border-color:#92dbe2;
+  color:#12252d;
+}
+#login .karte button.p:hover:not(:disabled){background:linear-gradient(115deg,#8be2df,#86c6e7)}
+#login .karte #pruefen{background:transparent;border:0;color:#b4dce2;box-shadow:none}
+#login .klein{color:#acbfcd;border-top-color:rgba(164,198,218,.22)}
+#login .fehler{color:#ffaeb7}
+@media(max-width:1260px){
+  .kacheln{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:950px){
+  aside{width:244px}
+  .idv-sidebar-logo{max-width:216px}
+  .workspace-topbar-caption{font-size:9px}
+  .grid2{grid-template-columns:1fr}
 }
 @media(max-width:820px){
-  aside{border-right:0;border-bottom:1px solid #4c5258}
+  #app{display:block}
+  aside{
+    width:100%;height:auto;position:relative;padding:12px 17px;
+    box-shadow:none;border-right:0;border-bottom:1px solid #3e4d59
+  }
+  aside .sidebar-brand{align-items:flex-start;margin:0 0 6px;padding:1px 0 8px;width:100%}
+  .idv-sidebar-logo{width:215px;max-width:67vw}
+  .sidebar-brand-caption{margin-left:5px}
+  aside #menu{width:100%}
+  .sidebar-gruppe{width:100%}
+  .sidebar-gruppe-inhalt{display:flex;flex-wrap:wrap;gap:4px}
+  aside .sidebar-gruppe-inhalt a{margin:2px 0}
+  aside .me{width:100%;margin:9px 0 0}
+  .workspace-main{padding:0 17px 30px;max-width:none}
+  .workspace-topbar{min-height:68px;margin-bottom:19px;padding:12px 2px}
+  .workspace-topbar-caption{display:none}
+  .hello{padding:23px}
+}
+@media(max-width:520px){
+  .kacheln{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .kachel{padding:15px 14px;min-height:129px}
+  .kachel b{font-size:30px}
+  .kachel-icon{width:30px;height:30px}
+  .kachel-icon .nav-icon{width:16px;height:16px}
+  .kachel-head span:first-child{font-size:11px}
+  .kachel small{font-size:9px}
+  .workspace-topbar-icon{width:38px;height:38px}
+  .workspace-topbar-title strong{font-size:9px}
+  .workspace-topbar-title span{font-size:14px}
+  #login .karte{padding:27px 22px 22px}
+  .idv-login-logo{width:290px}
+  main h1,#inhalt>h1{font-size:24px}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}
 }
 
 </style>
@@ -1083,13 +1197,15 @@ function vDash() {
   const dashboard = D.dashboard || {};
   const summary = dashboard.summary || {};
   const kpi = [
-    ['Personal', summary.personal ?? 0],
-    ['Kündigungen', summary.kuendigungen ?? 0],
-    ['Offene Rückgaben', summary.offeneRueckgaben ?? 0],
-    ['Disziplinarfälle', summary.disziplinFaelle ?? 0]
+    ['Personal', summary.personal ?? 0, 'pers', 'tone-cyan'],
+    ['Kündigungen', summary.kuendigungen ?? 0, 'kue', 'tone-violet'],
+    ['Offene Rückgaben', summary.offeneRueckgaben ?? 0, 'rout', 'tone-amber'],
+    ['Disziplinarfälle', summary.disziplinFaelle ?? 0, 'dis', 'tone-rose']
   ];
-  const kacheln = '<div class="kacheln">' + kpi.map(([label,n])=>
-    '<div class="kachel"><b>'+Number(n)+'</b><span>'+label+'</span></div>'
+  const kacheln = '<div class="kacheln">' + kpi.map(([label,n,icon,tone])=>
+    '<div class="kachel '+tone+'"><div class="kachel-head"><span>'+label+
+    '</span><span class="kachel-icon">'+navIcon(icon)+'</span></div>'+
+    '<b>'+Number(n)+'</b><small>IM SYSTEM ERFASST</small></div>'
   ).join('') + '</div>';
 
   function liste(titel, eintraege) {
