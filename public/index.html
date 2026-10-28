@@ -145,7 +145,15 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 @media(max-width:650px){.pers-form,#personalDialog .pers-detail{grid-template-columns:1fr}.pers-bar input,.pers-bar select{max-width:none;width:100%}}
 
 .sf-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.sf-selected{margin:1px 4px 1px 0}.sf-chip{border-radius:7px;background:#263449;color:#d6e2f4;padding:6px 10px}.sf-chip.sel{background:#21654a;color:#fff;border-color:#39a979}#sfDialog{max-width:min(830px,95vw);width:min(830px,95vw);max-height:92vh;overflow:auto;background:#182433;color:var(--txt);border:1px solid #536781;border-radius:12px;padding:26px}#sfDialog::backdrop{background:#050a18bb}#sfDialog h2{margin-top:0}#sfDialog .sf-commands{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}#sfDialog input{width:100%}
-#porDialog{max-width:min(620px,95vw);width:min(620px,95vw);max-height:92vh;overflow:auto;background:#182433;color:var(--txt);border:1px solid #536781;border-radius:12px;padding:26px}#porDialog::backdrop{background:#050a18bb}#porDialog h2{margin-top:0}#porDialog input,#porDialog select{width:100%}#porDialog .por-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}\n</style>
+#porDialog{max-width:min(620px,95vw);width:min(620px,95vw);max-height:92vh;overflow:auto;background:#182433;color:var(--txt);border:1px solid #536781;border-radius:12px;padding:26px}#porDialog::backdrop{background:#050a18bb}#porDialog h2{margin-top:0}#porDialog input,#porDialog select{width:100%}#porDialog .por-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}\n
+.copnet-box{border-top:1px solid var(--line);margin-top:18px;padding-top:16px}
+.copnet-box h3{margin:0 0 8px;font-size:15px}
+.copnet-felder{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.copnet-felder input{width:100%;max-width:100%;min-width:0}
+.copnet-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+#copInfo{min-height:18px}
+@media(max-width:600px){.copnet-felder{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 
@@ -202,6 +210,7 @@ const MODS = [
   ['users','Benutzer & Rollen','🔐'],['log','Protokoll','🧾']
 ];
 let ME = null, D = null, tab = 'dash';
+let copnetGeladen = null, copnetNummer = null;
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -538,6 +547,7 @@ function personalFiltern() {
 function personalDialogSchliessen() {
   const dialog = $('#personalDialog');
   if (dialog.open) dialog.close();
+  copnetGeladen = null; copnetNummer = null;
 }
 
 function personalFeld(name, id, wert, typ, extra) {
@@ -572,10 +582,115 @@ function personalAnzeigen(nr) {
   dialog.innerHTML = '<h2>' + esc([p.vorname,p.nachname].filter(Boolean).join(' ')) + '</h2>' +
     '<div class="mut">Personalakte · IdentityValley</div>' +
     '<div class="pers-detail">' + items.map(([k,v]) => '<div class="item"><small>' + k + '</small>' + esc(v == null || v === '' ? '–' : v) + '</div>').join('') + '</div>' +
+    (ME.sensibel ? '<section class="copnet-box"><h3>CopNet-Zugangsdaten</h3><div id="copnetArea" aria-live="polite">Zugangsdaten werden geschützt geladen …</div></section>' : '') +
     '<div class="actions"><button type="button" id="persAbbrechen">Schließen</button>' +
     (can('pers',2) ? '<button type="button" class="p" data-edit-person="' + Number(nr) + '">Bearbeiten</button>' : '') + '</div>';
   dialog.showModal();
   $('#persAbbrechen').addEventListener('click',personalDialogSchliessen);
+  if (ME.sensibel) copnetLaden(Number(nr), p).catch(() => {});
+}
+
+
+/* CopNet-Passwörter werden getrennt abgerufen. Sie stehen weder in den
+   Bootstrap-Daten noch als JSON im Seitenquelltext oder in einem HTML-Attribut. */
+async function copnetLaden(nr, person) {
+  copnetGeladen = null; copnetNummer = nr;
+  try {
+    const antwort = await api('/copnet/' + nr);
+    if (copnetNummer !== nr || !$('#personalDialog').open || !$('#copnetArea')) return;
+    copnetGeladen = { dienstnummer: antwort.dienstnummer || '', passwort: antwort.passwort || '' };
+    copnetAnzeigen(person);
+  } catch(e) {
+    if (copnetNummer === nr && $('#copnetArea')) {
+      $('#copnetArea').textContent = 'CopNet konnte nicht geladen werden: ' + e.message;
+    }
+  }
+}
+function copnetAnzeigen(person) {
+  const area = $('#copnetArea');
+  if (!area || !copnetGeladen || !ME.sensibel) return;
+  const darfSchreiben = can('pers',2);
+  area.innerHTML = '<div class="copnet-felder">' +
+    '<div><label>Name</label><input id="copName" readonly></div>' +
+    '<div><label>Dienstnummer</label><input id="copDn" readonly autocomplete="off"></div>' +
+    '<div><label>Passwort</label><input id="copPw" type="password" readonly autocomplete="off"></div>' +
+    '</div><div class="copnet-actions">' +
+    '<button type="button" id="copShow">Passwort anzeigen</button>' +
+    '<button type="button" id="copCopyPw">Passwort kopieren</button>' +
+    '<button type="button" id="copCopyAll">Zugang komplett kopieren</button>' +
+    (darfSchreiben ? '<button type="button" id="copEdit" class="p">Zugangsdaten bearbeiten</button>' : '') +
+    '</div><p id="copInfo" class="mut"></p>';
+  $('#copName').value = [person.vorname, person.nachname].filter(Boolean).join(' ').trim();
+  $('#copDn').value = copnetGeladen.dienstnummer;
+  $('#copPw').value = copnetGeladen.passwort;
+  $('#copShow').onclick = () => {
+    const feld=$('#copPw');
+    feld.type = feld.type === 'password' ? 'text' : 'password';
+    $('#copShow').textContent = feld.type === 'password' ? 'Passwort anzeigen' : 'Passwort verbergen';
+  };
+  $('#copCopyPw').onclick = () => copnetKopieren(copnetGeladen.passwort,'Passwort');
+  $('#copCopyAll').onclick = () => {
+    const daten = 'Name: ' + $('#copName').value + '\n' +
+      'Dienstnummer: ' + copnetGeladen.dienstnummer + '\n' +
+      'Passwort: ' + copnetGeladen.passwort;
+    copnetKopieren(daten,'Zugang');
+  };
+  if (darfSchreiben) $('#copEdit').onclick = () => copnetBearbeiten();
+}
+async function copnetKopieren(text,label) {
+  const info = $('#copInfo');
+  if (!text) { if(info)info.textContent='Keine Daten vorhanden';return; }
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value=text;ta.style.position='fixed';ta.style.left='-9999px';
+      document.body.appendChild(ta);ta.select();
+      const ok=document.execCommand('copy');ta.remove();
+      if (!ok) throw Error('Kopieren nicht unterstützt');
+    }
+    if(info)info.textContent=label+' kopiert';
+  } catch(e) {
+    if(info)info.textContent='Kopieren fehlgeschlagen. Bitte das Feld manuell kopieren.';
+  }
+}
+function copnetBearbeiten() {
+  if (!copnetGeladen || !can('pers',2) || !ME.sensibel) return;
+  const d = $('#personalDialog'), area = $('#copnetArea');
+  area.innerHTML = '<h3>CopNet-Zugangsdaten bearbeiten</h3>' +
+    '<label for="copDnEdit">Dienstnummer</label><input id="copDnEdit" autocomplete="off" maxlength="120">' +
+    '<label for="copPwEdit">Passwort</label><input id="copPwEdit" type="password" autocomplete="new-password" maxlength="500">' +
+    '<div class="copnet-actions"><button type="button" id="copRevealEdit">Passwort anzeigen</button>' +
+    '<button type="button" id="copCancel">Abbrechen</button><button type="button" class="p" id="copSave">Speichern</button></div>' +
+    '<p id="copInfo" class="mut"></p>';
+  $('#copDnEdit').value=copnetGeladen.dienstnummer;
+  $('#copPwEdit').value=copnetGeladen.passwort;
+  $('#copRevealEdit').onclick=()=>{
+    const pw=$('#copPwEdit');
+    pw.type=pw.type==='password'?'text':'password';
+  };
+  $('#copCancel').onclick=()=>{
+    const p=(D.personal||[]).find(x=>Number(x.personalnummer)===copnetNummer);
+    if(p) copnetAnzeigen(p);
+  };
+  $('#copSave').onclick=()=>copnetSpeichern();
+}
+async function copnetSpeichern() {
+  if(!copnetGeladen || !can('pers',2) || !ME.sensibel)return;
+  const nr=copnetNummer;
+  const dienstnummer=$('#copDnEdit').value.trim(), passwort=$('#copPwEdit').value;
+  const btn=$('#copSave');btn.disabled=true;$('#copInfo').textContent='Speichere …';
+  try {
+    await api('/copnet/'+nr,{method:'PUT',body:JSON.stringify({dienstnummer,passwort})});
+    if (copnetNummer!==nr || !$('#personalDialog').open) return;
+    copnetGeladen={dienstnummer,passwort};
+    const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nr);
+    if(p) copnetAnzeigen(p);
+    if($('#copInfo'))$('#copInfo').textContent='Zugangsdaten gespeichert';
+  } catch(e) {
+    if($('#copInfo'))$('#copInfo').textContent='Speichern fehlgeschlagen: '+e.message;
+  } finally { btn.disabled=false; }
 }
 
 function personalBearbeiten(nr) {
