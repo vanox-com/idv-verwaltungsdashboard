@@ -79,6 +79,10 @@ CREATE TABLE IF NOT EXISTS personal (
 
 /* POR-Freigabe und ursprüngliche Beförderungsfristen.
    Schema-Migration ist wiederholbar und überschreibt keine vorhandenen Werte. */
+/* Dokumenttitel und Google-Docs-/HTTPS-Ziel getrennt halten. Vorhandene Titel bleiben erhalten. */
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS arbeitsvertrag_url text NOT NULL DEFAULT '';
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS ernennungsurkunde_url text NOT NULL DEFAULT '';
+
 ALTER TABLE personal ADD COLUMN IF NOT EXISTS letzte_befoerderung date;
 ALTER TABLE personal ADD COLUMN IF NOT EXISTS naechste_befoerderung date;
 ALTER TABLE personal ADD COLUMN IF NOT EXISTS por_status text NOT NULL DEFAULT 'offen';

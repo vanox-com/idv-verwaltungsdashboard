@@ -23,6 +23,7 @@ export async function initDb() {
   const sql = await readFile(path.join(__dirname, 'schema.sql'), 'utf8');
   await db.query(sql);
   await seedBenutzer();
+  await originalDokumentLinksUebernehmen();
 }
 
 /*
@@ -56,4 +57,32 @@ async function seedBenutzer() {
   );
   await db.query("INSERT INTO log (aktion, art) VALUES ('Administrator angelegt', 'add')");
   console.log('Administrator angelegt mit Dienstnummer ' + dienstnummer);
+}
+
+/* Private, idempotente Wiederherstellung der eindeutig zugeordneten
+   Original-Links. Die Quelle bleibt Render-Environment statt GitHub. */
+async function originalDokumentLinksUebernehmen() {
+  const raw=process.env.PERSONAL_DOKUMENTE_IMPORT;
+  if(!raw)return;
+  let liste;
+  try { liste=JSON.parse(raw); } catch(e) {
+    throw new Error('PERSONAL_DOKUMENTE_IMPORT: ungültiges JSON');
+  }
+  if(!Array.isArray(liste)||liste.length>300)
+    throw new Error('PERSONAL_DOKUMENTE_IMPORT: ungültige Liste');
+  let anzahl=0;
+  for(const e of liste) {
+    if(!Number.isSafeInteger(e.nr)||e.nr<1||
+       !['arbeitsvertrag','ernennungsurkunde'].includes(e.feld)||
+       typeof e.name!=='string'||typeof e.url!=='string')
+      throw new Error('PERSONAL_DOKUMENTE_IMPORT: ungültiger Datensatz');
+    const u=new URL(e.url);
+    if(u.protocol!=='https:'||u.hostname!=='docs.google.com')
+      throw new Error('PERSONAL_DOKUMENTE_IMPORT: URL muss Google Docs sein');
+    const sql='UPDATE personal SET '+e.feld+'_url=$1 WHERE personalnummer=$2 AND '+
+      e.feld+"=$3 AND COALESCE("+e.feld+"_url,'')=''";
+    const r=await db.query(sql,[e.url,e.nr,e.name]);
+    anzahl+=r.rowCount;
+  }
+  if(anzahl)console.log('Dokumentlinks aus Original erfolgreich ergänzt: '+anzahl);
 }
