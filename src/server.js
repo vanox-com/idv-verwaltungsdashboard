@@ -638,6 +638,13 @@ app.post('/api/users', requireLogin, nurAdmin, async (req, res, next) => {
 app.patch('/api/users/:id', requireLogin, nurAdmin, async (req, res, next) => {
   try {
     const { anzeigename, rolle, gesperrt, neues_passwort } = req.body;
+    // Den einzigen Administrator nicht versehentlich durch den eigenen Dialog aussperren.
+    if (Number(req.params.id) === Number(req.user.id) &&
+       (gesperrt === true || (rolle != null && rolle !== 'Administrator'))) {
+      return res.status(400).json({ error: 'Eigenen Administratorzugang nicht sperren oder herabstufen' });
+    }
+    if (rolle != null && !(await db.query('SELECT 1 FROM roles WHERE name=$1', [rolle])).rows.length)
+      return res.status(400).json({ error: 'Unbekannte Rolle' });
     const felder = [], werte = [];
     if (anzeigename != null) { werte.push(anzeigename); felder.push(`anzeigename = $${werte.length}`); }
     if (rolle != null) { werte.push(rolle); felder.push(`rolle = $${werte.length}`); }
@@ -669,6 +676,30 @@ app.delete('/api/users/:id', requireLogin, nurAdmin, async (req, res, next) => {
       [req.user.id, `Zugang gelöscht: ${rows[0].dienstnummer}`]);
     res.json({ ok: true });
   } catch (e) { next(e); }
+});
+
+
+/* Berechtigungsmatrix: ausschließlich Administrator, Administratormatrix bleibt fest. */
+app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req, res, next) => {
+  try {
+    const rolle = req.params.rolle, modul = req.params.modul;
+    const stufe = req.body?.stufe;
+    const erlaubteModule = new Set(['dash', 'pers', 'bef', 'rout', 'sonder', 'dis',
+      'kue', 'chk', 'rl', 'org', 'bl', 'log']);
+    if (rolle === 'Administrator')
+      return res.status(403).json({ error: 'Administratorrechte sind fest' });
+    if (!erlaubteModule.has(modul) || ![0, 1, 2].includes(stufe))
+      return res.status(400).json({ error: 'Ungültiges Modul oder Berechtigungsstufe' });
+    const hatRolle = (await db.query('SELECT 1 FROM roles WHERE name=$1', [rolle])).rows.length;
+    if (!hatRolle) return res.status(404).json({ error: 'Rolle nicht vorhanden' });
+    await db.query(
+      `INSERT INTO role_perms (rolle, modul, stufe) VALUES ($1, $2, $3)
+       ON CONFLICT (rolle, modul) DO UPDATE SET stufe = EXCLUDED.stufe`, [rolle, modul, stufe]
+    );
+    await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'edit')`,
+      [req.user.id, `Rollenrecht geändert: ${rolle}/${modul} → ${stufe}`]);
+    res.json({ ok: true, rolle, modul, stufe });
+  } catch(e) { next(e); }
 });
 
 app.get('/api/log', requireLogin, requireRight('log', 1), async (req, res, next) => {

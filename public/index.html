@@ -162,6 +162,13 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .kue-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 14px}.kue-form .full{grid-column:1/-1}
 #kueDialog input,#kueDialog select{width:100%;min-width:0}.kue-commands{display:flex;gap:10px;justify-content:flex-end;margin-top:15px}
 @media(max-width:600px){.kue-form{grid-template-columns:1fr}}
+
+/* Benutzerverwaltung und Rollenmatrix */
+#userDialog{color:var(--txt);background:#182433;border:1px solid #536781;border-radius:12px;width:min(530px,96vw);max-height:92vh;overflow:auto;padding:26px}
+#userDialog::backdrop{background:#050a18bb}#userDialog h2{margin:0 0 9px}#userDialog input,#userDialog select{width:100%}
+#userDialog .user-check{display:flex;align-items:center;gap:9px}#userDialog .user-check input{width:auto}
+.user-commands{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}.user-delete{color:#ffb7b7;border-color:#7b4545}
+.user-perm{min-width:72px;cursor:pointer}.user-matrix th:first-child{text-align:left}.user-matrix td{text-align:center}
 </style>
 </head>
 <body>
@@ -448,6 +455,7 @@ function zeichne() {
       dis: vDis, rout: vRout, chk: vChk, rl: vRl, org: vOrg, users: vUsers };
     const f = ansichten[tab];
     $('#inhalt').innerHTML = f ? f() : '<p>Dieser Bereich ist für deine Rolle nicht freigegeben.</p>';
+    if(tab === 'users') ladeBenutzer().catch(err => { if($('#benutzerBereich')) $('#benutzerBereich').textContent = 'Benutzerverwaltung konnte nicht geladen werden: ' + err.message; });
   } catch (err) {
     $('#inhalt').innerHTML = '<h1>Fehler beim Laden</h1><p class="fehler">' + esc(err.message) + '</p>';
     console.error('Ansicht konnte nicht aufgebaut werden:', err);
@@ -1124,19 +1132,115 @@ function vOrg() {
   return '<h1>Organigramm</h1><div class="box">' + zeilen + '</div>';
 }
 
-function vUsers() {
-  if (ME.rolle !== 'Administrator') return '<p>Nur der Administrator darf Zugänge verwalten.</p>';
-  return `<h1>Benutzer &amp; Rollen</h1><div id="benutzerBereich">Lade …</div>`;
-}
 
-async function ladeBenutzer() {
-  const a = await api('/users');
-  $('#benutzerBereich').innerHTML = tabelle(['Dienstnummer','Name','Rolle','Passwort','Status'],
-    a.users.map(u => [esc(u.dienstnummer), esc(u.anzeigename), esc(u.rolle),
-      u.muss_passwort_aendern ? '<span class="tag warn">Startpasswort</span>' : '<span class="tag ok">geändert</span>',
-      u.gesperrt ? '<span class="tag bad">gesperrt</span>' : '<span class="tag ok">aktiv</span>']));
+/* Benutzer- und Berechtigungsverwaltung, Vorbild: Original-HTML. */
+const RECHTE_STUFEN=['–','Lesen','Bearbeiten'];
+let USER_ADMIN=null;
+function vUsers() {
+  if(ME.rolle!=='Administrator')return '<p>Nur der Administrator darf Zugänge verwalten.</p>';
+  return '<h1>Benutzer &amp; Rollen</h1><div class="pers-bar"><span class="mut">Zugänge anlegen, sperren und Rollenberechtigungen ändern.</span>'+
+    '<span class="spacer"></span><button type="button" class="p" id="userNeu">+ Zugang</button></div>'+
+    '<div id="benutzerBereich">Lade Benutzer und Berechtigungen …</div>';
 }
-setInterval(() => { if (tab === 'users' && $('#benutzerBereich') && $('#benutzerBereich').textContent === 'Lade …') ladeBenutzer().catch(() => {}); }, 60);
+async function ladeBenutzer() {
+  if(ME.rolle!=='Administrator')return;
+  const a=await api('/users');
+  USER_ADMIN=a;
+  if(tab!=='users'||!$('#benutzerBereich'))return;
+  const rows=a.users.map(u=>[
+    esc(u.dienstnummer),esc(u.anzeigename),esc(u.rolle),
+    u.muss_passwort_aendern?'<span class="tag warn">Startpasswort</span>':'<span class="tag ok">geändert</span>',
+    u.gesperrt?'<span class="tag bad">Gesperrt</span>':'<span class="tag ok">Aktiv</span>',
+    '<button type="button" data-user-edit="'+Number(u.id)+'">Bearbeiten</button> '+
+    (u.dienstnummer!==ME.dienstnummer?'<button type="button" class="user-delete" data-user-delete="'+Number(u.id)+'">Löschen</button>':'')
+  ]);
+  const matrixRows=MODS.filter(m=>m[0]!=='users').map(m=>{
+    const cells=a.rollen.map(r=>{
+      const p=a.perms.find(x=>x.rolle===r.name && x.modul===m[0]);
+      const st=p?Number(p.stufe):0;
+      const status=RECHTE_STUFEN[st]||'–';
+      if(r.name==='Administrator')return '<td><span class="tag ok">'+status+'</span></td>';
+      return '<td><button type="button" class="tag user-perm '+(st===2?'ok':st===1?'warn':'')+
+        '" data-perm-role="'+esc(r.name)+'" data-perm-module="'+esc(m[0])+
+        '" data-perm-value="'+st+'" title="Klicken zum Ändern">'+status+'</button></td>';
+    }).join('');
+    return '<tr><th scope="row">'+esc(m[1])+'</th>'+cells+'</tr>';
+  }).join('');
+  $('#benutzerBereich').innerHTML=
+    '<div class="box"><h3>Benutzerkonten</h3>'+tabelle(['Dienstnummer','Name','Rolle','Passwort','Status','Aktion'],rows)+'</div>'+
+    '<div class="box"><h3>Berechtigungsmatrix</h3>'+
+    '<p class="mut">Klick auf eine Berechtigung wechselt zwischen „Kein Recht“, „Lesen“ und „Bearbeiten“. Administratorrechte sind fest.</p>'+
+    '<div class="tw"><table class="user-matrix"><thead><tr><th>Modul</th>'+
+    a.rollen.map(r=>'<th>'+esc(r.name)+'</th>').join('')+'</tr></thead><tbody>'+matrixRows+
+    '</tbody></table></div></div>';
+}
+function userDialogForm(id) {
+  if(ME.rolle!=='Administrator'||!USER_ADMIN)return;
+  const neu=id==null,u=neu?null:USER_ADMIN.users.find(x=>Number(x.id)===Number(id));
+  if(!neu&&!u)return;
+  let d=$('#userDialog');
+  if(!d){d=document.createElement('dialog');d.id='userDialog';document.body.appendChild(d);}
+  const roleOptions=USER_ADMIN.rollen.map(r=>'<option value="'+esc(r.name)+'"'+(r.name===(u?.rolle||'Mitarbeiter')?' selected':'')+'>'+esc(r.name)+'</option>').join('');
+  d.innerHTML='<h2>'+(neu?'Zugang anlegen':'Zugang bearbeiten')+'</h2>'+
+    '<p class="mut">Passwörter werden ausschließlich auf dem Server als Hash gespeichert.</p>'+
+    '<form id="userForm"><label for="uNum">Dienstnummer</label>'+
+    '<input id="uNum" value="'+esc(u?.dienstnummer||'')+'" '+(neu?'required':'readonly')+' autocomplete="off">'+
+    '<label for="uName">Anzeigename</label><input id="uName" value="'+esc(u?.anzeigename||'')+'" required>'+
+    '<label for="uRole">Rolle</label><select id="uRole">'+roleOptions+'</select>'+
+    '<label for="uPassword">'+(neu?'Startpasswort (mindestens 8 Zeichen)':'Neues Passwort (leer lassen = beibehalten)')+'</label>'+
+    '<input id="uPassword" type="password" autocomplete="new-password" minlength="8" '+(neu?'required':'')+'>'+
+    (neu?'':'<label class="user-check"><input type="checkbox" id="uLocked" '+(u.gesperrt?'checked':'')+'> Zugang sperren</label>')+
+    '<p id="userFormError" class="fehler" role="alert"></p>'+
+    '<div class="user-commands"><button type="button" id="userCancel">Abbrechen</button>'+
+    '<button type="submit" class="p" id="userSave">Speichern</button></div></form>';
+  d.showModal();
+  $('#userCancel').onclick=()=>d.close();
+  $('#userForm').onsubmit=async e=>{
+    e.preventDefault();
+    const nummer=$('#uNum').value.trim(),name=$('#uName').value.trim(),rolle=$('#uRole').value,
+      pw=$('#uPassword').value;
+    if(!nummer||!name||(pw&&pw.length<8)||(neu&&pw.length<8)){
+      $('#userFormError').textContent='Dienstnummer, Name und gegebenenfalls Passwort (mindestens 8 Zeichen) sind erforderlich.';return;
+    }
+    const body=neu?{dienstnummer:nummer,anzeigename:name,rolle,startpasswort:pw}:
+      {anzeigename:name,rolle,gesperrt:$('#uLocked').checked};
+    if(!neu && pw)body.neues_passwort=pw;
+    $('#userSave').disabled=true;$('#userFormError').textContent='';
+    try{
+      await api(neu?'/users':'/users/'+id,{method:neu?'POST':'PATCH',body:JSON.stringify(body)});
+      d.close();
+      await ladeBenutzer();
+    }catch(err){$('#userFormError').textContent='Speichern fehlgeschlagen: '+err.message;}
+    finally{if($('#userSave'))$('#userSave').disabled=false;}
+  };
+}
+async function userLoeschen(id) {
+  if(ME.rolle!=='Administrator'||!USER_ADMIN)return;
+  const u=USER_ADMIN.users.find(x=>Number(x.id)===id);
+  if(!u||u.dienstnummer===ME.dienstnummer)return;
+  if(!confirm('Zugang für '+u.anzeigename+' (Dienstnummer '+u.dienstnummer+') endgültig löschen?'))return;
+  try{await api('/users/'+id,{method:'DELETE'});await ladeBenutzer();}
+  catch(err){alert('Löschen fehlgeschlagen: '+err.message);}
+}
+async function userRechtAendern(btn) {
+  if(ME.rolle!=='Administrator')return;
+  const rolle=btn.dataset.permRole,modul=btn.dataset.permModule,stufe=(Number(btn.dataset.permValue)+1)%3;
+  btn.disabled=true;
+  try{
+    await api('/rollen/'+encodeURIComponent(rolle)+'/recht/'+encodeURIComponent(modul),
+      {method:'PATCH',body:JSON.stringify({stufe})});
+    await ladeBenutzer();
+  }catch(err){btn.disabled=false;alert('Berechtigung konnte nicht gespeichert werden: '+err.message);}
+}
+document.addEventListener('click',e=>{
+  if(e.target.closest('#userNeu')){userDialogForm(null);return;}
+  const ed=e.target.closest('[data-user-edit]');
+  if(ed){userDialogForm(Number(ed.dataset.userEdit));return;}
+  const del=e.target.closest('[data-user-delete]');
+  if(del){userLoeschen(Number(del.dataset.userDelete));return;}
+  const perm=e.target.closest('[data-perm-role]');
+  if(perm)userRechtAendern(perm);
+});
 
 async function vLog_() {
   const zeilen = await api('/log');
