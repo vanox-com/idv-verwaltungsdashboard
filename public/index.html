@@ -240,6 +240,23 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .org-bereich ul{margin:8px 0 0;padding-left:18px}
 .org-bereich li{padding:3px 0}
 @media(max-width:740px){.org-bereiche{grid-template-columns:1fr}.org-raete{display:grid;grid-template-columns:1fr}}
+
+/* Wiederhergestellte Dashboard-Hinweise */
+.dashboard-line{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:9px 0;border-bottom:1px solid var(--line)}
+.dashboard-line:last-child{border-bottom:0}
+.dashboard-person{display:flex;flex-direction:column;min-width:0}
+.dashboard-person strong{font-weight:650}
+.dashboard-person small{font-size:11px;color:var(--mut)}
+.dashboard-line .tag{text-align:right;white-space:nowrap;flex:0 0 auto}
+.dashboard-group{margin:0 0 12px}
+.dashboard-group-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:6px}
+.dashboard-progress{height:6px;background:#2b3b4d;border-radius:10px;overflow:hidden}
+.dashboard-progress i{display:block;height:100%;background:#608eb6;border-radius:10px}
+.dashboard-stats{display:flex;gap:7px;flex-wrap:wrap}
+.dashboard-link{padding:6px 0;border-bottom:1px solid var(--line)}
+.dashboard-link:last-child{border:0}
+.box h3{font-size:16px;margin:0 0 14px;font-weight:690}
 </style>
 </head>
 <body>
@@ -550,45 +567,80 @@ function tabelle(kopf, zeilen) {
 
 /* ---------- Bereiche ---------- */
 
+
+/* Die Übersichtsseite kombiniert Statistiken mit der Ereignisübersicht der
+   Originaldatei. Persönliche Einträge kommen nur bei passendem Recht vom API. */
 function vDash() {
-  /* Aggregierte Kennzahlen kommen vom Server, auch ohne Recht auf Personalakten. */
-  const summary = D.dashboard.summary || {};
+  const dashboard = D.dashboard || {};
+  const summary = dashboard.summary || {};
   const kpi = [
     ['Personal', summary.personal ?? 0],
     ['Kündigungen', summary.kuendigungen ?? 0],
-    ['offene Rückgaben', summary.offeneRueckgaben ?? 0],
+    ['Offene Rückgaben', summary.offeneRueckgaben ?? 0],
     ['Disziplinarfälle', summary.disziplinFaelle ?? 0]
   ];
-  const kacheln = '<div class="kacheln">' + kpi.map(function (k) {
-    return '<div class="kachel"><b>' + k[1] + '</b><span>' + k[0] + '</span></div>';
-  }).join('') + '</div>';
-
-  const uebersicht = '<div class="box"><b>Personalübersicht</b>' + D.dashboard.personal.map(function (s) {
-    return '<div>' + esc(s.label) + ': <b>' + s.anzahl + '</b></div>';
-  }).join('') + '</div>';
+  const kacheln = '<div class="kacheln">' + kpi.map(([label,n])=>
+    '<div class="kachel"><b>'+Number(n)+'</b><span>'+label+'</span></div>'
+  ).join('') + '</div>';
 
   function liste(titel, eintraege) {
-    const inhalt = eintraege.map(function (l) {
-      return '<div>' + (l.url
-        ? '<a class="l" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.text) + '</a>'
-        : esc(l.text)) + '</div>';
-    }).join('') || '–';
-    return '<div class="box"><b>' + titel + '</b>' + inhalt + '</div>';
+    const inhalt=(eintraege||[]).map(l=>{
+      const url=String(l.url||'');
+      const text=esc(l.text);
+      return '<div class="dashboard-link">'+(/^https:\/\//i.test(url)
+        ?'<a class="l" target="_blank" rel="noopener noreferrer" href="'+esc(url)+'">'+text+'</a>'
+        :text)+'</div>';
+    }).join('') || '<span class="mut">Keine Einträge</span>';
+    return '<section class="box"><h3>'+titel+'</h3>'+inhalt+'</section>';
   }
-
-  const uhrzeit = new Date().getHours();
-  const begruessung = uhrzeit < 11 ? 'Guten Morgen' : uhrzeit < 18 ? 'Guten Tag' : 'Guten Abend';
-  const datum = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const willkommen = '<section class="hello"><span class="eyebrow">IdentityValley · Dienstübersicht</span>' +
-    '<h1>' + begruessung + ', ' + esc(ME.anzeigename) + '.</h1>' +
-    '<p>Schön, dass du wieder da bist. Einen erfolgreichen Dienst und gutes Gelingen bei deinen Aufgaben!</p>' +
-    '<span class="hello-date">' + esc(datum) + '</span></section>';
-  return willkommen + kacheln +
-    '<div class="grid2">' + uebersicht +
-    liste('Hilfreiche Links', D.dashboard.links) +
-    liste('Vorlagen', D.dashboard.vorlagen) +
-    liste('Info-Dokumente', D.dashboard.info) +
-    '</div>';
+  function personZeile(name,zweittext,status,badgeType='') {
+    return '<div class="dashboard-line"><div class="dashboard-person"><strong>'+esc(name)+'</strong>'+
+      (zweittext?'<small>'+esc(zweittext)+'</small>':'')+'</div>'+
+      '<span class="tag '+badgeType+'">'+esc(status)+'</span></div>';
+  }
+  const gruppen=dashboard.gruppen||[];
+  const max=Math.max(1,...gruppen.map(g=>Number(g.anzahl)||0));
+  const gruppenBox='<section class="box"><h3>Personal nach Gruppe</h3>'+
+    (gruppen.length?gruppen.map(g=>'<div class="dashboard-group"><div class="dashboard-group-head">'+
+      '<span>'+esc(g.name)+'</span><strong>'+Number(g.anzahl)+'</strong></div>'+
+      '<div class="dashboard-progress"><i style="width:'+Math.min(100,Math.round((Number(g.anzahl)||0)/max*100))+'%"></i></div></div>'
+    ).join(''):'<span class="mut">Keine Einträge</span>')+'</section>';
+  const due=dashboard.faellige||[];
+  const dueBox=can('bef')?'<section class="box"><h3>Fällige Beförderungen</h3>'+
+    (due.length?due.map(p=>personZeile(p.name,p.dienstgrad+' → '+p.naechsterRang,
+      'Fällig: '+fd(p.faellig), 'bad')).join(''):'<span class="mut">Keine fälligen Beförderungen</span>')+
+    '</section>':'';
+  const off=dashboard.inaktiv||[];
+  const offBox=can('pers')&&off.length?'<section class="box"><h3>Nicht im aktiven Dienst</h3>'+
+    off.map(p=>personZeile(p.name,p.dienstgrad||'',p.status,'warn')).join('')+'</section>':'';
+  const geb=dashboard.geburtstage||[],jub=dashboard.jubilaeen||[];
+  const gebBox=can('geb')?'<section class="box"><h3>Geburtstage (30 Tage)</h3>'+
+    (geb.length?geb.map(p=>personZeile(p.name,p.dienstgrad||'',
+      p.tage===0?'Heute': 'In '+p.tage+' Tagen','warn')).join(''):
+      '<span class="mut">Keine Geburtstage in den nächsten 30 Tagen</span>')+
+    '</section>':'';
+  const jubBox=can('jub')?'<section class="box"><h3>Dienstjubiläen (30 Tage)</h3>'+
+    (jub.length?jub.map(p=>personZeile(p.name,p.dienstgrad||'',
+      p.jahre+' Jahre'+(p.tage===0?' – heute':' in '+p.tage+' Tagen'),'ok')).join(''):
+      '<span class="mut">Keine Dienstjubiläen in den nächsten 30 Tagen</span>')+
+    '</section>':'';
+  const uebersicht='<section class="box"><h3>Personalübersicht (Dienstblatt)</h3>'+
+    '<div class="dashboard-stats">'+(dashboard.personal||[]).map(p=>
+      '<span class="tag">'+esc(p.label)+': <strong>'+Number(p.anzahl||0)+'</strong></span>'
+    ).join('')+'</div></section>';
+  const hour=new Date().getHours();
+  const begruessung=hour<11?'Guten Morgen':hour<18?'Guten Tag':'Guten Abend';
+  const datum=new Date().toLocaleDateString('de-DE',
+    {weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const willkommen='<section class="hello"><span class="eyebrow">IdentityValley · Dienstübersicht</span>'+
+    '<h1>'+begruessung+', '+esc(ME.anzeigename)+'.</h1>'+
+    '<p>Schön, dass du wieder da bist. Einen erfolgreichen Dienst und gutes Gelingen bei deinen Aufgaben!</p>'+
+    '<span class="hello-date">'+esc(datum)+'</span></section>';
+  return willkommen+kacheln+'<div class="grid2">'+
+    dueBox+gruppenBox+offBox+gebBox+jubBox+uebersicht+
+    liste('Hilfreiche Links',dashboard.links)+
+    liste('Vorlagen',dashboard.vorlagen)+
+    liste('Info-Dokumente',dashboard.info)+'</div>';
 }
 
 function vPers() {

@@ -277,6 +277,66 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
 
     /* Berechtigungen auch bei API-Ausgabe erzwingen, nicht nur Menüpunkte verstecken. */
     const berechtigt = m => (rechte[m] || 0) >= 1;
+
+    /* Die Original-Startseite zeigt aktuelle Ereignisse.
+       Ereignisdaten verlassen den Server nur bei entsprechendem Modulrecht. */
+    const heute = berlinTodayUtc();
+    const heuteMs = heute.getTime();
+    const isoDatum = value => value
+      ? (value instanceof Date ? value.toISOString().slice(0,10) : String(value).slice(0,10))
+      : '';
+    const dateDays = iso => Math.round((Date.parse(iso+'T00:00:00Z') - heuteMs)/86400000);
+    const personenName = p => [p.vorname,p.nachname].filter(Boolean).join(' ');
+    const gruppen = new Map();
+    for (const p of personal.rows) {
+      const key=p.gruppe||'Nicht zugeordnet';
+      gruppen.set(key,(gruppen.get(key)||0)+1);
+    }
+    daten.dashboard.gruppen = [...gruppen].map(([name,anzahl])=>({name,anzahl}))
+      .sort((a,b)=>b.anzahl-a.anzahl||a.name.localeCompare(b.name,'de'));
+    daten.dashboard.inaktiv = berechtigt('pers') ? personal.rows
+      .filter(p=>['Abgemeldet','Suspendiert','Inaktiv'].includes(p.status))
+      .map(p=>({nummer:p.personalnummer,name:personenName(p),status:p.status,dienstgrad:p.dienstgrad||''}))
+      : [];
+    daten.dashboard.faellige = [];
+    if (berechtigt('bef')) {
+      const raengeListe=raenge.rows;
+      daten.dashboard.faellige=personal.rows.filter(p=>p.status!=='Gekündigt').flatMap(p=>{
+        const i=raengeListe.findIndex(r=>r.name===p.dienstgrad);
+        const current=raengeListe[i],next=raengeListe[i+1];
+        if (!current||!next||!Number(current.tage)) return [];
+        let faellig=isoDatum(p.naechste_befoerderung);
+        if (!faellig && p.letzte_befoerderung) {
+          const letzte=isoDatum(p.letzte_befoerderung);
+          const d=new Date(letzte+'T00:00:00Z');
+          if (Number.isNaN(d.getTime()))return [];
+          d.setUTCDate(d.getUTCDate()+Number(current.tage));
+          faellig=d.toISOString().slice(0,10);
+        }
+        if (!faellig || dateDays(faellig)>0)return [];
+        return [{nummer:p.personalnummer,name:personenName(p),dienstgrad:p.dienstgrad,
+          naechsterRang:next.name,faellig,porStatus:p.por_status||'offen'}];
+      }).sort((a,b)=>a.faellig.localeCompare(b.faellig)).slice(0,8);
+    }
+    const kommenderJahrestag=(value,minimum)=>{
+      const iso=isoDatum(value);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(iso))return null;
+      const year=Number(iso.slice(0,4)),month=Number(iso.slice(5,7)),day=Number(iso.slice(8,10));
+      let next=new Date(Date.UTC(heute.getUTCFullYear(),month-1,day));
+      if(next.getTime()<heuteMs)next=new Date(Date.UTC(heute.getUTCFullYear()+1,month-1,day));
+      const rest=Math.round((next.getTime()-heuteMs)/86400000);
+      const jahre=next.getUTCFullYear()-year;
+      if(rest<0||rest>30||jahre<minimum)return null;
+      return {tage:rest,jahre};
+    };
+    const vorschau=(feld,minimum)=>personal.rows
+      .filter(p=>p.status!=='Gekündigt')
+      .flatMap(p=>{
+        const j=kommenderJahrestag(p[feld],minimum);
+        return j?[{nummer:p.personalnummer,name:personenName(p),dienstgrad:p.dienstgrad||'',...j}]:[];
+      }).sort((a,b)=>a.tage-b.tage||a.name.localeCompare(b.name,'de'));
+    daten.dashboard.geburtstage=berechtigt('geb')?vorschau('geburtsdatum',0):[];
+    daten.dashboard.jubilaeen=berechtigt('jub')?vorschau('eintrittsdatum',1):[];
     if (!berechtigt('bef')) {
       daten.befoerderungen = [];
       daten.raenge = [];
