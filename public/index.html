@@ -144,6 +144,7 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 #personalDialog .pers-detail small{display:block;color:var(--mut);font-size:12px}
 @media(max-width:650px){.pers-form,#personalDialog .pers-detail{grid-template-columns:1fr}.pers-bar input,.pers-bar select{max-width:none;width:100%}}
 
+.sf-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.sf-selected{margin:1px 4px 1px 0}.sf-chip{border-radius:7px;background:#263449;color:#d6e2f4;padding:6px 10px}.sf-chip.sel{background:#21654a;color:#fff;border-color:#39a979}#sfDialog{max-width:min(830px,95vw);width:min(830px,95vw);max-height:92vh;overflow:auto;background:#182433;color:var(--txt);border:1px solid #536781;border-radius:12px;padding:26px}#sfDialog::backdrop{background:#050a18bb}#sfDialog h2{margin-top:0}#sfDialog .sf-commands{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}#sfDialog input{width:100%}
 </style>
 </head>
 <body>
@@ -190,7 +191,7 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
   </aside>
   <main id="inhalt"></main>
 </div>
-<dialog id="personalDialog" aria-label="Personalakte"></dialog>
+<dialog id="personalDialog" aria-label="Personalakte"></dialog><dialog id="sfDialog" aria-label="Sonderfunktionen bearbeiten"></dialog>
 
 <script>
 const MODS = [
@@ -692,17 +693,69 @@ function vBef() {
     D.raenge.map(r => [esc(r.name), esc(r.abk || ''), r.tage || '', esc(r.bemerkung || ''), esc(r.grund || '')]))}</div>`;
 }
 
-function vSonder() {
-  const spalten = D.funktionsspalten;
-  const zeilen = D.personal.map(p => {
-    const f = D.funktionen.find(x => x.nr === p.personalnummer);
-    const w = (f && f.werte) || {};
-    return [p.personalnummer, esc(p.vorname + ' ' + p.nachname),
-      spalten.map(s => w[s] ? `<span class="tag ok">${esc(s)}</span>` : '').join('')].concat([esc((f && f.sonstige) || '')]);
-  });
-  return `<h1>Sonderfunktionen</h1>${tabelle(['Nr.','Name'].concat(spalten, ['Sonstige']), zeilen)}`;
+const SFGRUPPEN = [
+  ['Fortbildungen', ['Krad','Wassersch.','Ausbilder','Ibis','KriPo','SEK','Blitzer','Langwaffe','FüAss','DGL','AP','Verhandl.']],
+  ['Zugänge', ['EMD','CopNet','Forum']],
+  ['Prüfungen', ['PM','PK']]
+];
+function sfDaten(nr) {
+  return (D.funktionen || []).find(x => Number(x.nr) === Number(nr)) || { nr, werte: {}, leitung: '', sonstige: '' };
 }
-
+function vSonder() {
+  const schreiben = can('sonder',2);
+  const personen = D.personal || [];
+  const zeilen = personen.map(p => {
+    const nr = Number(p.personalnummer), f = sfDaten(nr), w = f.werte || {};
+    const zellen = SFGRUPPEN.map(gruppe => '<td>' + gruppe[1].filter(k=>!!w[k]).map(k=>
+      '<span class="tag ok sf-selected">'+esc(k)+'</span>').join(' ') + '</td>').join('');
+    return '<tr><td>'+nr+'</td><td>'+esc([p.vorname,p.nachname].filter(Boolean).join(' '))+'</td>' +
+      zellen+'<td>'+esc([f.leitung,f.sonstige].filter(Boolean).join(' · '))+'</td>' +
+      '<td>'+(schreiben?'<button type="button" data-sf-person="'+nr+'">Bearbeiten</button>':'')+'</td></tr>';
+  }).join('');
+  return '<h1>Sonderfunktionen &amp; Fortbildungen</h1><p class="mut">Ausbildungen, Zugänge und Prüfungen zuweisen oder aberkennen.</p>' +
+    '<div class="tw"><table><thead><tr>'+['Nr.','Person','Fortbildungen','Zugänge','Prüfungen','Leitung / Sonstiges','Aktion'].map(s=>'<th>'+s+'</th>').join('')+
+    '</tr></thead><tbody>'+zeilen+'</tbody></table></div>';
+}
+function sfDialog(nr) {
+  if (!can('sonder',2)) return;
+  const f = sfDaten(nr), p = (D.personal || []).find(x => Number(x.personalnummer) === nr);
+  if (!p) return;
+  const d = $('#sfDialog');
+  const chips = SFGRUPPEN.map(([titel,felder]) => '<div class="box"><h3>'+titel+'</h3><div class="sf-chips">' +
+    felder.map(k=>'<button type="button" class="sf-chip'+(f.werte && f.werte[k]?' sel':'')+'" data-sf-key="'+esc(k)+'">'+esc(k)+'</button>').join('') +
+    '</div></div>').join('');
+  d.innerHTML = '<h2>Fortbildungen &amp; Funktionen</h2><p class="mut">'+esc(p.vorname+' '+p.nachname)+'</p>'+chips+
+    '<label for="sfLeitung">Abteilungsleitung</label><input id="sfLeitung" value="'+esc(f.leitung||'')+'">' +
+    '<label for="sfSonstige">Sonstige Sonderfunktionen</label><input id="sfSonstige" value="'+esc(f.sonstige||'')+'">' +
+    '<p id="sfError" class="fehler"></p><div class="sf-commands"><button type="button" id="sfCancel">Abbrechen</button>' +
+    '<button type="button" id="sfSave" class="p">Speichern</button></div>';
+  d.dataset.person = nr;
+  d.showModal();
+  $('#sfCancel').onclick = () => d.close();
+  $('#sfSave').onclick = sfSpeichern;
+}
+async function sfSpeichern() {
+  const d = $('#sfDialog'), nr = Number(d.dataset.person);
+  if (!can('sonder',2)) return;
+  const w = {}, f = sfDaten(nr);
+  SFGRUPPEN.flatMap(x=>x[1]).forEach(k=>{w[k]=!!(f.werte||{})[k]});
+  d.querySelectorAll('[data-sf-key]').forEach(el=>{w[el.dataset.sfKey]=el.classList.contains('sel')});
+  const btn = $('#sfSave'); btn.disabled = true; btn.textContent = 'Speichere …';
+  $('#sfError').textContent = '';
+  try {
+    await api('/sonder/'+nr,{method:'PATCH',body:JSON.stringify({
+      werte:w,leitung:$('#sfLeitung').value,sonstige:$('#sfSonstige').value
+    })});
+    d.close(); await starten();
+  } catch(e) { $('#sfError').textContent = 'Speichern fehlgeschlagen: '+e.message; }
+  finally { btn.disabled=false;btn.textContent='Speichern'; }
+}
+document.addEventListener('click', e=>{
+  const chip=e.target.closest('[data-sf-key]');
+  if (chip) { chip.classList.toggle('sel'); return; }
+  const edit=e.target.closest('[data-sf-person]');
+  if (edit) sfDialog(Number(edit.dataset.sfPerson));
+});
 function vKue() {
   const zeilen = D.kuendigungen.map(k => [k.personalnummer, esc(k.vorname + ' ' + k.nachname), esc(k.rang || ''), esc(k.grund || ''),
     ['waffe','copnet','emd','ic','discord','dienstgegenstaende'].map(f =>

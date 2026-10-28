@@ -368,6 +368,32 @@ app.post('/api/funktion', requireLogin, requireRight('sonder', 2), async (req, r
   } catch (e) { next(e); }
 });
 
+/* Sonderfunktionen und Fortbildungen gemeinsam speichern. */
+app.patch('/api/sonder/:nr', requireLogin, requireRight('sonder', 2), async (req, res, next) => {
+  try {
+    const nr = Number(req.params.nr);
+    if (!Number.isSafeInteger(nr) || nr < 1) return res.status(400).json({ error: 'Ungültige Personalnummer' });
+    const werte = req.body.werte;
+    if (!werte || typeof werte !== 'object' || Array.isArray(werte)) return res.status(400).json({ error: 'Ungültige Zuordnung' });
+    const { rows: spalten } = await db.query('SELECT name FROM sonderfunktionsspalten');
+    const erlaubte = new Set(spalten.map(x => x.name));
+    if (Object.keys(werte).some(x => !erlaubte.has(x) || typeof werte[x] !== 'boolean')) return res.status(400).json({ error: 'Ungültige Fortbildung' });
+    const leitung = String(req.body.leitung || '').trim();
+    const sonstige = String(req.body.sonstige || '').trim();
+    if (leitung.length > 500 || sonstige.length > 500) return res.status(400).json({ error: 'Text zu lang' });
+    const { rows } = await db.query(
+      `INSERT INTO sonderfunktionen (personalnummer, leitung, sonstige, werte)
+       VALUES ($1, $2, $3, $4::jsonb)
+       ON CONFLICT (personalnummer) DO UPDATE SET
+         leitung = EXCLUDED.leitung, sonstige = EXCLUDED.sonstige,
+         werte = EXCLUDED.werte, aktualisiert = now()
+       RETURNING personalnummer`, [nr, leitung, sonstige, JSON.stringify(werte)]);
+    await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'edit')`,
+      [req.user.id, `Fortbildungen/Funktionen von ${nr} geändert`]);
+    res.json({ ok: true, personalnummer: rows[0].personalnummer });
+  } catch (e) { next(e); }
+});
+
 /* Beförderung durchführen */
 app.post('/api/befoerdern', requireLogin, requireRight('bef', 2), async (req, res, next) => {
   try {
