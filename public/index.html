@@ -124,6 +124,26 @@ a.l{color:#a0c8ef}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 
 aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;height:17px;flex-shrink:0;color:#8da4bb}aside a.on .nav-icon{color:#b4d8f4}
+
+/* Wiederhergestellte Personalverwaltung */
+.pers-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 16px}
+.pers-bar input{max-width:310px}.pers-bar select{width:auto;min-width:145px}
+.pers-bar .spacer{flex:1}
+.pers-link{background:transparent;border:0;color:#a8cff7;padding:2px 0;text-decoration:underline;text-underline-offset:3px}
+.pers-link:hover{color:#fff}
+.pers-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 16px}
+.pers-form .full{grid-column:1/-1}
+#personalDialog{background:#182433;color:var(--txt);border:1px solid #4b6686;border-radius:12px;max-width:min(780px,96vw);width:min(780px,96vw);max-height:90vh;overflow:auto;padding:24px 28px;box-shadow:0 28px 80px #0009}
+#personalDialog::backdrop{background:#040a14ba}
+#personalDialog h2{margin:0 0 5px;font-size:21px}
+#personalDialog .mut{color:var(--mut)}
+#personalDialog .actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:22px}
+#personalDialog .error{color:#ffb0b0;min-height:20px;margin-top:10px}
+#personalDialog .pers-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin-top:18px}
+#personalDialog .pers-detail .item{border-bottom:1px solid var(--line);padding-bottom:7px;overflow-wrap:anywhere}
+#personalDialog .pers-detail small{display:block;color:var(--mut);font-size:12px}
+@media(max-width:650px){.pers-form,#personalDialog .pers-detail{grid-template-columns:1fr}.pers-bar input,.pers-bar select{max-width:none;width:100%}}
+
 </style>
 </head>
 <body>
@@ -170,6 +190,7 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
   </aside>
   <main id="inhalt"></main>
 </div>
+<dialog id="personalDialog" aria-label="Personalakte"></dialog>
 
 <script>
 const MODS = [
@@ -467,13 +488,202 @@ function vDash() {
 }
 
 function vPers() {
-  const zeilen = D.personal.map(p => [
-    p.personalnummer, esc(p.vorname + ' ' + p.nachname), esc(p.dienstgrad || ''),
-    esc(p.gruppe), fd(p.eintrittsdatum), p.handy ? esc(p.handy) : '<span class="tag">gesperrt</span>',
-    `<span class="tag ${p.status === 'Aktiv' ? 'ok' : 'warn'}">${esc(p.status)}</span>`
-  ]);
-  return `<h1>Personal</h1>${tabelle(['Nr.','Name','Dienstgrad','Gruppe','Eintritt','Handy','Status'], zeilen)}`;
+  const personen = D.personal || [];
+  const gruppen = [...new Set(personen.map(p => p.gruppe).filter(Boolean))];
+  const statusListe = [...new Set(personen.map(p => p.status).filter(Boolean))];
+  const schreiben = can('pers', 2);
+  const zeilen = personen.map(p => {
+    const nummer = Number(p.personalnummer);
+    const name = esc([p.vorname, p.nachname].filter(Boolean).join(' '));
+    const status = '<span class="tag ' + (p.status === 'Aktiv' ? 'ok' : 'warn') + '">' + esc(p.status || '–') + '</span>';
+    const handy = ME.sensibel ? esc(p.handy || '–') : '<span class="tag">geschützt</span>';
+    const bearbeitung = schreiben ? ' <button type="button" class="pers-link" data-edit-person="' + nummer + '">Bearbeiten</button>' : '';
+    return '<tr class="pers-row" data-name="' + esc([p.personalnummer,p.vorname,p.nachname,p.dienstgrad,p.nebenjob].join(' ').toLowerCase()) + '" data-group="' + esc(p.gruppe || '') + '" data-status="' + esc(p.status || '') + '">' +
+      '<td>' + nummer + '</td>' +
+      '<td><button class="pers-link" type="button" data-show-person="' + nummer + '">' + name + '</button></td>' +
+      '<td>' + esc(p.dienstgrad || '–') + '</td><td>' + esc(p.gruppe || '–') + '</td>' +
+      '<td>' + fd(p.eintrittsdatum) + '</td><td>' + handy + '</td>' +
+      '<td>' + status + '</td><td>' + bearbeitung + '</td></tr>';
+  }).join('');
+  const auswahl = (werte) => '<option value="">Alle</option>' + werte.map(v => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
+  return '<h1>Personalverwaltung</h1>' +
+    '<div class="pers-bar">' +
+    '<input id="persSuche" aria-label="Personal durchsuchen" placeholder="Name, Dienstgrad oder Nummer suchen …" oninput="personalFiltern()">' +
+    '<select id="persGruppe" aria-label="Gruppe filtern" onchange="personalFiltern()">' + auswahl(gruppen) + '</select>' +
+    '<select id="persStatus" aria-label="Status filtern" onchange="personalFiltern()">' + auswahl(statusListe) + '</select>' +
+    '<span class="spacer"></span><span id="persAnzahl" class="mut">' + personen.length + ' Personen</span>' +
+    (schreiben ? '<button class="p" type="button" id="persNeu">+ Neue Person</button>' : '') +
+    '</div><div class="tw"><table><thead><tr>' +
+    ['Nr.','Name','Dienstgrad','Gruppe','Eintritt','Handy','Status','Aktion'].map(s => '<th>' + s + '</th>').join('') +
+    '</tr></thead><tbody>' + (zeilen || '<tr><td colspan="8">Keine Einträge</td></tr>') +
+    '</tbody></table></div>';
 }
+
+function personalFiltern() {
+  const q = ($('#persSuche')?.value || '').trim().toLowerCase();
+  const gruppe = $('#persGruppe')?.value || '';
+  const status = $('#persStatus')?.value || '';
+  let gezeigt = 0;
+  document.querySelectorAll('.pers-row').forEach(row => {
+    const sichtbar = (!q || row.dataset.name.includes(q)) &&
+      (!gruppe || row.dataset.group === gruppe) &&
+      (!status || row.dataset.status === status);
+    row.hidden = !sichtbar;
+    if (sichtbar) gezeigt++;
+  });
+  if ($('#persAnzahl')) $('#persAnzahl').textContent = gezeigt + ' Personen';
+}
+
+function personalDialogSchliessen() {
+  const dialog = $('#personalDialog');
+  if (dialog.open) dialog.close();
+}
+
+function personalFeld(name, id, wert, typ, extra) {
+  return '<div><label for="' + id + '">' + name + '</label>' +
+    '<input id="' + id + '" type="' + (typ || 'text') + '" value="' + esc(wert || '') + '" ' + (extra || '') + '></div>';
+}
+
+function personalSelect(name, id, werte, wert) {
+  return '<div><label for="' + id + '">' + name + '</label><select id="' + id + '">' +
+    [...new Set(werte)].map(s => '<option value="' + esc(s) + '"' + (s === wert ? ' selected' : '') + '>' + esc(s) + '</option>').join('') +
+    '</select></div>';
+}
+
+function personalAnzeigen(nr) {
+  if (!can('pers')) return;
+  const p = (D.personal || []).find(p => Number(p.personalnummer) === Number(nr));
+  if (!p) return;
+  const dialog = $('#personalDialog');
+  const items = [
+    ['Personalnummer', p.personalnummer], ['Dienstgrad', p.dienstgrad], ['Gruppe', p.gruppe],
+    ['Status', p.status], ['Eintritt', fd(p.eintrittsdatum)], ['Nebenjob', p.nebenjob],
+    ['Waffenschein', p.waffenschein ? 'Vorhanden' : 'Nicht vorhanden'],
+    ['Spind', p.spind ? 'Vorhanden' : 'Nicht vorhanden'],
+    ['RSA', p.rsa]
+  ];
+  if (ME.sensibel) {
+    items.push(['Handy',p.handy],['Geburtsdatum',fd(p.geburtsdatum)],
+      ['Urlaub von',fd(p.urlaub_von)],['Urlaub bis',fd(p.urlaub_bis)],
+      ['Urlaubstage',p.urlaub_tage],['Arbeitsvertrag',p.arbeitsvertrag],
+      ['Ernennungsurkunde',p.ernennungsurkunde],['Bemerkung',p.bemerkung]);
+  }
+  dialog.innerHTML = '<h2>' + esc([p.vorname,p.nachname].filter(Boolean).join(' ')) + '</h2>' +
+    '<div class="mut">Personalakte · IdentityValley</div>' +
+    '<div class="pers-detail">' + items.map(([k,v]) => '<div class="item"><small>' + k + '</small>' + esc(v == null || v === '' ? '–' : v) + '</div>').join('') + '</div>' +
+    '<div class="actions"><button type="button" id="persAbbrechen">Schließen</button>' +
+    (can('pers',2) ? '<button type="button" class="p" data-edit-person="' + Number(nr) + '">Bearbeiten</button>' : '') + '</div>';
+  dialog.showModal();
+  $('#persAbbrechen').addEventListener('click',personalDialogSchliessen);
+}
+
+function personalBearbeiten(nr) {
+  if (!can('pers',2)) return;
+  const neu = nr === null;
+  const p = neu ? {} : (D.personal || []).find(x => Number(x.personalnummer) === Number(nr));
+  if (!p) return;
+  const used = (D.personal || []).map(x => Number(x.personalnummer));
+  const vorschlag = Math.max(0,...used) + 1;
+  const raenge = (D.raenge || []).map(r => r.name).filter(Boolean);
+  const gruppen = ['Leitungsdienst','Polizeirat','Hauptberuf','Nebenberuf',...(D.personal || []).map(x => x.gruppe).filter(Boolean)];
+  const status = ['Aktiv','Abgemeldet','Inaktiv','Suspendiert','Gekündigt','freihalten',...(D.personal || []).map(x => x.status).filter(Boolean)];
+  const datum = x => x ? String(x).slice(0,10) : '';
+  const felder = [
+    personalFeld('Personalnummer','p_nr',neu?vorschlag:nr,'number',neu?'min="1" required':'readonly'),
+    personalSelect('Status','p_status',status,p.status || 'Aktiv'),
+    personalFeld('Vorname','p_vorname',p.vorname,'text','required maxlength="120"'),
+    personalFeld('Nachname','p_nachname',p.nachname,'text','required maxlength="120"'),
+    personalSelect('Gruppe','p_gruppe',gruppen,p.gruppe || 'Hauptberuf'),
+    personalSelect('Dienstgrad','p_dienstgrad',[p.dienstgrad || '',...raenge],p.dienstgrad || ''),
+    personalFeld('Eintrittsdatum','p_eintrittsdatum',datum(p.eintrittsdatum),'date'),
+    personalFeld('Nebenjob','p_nebenjob',p.nebenjob)
+  ];
+  if (ME.sensibel) {
+    felder.push(personalFeld('Handy','p_handy',p.handy),
+      personalFeld('Geburtsdatum','p_geburtsdatum',datum(p.geburtsdatum),'date'),
+      personalFeld('Arbeitsvertrag','p_arbeitsvertrag',p.arbeitsvertrag),
+      personalFeld('Ernennungsurkunde','p_ernennungsurkunde',p.ernennungsurkunde),
+      personalFeld('Urlaub von','p_urlaub_von',datum(p.urlaub_von),'date'),
+      personalFeld('Urlaub bis','p_urlaub_bis',datum(p.urlaub_bis),'date'),
+      personalFeld('Urlaubstage','p_urlaub_tage',p.urlaub_tage,'number','min="0"'),
+      personalSelect('RSA','p_rsa',[p.rsa || '','Offen','Erhalten'],p.rsa || ''),
+      '<div><label><input id="p_waffenschein" type="checkbox" style="width:auto" ' + (p.waffenschein ? 'checked' : '') + '> Waffenschein vorhanden</label></div>',
+      '<div><label><input id="p_spind" type="checkbox" style="width:auto" ' + (p.spind ? 'checked' : '') + '> Spind vorhanden</label></div>',
+      '<div class="full"><label for="p_bemerkung">Bemerkung</label><input id="p_bemerkung" value="' + esc(p.bemerkung || '') + '"></div>');
+  }
+  const dialog = $('#personalDialog');
+  if (dialog.open) dialog.close();
+  dialog.innerHTML = '<h2>' + (neu?'Neue Person anlegen':'Person bearbeiten') + '</h2>' +
+    '<div class="mut">Änderungen werden im gemeinsamen Verwaltungsportal gespeichert.</div>' +
+    '<form id="personalForm"><div class="pers-form">' + felder.join('') + '</div>' +
+    '<div class="error" id="persFormFehler" role="alert"></div><div class="actions">' +
+    '<button id="persAbbrechen" type="button">Abbrechen</button>' +
+    '<button id="persSpeichern" class="p" type="submit">Speichern</button></div></form>';
+  dialog.showModal();
+  $('#persAbbrechen').addEventListener('click',personalDialogSchliessen);
+  $('#personalForm').addEventListener('submit',event => personalSpeichern(event, neu, nr));
+}
+
+async function personalSpeichern(event, neu, nr) {
+  event.preventDefault();
+  if (!can('pers',2)) return;
+  const wert = id => $('#' + id).value.trim();
+  const body = {
+    vorname: wert('p_vorname'), nachname: wert('p_nachname'),
+    gruppe: wert('p_gruppe'), status: wert('p_status'),
+    dienstgrad: wert('p_dienstgrad'), eintrittsdatum: wert('p_eintrittsdatum'),
+    nebenjob: wert('p_nebenjob')
+  };
+  if (!body.vorname || !body.nachname) {
+    $('#persFormFehler').textContent = 'Vor- und Nachname sind erforderlich.';
+    return;
+  }
+  if (neu) {
+    body.personalnummer = Number(wert('p_nr'));
+    if (!Number.isSafeInteger(body.personalnummer) || body.personalnummer < 1) {
+      $('#persFormFehler').textContent = 'Bitte eine gültige Personalnummer eingeben.';
+      return;
+    }
+    if ((D.personal || []).some(p => Number(p.personalnummer) === body.personalnummer)) {
+      $('#persFormFehler').textContent = 'Diese Personalnummer ist bereits vergeben.';
+      return;
+    }
+  }
+  if (ME.sensibel) {
+    for (const f of ['handy','geburtsdatum','arbeitsvertrag','ernennungsurkunde','urlaub_von','urlaub_bis','bemerkung','rsa'])
+      body[f] = wert('p_' + f);
+    body.urlaub_tage = wert('p_urlaub_tage') ? Number(wert('p_urlaub_tage')) : null;
+    body.waffenschein = $('#p_waffenschein').checked;
+    body.spind = $('#p_spind').checked;
+  }
+  const button = $('#persSpeichern');
+  button.disabled = true;
+  button.textContent = 'Speichere …';
+  $('#persFormFehler').textContent = '';
+  try {
+    await api(neu ? '/personal' : '/personal/' + nr, {
+      method: neu ? 'POST' : 'PATCH', body: JSON.stringify(body)
+    });
+    personalDialogSchliessen();
+    await starten();
+  } catch (err) {
+    $('#persFormFehler').textContent = 'Speichern fehlgeschlagen: ' + err.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Speichern';
+  }
+}
+
+/* Klicks werden nach dem Zeichnen an dynamische Personaltabellen gebunden. */
+document.addEventListener('click', event => {
+  const neu = event.target.closest('#persNeu');
+  if (neu) { personalBearbeiten(null); return; }
+  const bearbeiten = event.target.closest('[data-edit-person]');
+  if (bearbeiten) { personalBearbeiten(Number(bearbeiten.dataset.editPerson)); return; }
+  const ansehen = event.target.closest('[data-show-person]');
+  if (ansehen) personalAnzeigen(Number(ansehen.dataset.showPerson));
+});
+
 
 function vBef() {
   const zeilen = D.befoerderungen.map(b => [b.personalnummer, esc(b.vorname + ' ' + b.nachname), esc(b.rang || ''), esc(b.neu_rang || ''), esc(b.grund || ''), fd(b.am)]);
