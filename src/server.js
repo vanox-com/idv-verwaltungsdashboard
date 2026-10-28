@@ -11,17 +11,25 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const SECURE = process.env.NODE_ENV === 'production';
 
+/* Render stellt die Anfragen hinter einem Zwischenrechner zu und setzt
+   dabei X-Forwarded-For. Ohne diese Zeile bricht die Sperre gegen zu viele
+   Anmeldeversuche bei jeder Anfrage ab — und zwar bevor das Passwort
+   überhaupt geprüft wird. */
+app.set('trust proxy', 1);
+
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-/* Nur ein Anmeldeversuch pro Sekunde und Adresse */
+/* Sperre gegen zu viele Anmeldeversuche: 30 in fünf Minuten, und nur
+   fehlgeschlagene Versuche zählen. Beim Tippen passiert nichts. */
 const loginLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 10,
+  windowMs: 5 * 60 * 1000,
+  limit: 30,
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Zu viele Anmeldeversuche. Bitte kurz warten.' }
+  message: { error: 'Zu viele Anmeldeversuche. Bitte fünf Minuten warten.' }
 });
 
 /* ---------- Sitzung ---------- */
