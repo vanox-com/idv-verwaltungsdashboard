@@ -187,10 +187,26 @@ const fd = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('.') 
 const can = (m, l = 1) => ME && (ME.rechte[m] || 0) >= l;
 
 async function api(pfad, optionen) {
-  const r = await fetch('/api' + pfad, Object.assign({ credentials: 'same-origin', cache: 'no-store', headers: { 'Content-Type': 'application/json' } }, optionen));
-  const daten = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(daten.error || 'Fehler');
-  return daten;
+  /* Der Datenaufbau hat eine feste Obergrenze. Ein hängender Request darf
+     den Login nicht erneut dauerhaft auf dem Bildschirm blockieren. */
+  const controller = pfad === '/bootstrap' ? new AbortController() : null;
+  const timeout = controller ? setTimeout(() => controller.abort(), 12000) : null;
+  try {
+    const r = await fetch('/api' + pfad, Object.assign({
+      credentials: 'same-origin', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' }
+    }, optionen, controller ? { signal: controller.signal } : {}));
+    const daten = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(daten.error || 'Serverfehler (HTTP ' + r.status + ')');
+    return daten;
+  } catch (err) {
+    if (controller && controller.signal.aborted) {
+      throw new Error('Zeitüberschreitung beim Laden der Verwaltungsdaten (12 Sekunden)');
+    }
+    throw err;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 /* ---------- Anmeldung ---------- */
