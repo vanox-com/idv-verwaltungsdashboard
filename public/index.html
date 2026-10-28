@@ -338,6 +338,33 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 #orgForm textarea{font-family:inherit;resize:vertical;min-height:140px;line-height:1.5}
 .org-dialog-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px;margin-top:16px}
 @media(max-width:500px){.org-card-head{flex-direction:column}}
+
+/* Kategorien der linken Navigation – mit ein-/ausklappbaren Menüpunkten */
+#menu{display:flex;flex-direction:column;gap:6px;min-width:0}
+.sidebar-gruppe{min-width:0}
+aside .sidebar-gruppe-taste{width:100%;display:flex;align-items:center;justify-content:space-between;
+  gap:8px;background:transparent;border:0;border-radius:5px;color:#91a6bd;
+  padding:9px 11px;text-align:left;font-size:11px;line-height:1.35;font-weight:750;
+  text-transform:uppercase;letter-spacing:.075em;cursor:pointer}
+aside .sidebar-gruppe-taste:hover,aside .sidebar-gruppe-taste.active{
+  background:#1d2c3e;color:#d6e6f8}
+.sidebar-gruppe-ende{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.sidebar-gruppe-zahl{font-weight:650;font-size:10px;color:#94b4d5}
+.sidebar-gruppe-chevron{width:14px;height:14px;transition:transform .16s}
+.sidebar-gruppe-taste[aria-expanded="true"] .sidebar-gruppe-chevron{transform:rotate(180deg)}
+.sidebar-gruppe-inhalt{padding:2px 0 5px 7px}
+.sidebar-gruppe-inhalt[hidden]{display:none!important}
+.sidebar-gruppe-inhalt a{font-size:13px;padding:8px 9px}
+aside .sidebar-gruppe-taste:focus-visible{outline:2px solid #8cbaee;outline-offset:2px}
+@media(max-width:820px){
+ #menu{width:100%;gap:5px}
+ .sidebar-gruppe{width:100%}
+ .sidebar-gruppe-inhalt{display:flex;flex-wrap:wrap;gap:3px}
+ .sidebar-gruppe-inhalt a{margin:1px;padding:8px 10px}
+}
+@media(prefers-reduced-motion:reduce){
+ .sidebar-gruppe-chevron{transition:none}
+}
 </style>
 </head>
 <body>
@@ -395,6 +422,16 @@ const MODS = [
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
   ['users','Benutzer & Rollen','🔐'],['log','Protokoll','🧾']
 ];
+/* Sidebar: dieselben Module und Rechte, nur übersichtlich gruppiert.
+   Ein aktives Modul hält seine Kategorie immer geöffnet. */
+const NAV_GRUPPEN = [
+  {id:'uebersicht',titel:'Übersicht',module:['dash']},
+  {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','rout','geb','jub']},
+  {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
+  {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
+  {id:'verwaltung',titel:'Administration',module:['users','log']}
+];
+const NAV_OFFEN = new Set(['uebersicht','personal']);
 let ME = null, D = null, tab = 'dash';
 let copnetGeladen = null, copnetNummer = null;
 
@@ -681,9 +718,46 @@ function navIcon(id) {
 }
 
 function zeichneMenue() {
-  $('#menu').innerHTML = MODS.filter(m => can(m[0]))
-    .map(m => `<a class="${m[0] === tab ? 'on' : ''}" data-t="${m[0]}">${navIcon(m[0])}<span>${m[1]}</span></a>`).join('');
-  $('#menu').querySelectorAll('a').forEach(a => a.addEventListener('click', () => { tab = a.dataset.t; zeichneMenue(); zeichne(); }));
+  const menu=$('#menu');
+  const module=new Map(MODS.map(m=>[m[0],m]));
+  menu.innerHTML=NAV_GRUPPEN.map(g=>{
+    const sichtbar=g.module.filter(id=>module.has(id)&&can(id));
+    if(!sichtbar.length)return ''; // Keine leeren Kategorien ohne Berechtigung.
+    const offen=NAV_OFFEN.has(g.id),hatAktiv=sichtbar.includes(tab);
+    return '<section class="sidebar-gruppe" aria-label="'+esc(g.titel)+'">'+
+      '<button type="button" class="sidebar-gruppe-taste'+(hatAktiv?' active':'')+
+      '" data-nav-group="'+g.id+'" aria-expanded="'+offen+
+      '" aria-controls="nav-items-'+g.id+'">'+
+      '<span>'+esc(g.titel)+'</span>'+
+      '<span class="sidebar-gruppe-ende"><span class="sidebar-gruppe-zahl">'+sichtbar.length+'</span>'+
+      '<svg class="sidebar-gruppe-chevron" viewBox="0 0 24 24" aria-hidden="true" fill="none" '+
+        'stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span></button>'+
+      '<div id="nav-items-'+g.id+'" class="sidebar-gruppe-inhalt"'+(offen?'':' hidden')+'>'+
+      sichtbar.map(id=>{
+        const m=module.get(id);
+        return '<a href="#'+encodeURIComponent(id)+'" class="'+(id===tab?'on':'')+
+          '" data-t="'+esc(id)+'" '+(id===tab?'aria-current="page"':'')+'>'+
+          navIcon(id)+'<span>'+esc(m[1])+'</span></a>';
+      }).join('')+'</div></section>';
+  }).join('');
+  menu.querySelectorAll('[data-nav-group]').forEach(button=>
+    button.addEventListener('click',()=>{
+      const id=button.dataset.navGroup;
+      if(NAV_OFFEN.has(id))NAV_OFFEN.delete(id);
+      else NAV_OFFEN.add(id);
+      zeichneMenue();
+    }));
+  menu.querySelectorAll('[data-t]').forEach(link=>
+    link.addEventListener('click',e=>{
+      e.preventDefault();
+      const id=link.dataset.t;
+      if(!module.has(id)||!can(id))return;
+      tab=id;
+      const gruppe=NAV_GRUPPEN.find(g=>g.module.includes(id));
+      if(gruppe)NAV_OFFEN.add(gruppe.id);
+      zeichneMenue();
+      zeichne();
+    }));
 }
 
 function zeichne() {
