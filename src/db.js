@@ -25,6 +25,7 @@ export async function initDb() {
   await seedBenutzer();
   await originalDokumentLinksUebernehmen();
   await excelPersonalLinksUebernehmen();
+  await originaleDashboardLinksUebernehmen();
 }
 
 /*
@@ -120,4 +121,46 @@ async function excelPersonalLinksUebernehmen() {
   }
   if(hinzugefuegt)console.log('Excel-Personal-Dokumentlinks ergänzt: '+hinzugefuegt);
   if(uebersprungen)console.log('Excel-Personal-Dokumentlinks unverändert: '+uebersprungen);
+}
+
+/* Die ursprünglich in Excel hinter den Dashboard-Titeln verborgenen Links.
+   Quellen stehen in einer privaten Render-Environment-Variable und nicht in
+   GitHub. Nur neue Einträge werden ergänzt; bestehende redaktionelle
+   Änderungen überschreiben wir beim Neustart niemals. */
+async function originaleDashboardLinksUebernehmen() {
+  const raw=process.env.DASHBOARD_EXCEL_LINKS_IMPORT;
+  if(!raw)return;
+  let quelle;
+  try { quelle=JSON.parse(raw); }
+  catch(e){throw new Error('Dashboard-Excel-Import: ungültiges JSON')}
+  if(!Array.isArray(quelle)||quelle.length>80)
+    throw new Error('Dashboard-Excel-Import: ungültige Eintragsliste');
+  const seen=new Set();
+  let hinzugefuegt=0,vorhanden=0;
+  for(const entry of quelle){
+    if(!entry||typeof entry!=='object'||
+       !['vorlage','info','link'].includes(entry.art)||
+       typeof entry.text!=='string'||!entry.text.trim()||entry.text.length>220||
+       typeof entry.url!=='string'||entry.url.length>2048||
+       !Number.isSafeInteger(entry.sortierung)||entry.sortierung<0)
+      throw new Error('Dashboard-Excel-Import: ungültiger Eintrag');
+    let url;
+    try{url=new URL(entry.url)}
+    catch(e){throw new Error('Dashboard-Excel-Import: ungültiger Link')}
+    if(url.protocol!=='https:'||url.username||url.password||
+       !['docs.google.com','forms.gle','emergencydispatch.de'].includes(url.hostname))
+      throw new Error('Dashboard-Excel-Import: unsicherer oder unerwarteter Link');
+    const key=entry.art+'|'+entry.text.trim();
+    if(seen.has(key))throw new Error('Dashboard-Excel-Import: doppelter Titel '+key);
+    seen.add(key);
+    const result=await db.query(
+      `INSERT INTO dashboard(art,text,url,sortierung)
+       SELECT $1,$2,$3,$4 WHERE NOT EXISTS (
+         SELECT 1 FROM dashboard WHERE art=$1 AND text=$2
+       )`,
+      [entry.art,entry.text.trim(),url.href,entry.sortierung]);
+    if(result.rowCount===1)hinzugefuegt++;
+    else vorhanden++;
+  }
+  console.log('Dashboard: '+hinzugefuegt+' Links aus Excel ergänzt, '+vorhanden+' schon vorhanden');
 }
