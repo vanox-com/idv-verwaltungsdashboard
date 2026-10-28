@@ -288,6 +288,22 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .rights-dialog-head .mut{margin:0}
 .rights-dialog-head button{white-space:nowrap}
 @media(max-width:550px){.rights-dialog-head{flex-direction:column}}
+
+/* Durchsuchbare Textbausteine mit Originaltext und Kopierfunktion */
+.textbaustein-gruppe{margin:20px 0}
+.textbaustein-gruppe h2{font-size:19px;margin:0 0 12px}
+.textbaustein-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.textbaustein-karte{margin:0;min-width:0}
+.textbaustein-karte[hidden],.textbaustein-gruppe[hidden]{display:none}
+.textbaustein-titel{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-bottom:14px}
+.textbaustein-titel h3{font-size:15px;margin:0}
+.textbaustein-titel button{white-space:nowrap}
+.textbaustein-karte details summary{cursor:pointer;color:var(--mut);font-size:13px}
+.textbaustein-inhalt{font-family:inherit;font-size:13px;line-height:1.6;white-space:pre-wrap;
+  overflow-wrap:anywhere;background:rgba(0,0,0,.13);border:1px solid var(--line);
+  border-radius:8px;padding:13px;margin:11px 0 0;max-height:400px;overflow-y:auto}
+@media(max-width:950px){.textbaustein-grid{grid-template-columns:1fr}}
+@media(max-width:460px){.textbaustein-titel{flex-direction:column;align-items:stretch}}
 </style>
 </head>
 <body>
@@ -341,7 +357,7 @@ const MODS = [
   ['dash','Dashboard','📊'],['pers','Personal','👥'],['bef','Beförderungen','⭐'],
   ['sonder','Sonderfunktionen','🎖️'],['kue','Kündigungen','📤'],
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],
-  ['chk','Checklisten','✅'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
+  ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
   ['users','Benutzer & Rollen','🔐'],['log','Protokoll','🧾']
 ];
@@ -617,6 +633,7 @@ function navIcon(id) {
     dis: '<path d="M12 3v18M4 7h16M5 7l-3 7h6L5 7zM19 7l-3 7h6l-3-7zM8 21h8"/>',
     rout: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     chk: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m7 12 3 3 7-7"/>',
+    texte: '<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/>',
     rl: '<path d="M12 6c-3-2-6-2-10-1v15c4-1 7-1 10 1 3-2 6-2 10-1V5c-4-1-7-1-10 1zM12 6v15"/>',
     org: '<rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="9" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5M5 17v-5h14v5M12 12v5"/>',
     sperr: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
@@ -636,6 +653,7 @@ function zeichneMenue() {
 }
 
 function zeichne() {
+  if (tab==='texte') { ladeTextbausteine(); return; }
   if (['sperr','geb','jub','bl'].includes(tab)) { ladeExtra(tab); return; }
   if (tab === 'log') {
     $('#inhalt').innerHTML = '<h1>Protokoll</h1><p>Lade Einträge …</p>';
@@ -1946,6 +1964,102 @@ document.addEventListener('input',e=>{
 
 /* Benutzer- und Berechtigungsverwaltung, Vorbild: Original-HTML. */
 const RECHTE_STUFEN=['–','Lesen','Bearbeiten'];
+
+/* Textvorlagen Rat.pdf: Zugriff ausschließlich über effektive Rollen-
+   und Einzelrechte; der Inhalt liegt in der geschützten Datenbank. */
+let TEXTBAUSTEINE_CACHE=null;
+const TEXT_KATEGORIEN=['Bewerbungen','Praktikanten','Beschwerden'];
+async function ladeTextbausteine(){
+  if(!can('texte')){
+    $('#inhalt').innerHTML='<p>Für Textbausteine fehlt die Berechtigung.</p>';
+    return;
+  }
+  $('#inhalt').innerHTML='<h1>Textbausteine</h1><p class="mut">Lade Textvorlagen …</p>';
+  try{
+    const result=await api('/textbausteine');
+    if(tab!=='texte')return;
+    TEXTBAUSTEINE_CACHE=Array.isArray(result)?result:[];
+    textbausteineZeichnen();
+  }catch(e){
+    if(tab==='texte')$('#inhalt').innerHTML=
+      '<h1>Textbausteine</h1><p class="fehler">Textbausteine konnten nicht geladen werden: '+esc(e.message)+'</p>';
+  }
+}
+function textbausteineZeichnen(){
+  if(tab!=='texte')return;
+  const daten=TEXTBAUSTEINE_CACHE||[];
+  const cards=TEXT_KATEGORIEN.map(kategorie=>{
+    const eintraege=daten.filter(x=>x.kategorie===kategorie);
+    if(!eintraege.length)return '';
+    return '<section class="textbaustein-gruppe"><h2>'+esc(kategorie)+
+      ' <span class="tag">'+eintraege.length+'</span></h2>'+
+      '<div class="textbaustein-grid">'+eintraege.map(x=>
+        '<article class="box textbaustein-karte" data-text-search="'+
+          esc((x.titel+' '+x.inhalt+' '+x.kategorie).toLowerCase())+'">'+
+          '<div class="textbaustein-titel"><h3>'+esc(x.titel)+'</h3>'+
+          '<button type="button" class="p" data-text-copy="'+esc(x.schluessel)+
+            '" aria-label="'+esc(x.titel)+' kopieren">Text kopieren</button></div>'+
+          '<details><summary>Vollständigen Text anzeigen</summary>'+
+          '<pre class="textbaustein-inhalt">'+esc(x.inhalt)+'</pre></details>'+
+        '</article>'
+      ).join('')+'</div></section>';
+  }).join('');
+  $('#inhalt').innerHTML='<h1>Textbausteine</h1>'+
+    '<p class="mut">Originalvorlagen für Polizeiräte aus „Textvorlagen Rat.pdf“. Platzhalter bitte nach dem Einfügen anpassen.</p>'+
+    '<div class="pers-bar"><input id="textbausteinSuche" type="search" placeholder="Titel oder Inhalt durchsuchen …" aria-label="Textbausteine durchsuchen">'+
+      '<span class="spacer"></span><span id="textbausteinAnzahl" class="mut">'+daten.length+' Textbausteine</span></div>'+
+    '<p id="textbausteinMeldung" class="mut" role="status" aria-live="polite"></p>'+
+    (cards||'<p>Keine Textbausteine vorhanden.</p>');
+}
+function textbausteineFiltern(){
+  const q=($('#textbausteinSuche')?.value||'').trim().toLowerCase();
+  let sichtbar=0;
+  document.querySelectorAll('.textbaustein-karte').forEach(c=>{
+    c.hidden=!!q&&!c.dataset.textSearch.includes(q);
+    if(!c.hidden)sichtbar++;
+  });
+  document.querySelectorAll('.textbaustein-gruppe').forEach(g=>{
+    g.hidden=!Array.from(g.querySelectorAll('.textbaustein-karte')).some(c=>!c.hidden);
+  });
+  const el=$('#textbausteinAnzahl');
+  if(el)el.textContent=sichtbar+' Textbausteine';
+}
+async function textbausteinKopieren(btn){
+  const x=(TEXTBAUSTEINE_CACHE||[]).find(v=>v.schluessel===btn.dataset.textCopy);
+  if(!x||!can('texte'))return;
+  btn.disabled=true;
+  const status=$('#textbausteinMeldung');
+  try{
+    if(navigator.clipboard?.writeText){
+      await navigator.clipboard.writeText(x.inhalt);
+    }else{
+      const ta=document.createElement('textarea');
+      ta.value=x.inhalt;
+      ta.style.position='fixed';
+      ta.style.left='-10000px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok=document.execCommand('copy');
+      ta.remove();
+      if(!ok)throw new Error('Zwischenablage nicht verfügbar');
+    }
+    if(status){status.textContent='„'+x.titel+'“ wurde vollständig kopiert.';status.style.color='#9ee6c3';}
+    btn.textContent='Kopiert ✓';
+  }catch(e){
+    if(status){status.textContent='Kopieren nicht möglich: '+e.message;status.style.color='#ffb6b6';}
+  }finally{
+    btn.disabled=false;
+  }
+}
+document.addEventListener('input',e=>{
+  if(e.target.matches('#textbausteinSuche'))textbausteineFiltern();
+});
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('[data-text-copy]');
+  if(btn)textbausteinKopieren(btn);
+});
+
 const RECHTE_MODULE=[...MODS.filter(m=>m[0]!=='users'),['por','POR-Freigabe','']];
 let USER_ADMIN=null;
 function vUsers() {

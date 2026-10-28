@@ -26,6 +26,7 @@ export async function initDb() {
   await originalDokumentLinksUebernehmen();
   await excelPersonalLinksUebernehmen();
   await originaleDashboardLinksUebernehmen();
+  await textbausteineAusPdfUebernehmen();
 }
 
 /*
@@ -163,4 +164,34 @@ async function originaleDashboardLinksUebernehmen() {
     else vorhanden++;
   }
   console.log('Dashboard: '+hinzugefuegt+' Links aus Excel ergänzt, '+vorhanden+' schon vorhanden');
+}
+
+/* Die Originaltexte aus „Textvorlagen Rat.pdf“ werden aus einer
+   privaten Render-Umgebungsvariablen übertragen, nicht ins öffentliche
+   GitHub-Repository geschrieben. Vorhandene Texte nicht überschreiben. */
+async function textbausteineAusPdfUebernehmen(){
+  const raw=process.env.POLIZEIRAT_TEXTBAUSTEINE_IMPORT;
+  if(!raw)return;
+  let daten;
+  try{daten=JSON.parse(raw)}catch(e){throw new Error('Textbaustein-PDF: ungültiges JSON')}
+  if(!Array.isArray(daten)||daten.length>100)throw new Error('Textbaustein-PDF: ungültige Liste');
+  const keys=new Set();
+  let angelegt=0;
+  for(const eintrag of daten){
+    if(!eintrag||typeof eintrag!=='object'||
+      typeof eintrag.schluessel!=='string'||!/^[a-z0-9-]{3,80}$/.test(eintrag.schluessel)||
+      !['Bewerbungen','Praktikanten','Beschwerden'].includes(eintrag.kategorie)||
+      typeof eintrag.titel!=='string'||!eintrag.titel.trim()||eintrag.titel.length>160||
+      typeof eintrag.inhalt!=='string'||!eintrag.inhalt.trim()||eintrag.inhalt.length>10000||
+      !Number.isSafeInteger(eintrag.sortierung)||eintrag.sortierung<0||eintrag.sortierung>1000)
+      throw new Error('Textbaustein-PDF: fehlerhafter Eintrag');
+    if(keys.has(eintrag.schluessel))throw new Error('Textbaustein-PDF: doppelter Schlüssel');
+    keys.add(eintrag.schluessel);
+    const r=await db.query(
+      'INSERT INTO textbausteine(schluessel,kategorie,titel,inhalt,sortierung) '+
+      'VALUES($1,$2,$3,$4,$5) ON CONFLICT(schluessel) DO NOTHING',
+      [eintrag.schluessel,eintrag.kategorie,eintrag.titel,eintrag.inhalt,eintrag.sortierung]);
+    angelegt+=r.rowCount;
+  }
+  console.log('Textbausteine aus PDF ergänzt: '+angelegt);
 }

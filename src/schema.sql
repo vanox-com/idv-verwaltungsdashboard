@@ -261,6 +261,15 @@ CREATE TABLE IF NOT EXISTS checklisten_status (
   PRIMARY KEY(name,punkt)
 );
 
+/* Wortgetreue RP-Textbausteine aus der PDF; nur berechtigte Rollen erhalten Inhalt. */
+CREATE TABLE IF NOT EXISTS textbausteine (
+  schluessel text PRIMARY KEY,
+  kategorie text NOT NULL,
+  titel text NOT NULL,
+  inhalt text NOT NULL,
+  sortierung integer NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS dashboard (
   id         serial PRIMARY KEY,
   art        text NOT NULL,               -- personal, vorlage, info, link
@@ -365,4 +374,15 @@ ON CONFLICT (rolle,modul) DO NOTHING;
 INSERT INTO role_perms (rolle,modul,stufe) VALUES
  ('Administrator','por',2),('Polizeirat','por',2),
  ('Leitungsdienst','por',0),('Ausbilder','por',0),('Mitarbeiter','por',0)
+ON CONFLICT(rolle,modul) DO NOTHING;
+
+/* Polizeiräte dürfen Textbausteine lesen und kopieren;
+   andere Rollen erhalten standardmäßig keinen Zugriff. Bestehende
+   Gruppen- und Einzelrechte werden niemals überschrieben. */
+INSERT INTO role_perms(rolle,modul,stufe) VALUES
+ ('Administrator','texte',2),
+ ('Polizeirat','texte',1),
+ ('Leitungsdienst','texte',0),
+ ('Ausbilder','texte',0),
+ ('Mitarbeiter','texte',0)
 ON CONFLICT(rolle,modul) DO NOTHING;
