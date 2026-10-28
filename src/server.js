@@ -377,7 +377,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
     daten.dashboard.faellige = [];
     if (berechtigt('bef')) {
       const raengeListe=raenge.rows;
-      daten.dashboard.faellige=personal.rows.filter(p=>p.status!=='Gekündigt').flatMap(p=>{
+      const alleFaelligen=personal.rows.filter(p=>p.status!=='Gekündigt').flatMap(p=>{
         const i=raengeListe.findIndex(r=>r.name===p.dienstgrad);
         const current=raengeListe[i],next=raengeListe[i+1];
         if (!current||!next||!Number(current.tage)) return [];
@@ -392,9 +392,11 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
         if (!faellig || dateDays(faellig)>0)return [];
         return [{nummer:p.personalnummer,name:personenName(p),dienstgrad:p.dienstgrad,
           naechsterRang:next.name,faellig,porStatus:p.por_status||'offen'}];
-      }).sort((a,b)=>a.faellig.localeCompare(b.faellig)).slice(0,8);
+      }).sort((a,b)=>a.faellig.localeCompare(b.faellig));
+      daten.dashboard.faellige=alleFaelligen.slice(0,8);
+      daten.dashboard.summary.faelligeBef=alleFaelligen.length;
     }
-    daten.dashboard.summary.faelligeBef=berechtigt('bef')?daten.dashboard.faellige.length:null;
+    if(!berechtigt('bef'))daten.dashboard.summary.faelligeBef=null;
     const kommenderJahrestag=(value,minimum)=>{
       const iso=isoDatum(value);
       if(!/^\d{4}-\d{2}-\d{2}$/.test(iso))return null;
