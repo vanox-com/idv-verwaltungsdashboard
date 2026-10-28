@@ -812,6 +812,37 @@ dialog::backdrop{background:rgba(8,12,18,.78);backdrop-filter:blur(5px)}
 }
 @media(max-width:370px){.dash-cell-kpi{grid-column:span 12}}
 
+
+/* Schulterklappen: dunkle marine-/anthrazitfarbene Tuchanmutung,
+   feinere Lichtkante und wertige Akzente ohne zusätzliche Neonfarben. */
+.rank-insignia{
+  flex-shrink:0;overflow:hidden;border-radius:6px;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.32));
+}
+.rank-with-insignia{gap:10px;min-height:30px}
+.rank-with-insignia>span:last-child{color:#e0e8f2;font-weight:560}
+.pers-rank-preview{
+  display:inline-flex;align-items:center;
+  padding:10px 13px;margin:12px 0 6px;
+  border:1px solid rgba(158,170,203,.23);
+  border-radius:12px;
+  background:linear-gradient(135deg,#202734,#222933 75%,#292b3a);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 7px 20px rgba(0,0,0,.1);
+}
+/* Wenige zusätzliche stilvolle Akzente im Verwaltungsdesign. */
+.workspace-topbar{position:relative}
+.workspace-topbar:after{
+  content:"";position:absolute;bottom:-1px;left:0;width:120px;height:1px;
+  background:linear-gradient(90deg,rgba(180,194,240,.62),rgba(177,167,211,0));
+}
+aside .sidebar-brand{position:relative}
+aside .sidebar-brand:after{
+  content:"";position:absolute;bottom:0;left:30%;right:30%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(167,183,229,.5),transparent);
+}
+.tw tbody tr:hover td{background:rgba(143,157,208,.085)}
+button.p:focus-visible{outline-color:#c5c8f7}
+
 </style>
 </head>
 <body>
@@ -887,9 +918,9 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;
 const fd = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('.') : '';
 const can = (m, l = 1) => ME && (ME.rechte[m] || 0) >= l;
 
-/* Dienstgradabzeichen: SVG-Farb- und Stern/Litzenzuordnung der Original-HTML.
-   Transparente Querklappe, mittlerer Dienst blau, gehobener silber,
-   höherer gold; Anwärter mit Litze; obere Dienstgrade mit Kranz. */
+/* Dienstgradabzeichen: dunkles texturiertes Schulterstück, farbige Rangsterne.
+   Die drei RP-Führungsränge zeigen stilisiertes hessisches Gold-Eichenlaub
+   statt des bisherigen rechteckigen Rahmens. Die Rangzuordnung bleibt gleich. */
 const RANK_BLAU='#1f6fb2',RANK_SILBER='#d9dee5',RANK_GOLD='#e8b23a';
 const RANK_LITZEN={
   'Polizeimeisteranwärter':[RANK_BLAU,'str'],
@@ -922,11 +953,38 @@ function rankStern(cx,cy,r,farbe){
   }
   return '<polygon points="'+punkte.join(' ')+'" fill="'+farbe+'"/>';
 }
-function rankKranz(farbe,laenge=22){
-  const d=3,links=10,oben=10,unten=34;
-  return '<rect x="'+links+'" y="'+(oben-d)+'" width="'+(2*d)+'" height="'+(unten-oben+2*d)+'" fill="'+farbe+'"/>'+
-    '<rect x="'+links+'" y="'+(oben-d)+'" width="'+laenge+'" height="'+(2*d)+'" fill="'+farbe+'"/>'+
-    '<rect x="'+links+'" y="'+(unten-d)+'" width="'+laenge+'" height="'+(2*d)+'" fill="'+farbe+'"/>';
+/* Eichenlaub-Zweige, als feines SVG-Vektormotiv statt der drei
+   rechteckigen Balken. An realen hessischen goldenen Eichenlaubabzeichen
+   orientiert, für die IdentityValley-Rangfolge gestalterisch angepasst. */
+function rankKranz(farbe,anzahl=1){
+  const end=48+(anzahl-1)*18;
+  const top='M9 22 C17 15 26 11 '+end+' 11';
+  const bottom='M9 22 C17 29 26 33 '+end+' 33';
+  const aeste='<path d="'+top+' '+bottom+
+    '" fill="none" stroke="'+farbe+'" stroke-width="1.55" stroke-linecap="round" opacity=".95"/>';
+  /* Lappige Eichenblätter mit kleiner Mittelader. Die Zweige öffnen sich
+     nach rechts und rahmen die Sterne wie bei Polizeiführungsabzeichen. */
+  const blatt='M0 0 C-1.3 -1.7 -3.8 -1.8 -3.3 -4 C-5.7 -4.5 -5.4 -7 -3.1 -7.1 '+
+    'C-3.7 -9.5 -.8 -10.8 1 -8.5 C3.6 -9.8 5.2 -7.4 3.7 -5.5 '+
+    'C5.6 -3.6 2.5 -1.6 0 0Z';
+  const n=anzahl===1?5:anzahl===2?7:9;
+  let blätter='';
+  for(let i=0;i<n;i++){
+    const t=(i+.3)/(n+.35);
+    const x=13+(end-15)*t;
+    const y=22-11*Math.sin(Math.PI*.5*Math.min(1,(x-9)/(end-9)));
+    for(const side of [1,-1]){
+      const cy=side===1?y:44-y;
+      const angle=side===1?(-25+25*t):(155-25*t);
+      const transform='translate('+x.toFixed(2)+' '+cy.toFixed(2)+') rotate('+angle.toFixed(1)+')';
+      blätter+='<g transform="'+transform+'">'+
+        '<path d="'+blatt+'" fill="'+farbe+'" stroke="#fce5a3" stroke-width=".24" stroke-linejoin="round"/>'+
+        '<path d="M0 0 L-.2 -6.4" stroke="#fff1bc" stroke-width=".45" opacity=".65"/>'+
+        '</g>';
+    }
+  }
+  return aeste+blätter+
+    '<circle cx="9" cy="22" r="1.9" fill="'+farbe+'" stroke="#ffe8a8" stroke-width=".5"/>';
 }
 function rangAbzeichen(rang,scale=1){
   const v=RANK_LITZEN[String(rang||'')];
@@ -941,13 +999,18 @@ function rangAbzeichen(rang,scale=1){
     const r=7.4,z=15;
     shapes=stern(xStart,cy-8,r)+stern(xStart,cy+8,r)+
       stern(xStart+z,cy,r)+stern(xStart+2*z,cy,r)+stern(xStart+3*z,cy,r);
-  } else if(art==='k1')shapes=rankKranz(f)+stern(28,cy,7.6);
-  else if(art==='k2')shapes=rankKranz(f,30)+stern(26,cy,7.2)+stern(42,cy,7.2);
-  else if(art==='k3')shapes=rankKranz(f,40)+stern(25,cy,6.6)+stern(40,cy,6.6)+stern(55,cy,6.6);
-  const w=Math.round(132*scale*.558),h=Math.round(44*scale*.558);
+  } else if(art==='k1')shapes=rankKranz(f,1)+stern(33,cy,7.5);
+  else if(art==='k2')shapes=rankKranz(f,2)+stern(33,cy,7)+stern(51,cy,7);
+  else if(art==='k3')shapes=rankKranz(f,3)+stern(33,cy,6.8)+stern(51,cy,6.8)+stern(69,cy,6.8);
+  const w=Math.round(132*scale*.66),h=Math.round(44*scale*.66);
+  const klappe='<rect x="1.2" y="2" width="129.6" height="40" rx="6" '+
+    'fill="#111923" stroke="#526174" stroke-width="1.1"/>'+
+    '<path d="M8 5 H122" stroke="#a0aec1" stroke-width=".8" opacity=".13"/>'+
+    '<circle cx="119" cy="22" r="5" fill="#263141" stroke="#8190a1" stroke-width=".9"/>'+
+    '<circle cx="119" cy="22" r="2.2" fill="#718296" opacity=".65"/>';
   return '<svg class="rank-insignia" width="'+w+'" height="'+h+
     '" viewBox="0 0 132 44" role="img" aria-label="Dienstgradabzeichen '+esc(rang)+
-    '" xmlns="http://www.w3.org/2000/svg">'+shapes+'</svg>';
+    '" xmlns="http://www.w3.org/2000/svg">'+klappe+shapes+'</svg>';
 }
 function rangMitAbzeichen(rang,scale=1){
   const name=String(rang||'–');
