@@ -249,17 +249,13 @@ function tabelle(kopf, zeilen) {
 /* ---------- Bereiche ---------- */
 
 function vDash() {
-  const p = D.personal;
-  const offen = D.kuendigungen.filter(function (k) {
-    return ['waffe','copnet','emd','ic','discord','dienstgegenstaende'].some(function (f) { return /offen/i.test(k[f] || ''); });
-  }).length;
-  const diszFaelle = D.disziplin.filter(function (d) { return (d.massnahmen || []).length; }).length;
-
+  /* Aggregierte Kennzahlen kommen vom Server, auch ohne Recht auf Personalakten. */
+  const summary = D.dashboard.summary || {};
   const kpi = [
-    ['Personal', p.length],
-    ['Kündigungen', D.kuendigungen.length],
-    ['offene Rückgaben', offen],
-    ['Disziplinarfälle', diszFaelle]
+    ['Personal', summary.personal ?? 0],
+    ['Kündigungen', summary.kuendigungen ?? 0],
+    ['offene Rückgaben', summary.offeneRueckgaben ?? 0],
+    ['Disziplinarfälle', summary.disziplinFaelle ?? 0]
   ];
   const kacheln = '<div class="kacheln">' + kpi.map(function (k) {
     return '<div class="kachel"><b>' + k[1] + '</b><span>' + k[0] + '</span></div>';
