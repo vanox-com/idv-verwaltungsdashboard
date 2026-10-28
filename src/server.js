@@ -228,6 +228,38 @@ app.post('/api/passwort', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* Globale Startseiten-Kacheln: ausschließlich feste IDs ohne freies HTML. */
+const DASHBOARD_WIDGET_IDS=new Set(["kpi-personal","kpi-kuendigungen","kpi-rueckgaben","kpi-disziplin","kpi-aktiv","kpi-neu30","kpi-urlaub","kpi-bef","panel-bef","panel-gruppen","panel-inaktiv","panel-geb","panel-jub","panel-dienstblatt","panel-links","panel-vorlagen","panel-info","panel-status","panel-neue"]);
+
+
+/* Globale Dashboard-Anordnung darf nur ein Administrator verändern.
+   Änderungen werden versioniert und in PostgreSQL dauerhaft gespeichert. */
+app.put('/api/dashboard-layout',requireLogin,async(req,res,next)=>{
+  try{
+    if(req.user.rolle!=='Administrator')return res.status(403).json({error:'Nur Administratoren dürfen das Dashboard anpassen'});
+    const version=req.body?.version,items=req.body?.items;
+    if(!Number.isSafeInteger(version)||version<0||
+       !Array.isArray(items)||items.length>DASHBOARD_WIDGET_IDS.size||
+       !items.every(x=>x&&typeof x==='object'&&!Array.isArray(x)&&
+         DASHBOARD_WIDGET_IDS.has(x.id)&&typeof x.sichtbar==='boolean')||
+       new Set(items.map(x=>x.id)).size!==items.length)
+      return res.status(400).json({error:'Ungültige Dashboard-Konfiguration'});
+    const result=version===0?
+      await db.query(
+        'INSERT INTO dashboard_layout(id,items,version) VALUES(1,$1::jsonb,1) '+
+        'ON CONFLICT(id) DO NOTHING RETURNING items,version',
+        [JSON.stringify(items)]):
+      await db.query(
+        'UPDATE dashboard_layout SET items=$1::jsonb,version=version+1,aktualisiert=now() '+
+        'WHERE id=1 AND version=$2 RETURNING items,version',
+        [JSON.stringify(items),version]);
+    if(!result.rows.length)return res.status(409).json({error:'Das Dashboard wurde bereits geändert. Bitte die Seite neu laden.'});
+    await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
+      [req.user.id,'Dashboard-Kacheln und Anordnung angepasst']);
+    res.json(result.rows[0]);
+  }catch(err){next(err)}
+});
+
 /* ---------- Lesen ---------- */
 
 app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
@@ -236,7 +268,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
   try {
     const [personal, raenge, funktionen, funktionsspalten, kuendigungen, disziplin,
       disziplinSpalten, richtlinie, checklisten, checklistenStatus, dashboard, routine, sonderzahlungen,
-      organigramm, befoerderungen] = await Promise.all([
+      organigramm, befoerderungen, dashboardLayout] = await Promise.all([
       db.query(`SELECT * FROM personal ORDER BY personalnummer`),
       db.query(`SELECT * FROM raenge ORDER BY sortierung, name`),
       db.query(`SELECT * FROM sonderfunktionen`),
@@ -251,7 +283,8 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       db.query(`SELECT * FROM routine ORDER BY sortierung`),
       db.query(`SELECT * FROM sonderzahlungen ORDER BY nachname`),
       db.query(`SELECT * FROM organigramm ORDER BY sortierung`),
-      db.query(`SELECT * FROM befoerderungen ORDER BY nachname`)
+      db.query(`SELECT * FROM befoerderungen ORDER BY nachname`),
+      db.query(`SELECT items,version FROM dashboard_layout WHERE id=1`)
     ]);
 
     const rolle = req.user.rolle;
@@ -269,6 +302,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       checklisten: checklisten.rows.map(r => ({ name: r.name, aufgaben: r.aufgaben })),
       checklistenStatus: checklistenStatus.rows,
       dashboard: {
+        layout: dashboardLayout.rows[0]||{items:[],version:0},
         personal: dashboard.rows.filter(r => r.art === 'personal').map(r => ({ label: r.text, anzahl: r.anzahl })),
         vorlagen: dashboard.rows.filter(r => r.art === 'vorlage').map(r => ({ text: r.text, url: r.url })),
         info: dashboard.rows.filter(r => r.art === 'info').map(r => ({ text: r.text, url: r.url })),
@@ -304,6 +338,31 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       : '';
     const dateDays = iso => Math.round((Date.parse(iso+'T00:00:00Z') - heuteMs)/86400000);
     const personenName = p => [p.vorname,p.nachname].filter(Boolean).join(' ');
+    const neu30=personal.rows.filter(p=>{
+      const datum=isoDatum(p.eintrittsdatum);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(datum))return false;
+      const d=dateDays(datum);
+      return d<=0&&d>=-29;
+    });
+    const aktiveStatus=new Set(['Aktiv']);
+    daten.dashboard.summary.aktiv=personal.rows.filter(p=>aktiveStatus.has(p.status)).length;
+    daten.dashboard.summary.neu30=berechtigt('pers')?neu30.length:null;
+    daten.dashboard.summary.urlaub=berechtigt('pers')?personal.rows.filter(p=>{
+      const von=isoDatum(p.urlaub_von),bis=isoDatum(p.urlaub_bis);
+      return /^\d{4}-\d{2}-\d{2}$/.test(von)&&/^\d{4}-\d{2}-\d{2}$/.test(bis)&&
+        von<=isoDatum(heute)&&bis>=isoDatum(heute);
+    }).length:null;
+    daten.dashboard.neueinstellungen=berechtigt('pers')?neu30
+      .map(p=>({name:personenName(p),gruppe:p.gruppe||'',eintritt:isoDatum(p.eintrittsdatum)}))
+      .sort((a,b)=>b.eintritt.localeCompare(a.eintritt)).slice(0,8):[];
+    const statusCounts=new Map();
+    for(const p of personal.rows){
+      const st=p.status||'Nicht zugeordnet';
+      statusCounts.set(st,(statusCounts.get(st)||0)+1);
+    }
+    daten.dashboard.statusverteilung=[...statusCounts].map(([name,anzahl])=>({name,anzahl}))
+      .sort((a,b)=>b.anzahl-a.anzahl||a.name.localeCompare(b.name,'de'));
+
     const gruppen = new Map();
     for (const p of personal.rows) {
       const key=p.gruppe||'Nicht zugeordnet';
@@ -335,6 +394,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
           naechsterRang:next.name,faellig,porStatus:p.por_status||'offen'}];
       }).sort((a,b)=>a.faellig.localeCompare(b.faellig)).slice(0,8);
     }
+    daten.dashboard.summary.faelligeBef=berechtigt('bef')?daten.dashboard.faellige.length:null;
     const kommenderJahrestag=(value,minimum)=>{
       const iso=isoDatum(value);
       if(!/^\d{4}-\d{2}-\d{2}$/.test(iso))return null;
@@ -374,7 +434,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
     if (!berechtigt('chk')) { daten.checklisten = []; daten.checklistenStatus = []; }
     if (!berechtigt('rl')) daten.richtlinie = { stand: '', zeilen: [] };
     if (!berechtigt('org')) daten.organigramm = [];
-    if (!berechtigt('dash')) daten.dashboard = { personal: [], vorlagen: [], info: [], links: [], summary: {} };
+    if (!berechtigt('dash')) daten.dashboard = { personal: [], vorlagen: [], info: [], links: [], summary: {},layout:{items:[],version:0} };
 
     if (!berechtigt('pers')) {
       /* Funktions- und Disziplinansichten benötigen Namen, aber keine Personalakte. */
