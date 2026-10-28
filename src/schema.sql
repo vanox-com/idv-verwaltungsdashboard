@@ -29,6 +29,15 @@ CREATE TABLE IF NOT EXISTS users (
   erstellt              timestamptz NOT NULL DEFAULT now()
 );
 
+/* Konkrete Dienstnummer kann je Modul das Rollenrecht übersteuern.
+   Kein Eintrag bedeutet: Rollenrecht erben. Eintrag mit 0 = ausdrücklich sperren. */
+CREATE TABLE IF NOT EXISTS user_perms (
+  user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  modul text NOT NULL,
+  stufe smallint NOT NULL CHECK(stufe IN (0,1,2)),
+  PRIMARY KEY (user_id,modul)
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   token   text PRIMARY KEY,
   user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -345,3 +354,11 @@ INSERT INTO role_perms (rolle, modul, stufe) VALUES
   ('Administrator','bl',2),('Polizeirat','bl',2),('Leitungsdienst','bl',1),('Ausbilder','bl',0),('Mitarbeiter','bl',0)
 ON CONFLICT (rolle,modul) DO NOTHING;
 
+
+/* POR-Genehmigung getrennt vom Beförderungsrecht.
+   Nur Administrator und Polizeirat bekommen sie standardmäßig,
+   weitere Rollen oder Dienstnummern lassen sich gezielt freischalten. */
+INSERT INTO role_perms (rolle,modul,stufe) VALUES
+ ('Administrator','por',2),('Polizeirat','por',2),
+ ('Leitungsdienst','por',0),('Ausbilder','por',0),('Mitarbeiter','por',0)
+ON CONFLICT(rolle,modul) DO NOTHING;

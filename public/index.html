@@ -257,6 +257,20 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .dashboard-link{padding:6px 0;border-bottom:1px solid var(--line)}
 .dashboard-link:last-child{border:0}
 .box h3{font-size:16px;margin:0 0 14px;font-weight:690}
+
+/* Rollenrechte + Einzelrechte */
+#userDialog{width:min(810px,96vw)}
+.user-exceptions{margin-top:20px;border-top:1px solid var(--line);padding-top:16px}
+.user-exceptions h3{margin:0 0 7px;font-size:16px}
+.user-exception-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}
+.user-exception-label{display:flex;flex-direction:column;gap:3px;min-width:0}
+.user-exception-label small{color:var(--mut)}
+@media(max-width:620px){.user-exception-grid{grid-template-columns:1fr}}
+
+.rank-with-insignia{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;min-height:25px}
+.rank-insignia{flex:none;display:inline-block;vertical-align:middle;overflow:visible;
+ filter:drop-shadow(0 1px 1px rgba(0,0,0,.38))}
+.pers-rank-preview{margin:11px 0 3px}
 </style>
 </head>
 <body>
@@ -321,6 +335,75 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fd = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('.') : '';
 const can = (m, l = 1) => ME && (ME.rechte[m] || 0) >= l;
+
+/* Dienstgradabzeichen: SVG-Farb- und Stern/Litzenzuordnung der Original-HTML.
+   Transparente Querklappe, mittlerer Dienst blau, gehobener silber,
+   höherer gold; Anwärter mit Litze; obere Dienstgrade mit Kranz. */
+const RANK_BLAU='#1f6fb2',RANK_SILBER='#d9dee5',RANK_GOLD='#e8b23a';
+const RANK_LITZEN={
+  'Polizeimeisteranwärter':[RANK_BLAU,'str'],
+  'Polizeimeister':[RANK_BLAU,'s2'],
+  'Polizeiobermeister':[RANK_BLAU,'s3'],
+  'Polizeihauptmeister':[RANK_BLAU,'s4'],
+  'Polizeihauptmeister AZ':[RANK_BLAU,'a5'],
+  'Polizeikommissaranwärter':[RANK_SILBER,'str'],
+  'Polizeikommissar':[RANK_SILBER,'s1'],
+  'Kriminalkommissar':[RANK_SILBER,'s1'],
+  'Polizeioberkommissar':[RANK_SILBER,'s2'],
+  'Kriminaloberkommissar':[RANK_SILBER,'s2'],
+  'Polizeihauptkommissar':[RANK_SILBER,'s3'],
+  'Kriminalhauptkommissar':[RANK_SILBER,'s3'],
+  'Polizeihauptkommissar A12':[RANK_SILBER,'s4'],
+  'Erster Polizeihauptkommissar':[RANK_SILBER,'a5'],
+  'Polizeiratanwärter':[RANK_GOLD,'str'],
+  'Polizeirat':[RANK_GOLD,'s1'],
+  'Polizeioberrat':[RANK_GOLD,'s2'],
+  'Polizeidirektor':[RANK_GOLD,'s4'],
+  'Leitender Polizeidirektor':[RANK_GOLD,'k1'],
+  'Polizeivizepräsident':[RANK_GOLD,'k2'],
+  'Polizeipräsident':[RANK_GOLD,'k3']
+};
+function rankStern(cx,cy,r,farbe){
+  const punkte=[];
+  for(let i=0;i<12;i++){
+    const rad=Math.PI/6*i-Math.PI/2,abstand=i%2?r*.45:r;
+    punkte.push((cx+Math.cos(rad)*abstand).toFixed(1)+','+(cy+Math.sin(rad)*abstand).toFixed(1));
+  }
+  return '<polygon points="'+punkte.join(' ')+'" fill="'+farbe+'"/>';
+}
+function rankKranz(farbe,laenge=22){
+  const d=3,links=10,oben=10,unten=34;
+  return '<rect x="'+links+'" y="'+(oben-d)+'" width="'+(2*d)+'" height="'+(unten-oben+2*d)+'" fill="'+farbe+'"/>'+
+    '<rect x="'+links+'" y="'+(oben-d)+'" width="'+laenge+'" height="'+(2*d)+'" fill="'+farbe+'"/>'+
+    '<rect x="'+links+'" y="'+(unten-d)+'" width="'+laenge+'" height="'+(2*d)+'" fill="'+farbe+'"/>';
+}
+function rangAbzeichen(rang,scale=1){
+  const v=RANK_LITZEN[String(rang||'')];
+  if(!v)return '';
+  const [f,art]=v,R=9.6,step=21.5,cy=22,xStart=12.6;
+  const stern=(x,y,r=R)=>rankStern(x,y,r,f);
+  let shapes='';
+  if(art==='str')shapes='<rect x="14" y="6" width="9" height="32" fill="'+f+'"/>';
+  else if(/^s[1-4]$/.test(art)){
+    shapes=Array.from({length:Number(art[1])},(_,i)=>stern(xStart+i*step,cy)).join('');
+  } else if(art==='a5'){
+    const r=7.4,z=15;
+    shapes=stern(xStart,cy-8,r)+stern(xStart,cy+8,r)+
+      stern(xStart+z,cy,r)+stern(xStart+2*z,cy,r)+stern(xStart+3*z,cy,r);
+  } else if(art==='k1')shapes=rankKranz(f)+stern(28,cy,7.6);
+  else if(art==='k2')shapes=rankKranz(f,30)+stern(26,cy,7.2)+stern(42,cy,7.2);
+  else if(art==='k3')shapes=rankKranz(f,40)+stern(25,cy,6.6)+stern(40,cy,6.6)+stern(55,cy,6.6);
+  const w=Math.round(132*scale*.558),h=Math.round(44*scale*.558);
+  return '<svg class="rank-insignia" width="'+w+'" height="'+h+
+    '" viewBox="0 0 132 44" role="img" aria-label="Dienstgradabzeichen '+esc(rang)+
+    '" xmlns="http://www.w3.org/2000/svg">'+shapes+'</svg>';
+}
+function rangMitAbzeichen(rang,scale=1){
+  const name=String(rang||'–');
+  return '<span class="rank-with-insignia">'+rangAbzeichen(name,scale)+
+    '<span>'+esc(name)+'</span></span>';
+}
+
 
 async function api(pfad, optionen) {
   /* Der Datenaufbau hat eine feste Obergrenze. Ein hängender Request darf
@@ -657,7 +740,7 @@ function vPers() {
     return '<tr class="pers-row" data-name="' + esc([p.personalnummer,p.vorname,p.nachname,p.dienstgrad,p.nebenjob].join(' ').toLowerCase()) + '" data-group="' + esc(p.gruppe || '') + '" data-status="' + esc(p.status || '') + '">' +
       '<td>' + nummer + '</td>' +
       '<td><button class="pers-link" type="button" data-show-person="' + nummer + '">' + name + '</button></td>' +
-      '<td>' + esc(p.dienstgrad || '–') + '</td><td>' + esc(p.gruppe || '–') + '</td>' +
+      '<td>' + rangMitAbzeichen(p.dienstgrad) + '</td><td>' + esc(p.gruppe || '–') + '</td>' +
       '<td>' + fd(p.eintrittsdatum) + '</td><td>' + handy + '</td>' +
       '<td>' + status + '</td><td>' + bearbeitung + '</td></tr>';
   }).join('');
@@ -727,6 +810,7 @@ function personalAnzeigen(nr) {
   }
   dialog.innerHTML = '<h2>' + esc([p.vorname,p.nachname].filter(Boolean).join(' ')) + '</h2>' +
     '<div class="mut">Personalakte · IdentityValley</div>' +
+    '<div class="pers-rank-preview">'+rangMitAbzeichen(p.dienstgrad,1.25)+'</div>' +
     '<div class="pers-detail">' + items.map(([k,v]) => '<div class="item"><small>' + k + '</small>' + esc(v == null || v === '' ? '–' : v) + '</div>').join('') + '</div>' +
     (ME.sensibel ? '<section class="copnet-box"><h3>CopNet-Zugangsdaten</h3><div id="copnetArea" aria-live="polite">Zugangsdaten werden geschützt geladen …</div></section>' : '') +
     '<div class="actions"><button type="button" id="persAbbrechen">Schließen</button>' +
@@ -975,17 +1059,17 @@ function vBef() {
     const nr = Number(p.personalnummer), days = Math.round((Date.parse(termin+'T00:00:00Z')-Date.parse(heute+'T00:00:00Z'))/86400000);
     const status = days<=0 ? 'fällig seit '+(-days)+' Tagen' : 'in '+days+' Tagen';
     const st = (p.por_status === 'genehmigt'?'ok':p.por_status === 'beantragt'?'warn':p.por_status === 'abgelehnt'?'bad':'');
-    const action = verwalten ?
-      '<button type="button" data-por-person="'+nr+'">POR</button> ' +
-      (days<=0 && p.por_status === 'genehmigt'?
-        '<button type="button" class="p" data-promote-person="'+nr+'">Befördern</button>':'') : '';
-    return '<tr><td>'+esc(p.vorname+' '+p.nachname)+'</td><td>'+esc(p.dienstgrad || '')+'</td>' +
-      '<td>'+esc(next.name)+'</td><td>'+fd(p.letzte_befoerderung)+'</td><td>'+fd(termin)+'</td>' +
+    const action =
+      (can('por',2) ? '<button type="button" data-por-person="'+nr+'">POR</button> ' : '') +
+      (verwalten && days<=0 && p.por_status === 'genehmigt' ?
+        '<button type="button" class="p" data-promote-person="'+nr+'">Befördern</button>' : '');
+    return '<tr><td>'+esc(p.vorname+' '+p.nachname)+'</td><td>'+rangMitAbzeichen(p.dienstgrad)+'</td>' +
+      '<td>'+rangMitAbzeichen(next.name)+'</td><td>'+fd(p.letzte_befoerderung)+'</td><td>'+fd(termin)+'</td>' +
       '<td><span class="tag '+(days<=0?'bad':days<=14?'warn':'ok')+'">'+status+'</span></td>' +
       '<td><span class="tag '+st+'">'+esc(porText(p))+'</span></td>' +
       '<td>'+esc(aktBem(p.dienstgrad))+'</td><td>'+action+'</td></tr>';
   }).join('');
-  const ranks = raenge.map(r => '<tr><td>'+esc(r.name)+'</td><td>'+esc(r.abk||'')+'</td>' +
+  const ranks = raenge.map(r => '<tr><td>'+rangMitAbzeichen(r.name)+'</td><td>'+esc(r.abk||'')+'</td>' +
     '<td>'+(r.tage ? r.tage+' Tage':'–')+'</td><td>'+esc(r.bemerkung||'')+'</td><td>'+esc(r.grund||'')+'</td></tr>').join('');
   return '<h1>Beförderungen</h1><p class="mut">Fristen nach Beförderungsbedingungen. Keine Beförderung ohne POR-Freigabe.</p>' +
     (wartet ? '<div class="box"><b>'+wartet+'</b> POR-Anträge warten auf eine Entscheidung.</div>' : '') +
@@ -997,7 +1081,7 @@ function vBef() {
 }
 function aktBem(name) { const r = (D.raenge||[]).find(x=>x.name===name); return r ? r.bemerkung||'' : ''; }
 function porBearbeiten(nr) {
-  if(!can('bef',2))return;
+  if(!can('bef',1)||!can('por',2))return;
   const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nr);if(!p)return;
   const d=$('#porDialog');
   const options=POR_STATUS.map(([status,label])=>'<option value="'+status+'"'+((p.por_status||'offen')===status?' selected':'')+'>'+label+'</option>').join('');
@@ -1261,7 +1345,7 @@ function vDis(){
       '</div></div>':'').join('');
     const name=[p.vorname,p.nachname].filter(Boolean).join(' ');
     return '<tr class="dis-row" data-dis-name="'+esc((nr+' '+name+' '+(p.dienstgrad||'')).toLowerCase())+'">'+
-      '<td>'+nr+'</td><td>'+esc(name)+'</td><td>'+esc(p.dienstgrad||'–')+'</td>'+
+      '<td>'+nr+'</td><td>'+esc(name)+'</td><td>'+rangMitAbzeichen(p.dienstgrad)+'</td>'+
       '<td>'+(ms||'<span class="mut">Keine</span>')+'</td><td>'+esc(akte.bemerkung||'')+'</td>'+
       '<td>'+(schreiben?'<button type="button" data-dis-person="'+nr+'">Eintragen / Bearbeiten</button>':'')+'</td></tr>';
   }).join('');
@@ -1804,6 +1888,7 @@ document.addEventListener('input',e=>{
 
 /* Benutzer- und Berechtigungsverwaltung, Vorbild: Original-HTML. */
 const RECHTE_STUFEN=['–','Lesen','Bearbeiten'];
+const RECHTE_MODULE=[...MODS.filter(m=>m[0]!=='users'),['por','POR-Freigabe','']];
 let USER_ADMIN=null;
 function vUsers() {
   if(ME.rolle!=='Administrator')return '<p>Nur der Administrator darf Zugänge verwalten.</p>';
@@ -1823,7 +1908,7 @@ async function ladeBenutzer() {
     '<button type="button" data-user-edit="'+Number(u.id)+'">Bearbeiten</button> '+
     (u.dienstnummer!==ME.dienstnummer?'<button type="button" class="user-delete" data-user-delete="'+Number(u.id)+'">Löschen</button>':'')
   ]);
-  const matrixRows=MODS.filter(m=>m[0]!=='users').map(m=>{
+  const matrixRows=RECHTE_MODULE.map(m=>{
     const cells=a.rollen.map(r=>{
       const p=a.perms.find(x=>x.rolle===r.name && x.modul===m[0]);
       const st=p?Number(p.stufe):0;
@@ -1838,7 +1923,7 @@ async function ladeBenutzer() {
   $('#benutzerBereich').innerHTML=
     '<div class="box"><h3>Benutzerkonten</h3>'+tabelle(['Dienstnummer','Name','Rolle','Passwort','Status','Aktion'],rows)+'</div>'+
     '<div class="box"><h3>Berechtigungsmatrix</h3>'+
-    '<p class="mut">Klick auf eine Berechtigung wechselt zwischen „Kein Recht“, „Lesen“ und „Bearbeiten“. Administratorrechte sind fest.</p>'+
+    '<p class="mut">Gruppenrechte gelten als Standard. Klick wechselt zwischen „Kein Recht“, „Lesen“ und „Bearbeiten“. Für Dienstnummern sind Ausnahmen möglich. POR-Freigabe ist von Beförderungsrechten getrennt.</p>'+
     '<div class="tw"><table class="user-matrix"><thead><tr><th>Modul</th>'+
     a.rollen.map(r=>'<th>'+esc(r.name)+'</th>').join('')+'</tr></thead><tbody>'+matrixRows+
     '</tbody></table></div></div>';
@@ -1862,6 +1947,7 @@ function userDialogForm(id) {
     '<p id="userFormError" class="fehler" role="alert"></p>'+
     '<div class="user-commands"><button type="button" id="userCancel">Abbrechen</button>'+
     '<button type="submit" class="p" id="userSave">Speichern</button></div></form>';
+  if(!neu) userAusnahmenAnzeigen(d,u);
   d.showModal();
   $('#userCancel').onclick=()=>d.close();
   $('#userForm').onsubmit=async e=>{
@@ -1891,6 +1977,50 @@ async function userLoeschen(id) {
   try{await api('/users/'+id,{method:'DELETE'});await ladeBenutzer();}
   catch(err){alert('Löschen fehlgeschlagen: '+err.message);}
 }
+
+function userAusnahmenAnzeigen(dialog,u){
+  if(!u||!USER_ADMIN)return;
+  const section=document.createElement('section');
+  section.className='user-exceptions';
+  const labels=RECHTE_MODULE.map(([modul,titel])=>{
+    const grund=USER_ADMIN.perms.find(p=>p.rolle===u.rolle&&p.modul===modul);
+    const ausnahme=(USER_ADMIN.userPerms||[]).find(p=>Number(p.user_id)===Number(u.id)&&p.modul===modul);
+    const value=ausnahme===undefined?'inherit':String(ausnahme.stufe);
+    return '<label class="user-exception-label">'+esc(titel)+
+      '<small>Rollenstandard: '+RECHTE_STUFEN[Number(grund?.stufe||0)]+'</small>'+
+      '<select data-user-override="'+Number(u.id)+'" data-user-modul="'+esc(modul)+'" '+
+      (u.rolle==='Administrator'?'disabled':'')+'>'+
+      [['inherit','Von Rolle übernehmen'],['0','Kein Zugriff'],['1','Lesen'],['2','Bearbeiten']].map(([v,t])=>
+        '<option value="'+v+'"'+(value===v?' selected':'')+'>'+t+'</option>').join('')+
+      '</select></label>';
+  }).join('');
+  section.innerHTML='<h3>Individuelle Berechtigungen</h3>'+
+    '<p class="mut">Änderungen gelten sofort und nur für diese Dienstnummer. „Von Rolle übernehmen“ entfernt die Ausnahme. Für POR-Freigaben braucht die Person zudem Leserecht im Modul Beförderungen; nur „Bearbeiten“ bei POR erlaubt Freigaben.</p>'+
+    '<div class="user-exception-grid">'+labels+'</div><p id="userOverrideInfo" role="status" class="mut"></p>';
+  dialog.appendChild(section);
+}
+async function userAusnahmeAendern(sel){
+  if(ME.rolle!=='Administrator')return;
+  const id=Number(sel.dataset.userOverride),modul=sel.dataset.userModul;
+  if(!Number.isSafeInteger(id)||!RECHTE_MODULE.some(x=>x[0]===modul))return;
+  const stufe=sel.value==='inherit'?null:Number(sel.value);
+  sel.disabled=true;
+  const info=$('#userOverrideInfo');
+  if(info)info.textContent='Speichere …';
+  try{
+    await api('/users/'+id+'/recht/'+encodeURIComponent(modul),
+      {method:'PATCH',body:JSON.stringify({stufe})});
+    if(info)info.textContent='Individuelles Recht gespeichert.';
+    await ladeBenutzer();
+  }catch(err){
+    if(info)info.textContent='Änderung fehlgeschlagen: '+err.message;
+    const v=USER_ADMIN.userPerms?.find(x=>Number(x.user_id)===id&&x.modul===modul);
+    sel.value=v?String(v.stufe):'inherit';
+  }finally{sel.disabled=false;}
+}
+document.addEventListener('change',e=>{
+  if(e.target.matches('[data-user-override]'))userAusnahmeAendern(e.target);
+});
 async function userRechtAendern(btn) {
   if(ME.rolle!=='Administrator')return;
   const rolle=btn.dataset.permRole,modul=btn.dataset.permModule,stufe=(Number(btn.dataset.permValue)+1)%3;
