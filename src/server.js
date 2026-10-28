@@ -420,6 +420,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
    transaktional abgesicherten POR-Beförderungsablauf geändert. */
 const vertraulichePersonalFelder = new Set([
   'geburtsdatum', 'handy', 'arbeitsvertrag', 'ernennungsurkunde',
+  'arbeitsvertrag_url', 'ernennungsurkunde_url',
   'urlaub_von', 'urlaub_bis', 'urlaub_tage', 'bemerkung', 'rsa',
   'waffenschein', 'spind'
 ]);
@@ -427,6 +428,23 @@ async function darfVertraulichesPersonalBearbeiten(rolle, daten) {
   if (!Object.keys(daten).some(k => vertraulichePersonalFelder.has(k))) return true;
   const {rows} = await db.query('SELECT sensibel FROM roles WHERE name=$1', [rolle]);
   return !!rows[0]?.sensibel;
+}
+function dokumentLinksValidieren(body) {
+  for (const feld of ['arbeitsvertrag_url','ernennungsurkunde_url']) {
+    if (!Object.hasOwn(body,feld)) continue;
+    if (typeof body[feld] !== 'string' || body[feld].length > 2048)
+      return 'Ungültiger Dokumentenlink';
+    const wert=body[feld].trim();
+    if (!wert) { body[feld]=''; continue; }
+    try {
+      const link=new URL(wert);
+      if (link.protocol !== 'https:' || !link.hostname.includes('.') ||
+          link.username || link.password || /\s/.test(wert))
+        return 'Bitte einen gültigen HTTPS-Dokumentenlink eingeben';
+      body[feld]=link.href;
+    } catch(e) { return 'Bitte einen gültigen HTTPS-Dokumentenlink eingeben'; }
+  }
+  return null;
 }
 app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req, res, next) => {
   try {
@@ -438,8 +456,11 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
       return res.status(409).json({ error: 'Dienstgrad ausschließlich über die Beförderungsverwaltung ändern' });
     if (!await darfVertraulichesPersonalBearbeiten(req.user.rolle, body))
       return res.status(403).json({ error: 'Kein Recht für vertrauliche Personalfelder' });
+    const linkFehler = dokumentLinksValidieren(body);
+    if (linkFehler) return res.status(400).json({error:linkFehler});
     const erlaubt = ['vorname', 'nachname', 'geburtsdatum', 'handy', 'waffenschein', 'spind',
       'nebenjob', 'eintrittsdatum', 'arbeitsvertrag', 'ernennungsurkunde',
+      'arbeitsvertrag_url', 'ernennungsurkunde_url',
       'urlaub_von', 'urlaub_bis', 'urlaub_tage', 'bemerkung', 'rsa', 'status', 'gruppe'];
     const felder = [], werte = [];
     erlaubt.forEach(k => {
@@ -464,6 +485,8 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
     const b = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
     if (!await darfVertraulichesPersonalBearbeiten(req.user.rolle, b))
       return res.status(403).json({ error: 'Kein Recht für vertrauliche Personalfelder' });
+    const linkFehler = dokumentLinksValidieren(b);
+    if (linkFehler) return res.status(400).json({error:linkFehler});
     const nr=Number(b.personalnummer);
     if (!Number.isSafeInteger(nr) || nr < 1)
       return res.status(400).json({ error: 'Ungültige Personalnummer' });
@@ -472,12 +495,13 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
     const { rows } = await db.query(
       `INSERT INTO personal (personalnummer, gruppe, status, vorname, nachname, geburtsdatum, handy,
         waffenschein, spind, nebenjob, dienstgrad, eintrittsdatum, arbeitsvertrag, ernennungsurkunde,
-        urlaub_von, urlaub_bis, urlaub_tage, bemerkung, rsa)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+        urlaub_von, urlaub_bis, urlaub_tage, bemerkung, rsa, arbeitsvertrag_url, ernennungsurkunde_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        RETURNING personalnummer,vorname,nachname,gruppe,status,dienstgrad`,
       [nr, b.gruppe || 'Hauptberuf', b.status || 'Aktiv', b.vorname, b.nachname, b.geburtsdatum || null,
         b.handy, !!b.waffenschein, !!b.spind, b.nebenjob, b.dienstgrad, b.eintrittsdatum || null,
-        b.arbeitsvertrag, b.ernennungsurkunde, b.urlaub_von || null, b.urlaub_bis || null, b.urlaub_tage, b.bemerkung, b.rsa]);
+        b.arbeitsvertrag, b.ernennungsurkunde, b.urlaub_von || null, b.urlaub_bis || null, b.urlaub_tage, b.bemerkung, b.rsa,
+        b.arbeitsvertrag_url || '', b.ernennungsurkunde_url || '']);
     await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'add')`,
       [req.user.id, `Personal ${nr} angelegt`]);
     res.json(rows[0]);
