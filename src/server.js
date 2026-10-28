@@ -104,7 +104,7 @@ function requireRight(modul, stufe = 1) {
    Admin-/Testzugang behält seinen eigenen Anzeigenamen. */
 async function nameFuerDienstnummer(u) {
   const nummer = String(u.dienstnummer || '').trim();
-  if (/^\\d{1,6}$/.test(nummer) && Number(nummer) > 0) {
+  if (/^\d{1,6}$/.test(nummer) && Number(nummer) > 0) {
     const { rows } = await db.query(
       'SELECT vorname, nachname FROM personal WHERE personalnummer = $1 LIMIT 1',
       [Number(nummer)]
