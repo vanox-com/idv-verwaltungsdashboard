@@ -95,16 +95,33 @@ async function requireLogin(req, res, next) {
   } catch (e) { next(e); }
 }
 
+/* Effektive Rechte: Ausnahme pro Benutzer > Gruppenrolle.
+   Administrator bleibt privilegiert, ohne dass Einzel-Ausnahmen ihn aussperren. */
+async function effektiveRechte(u) {
+  const {rows}=await db.query(
+    `SELECT modul,stufe FROM role_perms WHERE rolle=$1`,[u.rolle]);
+  const rechte={};
+  rows.forEach(r=>{rechte[r.modul]=Number(r.stufe)});
+  if(u.rolle!=='Administrator') {
+    const {rows:ausnahmen}=await db.query(
+      'SELECT modul,stufe FROM user_perms WHERE user_id=$1',[u.id]);
+    ausnahmen.forEach(r=>{rechte[r.modul]=Number(r.stufe)});
+  }
+  return rechte;
+}
 function requireRight(modul, stufe = 1) {
-  return async (req, res, next) => {
+  return async (req,res,next)=>{
     try {
-      const { rows } = await db.query(
-        `SELECT p.stufe FROM role_perms p
-          WHERE p.rolle = $1 AND p.modul = $2`, [req.user.rolle, modul]);
-      const hat = rows.length ? rows[0].stufe : 0;
-      if (hat < stufe) return res.status(403).json({ error: 'Kein Recht für diesen Bereich' });
+      const {rows}=await db.query(
+        `SELECT COALESCE(
+           CASE WHEN $3='Administrator' THEN NULL ELSE
+             (SELECT stufe FROM user_perms WHERE user_id=$1 AND modul=$2) END,
+           (SELECT stufe FROM role_perms WHERE rolle=$3 AND modul=$2),0) AS stufe`,
+        [req.user.id,modul,req.user.rolle]);
+      if(Number(rows[0]?.stufe||0)<stufe)
+        return res.status(403).json({error:'Kein Recht für diesen Bereich'});
       next();
-    } catch (e) { next(e); }
+    }catch(e){next(e)}
   };
 }
 
@@ -181,10 +198,7 @@ app.get('/api/me', async (req, res, next) => {
   try {
     const u = await currentUser(req);
     if (!u) return res.status(401).json({ error: 'Nicht angemeldet' });
-    const { rows } = await db.query(
-      `SELECT modul, stufe FROM role_perms WHERE rolle = $1`, [u.rolle]);
-    const rechte = {};
-    rows.forEach(r => { rechte[r.modul] = r.stufe; });
+    const rechte = await effektiveRechte(u);
     res.json({
       id: u.id, dienstnummer: u.dienstnummer, anzeigename: await nameFuerDienstnummer(u),
       rolle: u.rolle, mussPasswortAendern: !!u.muss_passwort_aendern, rechte
@@ -241,8 +255,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
     ]);
 
     const rolle = req.user.rolle;
-    const { rows: perms } = await db.query(`SELECT modul, stufe FROM role_perms WHERE rolle = $1`, [rolle]);
-    const rechte = {}; perms.forEach(p => { rechte[p.modul] = p.stufe; });
+    const rechte = await effektiveRechte(req.user);
     const sensibel = (await db.query(`SELECT sensibel FROM roles WHERE name = $1`, [rolle])).rows[0]?.sensibel;
 
     const daten = {
@@ -744,7 +757,7 @@ app.patch('/api/sonderzahlung/:id',requireLogin,requireRight('rout',2),
   });
 
 /* Freigabe durch den Polizeioberrat (POR) verwalten. */
-app.patch('/api/por/:nr', requireLogin, requireRight('bef', 2), async (req, res, next) => {
+app.patch('/api/por/:nr', requireLogin, requireRight('bef', 1), requireRight('por', 2), async (req, res, next) => {
   try {
     const nr = Number(req.params.nr);
     const status = String(req.body.status || '');
@@ -1061,7 +1074,9 @@ app.get('/api/users', requireLogin, nurAdmin, async (req, res, next) => {
       `SELECT id, dienstnummer, anzeigename, rolle, muss_passwort_aendern, gesperrt, erstellt FROM users ORDER BY dienstnummer`);
     const { rows: rollen } = await db.query(`SELECT name, farbe, sensibel FROM roles ORDER BY name`);
     const { rows: perms } = await db.query(`SELECT rolle, modul, stufe FROM role_perms`);
-    res.json({ users: rows, rollen, perms });
+    const { rows: userPerms } = await db.query(
+      `SELECT user_id,modul,stufe FROM user_perms ORDER BY user_id,modul`);
+    res.json({ users: rows, rollen, perms, userPerms });
   } catch (e) { next(e); }
 });
 
@@ -1135,7 +1150,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
     const rolle = req.params.rolle, modul = req.params.modul;
     const stufe = req.body?.stufe;
     const erlaubteModule = new Set(['dash', 'pers', 'bef', 'rout', 'sonder', 'dis',
-      'kue', 'chk', 'rl', 'org', 'sperr', 'geb', 'jub', 'bl', 'log']);
+      'kue', 'chk', 'rl', 'org', 'sperr', 'geb', 'jub', 'bl', 'log', 'por']);
     if (rolle === 'Administrator')
       return res.status(403).json({ error: 'Administratorrechte sind fest' });
     if (!erlaubteModule.has(modul) || ![0, 1, 2].includes(stufe))
@@ -1150,6 +1165,33 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
       [req.user.id, `Rollenrecht geändert: ${rolle}/${modul} → ${stufe}`]);
     res.json({ ok: true, rolle, modul, stufe });
   } catch(e) { next(e); }
+});
+
+/* Individuelle Berechtigungen (null = Rollenrecht wieder übernehmen).
+   Kontobearbeitung selbst bleibt ausschließlich Administratoren vorbehalten. */
+app.patch('/api/users/:id/recht/:modul',requireLogin,nurAdmin,async(req,res,next)=>{
+  try{
+    const userId=Number(req.params.id),modul=req.params.modul,stufe=req.body?.stufe;
+    const erlaubte=new Set(['dash','pers','bef','por','sonder','kue','dis','rout',
+      'chk','rl','org','sperr','geb','jub','bl','log']);
+    if(!Number.isSafeInteger(userId)||userId<1||!erlaubte.has(modul)||
+       ![null,0,1,2].includes(stufe))
+      return res.status(400).json({error:'Ungültige Berechtigung'});
+    const {rows}=await db.query('SELECT id,rolle,dienstnummer FROM users WHERE id=$1',[userId]);
+    if(!rows.length)return res.status(404).json({error:'Konto nicht gefunden'});
+    if(rows[0].rolle==='Administrator')
+      return res.status(403).json({error:'Administratorrechte sind fest'});
+    if(stufe===null)
+      await db.query('DELETE FROM user_perms WHERE user_id=$1 AND modul=$2',[userId,modul]);
+    else
+      await db.query(
+        `INSERT INTO user_perms(user_id,modul,stufe) VALUES($1,$2,$3)
+         ON CONFLICT(user_id,modul) DO UPDATE SET stufe=EXCLUDED.stufe`,
+        [userId,modul,stufe]);
+    await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
+      [req.user.id,'Individuelles Recht '+rows[0].dienstnummer+'/'+modul+' → '+(stufe===null?'Rolle':stufe)]);
+    res.json({ok:true,stufe});
+  }catch(e){next(e)}
 });
 
 app.get('/api/log', requireLogin, requireRight('log', 1), async (req, res, next) => {
