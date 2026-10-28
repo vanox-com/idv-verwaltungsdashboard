@@ -273,6 +273,15 @@ CREATE TABLE IF NOT EXISTS textbausteine (
 /* Soft-Delete: Beim Neustart dürfen gelöschte PDF-Originale nicht zurückkommen. */
 ALTER TABLE textbausteine ADD COLUMN IF NOT EXISTS geloescht boolean NOT NULL DEFAULT false;
 
+/* Gemeinsames, nur durch Admin bearbeitbares Startseiten-Layout.
+   Version verhindert das Überschreiben paralleler Änderungen. */
+CREATE TABLE IF NOT EXISTS dashboard_layout (
+  id smallint PRIMARY KEY CHECK(id=1),
+  items jsonb NOT NULL DEFAULT '[]'::jsonb,
+  version integer NOT NULL DEFAULT 1,
+  aktualisiert timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS dashboard (
   id         serial PRIMARY KEY,
   art        text NOT NULL,               -- personal, vorlage, info, link

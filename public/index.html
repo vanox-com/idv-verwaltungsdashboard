@@ -752,6 +752,66 @@ dialog::backdrop{background:rgba(8,12,18,.78);backdrop-filter:blur(5px)}
   *,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}
 }
 
+
+/* Dashboard-Widgets: Admin kann auf Desktop ziehen, alternativ Pfeiltasten im Editor. */
+.dash-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-5px 0 17px}
+.dash-toolbar button{border-color:rgba(176,173,217,.47);background:rgba(140,148,194,.095);color:#e0e0f5}
+.dash-layout-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:stretch}
+.dash-cell{min-width:0}
+.dash-cell-kpi{grid-column:span 3}
+.dash-cell-panel{grid-column:span 6}
+.dash-cell>.kachel,.dash-cell>.box{height:100%;margin:0;min-height:0}
+.dash-cell>.kachel{min-height:150px}
+.dash-cell>.box{min-height:115px}
+.dash-cell>.box h3{margin-top:0}
+.dash-cell.dash-editing{position:relative;cursor:grab;border-radius:18px;outline:1px dashed #7983b4;outline-offset:3px}
+.dash-cell.dash-editing:active{cursor:grabbing}
+.dash-cell.dash-dragging{opacity:.45}
+.dash-drag-label{display:flex;align-items:center;gap:7px;position:relative;z-index:2;
+  padding:7px 12px;border-radius:10px 10px 0 0;
+  background:#3d4356;color:#eef0fb;font-size:12px;font-weight:700;
+}
+.dash-drag-label span:first-child{font-size:18px;line-height:1}
+.dash-drag-hint{margin-left:auto;color:#c6c8dc;font-size:10px;font-weight:400}
+.dash-cell.dash-editing .kachel,.dash-cell.dash-editing .box{border-radius:0 0 14px 14px}
+.dash-editor{
+  background:linear-gradient(140deg,#2c303c,#242a35);
+  border:1px solid #657096;border-radius:16px;
+  padding:20px;margin:0 0 23px;box-shadow:0 12px 33px rgba(0,0,0,.12)
+}
+.dash-editor-head{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}
+.dash-editor-head strong{font-size:17px;color:#f0f0fd}
+.dash-editor-head p{margin:5px 0 0;font-size:12px;color:#bfc5d7}
+.dash-editor-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.dash-editor-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:17px}
+.dash-editor-row{min-width:0;display:flex;align-items:center;justify-content:space-between;gap:7px;
+  padding:9px 10px;background:#313744;border:1px solid #4b566a;border-radius:10px}
+.dash-editor-row label{min-width:0;display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;flex-wrap:wrap}
+.dash-editor-row label input{flex:0 0 auto;accent-color:#9dafe2;width:16px;height:16px}
+.dash-editor-row label span{font-size:12px;font-weight:660;min-width:0}
+.dash-editor-row label small{font-size:10px;color:#b0bbc9;flex-basis:100%;padding-left:25px}
+.dash-editor-arrows{display:flex;align-items:center;gap:3px}
+.dash-editor-arrows button{padding:2px 8px;min-height:29px;border-radius:6px;font-size:15px}
+#dashEditMeldung{margin:7px 0 0;color:#ffc4c9}
+@media(max-width:1300px){
+ .dash-cell-kpi{grid-column:span 6}
+ .dash-editor-list{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:900px){
+ .dash-cell-panel{grid-column:span 12}
+ .dash-editor-list{grid-template-columns:1fr}
+}
+@media(max-width:520px){
+ .dash-layout-grid{gap:12px}
+ .dash-cell-kpi{grid-column:span 6}
+ .dash-cell>.kachel{min-height:134px}
+ .dash-drag-hint{display:none}
+ .dash-editor{padding:14px}
+ .dash-editor-actions{width:100%}
+ .dash-editor-actions button{flex:1}
+}
+@media(max-width:370px){.dash-cell-kpi{grid-column:span 12}}
+
 </style>
 </head>
 <body>
@@ -1187,66 +1247,258 @@ function tabelle(kopf, zeilen) {
 
 /* Die Übersichtsseite kombiniert Statistiken mit der Ereignisübersicht der
    Originaldatei. Persönliche Einträge kommen nur bei passendem Recht vom API. */
-function vDash() {
-  const dashboard = D.dashboard || {};
-  const summary = dashboard.summary || {};
-  const kpi = [
-    ['Personal', summary.personal ?? 0, 'pers', 'tone-cyan'],
-    ['Kündigungen', summary.kuendigungen ?? 0, 'kue', 'tone-violet'],
-    ['Offene Rückgaben', summary.offeneRueckgaben ?? 0, 'rout', 'tone-amber'],
-    ['Disziplinarfälle', summary.disziplinFaelle ?? 0, 'dis', 'tone-rose']
-  ];
-  const kacheln = '<div class="kacheln">' + kpi.map(([label,n,icon,tone])=>
-    '<div class="kachel '+tone+'"><div class="kachel-head"><span>'+label+
-    '</span><span class="kachel-icon">'+navIcon(icon)+'</span></div>'+
-    '<b>'+Number(n)+'</b><small>IM SYSTEM ERFASST</small></div>'
-  ).join('') + '</div>';
+/* Globale Dashboard-Kacheln: nur Admin speichert Konfiguration.
+   Die Anzeige respektiert zusätzlich die effektiven Modulrechte jedes Kontos. */
+const DASH_WIDGETS=[
+  {id:'kpi-personal',titel:'Personal',typ:'kpi'},
+  {id:'kpi-kuendigungen',titel:'Kündigungen',typ:'kpi'},
+  {id:'kpi-rueckgaben',titel:'Offene Rückgaben',typ:'kpi'},
+  {id:'kpi-disziplin',titel:'Disziplinarfälle',typ:'kpi'},
+  {id:'kpi-aktiv',titel:'Aktive Beschäftigte',typ:'kpi'},
+  {id:'kpi-neu30',titel:'Neueintritte (30 Tage)',typ:'kpi',recht:'pers',neu:true},
+  {id:'kpi-urlaub',titel:'Aktuell im Urlaub',typ:'kpi',recht:'pers',neu:true},
+  {id:'kpi-bef',titel:'Fällige Beförderungen',typ:'kpi',recht:'bef',neu:true},
+  {id:'panel-bef',titel:'Fällige Beförderungen',typ:'panel',recht:'bef'},
+  {id:'panel-gruppen',titel:'Personal nach Gruppe',typ:'panel'},
+  {id:'panel-inaktiv',titel:'Nicht im aktiven Dienst',typ:'panel',recht:'pers'},
+  {id:'panel-geb',titel:'Geburtstage (30 Tage)',typ:'panel',recht:'geb'},
+  {id:'panel-jub',titel:'Dienstjubiläen (30 Tage)',typ:'panel',recht:'jub'},
+  {id:'panel-dienstblatt',titel:'Personalübersicht (Dienstblatt)',typ:'panel'},
+  {id:'panel-links',titel:'Hilfreiche Links',typ:'panel'},
+  {id:'panel-vorlagen',titel:'Vorlagen',typ:'panel'},
+  {id:'panel-info',titel:'Info-Dokumente',typ:'panel'},
+  {id:'panel-status',titel:'Personalstatus im Überblick',typ:'panel'},
+  {id:'panel-neue',titel:'Neueinstellungen (30 Tage)',typ:'panel',recht:'pers',neu:true}
+];
+let DASH_EDITOR=null;
+function dashboardItems(){
+  const gespeicherte=D?.dashboard?.layout?.items;
+  const quelle=DASH_EDITOR?.items||(Array.isArray(gespeicherte)?gespeicherte:[]);
+  const ids=new Set(DASH_WIDGETS.map(x=>x.id));
+  const seen=new Set();
+  const result=[];
+  for(const x of quelle){
+    if(!x||!ids.has(x.id)||seen.has(x.id))continue;
+    result.push({id:x.id,sichtbar:x.sichtbar!==false});
+    seen.add(x.id);
+  }
+  for(const widget of DASH_WIDGETS){
+    if(!seen.has(widget.id))result.push({id:widget.id,sichtbar:!widget.neu});
+  }
+  return result;
+}
+function dashboardEditierbar(){return ME?.rolle==='Administrator'&&can('dash');}
+function dashboardWidgetErlaubt(widget){
+  return !widget.recht||can(widget.recht);
+}
+function dashboardEinstellmodus(){
+  if(!dashboardEditierbar())return;
+  DASH_EDITOR={
+    version:Number(D?.dashboard?.layout?.version||0),
+    items:dashboardItems()
+  };
+  $('#inhalt').innerHTML=vDash();
+}
+function dashboardEditorAendern(id,typ,value){
+  if(!DASH_EDITOR||!dashboardEditierbar())return;
+  const entries=DASH_EDITOR.items;
+  const index=entries.findIndex(x=>x.id===id);
+  if(index<0)return;
+  if(typ==='sichtbar')entries[index].sichtbar=!!value;
+  else if(typ==='hoch'&&index>0){
+    [entries[index-1],entries[index]]=[entries[index],entries[index-1]];
+  }else if(typ==='runter'&&index<entries.length-1){
+    [entries[index+1],entries[index]]=[entries[index],entries[index+1]];
+  }else if(typ==='vor'&&value!==id){
+    const dest=entries.findIndex(x=>x.id===value);
+    if(dest<0)return;
+    const [moved]=entries.splice(index,1);
+    entries.splice(dest,0,moved);
+  }
+  $('#inhalt').innerHTML=vDash();
+}
+function dashboardEditorAlle(sichtbar){
+  if(!DASH_EDITOR||!dashboardEditierbar())return;
+  for(const x of DASH_EDITOR.items)x.sichtbar=sichtbar;
+  $('#inhalt').innerHTML=vDash();
+}
+function dashboardEditorStandard(){
+  if(!DASH_EDITOR||!dashboardEditierbar())return;
+  DASH_EDITOR.items=DASH_WIDGETS.map(w=>({id:w.id,sichtbar:!w.neu}));
+  $('#inhalt').innerHTML=vDash();
+}
+function dashboardEditorAbbrechen(){
+  DASH_EDITOR=null;
+  if(tab==='dash')$('#inhalt').innerHTML=vDash();
+}
+async function dashboardEditorSpeichern(){
+  if(!DASH_EDITOR||!dashboardEditierbar())return;
+  const btn=$('#dashSave');
+  if(btn)btn.disabled=true;
+  try{
+    const gespeichert=await api('/dashboard-layout',{
+      method:'PUT',
+      body:JSON.stringify(DASH_EDITOR)
+    });
+    D.dashboard.layout=gespeichert;
+    DASH_EDITOR=null;
+    if(tab==='dash')$('#inhalt').innerHTML=vDash();
+  }catch(err){
+    const meldung=$('#dashEditMeldung');
+    if(meldung)meldung.textContent='Speichern fehlgeschlagen: '+err.message;
+    if(btn)btn.disabled=false;
+  }
+}
+function dashboardEditorEvent(e){
+  if(tab!=='dash'||!dashboardEditierbar())return;
+  const id=e.target.id;
+  if(id==='dashEdit'){dashboardEinstellmodus();return}
+  if(!DASH_EDITOR)return;
+  if(id==='dashSave'){dashboardEditorSpeichern();return}
+  if(id==='dashCancel'){dashboardEditorAbbrechen();return}
+  if(id==='dashAll'){dashboardEditorAlle(true);return}
+  if(id==='dashReset'){dashboardEditorStandard();return}
+  const move=e.target.closest('[data-dash-move]');
+  if(move){
+    dashboardEditorAendern(move.dataset.dashId,move.dataset.dashMove);
+    return;
+  }
+}
+document.addEventListener('click',dashboardEditorEvent);
+document.addEventListener('change',e=>{
+  if(tab!=='dash'||!DASH_EDITOR||!dashboardEditierbar())return;
+  const input=e.target.closest('[data-dash-toggle]');
+  if(input)dashboardEditorAendern(input.dataset.dashToggle,'sichtbar',input.checked);
+});
+let DASH_DRAG_SOURCE=null;
+document.addEventListener('dragstart',e=>{
+  if(!DASH_EDITOR||!dashboardEditierbar()||tab!=='dash')return;
+  const item=e.target.closest('.dash-cell[draggable="true"]');
+  if(!item)return;
+  DASH_DRAG_SOURCE=item.dataset.dashWidget;
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',DASH_DRAG_SOURCE);
+  item.classList.add('dash-dragging');
+});
+document.addEventListener('dragover',e=>{
+  if(!DASH_DRAG_SOURCE||!DASH_EDITOR)return;
+  const target=e.target.closest('.dash-cell[data-dash-widget]');
+  if(!target)return;
+  e.preventDefault();e.dataTransfer.dropEffect='move';
+});
+document.addEventListener('drop',e=>{
+  const target=e.target.closest('.dash-cell[data-dash-widget]');
+  if(!DASH_DRAG_SOURCE||!target||!DASH_EDITOR)return;
+  e.preventDefault();
+  const id=DASH_DRAG_SOURCE;
+  DASH_DRAG_SOURCE=null;
+  dashboardEditorAendern(id,'vor',target.dataset.dashWidget);
+});
+document.addEventListener('dragend',()=>{
+  DASH_DRAG_SOURCE=null;
+  document.querySelectorAll('.dash-dragging').forEach(x=>x.classList.remove('dash-dragging'));
+});
 
-  function liste(titel, eintraege) {
+function vDash(){
+  const d=D.dashboard||{},summary=d.summary||{},bearbeiten=!!DASH_EDITOR&&dashboardEditierbar();
+  const bezeichnung={personal:'pers',kuendigungen:'kue',rueckgaben:'rout',disziplin:'dis',aktiv:'pers',neu30:'pers',urlaub:'pers',bef:'bef'};
+  const kpi=(titel,value,icon,tone,hinweis='IM SYSTEM ERFASST')=>
+    '<div class="kachel '+tone+'"><div class="kachel-head"><span>'+esc(titel)+
+    '</span><span class="kachel-icon">'+navIcon(icon)+'</span></div>'+
+    '<b>'+Number(value??0)+'</b><small>'+esc(hinweis)+'</small></div>';
+  const liste=(titel,eintraege)=>{
     const inhalt=(eintraege||[]).map(l=>{
-      const url=String(l.url||'');
-      const text=esc(l.text);
+      const url=String(l.url||''),text=esc(l.text);
       return '<div class="dashboard-link">'+(/^https:\/\//i.test(url)
         ?'<a class="l" target="_blank" rel="noopener noreferrer" href="'+esc(url)+'">'+text+'</a>'
         :text)+'</div>';
-    }).join('') || '<span class="mut">Keine Einträge</span>';
-    return '<section class="box"><h3>'+titel+'</h3>'+inhalt+'</section>';
-  }
-  function personZeile(name,zweittext,status,badgeType='') {
-    return '<div class="dashboard-line"><div class="dashboard-person"><strong>'+esc(name)+'</strong>'+
-      (zweittext?'<small>'+esc(zweittext)+'</small>':'')+'</div>'+
-      '<span class="tag '+badgeType+'">'+esc(status)+'</span></div>';
-  }
-  const gruppen=dashboard.gruppen||[];
-  const max=Math.max(1,...gruppen.map(g=>Number(g.anzahl)||0));
-  const gruppenBox='<section class="box"><h3>Personal nach Gruppe</h3>'+
-    (gruppen.length?gruppen.map(g=>'<div class="dashboard-group"><div class="dashboard-group-head">'+
-      '<span>'+esc(g.name)+'</span><strong>'+Number(g.anzahl)+'</strong></div>'+
-      '<div class="dashboard-progress"><i style="width:'+Math.min(100,Math.round((Number(g.anzahl)||0)/max*100))+'%"></i></div></div>'
+    }).join('')||'<span class="mut">Keine Einträge</span>';
+    return '<section class="box"><h3>'+esc(titel)+'</h3>'+inhalt+'</section>';
+  };
+  const personZeile=(name,zweittext,status,badgeType='')=>
+    '<div class="dashboard-line"><div class="dashboard-person"><strong>'+esc(name)+'</strong>'+
+    (zweittext?'<small>'+esc(zweittext)+'</small>':'')+'</div>'+
+    '<span class="tag '+badgeType+'">'+esc(status)+'</span></div>';
+  const progress=(titel,werte)=>{
+    const max=Math.max(1,...werte.map(x=>Number(x.anzahl)||0));
+    return '<section class="box"><h3>'+esc(titel)+'</h3>'+
+    (werte.length?werte.map(x=>'<div class="dashboard-group"><div class="dashboard-group-head">'+
+      '<span>'+esc(x.name)+'</span><strong>'+Number(x.anzahl||0)+'</strong></div>'+
+      '<div class="dashboard-progress"><i style="width:'+Math.min(100,Math.round((Number(x.anzahl)||0)/max*100))+'%"></i></div></div>'
     ).join(''):'<span class="mut">Keine Einträge</span>')+'</section>';
-  const due=dashboard.faellige||[];
-  const dueBox=can('bef')?'<section class="box"><h3>Fällige Beförderungen</h3>'+
-    (due.length?due.map(p=>personZeile(p.name,p.dienstgrad+' → '+p.naechsterRang,
-      'Fällig: '+fd(p.faellig), 'bad')).join(''):'<span class="mut">Keine fälligen Beförderungen</span>')+
-    '</section>':'';
-  const off=dashboard.inaktiv||[];
-  const offBox=can('pers')&&off.length?'<section class="box"><h3>Nicht im aktiven Dienst</h3>'+
-    off.map(p=>personZeile(p.name,p.dienstgrad||'',p.status,'warn')).join('')+'</section>':'';
-  const geb=dashboard.geburtstage||[],jub=dashboard.jubilaeen||[];
-  const gebBox=can('geb')?'<section class="box"><h3>Geburtstage (30 Tage)</h3>'+
-    (geb.length?geb.map(p=>personZeile(p.name,p.dienstgrad||'',
-      p.tage===0?'Heute': 'In '+p.tage+' Tagen','warn')).join(''):
-      '<span class="mut">Keine Geburtstage in den nächsten 30 Tagen</span>')+
-    '</section>':'';
-  const jubBox=can('jub')?'<section class="box"><h3>Dienstjubiläen (30 Tage)</h3>'+
-    (jub.length?jub.map(p=>personZeile(p.name,p.dienstgrad||'',
-      p.jahre+' Jahre'+(p.tage===0?' – heute':' in '+p.tage+' Tagen'),'ok')).join(''):
-      '<span class="mut">Keine Dienstjubiläen in den nächsten 30 Tagen</span>')+
-    '</section>':'';
-  const uebersicht='<section class="box"><h3>Personalübersicht (Dienstblatt)</h3>'+
-    '<div class="dashboard-stats">'+(dashboard.personal||[]).map(p=>
-      '<span class="tag">'+esc(p.label)+': <strong>'+Number(p.anzahl||0)+'</strong></span>'
-    ).join('')+'</div></section>';
+  };
+  const due=d.faellige||[],off=d.inaktiv||[],geb=d.geburtstage||[],jub=d.jubilaeen||[];
+  const einstellungen=d.neueinstellungen||[];
+  const widgetHtml={
+    'kpi-personal':kpi('Personal',summary.personal,'pers','tone-cyan'),
+    'kpi-kuendigungen':kpi('Kündigungen',summary.kuendigungen,'kue','tone-violet'),
+    'kpi-rueckgaben':kpi('Offene Rückgaben',summary.offeneRueckgaben,'rout','tone-amber'),
+    'kpi-disziplin':kpi('Disziplinarfälle',summary.disziplinFaelle,'dis','tone-rose'),
+    'kpi-aktiv':kpi('Aktive Beschäftigte',summary.aktiv,'pers','tone-cyan'),
+    'kpi-neu30':kpi('Neueintritte (30 Tage)',summary.neu30,'pers','tone-violet','LETZTE 30 TAGE'),
+    'kpi-urlaub':kpi('Aktuell im Urlaub',summary.urlaub,'rout','tone-amber'),
+    'kpi-bef':kpi('Fällige Beförderungen',summary.faelligeBef,'bef','tone-rose'),
+    'panel-bef':'<section class="box"><h3>Fällige Beförderungen</h3>'+
+      (due.length?due.map(p=>personZeile(p.name,p.dienstgrad+' → '+p.naechsterRang,
+        'Fällig: '+fd(p.faellig),'bad')).join(''):'<span class="mut">Keine fälligen Beförderungen</span>')+'</section>',
+    'panel-gruppen':progress('Personal nach Gruppe',d.gruppen||[]),
+    'panel-inaktiv':'<section class="box"><h3>Nicht im aktiven Dienst</h3>'+
+      (off.length?off.map(p=>personZeile(p.name,p.dienstgrad||'',p.status,'warn')).join(''):
+        '<span class="mut">Keine Einträge</span>')+'</section>',
+    'panel-geb':'<section class="box"><h3>Geburtstage (30 Tage)</h3>'+
+      (geb.length?geb.map(p=>personZeile(p.name,p.dienstgrad||'',p.tage===0?'Heute':'In '+p.tage+' Tagen','warn')).join(''):
+        '<span class="mut">Keine Geburtstage in den nächsten 30 Tagen</span>')+'</section>',
+    'panel-jub':'<section class="box"><h3>Dienstjubiläen (30 Tage)</h3>'+
+      (jub.length?jub.map(p=>personZeile(p.name,p.dienstgrad||'',p.jahre+' Jahre'+
+        (p.tage===0?' – heute':' in '+p.tage+' Tagen'),'ok')).join(''):
+        '<span class="mut">Keine Dienstjubiläen in den nächsten 30 Tagen</span>')+'</section>',
+    'panel-dienstblatt':'<section class="box"><h3>Personalübersicht (Dienstblatt)</h3>'+
+      '<div class="dashboard-stats">'+(d.personal||[]).map(p=>
+        '<span class="tag">'+esc(p.label)+': <strong>'+Number(p.anzahl||0)+'</strong></span>'
+      ).join('')+'</div></section>',
+    'panel-links':liste('Hilfreiche Links',d.links),
+    'panel-vorlagen':liste('Vorlagen',d.vorlagen),
+    'panel-info':liste('Info-Dokumente',d.info),
+    'panel-status':progress('Personalstatus im Überblick',d.statusverteilung||[]),
+    'panel-neue':'<section class="box"><h3>Neueinstellungen (30 Tage)</h3>'+
+      (einstellungen.length?einstellungen.map(p=>personZeile(p.name,p.gruppe||'',fd(p.eintritt),'ok')).join(''):
+        '<span class="mut">Keine Neueintritte in den letzten 30 Tagen</span>')+'</section>'
+  };
+  const alle=dashboardItems(),lookup=new Map(DASH_WIDGETS.map(w=>[w.id,w]));
+  const editorListe=bearbeiten?'<section class="dash-editor"><div class="dash-editor-head">'+
+    '<div><strong>Dashboard gestalten</strong><p>Widgets anzeigen, ausblenden oder sortieren. '+
+    'Am Computer kannst du die sichtbaren Karten auch ziehen.</p></div>'+
+    '<div class="dash-editor-actions">'+
+    '<button type="button" id="dashAll">Alle anzeigen</button>'+
+    '<button type="button" id="dashReset">Standard</button>'+
+    '<button type="button" id="dashCancel">Abbrechen</button>'+
+    '<button type="button" id="dashSave" class="p">Layout speichern</button></div></div>'+
+    '<p class="mut" id="dashEditMeldung" role="status" aria-live="polite"></p>'+
+    '<div class="dash-editor-list">'+alle.map((x,i)=>{
+      const def=lookup.get(x.id);
+      return '<div class="dash-editor-row">'+
+        '<label><input type="checkbox" data-dash-toggle="'+esc(x.id)+'" '+
+        (x.sichtbar?'checked ':'')+'/><span>'+esc(def.titel)+'</span>'+
+        '<small>'+esc(def.typ==='kpi'?'Kennzahl':'Infokasten')+
+        (def.recht?' · Recht: '+esc(def.recht):'')+'</small></label>'+
+        '<div class="dash-editor-arrows">'+
+          '<button type="button" data-dash-id="'+esc(x.id)+'" data-dash-move="hoch" '+
+          (i===0?'disabled':'')+' aria-label="'+esc(def.titel)+' nach oben">↑</button>'+
+          '<button type="button" data-dash-id="'+esc(x.id)+'" data-dash-move="runter" '+
+          (i===alle.length-1?'disabled':'')+' aria-label="'+esc(def.titel)+' nach unten">↓</button>'+
+        '</div></div>';
+    }).join('')+'</div></section>':'';
+  const cells=alle.filter(x=>x.sichtbar).map(x=>{
+    const def=lookup.get(x.id);
+    if(!dashboardWidgetErlaubt(def))return '';
+    if(x.id==='panel-inaktiv'&&!off.length&&!bearbeiten)return '';
+    return '<div class="dash-cell '+(def.typ==='kpi'?'dash-cell-kpi':'dash-cell-panel')+
+      (bearbeiten?' dash-editing':'')+'" data-dash-widget="'+esc(x.id)+'" '+
+      (bearbeiten?'draggable="true"':'')+'>'+
+      (bearbeiten?'<div class="dash-drag-label"><span aria-hidden="true">⠿</span> '+
+        esc(def.titel)+' <span class="dash-drag-hint">ziehen & verschieben</span></div>':'')+
+      widgetHtml[x.id]+'</div>';
+  }).join('');
   const hour=new Date().getHours();
   const begruessung=hour<11?'Guten Morgen':hour<18?'Guten Tag':'Guten Abend';
   const datum=new Date().toLocaleDateString('de-DE',
@@ -1255,11 +1507,10 @@ function vDash() {
     '<h1>'+begruessung+', '+esc(ME.anzeigename)+'.</h1>'+
     '<p>Schön, dass du wieder da bist. Einen erfolgreichen Dienst und gutes Gelingen bei deinen Aufgaben!</p>'+
     '<span class="hello-date">'+esc(datum)+'</span></section>';
-  return willkommen+kacheln+'<div class="grid2">'+
-    dueBox+gruppenBox+offBox+gebBox+jubBox+uebersicht+
-    liste('Hilfreiche Links',dashboard.links)+
-    liste('Vorlagen',dashboard.vorlagen)+
-    liste('Info-Dokumente',dashboard.info)+'</div>';
+  return willkommen+(dashboardEditierbar()&&!bearbeiten?
+    '<div class="dash-toolbar"><span class="mut">Deine Dienstübersicht</span>'+
+    '<button type="button" id="dashEdit">Dashboard anpassen</button></div>':'')+
+    editorListe+'<div class="dash-layout-grid">'+cells+'</div>';
 }
 
 function vPers() {
