@@ -57,7 +57,8 @@ CREATE TABLE IF NOT EXISTS log (
 
 CREATE TABLE IF NOT EXISTS personal (
   personalnummer    integer PRIMARY KEY,
-  gruppe            text NOT NULL DEFAULT 'Hauptberuf',
+  gruppe            text NOT NULL DEFAULT 'Nicht zugeordnet',
+  beschaeftigungsart text NOT NULL DEFAULT 'Hauptberuf',
   status            text NOT NULL DEFAULT 'Aktiv',
   vorname           text,
   nachname          text,
@@ -80,6 +81,10 @@ CREATE TABLE IF NOT EXISTS personal (
 /* POR-Freigabe und ursprüngliche Beförderungsfristen.
    Schema-Migration ist wiederholbar und überschreibt keine vorhandenen Werte. */
 /* Dokumenttitel und Google-Docs-/HTTPS-Ziel getrennt halten. Vorhandene Titel bleiben erhalten. */
+-- Altdaten trennen, ohne eine Dienstgruppe zu erfinden.
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS beschaeftigungsart text NOT NULL DEFAULT 'Hauptberuf';
+UPDATE personal SET beschaeftigungsart='Nebenberuf' WHERE gruppe='Nebenberuf';
+UPDATE personal SET gruppe='Nicht zugeordnet' WHERE gruppe IN ('Hauptberuf','Nebenberuf');
 ALTER TABLE personal ADD COLUMN IF NOT EXISTS arbeitsvertrag_url text NOT NULL DEFAULT '';
 ALTER TABLE personal ADD COLUMN IF NOT EXISTS ernennungsurkunde_url text NOT NULL DEFAULT '';
 
