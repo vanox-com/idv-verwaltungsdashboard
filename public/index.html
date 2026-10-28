@@ -885,6 +885,8 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 @media(prefers-reduced-motion:reduce){
  .dash-cell.dash-navigierbar>.kachel,.dash-cell.dash-navigierbar>.box{transition:none}
 }
+/* Das Original-Logo besitzt einen echten Alphakanal; keine Aufhellung durch Screen-Blending. */
+.idv-sidebar-logo,.idv-login-logo{mix-blend-mode:normal}
 </style>
 </head>
 <body>
@@ -893,7 +895,7 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 <div id="login">
   <div class="login-top"><div class="login-top-left">POLIZEI HESSEN<br>VERWALTUNGSPORTAL</div><div class="login-top-right">IDENTITYVALLEY · ROLEPLAY</div></div>
   <div class="login-center">
-    <div class="login-brand"><img class="idv-login-logo" src="/assets/idv-polizei-logo.svg" width="255" height="100" alt="Polizei IdentityValley GTA RP" decoding="async"><p>VERWALTUNGSPORTAL</p></div>
+    <div class="login-brand"><img class="idv-login-logo" src="/assets/idv-polizei-logo-transparent.svg" width="255" height="100" alt="Polizei IdentityValley GTA RP" decoding="async"><p>VERWALTUNGSPORTAL</p></div>
     <form class="karte" id="loginForm">
       <h2>Willkommen zurück</h2>
       <p class="hinweis">Melde dich an, um auf das Verwaltungsportal zuzugreifen.</p>
@@ -922,7 +924,7 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 </div>
 <div id="app" class="hide">
   <aside>
-    <div class="sidebar-brand"><img class="idv-sidebar-logo" src="/assets/idv-polizei-logo.svg" width="255" height="100" alt="Polizei IdentityValley GTA RP" decoding="async"><span class="sidebar-brand-caption">VERWALTUNGSPORTAL <span aria-hidden="true">·</span> GESCHÜTZTER ZUGANG</span></div>
+    <div class="sidebar-brand"><img class="idv-sidebar-logo" src="/assets/idv-polizei-logo-transparent.svg" width="255" height="100" alt="Polizei IdentityValley GTA RP" decoding="async"><span class="sidebar-brand-caption">VERWALTUNGSPORTAL <span aria-hidden="true">·</span> GESCHÜTZTER ZUGANG</span></div>
     <div id="menu"></div>
     <div class="me">
       <b id="meName"></b><span id="meRolle"></span>
