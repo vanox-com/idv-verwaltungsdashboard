@@ -248,7 +248,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       funktionen: funktionen.rows.map(r => ({ nr: r.personalnummer, leitung: r.leitung, sonstige: r.sonstige, werte: r.werte })),
       kuendigungen: kuendigungen.rows,
       disziplinSpalten: disziplinSpalten.rows.map(r => r.name),
-      disziplin: disziplin.rows.map(r => ({ nr: r.personalnummer, massnahmen: r.massnahmen })),
+      disziplin: disziplin.rows.map(r => ({ nr: r.personalnummer, massnahmen: r.massnahmen, slots: r.slots, bemerkung: r.bemerkung })),
       richtlinie: { stand: richtlinie.rows[0]?.stand || '', zeilen: richtlinie.rows },
       checklisten: checklisten.rows.map(r => ({ name: r.name, aufgaben: r.aufgaben })),
       dashboard: {
@@ -302,6 +302,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       daten.personal = (berechtigt('sonder') || berechtigt('dis') || berechtigt('bef'))
         ? daten.personal.map(p => ({
             personalnummer: p.personalnummer, vorname: p.vorname, nachname: p.nachname,
+            ...(berechtigt('dis') ? { dienstgrad: p.dienstgrad } : {}),
             ...(berechtigt('bef') ? {
               status: p.status, dienstgrad: p.dienstgrad,
               letzte_befoerderung: p.letzte_befoerderung,
@@ -461,6 +462,44 @@ app.patch('/api/sonder/:nr', requireLogin, requireRight('sonder', 2), async (req
       [req.user.id, `Fortbildungen/Funktionen von ${nr} geändert`]);
     res.json({ ok: true, personalnummer: rows[0].personalnummer });
   } catch (e) { next(e); }
+});
+
+
+/* Disziplinarakten nach den sechs Maßnahmentypen aus der Originaldatei. */
+app.patch('/api/disziplin/:nr', requireLogin, requireRight('dis', 2), async(req,res,next)=>{
+  try {
+    const nr=Number(req.params.nr), slots=req.body?.slots, bemerkung=req.body?.bemerkung;
+    if(!Number.isSafeInteger(nr)||nr<1)return res.status(400).json({error:'Ungültige Personalnummer'});
+    if(!Array.isArray(slots)||slots.length!==6)return res.status(400).json({error:'Genau sechs Maßnahmenslots erforderlich'});
+    if(typeof bemerkung!=='string'||bemerkung.length>4000)
+      return res.status(400).json({error:'Bemerkung zu lang'});
+    const erlaubte=new Set(['done','t','u','d']);
+    const clean=[];
+    for(const x of slots){
+      if(x===null){clean.push(null);continue;}
+      if(!x||typeof x!=='object'||Array.isArray(x)||
+         Object.keys(x).some(k=>!erlaubte.has(k))||
+         typeof x.done!=='boolean'||typeof x.t!=='string'||
+         typeof x.u!=='string'||typeof x.d!=='string')
+        return res.status(400).json({error:'Ungültiges Maßnahmenformat'});
+      if(x.t.length>1500||x.u.length>2000||x.d.length>10)
+        return res.status(400).json({error:'Maßnahmendaten zu lang'});
+      if(x.u&& !/^https:\/\/[^\s]+$/i.test(x.u))
+        return res.status(400).json({error:'Dokumentenlink muss mit https:// beginnen'});
+      if(x.d && (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(x.d) ||
+         Number.isNaN(Date.parse(x.d))))
+        return res.status(400).json({error:'Ungültiges Maßnahmendatum'});
+      clean.push({done:x.done,t:x.t,u:x.u,d:x.d});
+    }
+    const {rows}=await db.query(
+      "INSERT INTO disziplin (personalnummer,slots,bemerkung) SELECT personalnummer,$2::jsonb,$3 FROM personal WHERE personalnummer=$1 ON CONFLICT (personalnummer) DO UPDATE SET slots=EXCLUDED.slots,bemerkung=EXCLUDED.bemerkung,aktualisiert=now() RETURNING personalnummer",
+      [nr,JSON.stringify(clean),bemerkung]
+    );
+    if(!rows.length)return res.status(404).json({error:'Personalnummer nicht gefunden'});
+    await db.query("INSERT INTO log (user_id,aktion,art) VALUES ($1,$2,'edit')",
+      [req.user.id,'Disziplinarakte bei Personalnummer '+nr+' geändert']);
+    res.json({ok:true});
+  }catch(err){next(err);}
 });
 
 /* Freigabe durch den Polizeioberrat (POR) verwalten. */

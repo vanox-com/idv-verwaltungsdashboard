@@ -196,6 +196,11 @@ CREATE TABLE IF NOT EXISTS disziplin (
   massnahmen     jsonb NOT NULL DEFAULT '[]'::jsonb
 );
 
+/* Strukturierte Disziplinarakten; bisherige Rohdaten bleiben erhalten. */
+ALTER TABLE disziplin ADD COLUMN IF NOT EXISTS slots jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE disziplin ADD COLUMN IF NOT EXISTS bemerkung text NOT NULL DEFAULT '';
+ALTER TABLE disziplin ADD COLUMN IF NOT EXISTS aktualisiert timestamptz NOT NULL DEFAULT now();
+
 CREATE TABLE IF NOT EXISTS richtlinie (
   id         serial PRIMARY KEY,
   stand      text,

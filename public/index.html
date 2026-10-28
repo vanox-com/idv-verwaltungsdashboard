@@ -169,6 +169,17 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 #userDialog .user-check{display:flex;align-items:center;gap:9px}#userDialog .user-check input{width:auto}
 .user-commands{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}.user-delete{color:#ffb7b7;border-color:#7b4545}
 .user-perm{min-width:72px;cursor:pointer}.user-matrix th:first-child{text-align:left}.user-matrix td{text-align:center}
+
+/* Disziplinarverwaltung */
+#disDialog{color:var(--txt);background:#182433;border:1px solid #536781;border-radius:12px;width:min(1030px,96vw);max-height:92vh;overflow:auto;padding:25px}
+#disDialog::backdrop{background:#050a18bb}#disDialog h2{margin:0 0 6px}
+.dis-slot{border:1px solid var(--line);border-radius:7px;margin:12px 0;padding:12px 16px}
+.dis-slot legend{font-weight:650;color:#c1d7ed;padding:0 7px}
+.dis-slot input,.dis-slot textarea{width:100%}.dis-check{display:flex;gap:9px;align-items:center;margin:0 0 8px}
+.dis-check input{width:auto}.dis-three{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 160px;gap:10px}
+#disBem{width:100%;min-height:90px;padding:10px;background:#101a28;color:var(--txt);border:1px solid var(--line);border-radius:5px}
+.dis-buttons{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}.dis-record{margin-bottom:10px}
+@media(max-width:700px){.dis-three{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -1092,15 +1103,103 @@ document.addEventListener('click',event=>{
   const del=event.target.closest('[data-kue-delete]');
   if(del)kueLoeschen(Number(del.dataset.kueDelete));
 });
-function vDis() {
-  const zeilen = D.disziplin.filter(d => (d.massnahmen || []).length).map(d => {
-    const p = D.personal.find(x => x.personalnummer === d.nr) || {};
-    return [d.nr, esc((p.vorname || '') + ' ' + (p.nachname || '')),
-      (d.massnahmen || []).map(m => `<span class="tag bad">${esc(m.wert)}</span>`).join('')];
-  });
-  return `<h1>Disziplinarmanagement</h1>${tabelle(['Nr.','Name','Maßnahmen'], zeilen)}`;
-}
 
+const DIS_TITEL=['Mündliche Verwarnung','1. Abmahnung','2. Abmahnung','3. Abmahnung','Sonstige Maßnahme 1','Sonstige Maßnahme 2'];
+function disAkte(nr){
+  const e=(D.disziplin||[]).find(x=>Number(x.nr)===nr)||{};
+  // Bisherige Importwerte kommen aus einer älteren Tabelle (3 Felder pro
+  // Maßnahme). Nur anzeigen, nicht beim Start überschreiben.
+  const alt={};
+  if(Array.isArray(e.massnahmen))e.massnahmen.forEach(x=>{
+    if(Number.isInteger(x.spalte) && x.spalte>=0 && x.spalte<18)alt[x.spalte]=String(x.wert||'');
+  });
+  const datum=v=>{
+    if(!v)return '';
+    if(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v))return v;
+    if(/^[0-9]{4,6}$/.test(v)){
+      const n=Number(v);
+      if(n>=30000 && n<=65000)return new Date(Date.UTC(1899,11,30)+n*86400000).toISOString().slice(0,10);
+    }
+    return '';
+  };
+  const legacy=Array.from({length:6},(_,i)=>{
+    const check=alt[i*3],t=alt[i*3+1]||'',d=datum(alt[i*3+2]||'');
+    return check!=null||t||d?{done:check==='true',t,u:'',d}:null;
+  });
+  return {slots:Array.isArray(e.slots)&&e.slots.length===6
+    ?e.slots.map(x=>x||null):legacy,bemerkung:e.bemerkung||''};
+}
+function vDis(){
+  const personen=D.personal||[], schreiben=can('dis',2);
+  const rows=personen.map(p=>{
+    const nr=Number(p.personalnummer),akte=disAkte(nr);
+    const ms=akte.slots.map((s,i)=>s?.done?
+      '<div class="dis-record"><span class="tag bad">'+esc(DIS_TITEL[i])+'</span> '+esc(fd(s.d)||'')+
+      '<div>'+esc(s.t||'')+(s.u?
+        ' <a class="l" href="'+esc(s.u)+'" target="_blank" rel="noopener noreferrer">Dokument</a>':'')+
+      '</div></div>':'').join('');
+    const name=[p.vorname,p.nachname].filter(Boolean).join(' ');
+    return '<tr class="dis-row" data-dis-name="'+esc((nr+' '+name+' '+(p.dienstgrad||'')).toLowerCase())+'">'+
+      '<td>'+nr+'</td><td>'+esc(name)+'</td><td>'+esc(p.dienstgrad||'–')+'</td>'+
+      '<td>'+(ms||'<span class="mut">Keine</span>')+'</td><td>'+esc(akte.bemerkung||'')+'</td>'+
+      '<td>'+(schreiben?'<button type="button" data-dis-person="'+nr+'">Eintragen / Bearbeiten</button>':'')+'</td></tr>';
+  }).join('');
+  return '<h1>Disziplinarmanagement</h1>'+
+    '<p class="mut">Nach jeder Maßnahme den Polizeioberrat informieren. Eine Anhörung ist verpflichtend.</p>'+
+    '<div class="pers-bar"><input id="disSuche" aria-label="Disziplinarakten suchen" placeholder="Name oder Nummer suchen …" oninput="disFiltern()">'+
+    '<span class="spacer"></span><span id="disAnzahl" class="mut">'+personen.length+' Personen</span></div>'+
+    '<div class="tw"><table><thead><tr>'+['Nr.','Person','Dienstgrad','Maßnahmen','Bemerkung','Aktion'].map(x=>'<th>'+x+'</th>').join('')+
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+function disFiltern(){
+  const q=($('#disSuche')?.value||'').trim().toLowerCase();let n=0;
+  document.querySelectorAll('.dis-row').forEach(tr=>{tr.hidden=!!q&&!tr.dataset.disName.includes(q);if(!tr.hidden)n++;});
+  if($('#disAnzahl'))$('#disAnzahl').textContent=n+' Personen';
+}
+function disBearbeiten(nr){
+  if(!can('dis',2))return;
+  const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nr);if(!p)return;
+  const akt=disAkte(nr);
+  let dlg=$('#disDialog');
+  if(!dlg){dlg=document.createElement('dialog');dlg.id='disDialog';document.body.appendChild(dlg);}
+  const boxes=DIS_TITEL.map((titel,i)=>{
+    const x=akt.slots[i]||{};
+    return '<fieldset class="dis-slot"><legend>'+esc(titel)+'</legend>'+
+      '<label class="dis-check"><input type="checkbox" id="disDone'+i+'" '+(x.done?'checked':'')+'> Maßnahme eingetragen</label>'+
+      '<div class="dis-three">'+
+      '<div><label for="disTitle'+i+'">Bezeichnung / Sachverhalt</label><input maxlength="1500" id="disTitle'+i+'" value="'+esc(x.t||'')+'"></div>'+
+      '<div><label for="disUrl'+i+'">Dokumentenlink (https)</label><input maxlength="2000" type="url" id="disUrl'+i+'" value="'+esc(x.u||'')+'"></div>'+
+      '<div><label for="disDate'+i+'">Datum</label><input type="date" id="disDate'+i+'" value="'+esc(x.d||'')+'"></div>'+
+      '</div></fieldset>';
+  }).join('');
+  dlg.innerHTML='<h2>Disziplinarakte bearbeiten</h2>'+
+    '<p class="mut">'+esc([p.vorname,p.nachname].filter(Boolean).join(' '))+' · Nr. '+nr+'</p>'+
+    '<form id="disForm">'+boxes+
+    '<label for="disBem">Bemerkung zur Akte</label><textarea id="disBem" rows="3" maxlength="4000"></textarea>'+
+    '<p id="disError" class="fehler" role="alert"></p>'+
+    '<div class="dis-buttons"><button type="button" id="disCancel">Abbrechen</button>'+
+    '<button class="p" type="submit" id="disSave">Speichern</button></div></form>';
+  dlg.dataset.nr=nr;dlg.showModal();$('#disBem').value=akt.bemerkung;
+  $('#disCancel').onclick=()=>dlg.close();
+  $('#disForm').onsubmit=async e=>{
+    e.preventDefault();const nummer=Number(dlg.dataset.nr);
+    const slots=DIS_TITEL.map((_,i)=>{
+      const done=$('#disDone'+i).checked,t=$('#disTitle'+i).value.trim(),
+        u=$('#disUrl'+i).value.trim(),d=$('#disDate'+i).value;
+      return done||t||u||d ? {done,t,u,d} : null;
+    });
+    const btn=$('#disSave');btn.disabled=true;$('#disError').textContent='';
+    try{
+      await api('/disziplin/'+nummer,{method:'PATCH',body:JSON.stringify({slots,bemerkung:$('#disBem').value})});
+      dlg.close();await starten();
+    }catch(err){$('#disError').textContent='Speichern fehlgeschlagen: '+err.message;}
+    finally{if($('#disSave'))$('#disSave').disabled=false;}
+  };
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-dis-person]');
+  if(b)disBearbeiten(Number(b.dataset.disPerson));
+});
 function vRout() {
   const r = D.routine[0];
   if (!r) return '<h1>Routine</h1><p>Keine Daten.</p>';
