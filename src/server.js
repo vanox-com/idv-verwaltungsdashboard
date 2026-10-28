@@ -298,9 +298,15 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
 
     if (!berechtigt('pers')) {
       /* Funktions- und Disziplinansichten benötigen Namen, aber keine Personalakte. */
-      daten.personal = (berechtigt('sonder') || berechtigt('dis'))
+      daten.personal = (berechtigt('sonder') || berechtigt('dis') || berechtigt('bef'))
         ? daten.personal.map(p => ({
-            personalnummer: p.personalnummer, vorname: p.vorname, nachname: p.nachname
+            personalnummer: p.personalnummer, vorname: p.vorname, nachname: p.nachname,
+            ...(berechtigt('bef') ? {
+              status: p.status, dienstgrad: p.dienstgrad,
+              letzte_befoerderung: p.letzte_befoerderung,
+              naechste_befoerderung: p.naechste_befoerderung,
+              por_status: p.por_status, por_notiz: p.por_notiz, por_am: p.por_am
+            } : {})
           }))
         : [];
     } else if (!sensibel) {
