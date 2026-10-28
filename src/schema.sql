@@ -299,6 +299,14 @@ CREATE TABLE IF NOT EXISTS sonderzahlungen (
   betrag         text, grund text
 );
 
+/* Editierbare Organisationsstruktur; die 13 Originalzeilen bleiben als Archiv erhalten. */
+CREATE TABLE IF NOT EXISTS organigramm_layout (
+  id smallint PRIMARY KEY CHECK(id=1),
+  inhalt jsonb NOT NULL,
+  version integer NOT NULL DEFAULT 1,
+  aktualisiert timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS organigramm (
   id         serial PRIMARY KEY,
   zeile      jsonb NOT NULL DEFAULT '[]'::jsonb,
