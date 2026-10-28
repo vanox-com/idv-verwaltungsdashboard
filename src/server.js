@@ -219,7 +219,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
   console.log('[dashboard] Datenabfrage gestartet, Dienstnummer:', req.user.dienstnummer);
   try {
     const [personal, raenge, funktionen, funktionsspalten, kuendigungen, disziplin,
-      disziplinSpalten, richtlinie, checklisten, dashboard, routine, sonderzahlungen,
+      disziplinSpalten, richtlinie, checklisten, checklistenStatus, dashboard, routine, sonderzahlungen,
       organigramm, befoerderungen] = await Promise.all([
       db.query(`SELECT * FROM personal ORDER BY personalnummer`),
       db.query(`SELECT * FROM raenge ORDER BY sortierung, name`),
@@ -230,6 +230,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       db.query(`SELECT * FROM disziplinspalten ORDER BY sortierung`),
       db.query(`SELECT * FROM richtlinie ORDER BY sortierung`),
       db.query(`SELECT * FROM checklisten ORDER BY sortierung`),
+      db.query(`SELECT name,punkt,erledigt FROM checklisten_status`),
       db.query(`SELECT * FROM dashboard ORDER BY sortierung`),
       db.query(`SELECT * FROM routine ORDER BY sortierung`),
       db.query(`SELECT * FROM sonderzahlungen ORDER BY nachname`),
@@ -251,6 +252,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       disziplin: disziplin.rows.map(r => ({ nr: r.personalnummer, massnahmen: r.massnahmen, slots: r.slots, bemerkung: r.bemerkung })),
       richtlinie: { stand: richtlinie.rows[0]?.stand || '', zeilen: richtlinie.rows },
       checklisten: checklisten.rows.map(r => ({ name: r.name, aufgaben: r.aufgaben })),
+      checklistenStatus: checklistenStatus.rows,
       dashboard: {
         personal: dashboard.rows.filter(r => r.art === 'personal').map(r => ({ label: r.text, anzahl: r.anzahl })),
         vorlagen: dashboard.rows.filter(r => r.art === 'vorlage').map(r => ({ text: r.text, url: r.url })),
@@ -292,7 +294,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       daten.routine = [];
       daten.sonderzahlungen = [];
     }
-    if (!berechtigt('chk')) daten.checklisten = [];
+    if (!berechtigt('chk')) { daten.checklisten = []; daten.checklistenStatus = []; }
     if (!berechtigt('rl')) daten.richtlinie = { stand: '', zeilen: [] };
     if (!berechtigt('org')) daten.organigramm = [];
     if (!berechtigt('dash')) daten.dashboard = { personal: [], vorlagen: [], info: [], links: [], summary: {} };
@@ -762,6 +764,38 @@ app.delete('/api/kuendigung/:id', requireLogin, requireRight('kue', 2), async (r
       [req.user.id, `Kündigung gelöscht: ${rows[0].vorname || ''} ${rows[0].nachname || ''} (ID ${rows[0].id})`]);
     res.json({ ok: true });
   } catch (e) { next(e); }
+});
+
+
+/* ---------- Checklisten: serverseitig berechtigtes Abhaken ---------- */
+app.patch('/api/checklisten/:name/punkte/:index', requireLogin, requireRight('chk',2),
+  async (req,res,next)=>{
+    try{
+      const name=String(req.params.name||'');
+      const index=Number(req.params.index), erledigt=req.body?.erledigt;
+      if(!name||name.length>250||!Number.isSafeInteger(index)||index<0||
+         typeof erledigt!=='boolean')
+        return res.status(400).json({error:'Ungültiger Checklistenpunkt'});
+      const {rows}=await db.query('SELECT aufgaben FROM checklisten WHERE name=$1',[name]);
+      if(!rows.length)return res.status(404).json({error:'Checkliste nicht gefunden'});
+      const items=rows[0].aufgaben;
+      if(!Array.isArray(items)||index>=items.length)
+        return res.status(400).json({error:'Checklistenpunkt nicht vorhanden'});
+      await db.query(
+        "INSERT INTO checklisten_status (name,punkt,erledigt) VALUES ($1,$2,$3) ON CONFLICT(name,punkt) DO UPDATE SET erledigt=EXCLUDED.erledigt,aktualisiert=now()",
+        [name,index,erledigt]);
+      await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
+        [req.user.id,'Checkliste '+name+' / Punkt '+(index+1)+': '+(erledigt?'erledigt':'offen')]);
+      res.json({ok:true,erledigt});
+    }catch(err){next(err);}
+  });
+app.post('/api/checklisten/reset',requireLogin,requireRight('chk',2),async(req,res,next)=>{
+  try{
+    const result=await db.query('DELETE FROM checklisten_status');
+    await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
+      [req.user.id,'Alle Checklisten-Häkchen zurückgesetzt ('+result.rowCount+')']);
+    res.json({ok:true,anzahl:result.rowCount});
+  }catch(err){next(err);}
 });
 
 /* ---------- Benutzerverwaltung: ausschließlich Admin ---------- */

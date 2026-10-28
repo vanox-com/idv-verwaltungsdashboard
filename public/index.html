@@ -200,6 +200,17 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 #zahlungDialog .zahlung-check{display:flex;gap:9px;align-items:center}#zahlungDialog .zahlung-check input{width:auto}
 .zahlung-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
 @media(max-width:820px){.routine-toolbar .routine-inline{width:100%}.routine-inline input,.routine-inline select{flex:1;min-width:0}}
+
+/* Checklisten */
+.checklist-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.checklist-head h3{margin:0;font-size:16px}
+.checklist-progress{height:6px;background:#2a394d;border-radius:10px;overflow:hidden;margin:13px 0}
+.checklist-progress>div{height:100%;background:#5eab88;transition:width .16s}
+.checklist-points{list-style:none;margin:0;padding:0}
+.checklist-item{display:flex;gap:10px;align-items:flex-start;padding:10px 2px;border-top:1px solid var(--line)}
+.checklist-item input{width:18px;height:18px;flex:0 0 auto;margin:2px 0 0;accent-color:#5aa783}
+.checklist-item span{flex:1;line-height:1.4}
+.checklist-item.done span{text-decoration:line-through;color:var(--mut)}
 </style>
 </head>
 <body>
@@ -1395,13 +1406,85 @@ document.addEventListener('submit',e=>{
   if(e.target.matches('#routineDateForm'))return routineDatumHinzufuegen(e);
   if(e.target.matches('#routinePersonForm'))return routinePersonHinzufuegen(e);
 });
-function vChk() {
-  const bloecke = D.checklisten.map(function (l) {
-    const punkte = (l.aufgaben || []).map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('');
-    return '<div class="box"><b>' + esc(l.name) + '</b><ul>' + punkte + '</ul></div>';
-  }).join('');
-  return '<h1>Checklisten</h1><div class="grid2">' + bloecke + '</div>';
+
+/* Checklisten wie in der ursprünglichen HTML mit dauerhaftem gemeinsamen Status. */
+const CHECKLIST_LINKS={
+  'Bewerbung':{
+    0:'https://forum.identityvalley.de/forum/index.php?board/157-bewerbungen-polizei/',
+    1:'https://docs.google.com/document/d/1JWeX-eMkBFG7_NJim7xTorvyJor28rmRUxP5Wlo4LAY/edit?usp=sharing'
+  },
+  'Beförderung':{
+    4:'https://docs.google.com/document/d/1LTaR_fozunzRp7L392zoDcCb8GxX8CYN2HVmVIvcKY4/edit?tab=t.0'
+  }
+};
+function chkIstErledigt(name,i){
+  return !!(D.checklistenStatus||[]).find(x=>x.name===name&&Number(x.punkt)===i&&x.erledigt);
 }
+function vChk(){
+  const schreiben=can('chk',2),blocks=(D.checklisten||[]).map(c=>{
+    const items=Array.isArray(c.aufgaben)?c.aufgaben:[];
+    const fertig=items.filter((_,i)=>chkIstErledigt(c.name,i)).length;
+    const pct=items.length?Math.round(fertig/items.length*100):0;
+    const rows=items.map((x,i)=>{
+      const text=typeof x==='string'?x:String(x?.t||'');
+      const link=typeof x==='object'?String(x?.u||''):(CHECKLIST_LINKS[c.name]||{})[i]||'';
+      const checked=chkIstErledigt(c.name,i);
+      const name=esc(c.name);
+      const step=link&&/^https:\/\//i.test(link)?
+        '<a class="l" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">'+esc(text)+'</a>':esc(text);
+      return '<li class="checklist-item '+(checked?'done':'')+'">'+
+        '<input type="checkbox" aria-label="'+esc(text)+'" data-check-name="'+name+
+        '" data-check-index="'+i+'" '+(checked?'checked':'')+(schreiben?'':' disabled')+'>'+
+        '<span>'+step+'</span></li>';
+    }).join('');
+    return '<section class="box checklist-box"><div class="checklist-head"><h3>'+esc(c.name)+'</h3>'+
+      '<span class="tag '+(pct===100?'ok':'')+'">'+fertig+' / '+items.length+'</span></div>'+
+      '<div class="checklist-progress"><div style="width:'+pct+'%"></div></div>'+
+      '<ul class="checklist-points">'+rows+'</ul></section>';
+  }).join('');
+  return '<h1>Checklisten</h1><div class="pers-bar">'+
+    '<span class="mut">Gemeinsame Arbeitschecklisten für die Verwaltung. Fortschritt wird gespeichert.</span>'+
+    '<span class="spacer"></span>'+(schreiben?
+      '<button type="button" id="checkReset">Alle Häkchen zurücksetzen</button>':'')+
+    '</div><p id="checkInfo" class="mut" role="status"></p>'+
+    '<div class="grid2">'+blocks+'</div>';
+}
+async function chkSetzen(input){
+  if(!can('chk',2))return;
+  const name=input.dataset.checkName,index=Number(input.dataset.checkIndex);
+  const fertig=input.checked;input.disabled=true;
+  try{
+    await api('/checklisten/'+encodeURIComponent(name)+'/punkte/'+index,
+      {method:'PATCH',body:JSON.stringify({erledigt:fertig})});
+    const old=(D.checklistenStatus||[]).find(x=>x.name===name&&Number(x.punkt)===index);
+    if(old)old.erledigt=fertig;
+    else (D.checklistenStatus ||= []).push({name,punkt:index,erledigt:fertig});
+    zeichne();
+  }catch(err){
+    input.checked=!fertig;
+    input.disabled=false;
+    const out=$('#checkInfo');
+    if(out)out.textContent='Speichern fehlgeschlagen: '+err.message;
+  }
+}
+async function chkZuruecksetzen(){
+  if(!can('chk',2))return;
+  if(!confirm('Alle Häkchen in sämtlichen Checklisten wirklich zurücksetzen?'))return;
+  const btn=$('#checkReset');btn.disabled=true;
+  try{
+    await api('/checklisten/reset',{method:'POST'});
+    D.checklistenStatus=[];zeichne();
+  }catch(err){
+    if($('#checkInfo'))$('#checkInfo').textContent='Zurücksetzen fehlgeschlagen: '+err.message;
+    btn.disabled=false;
+  }
+}
+document.addEventListener('change',e=>{
+  if(e.target.matches('[data-check-name]'))chkSetzen(e.target);
+});
+document.addEventListener('click',e=>{
+  if(e.target.closest('#checkReset'))chkZuruecksetzen();
+});
 
 function vRl() {
   const r = D.richtlinie;
