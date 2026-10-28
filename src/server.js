@@ -97,12 +97,14 @@ async function requireLogin(req, res, next) {
 
 function requireRight(modul, stufe = 1) {
   return async (req, res, next) => {
-    const { rows } = await db.query(
-      `SELECT p.stufe FROM role_perms p
-        WHERE p.rolle = $1 AND p.modul = $2`, [req.user.rolle, modul]);
-    const hat = rows.length ? rows[0].stufe : 0;
-    if (hat < stufe) return res.status(403).json({ error: 'Kein Recht für diesen Bereich' });
-    next();
+    try {
+      const { rows } = await db.query(
+        `SELECT p.stufe FROM role_perms p
+          WHERE p.rolle = $1 AND p.modul = $2`, [req.user.rolle, modul]);
+      const hat = rows.length ? rows[0].stufe : 0;
+      if (hat < stufe) return res.status(403).json({ error: 'Kein Recht für diesen Bereich' });
+      next();
+    } catch (e) { next(e); }
   };
 }
 
@@ -272,7 +274,9 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       offeneRueckgaben: kuendigungen.rows.filter(k =>
         ['waffe', 'copnet', 'emd', 'ic', 'discord', 'dienstgegenstaende']
           .some(f => /offen/i.test(k[f] || ''))).length,
-      disziplinFaelle: disziplin.rows.filter(d => Array.isArray(d.massnahmen) && d.massnahmen.length > 0).length
+      disziplinFaelle: disziplin.rows.filter(d =>
+        (Array.isArray(d.massnahmen) && d.massnahmen.length > 0) ||
+        (Array.isArray(d.slots) && d.slots.some(x => x && (x.done || x.t || x.u || x.d)))).length
     };
 
     /* Berechtigungen auch bei API-Ausgabe erzwingen, nicht nur Menüpunkte verstecken. */
@@ -374,8 +378,18 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
           }))
         : [];
     } else if (!sensibel) {
+      /* Aus einer geschützten Vollakte dürfen keine vertraulichen Dokumente,
+         Notizen, Geburtstage oder Urlaubsdaten im Netzwerk ankommen. */
       daten.personal = daten.personal.map(p => ({
-        ...p, handy: null, geburtsdatum: null, urlaub_von: null, urlaub_bis: null
+        personalnummer: p.personalnummer, vorname: p.vorname, nachname: p.nachname,
+        gruppe: p.gruppe, status: p.status, dienstgrad: p.dienstgrad,
+        nebenjob: p.nebenjob, eintrittsdatum: p.eintrittsdatum,
+        waffenschein: p.waffenschein, spind: p.spind,
+        ...(berechtigt('bef') ? {
+          letzte_befoerderung: p.letzte_befoerderung,
+          naechste_befoerderung: p.naechste_befoerderung,
+          por_status: p.por_status, por_notiz: p.por_notiz, por_am: p.por_am
+        } : {})
       }));
     }
 
@@ -389,39 +403,75 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
 
 /* ---------- Schreiben ---------- */
 
+/* Dienstgrade vorhandener Mitarbeiter werden ausschließlich über den
+   transaktional abgesicherten POR-Beförderungsablauf geändert. */
+const vertraulichePersonalFelder = new Set([
+  'geburtsdatum', 'handy', 'arbeitsvertrag', 'ernennungsurkunde',
+  'urlaub_von', 'urlaub_bis', 'urlaub_tage', 'bemerkung', 'rsa',
+  'waffenschein', 'spind'
+]);
+async function darfVertraulichesPersonalBearbeiten(rolle, daten) {
+  if (!Object.keys(daten).some(k => vertraulichePersonalFelder.has(k))) return true;
+  const {rows} = await db.query('SELECT sensibel FROM roles WHERE name=$1', [rolle]);
+  return !!rows[0]?.sensibel;
+}
 app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req, res, next) => {
   try {
+    const nr = Number(req.params.nr);
+    if (!Number.isSafeInteger(nr) || nr < 1)
+      return res.status(400).json({ error: 'Ungültige Personalnummer' });
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    if (Object.hasOwn(body,'dienstgrad'))
+      return res.status(409).json({ error: 'Dienstgrad ausschließlich über die Beförderungsverwaltung ändern' });
+    if (!await darfVertraulichesPersonalBearbeiten(req.user.rolle, body))
+      return res.status(403).json({ error: 'Kein Recht für vertrauliche Personalfelder' });
     const erlaubt = ['vorname', 'nachname', 'geburtsdatum', 'handy', 'waffenschein', 'spind',
-      'nebenjob', 'dienstgrad', 'eintrittsdatum', 'arbeitsvertrag', 'ernennungsurkunde',
+      'nebenjob', 'eintrittsdatum', 'arbeitsvertrag', 'ernennungsurkunde',
       'urlaub_von', 'urlaub_bis', 'urlaub_tage', 'bemerkung', 'rsa', 'status', 'gruppe'];
     const felder = [], werte = [];
     erlaubt.forEach(k => {
-      if (k in req.body) { werte.push(req.body[k] === '' ? null : req.body[k]); felder.push(`${k} = $${werte.length}`); }
+      if (Object.hasOwn(body,k)) {
+        werte.push(body[k] === '' ? null : body[k]);
+        felder.push(`${k} = $${werte.length}`);
+      }
     });
     if (!felder.length) return res.status(400).json({ error: 'Keine Felder übergeben' });
-    werte.push(req.params.nr);
-    await db.query(`UPDATE personal SET ${felder.join(', ')} WHERE personalnummer = $${werte.length}`, werte);
+    werte.push(nr);
+    const {rowCount} = await db.query(
+      `UPDATE personal SET ${felder.join(', ')} WHERE personalnummer = $${werte.length}`, werte);
+    if (!rowCount) return res.status(404).json({ error: 'Personalakte nicht gefunden' });
     await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'edit')`,
-      [req.user.id, `Personal ${req.params.nr} geändert`]);
+      [req.user.id, `Personal ${nr} geändert`]);
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
 
 app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res, next) => {
   try {
-    const b = req.body;
+    const b = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    if (!await darfVertraulichesPersonalBearbeiten(req.user.rolle, b))
+      return res.status(403).json({ error: 'Kein Recht für vertrauliche Personalfelder' });
+    const nr=Number(b.personalnummer);
+    if (!Number.isSafeInteger(nr) || nr < 1)
+      return res.status(400).json({ error: 'Ungültige Personalnummer' });
+    if (!String(b.vorname || '').trim() || !String(b.nachname || '').trim())
+      return res.status(400).json({ error: 'Vor- und Nachname nötig' });
     const { rows } = await db.query(
       `INSERT INTO personal (personalnummer, gruppe, status, vorname, nachname, geburtsdatum, handy,
         waffenschein, spind, nebenjob, dienstgrad, eintrittsdatum, arbeitsvertrag, ernennungsurkunde,
         urlaub_von, urlaub_bis, urlaub_tage, bemerkung, rsa)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
-      [b.personalnummer, b.gruppe || 'Hauptberuf', b.status || 'Aktiv', b.vorname, b.nachname, b.geburtsdatum || null,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       RETURNING personalnummer,vorname,nachname,gruppe,status,dienstgrad`,
+      [nr, b.gruppe || 'Hauptberuf', b.status || 'Aktiv', b.vorname, b.nachname, b.geburtsdatum || null,
         b.handy, !!b.waffenschein, !!b.spind, b.nebenjob, b.dienstgrad, b.eintrittsdatum || null,
         b.arbeitsvertrag, b.ernennungsurkunde, b.urlaub_von || null, b.urlaub_bis || null, b.urlaub_tage, b.bemerkung, b.rsa]);
     await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'add')`,
-      [req.user.id, `Personal ${b.personalnummer} angelegt`]);
+      [req.user.id, `Personal ${nr} angelegt`]);
     res.json(rows[0]);
-  } catch (e) { next(e); }
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'Diese Personalnummer gibt es bereits' });
+    next(e);
+  }
 });
 
 /* Geschützter CopNet-Zugang: AES-256-GCM, eigener Schlüssel aus Render-
