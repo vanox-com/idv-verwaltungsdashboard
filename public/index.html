@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dienstportal Polizeirat</title>
+<title>Polizei Hessen · Verwaltungsportal | IdentityValley</title>
+<meta name="description" content="Fiktives Polizei-Hessen-Verwaltungsportal für GTA-RP auf IdentityValley.">
+<link rel="icon" type="image/svg+xml" href="/assets/idv-signet.svg">
 <style>
 :root{--bg:#0f1722;--panel:#182333;--line:#26354b;--txt:#e6edf6;--mut:#8ea0b8;--acc:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444}
 *{box-sizing:border-box}
@@ -372,7 +374,7 @@ function vDash() {
   const datum = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const willkommen = '<section class="hello"><span class="eyebrow">IdentityValley · Dienstübersicht</span>' +
     '<h1>' + begruessung + ', ' + esc(ME.anzeigename) + '.</h1>' +
-    '<p>Willkommen im Verwaltungsportal. Hier findest du alle für deine Rolle freigegebenen Verwaltungsbereiche.</p>' +
+    '<p>Schön, dass du wieder da bist. Einen erfolgreichen Dienst und gutes Gelingen bei deinen Aufgaben!</p>' +
     '<span class="hello-date">' + esc(datum) + '</span></section>';
   return willkommen + kacheln +
     '<div class="grid2">' + uebersicht +
