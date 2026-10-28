@@ -843,6 +843,15 @@ aside .sidebar-brand:after{
 .tw tbody tr:hover td{background:rgba(143,157,208,.085)}
 button.p:focus-visible{outline-color:#c5c8f7}
 
+
+/* Namen in der Personalübersicht ohne Unterstreichung; weiterhin anklickbar. */
+.pers-row .pers-link[data-show-person],
+.pers-row .pers-link[data-show-person]:hover,
+.pers-row .pers-link[data-show-person]:focus-visible{
+  text-decoration:none;
+}
+.pers-row .pers-link[data-show-person]{font-weight:600;cursor:pointer}
+.pers-row .pers-link[data-show-person]:hover{color:#dce4ff}
 </style>
 </head>
 <body>
