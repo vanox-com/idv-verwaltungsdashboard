@@ -39,6 +39,11 @@ app.use((req, res, next) => {
   }
   next();
 });
+/* Keine veraltete Login-HTML aus dem Browsercache ausliefern. */
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path.endsWith('.html')) res.set('Cache-Control', 'no-store');
+  next();
+});
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 /* Sperre gegen zu viele Anmeldeversuche: 30 in fünf Minuten, und nur
@@ -208,6 +213,8 @@ app.post('/api/passwort', async (req, res, next) => {
 /* ---------- Lesen ---------- */
 
 app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
+  const beginn = Date.now();
+  console.log('[dashboard] Datenabfrage gestartet, Dienstnummer:', req.user.dienstnummer);
   try {
     const [personal, raenge, funktionen, funktionsspalten, kuendigungen, disziplin,
       disziplinSpalten, richtlinie, checklisten, dashboard, routine, sonderzahlungen,
@@ -302,7 +309,11 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
     }
 
     res.json({ user: { dienstnummer: req.user.dienstnummer, anzeigename: await nameFuerDienstnummer(req.user), rolle, rechte, sensibel: !!sensibel }, daten });
-  } catch (e) { next(e); }
+    console.log('[dashboard] Datenabfrage erfolgreich, Dauer:', Date.now() - beginn, 'ms');
+  } catch (e) {
+    console.error('[dashboard] Datenabfrage fehlgeschlagen:', e.code || '', e.message);
+    next(e);
+  }
 });
 
 /* ---------- Schreiben ---------- */

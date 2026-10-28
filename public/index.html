@@ -187,7 +187,7 @@ const fd = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('.') 
 const can = (m, l = 1) => ME && (ME.rechte[m] || 0) >= l;
 
 async function api(pfad, optionen) {
-  const r = await fetch('/api' + pfad, Object.assign({ headers: { 'Content-Type': 'application/json' } }, optionen));
+  const r = await fetch('/api' + pfad, Object.assign({ credentials: 'same-origin', cache: 'no-store', headers: { 'Content-Type': 'application/json' } }, optionen));
   const daten = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(daten.error || 'Fehler');
   return daten;
@@ -195,13 +195,31 @@ async function api(pfad, optionen) {
 
 /* ---------- Anmeldung ---------- */
 let startpasswort = null;
+let loginLaeuft = false;
+let authentifizierungsVersion = 0;
+
+function loginHinweis(nachricht, istFehler = false) {
+  const feld = $('#fehler');
+  feld.style.color = istFehler ? '#ffb6b6' : '#c1d6ec';
+  feld.textContent = nachricht;
+}
+function loginButtonBusy(busy) {
+  const knopf = $('#anmelden');
+  knopf.disabled = busy;
+  knopf.textContent = busy ? 'Anmeldung läuft …' : 'Anmelden →';
+}
+
 $('#loginForm').addEventListener('submit', async e => {
   e.preventDefault();
-  $('#fehler').textContent = '';
+  if (loginLaeuft) return;
+  loginLaeuft = true;
+  authentifizierungsVersion++;
+  loginButtonBusy(true);
+  loginHinweis('Schritt 1 von 2: Zugangsdaten werden geprüft …');
   try {
     const a = await api('/login', {
       method: 'POST',
-      body: JSON.stringify({ dienstnummer: $('#dnr').value, passwort: $('#pw').value })
+      body: JSON.stringify({ dienstnummer: $('#dnr').value.trim(), passwort: $('#pw').value })
     });
     if (a.mussPasswortAendern) {
       startpasswort = $('#pw').value;
@@ -212,8 +230,14 @@ $('#loginForm').addEventListener('submit', async e => {
       return;
     }
     $('#pw').value = '';
+    loginHinweis('Schritt 2 von 2: Angemeldet. Dashboard wird geladen …');
     await starten();
-  } catch (err) { $('#fehler').textContent = err.message; }
+  } catch (err) {
+    loginHinweis('Anmeldung fehlgeschlagen: ' + err.message, true);
+  } finally {
+    loginLaeuft = false;
+    loginButtonBusy(false);
+  }
 });
 
 $('#wechselForm').addEventListener('submit', async e => {
@@ -234,18 +258,21 @@ $('#wechselForm').addEventListener('submit', async e => {
     $('#neuPw2').value = '';
     $('#wechselForm').classList.add('hide');
     $('#loginForm').classList.remove('hide');
+    loginHinweis('Passwort geändert. Dashboard wird geladen …');
     await starten();
   } catch (err) { $('#wechselFehler').textContent = err.message; }
 });
 
 $('#wechselAbbrechen').addEventListener('click', async () => {
   startpasswort = null;
+  authentifizierungsVersion++;
   await api('/logout', { method: 'POST' }).catch(() => {});
   $('#wechselForm').classList.add('hide');
   $('#loginForm').classList.remove('hide');
   $('#pw').value = '';
   $('#neuPw').value = '';
   $('#neuPw2').value = '';
+  loginHinweis('');
 });
 
 $('#abmelden').addEventListener('click', async () => {
@@ -253,56 +280,76 @@ $('#abmelden').addEventListener('click', async () => {
   location.reload();
 });
 
-/* Prüf-Knopf: fragt den Server, ob er antwortet. Zeigt das Ergebnis im Formular. */
+/* Die Verbindungsprüfung prüft jetzt beide getrennten Schritte. */
 $('#pruefen').addEventListener('click', async () => {
-  const feld = $('#fehler');
-  feld.style.color = '#8ea0b8';
-  feld.textContent = 'Prüfe Verbindung …';
+  loginHinweis('Prüfe Sitzung beim Server …');
   try {
-    const r = await fetch('/api/me');
-    if (r.status === 401) { feld.textContent = 'Server antwortet (401 = noch nicht angemeldet). Die Anmeldung selbst ist das Problem.'; }
-    else if (r.ok) { feld.textContent = 'Server antwortet, du bist bereits angemeldet.'; }
-    else { feld.textContent = 'Server antwortet mit Status ' + r.status; }
-  } catch (e) {
-    feld.textContent = 'Server nicht erreichbar: ' + e.message;
-  }
+    const r = await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' });
+    if (r.status === 401) loginHinweis('Server erreichbar. Aktuell keine gültige Anmeldung. Bitte erneut anmelden.');
+    else if (r.ok) loginHinweis('Server und Sitzung funktionieren. Dashboard-Aufbau wird geprüft …');
+    else loginHinweis('Server antwortet mit Status ' + r.status, true);
+  } catch (err) { loginHinweis('Verbindung fehlgeschlagen: ' + err.message, true); }
 });
 
-/* Enter im Passwortfeld löst die Anmeldung aus */
 $('#pw').addEventListener('keydown', function (e) {
   if (e.key === 'Enter') { e.preventDefault(); $('#loginForm').requestSubmit(); }
 });
 
 /* ---------- Aufbau ---------- */
 
+/* Nach erfolgreicher Serveranmeldung darf eine fehlerhafte Verwaltungsabfrage
+   den Zugang nicht stillschweigend blockieren. Die Minimalansicht gibt es nur
+   nach erneuter, serverseitiger Authentifizierung über /api/me. */
 async function starten() {
-  let antwort;
   try {
-    antwort = await api('/bootstrap');
+    const antwort = await api('/bootstrap');
+    if (!antwort || !antwort.user || !antwort.daten || !antwort.daten.dashboard) {
+      throw new Error('Der Server hat unvollständige Dashboarddaten zurückgegeben');
+    }
+    ME = antwort.user;
+    D = antwort.daten;
+    $('#meName').textContent = ME.anzeigename || 'Dienstkonto';
+    $('#meRolle').textContent = ME.rolle + (ME.sensibel ? ' · Personaldaten' : '');
+    $('#login').classList.add('hide');
+    $('#app').classList.remove('hide');
+    zeichneMenue();
+    zeichne();
+    return true;
   } catch (err) {
-    if (/Nicht angemeldet|Passwortwechsel/.test(err.message)) { showLogin(); return; }
-    /* Jeder andere Fehler wird sichtbar gemacht, statt still zu bleiben. */
-    meldung('Der Aufbau ist fehlgeschlagen: ' + err.message, true);
-    return;
+    console.error('Portalaufbau fehlgeschlagen:', err);
+    loginHinweis('Anmeldung erfolgreich. Fehler beim Laden des Dashboards: ' + err.message, true);
+    try {
+      const user = await api('/me');
+      if (user.mussPasswortAendern) throw new Error('Bitte zuerst das Startpasswort ändern');
+      ME = user;
+      D = null;
+      $('#meName').textContent = user.anzeigename || 'Dienstkonto';
+      $('#meRolle').textContent = user.rolle || 'Angemeldet';
+      $('#menu').innerHTML = '';
+      $('#inhalt').innerHTML = '<section class="hello"><span class="eyebrow">IdentityValley · Gesicherter Zugang</span>' +
+        '<h1>Willkommen, ' + esc(user.anzeigename || 'Dienstkonto') + '.</h1>' +
+        '<p>Deine Anmeldung war erfolgreich. Die Verwaltungsdaten konnten allerdings noch nicht vollständig geladen werden.</p>' +
+        '</section><div class="box"><b>Dashboard vorübergehend eingeschränkt</b>' +
+        '<p>Fehler: ' + esc(err.message) + '</p>' +
+        '<p>Dein Zugang ist aktiv. Bitte lade die Verwaltungsdaten erneut.</p>' +
+        '<button type="button" class="p" id="dashboardNeuLaden">Verwaltungsdaten erneut laden</button></div>';
+      $('#login').classList.add('hide');
+      $('#app').classList.remove('hide');
+      $('#dashboardNeuLaden').addEventListener('click', () => { starten(); });
+      return true;
+    } catch (sitzungsfehler) {
+      showLogin();
+      loginHinweis('Die Zugangsdaten wurden angenommen, aber die Sitzung konnte nicht bestätigt werden: ' +
+        sitzungsfehler.message + '. Bitte Browser-Cookies für diese Website zulassen.', true);
+      return false;
+    }
   }
-  ME = antwort.user; D = antwort.daten;
-  $('#login').classList.add('hide');
-  $('#app').classList.remove('hide');
-  $('#meName').textContent = ME.anzeigename;
-  $('#meRolle').textContent = ME.rolle + (ME.sensibel ? ' · Personaldaten' : '');
-  zeichneMenue();
-  zeichne();
 }
 
-/* Schreibt eine Meldung an die Stelle, die man gerade sieht. */
-function meldung(text, istFehler) {
-  const leer = $('#logZeile');
-  if (leer) { leer.textContent = ''; }
-  const feld = $('#fehler');
-  if (feld) { feld.style.color = istFehler ? '#fca5a5' : '#8ea0b8'; feld.textContent = text; }
-  console.log(text);
+function meldung(nachricht, istFehler) {
+  loginHinweis(nachricht, istFehler);
+  console.log(nachricht);
 }
-
 function showLogin() {
   $('#app').classList.add('hide');
   $('#login').classList.remove('hide');
@@ -500,10 +547,15 @@ async function vLog_() {
 /* ---------- Start ---------- */
 
 (async () => {
+  const versionBeimStart = authentifizierungsVersion;
   try {
-    const u = await fetch('/api/me');
-    if (u.ok) { await starten(); } else { showLogin(); }
+    const u = await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' });
+    /* Ein noch laufender Start-Check darf keinen späteren Login zurücksetzen. */
+    if (versionBeimStart !== authentifizierungsVersion) return;
+    if (u.ok) await starten();
+    else showLogin();
   } catch (e) {
+    if (versionBeimStart !== authentifizierungsVersion) return;
     showLogin();
     meldung('Server nicht erreichbar: ' + e.message, true);
   }
