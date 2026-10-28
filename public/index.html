@@ -863,6 +863,28 @@ button.p:focus-visible{outline-color:#c5c8f7}
 #personalDialog .personal-kuendigung label{color:#f2d5ad}
 #personalDialog .personal-kuendigung textarea{box-sizing:border-box;width:100%;resize:vertical;min-height:95px;margin-top:6px}
 #personalDialog .personal-kuendigung .mut{margin:7px 0 0;line-height:1.5}
+
+aside #menu .sidebar-gruppe-inhalt a,
+aside #menu .sidebar-gruppe-inhalt a:hover,
+aside #menu .sidebar-gruppe-inhalt a:focus-visible,
+aside #menu .sidebar-gruppe-inhalt a:visited,
+aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
+.dash-cell.dash-navigierbar{cursor:pointer}
+.dash-cell.dash-navigierbar>.kachel,
+.dash-cell.dash-navigierbar>.box{transition:border-color .16s,box-shadow .16s,transform .16s}
+.dash-cell.dash-navigierbar:hover>.kachel,
+.dash-cell.dash-navigierbar:hover>.box,
+.dash-cell.dash-navigierbar:focus-visible>.kachel,
+.dash-cell.dash-navigierbar:focus-visible>.box{
+  border-color:#9eadd9;transform:translateY(-2px);
+  box-shadow:0 13px 28px rgba(0,0,0,.17),inset 0 0 0 1px rgba(185,188,230,.12)
+}
+.dash-cell.dash-navigierbar:focus-visible{
+  outline:2px solid #b8c7f2;outline-offset:4px;border-radius:15px
+}
+@media(prefers-reduced-motion:reduce){
+ .dash-cell.dash-navigierbar>.kachel,.dash-cell.dash-navigierbar>.box{transition:none}
+}
 </style>
 </head>
 <body>
@@ -1247,6 +1269,15 @@ function navIcon(id) {
   return '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
 }
 
+function wechsleZuModul(id){
+  if(!MODS.some(m=>m[0]===id)||!can(id))return false;
+  tab=id;
+  const gruppe=NAV_GRUPPEN.find(g=>g.module.includes(id));
+  if(gruppe)NAV_OFFEN.add(gruppe.id);
+  zeichneMenue();
+  zeichne();
+  return true;
+}
 function zeichneMenue() {
   const aktuellesModul=MODS.find(m=>m[0]===tab);
   const aktuellerTitel=$('#workspaceBereich');
@@ -1283,13 +1314,7 @@ function zeichneMenue() {
   menu.querySelectorAll('[data-t]').forEach(link=>
     link.addEventListener('click',e=>{
       e.preventDefault();
-      const id=link.dataset.t;
-      if(!module.has(id)||!can(id))return;
-      tab=id;
-      const gruppe=NAV_GRUPPEN.find(g=>g.module.includes(id));
-      if(gruppe)NAV_OFFEN.add(gruppe.id);
-      zeichneMenue();
-      zeichne();
+      wechsleZuModul(link.dataset.t);
     }));
 }
 
@@ -1353,6 +1378,15 @@ const DASH_WIDGETS=[
   {id:'panel-status',titel:'Personalstatus im Überblick',typ:'panel'},
   {id:'panel-neue',titel:'Neueinstellungen (30 Tage)',typ:'panel',recht:'pers',neu:true}
 ];
+/* Gemeinsame Widget-Ziele; die Dokumentkarten enthalten eigene externe Links. */
+const DASH_WIDGET_ZIELE={
+  'kpi-personal':'pers','kpi-kuendigungen':'kue','kpi-rueckgaben':'kue',
+  'kpi-disziplin':'dis','kpi-aktiv':'pers','kpi-neu30':'pers',
+  'kpi-urlaub':'pers','kpi-bef':'bef','panel-bef':'bef',
+  'panel-gruppen':'pers','panel-inaktiv':'pers','panel-geb':'geb',
+  'panel-jub':'jub','panel-dienstblatt':'pers','panel-status':'pers',
+  'panel-neue':'pers'
+};
 let DASH_EDITOR=null;
 function dashboardItems(){
   const gespeicherte=D?.dashboard?.layout?.items;
@@ -1448,6 +1482,19 @@ function dashboardEditorEvent(e){
   }
 }
 document.addEventListener('click',dashboardEditorEvent);
+document.addEventListener('click',e=>{
+  if(tab!=='dash'||DASH_EDITOR)return;
+  if(e.target.closest('a,button,input,select,textarea,[contenteditable]'))return;
+  const box=e.target.closest('.dash-cell[data-dash-ziel]');
+  if(box)wechsleZuModul(box.dataset.dashZiel);
+});
+document.addEventListener('keydown',e=>{
+  if(tab!=='dash'||DASH_EDITOR||!['Enter',' '].includes(e.key))return;
+  const box=e.target.closest('.dash-cell[data-dash-ziel]');
+  if(!box||e.target!==box)return;
+  e.preventDefault();
+  wechsleZuModul(box.dataset.dashZiel);
+});
 document.addEventListener('change',e=>{
   if(tab!=='dash'||!DASH_EDITOR||!dashboardEditierbar())return;
   const input=e.target.closest('[data-dash-toggle]');
@@ -1575,9 +1622,15 @@ function vDash(){
     const def=lookup.get(x.id);
     if(!dashboardWidgetErlaubt(def))return '';
     if(x.id==='panel-inaktiv'&&!off.length&&!bearbeiten)return '';
+    const ziel=DASH_WIDGET_ZIELE[x.id];
+    const navigierbar=!bearbeiten&&ziel&&can(ziel);
+    const zielName=navigierbar?(MODS.find(m=>m[0]===ziel)?.[1]||ziel):'';
     return '<div class="dash-cell '+(def.typ==='kpi'?'dash-cell-kpi':'dash-cell-panel')+
-      (bearbeiten?' dash-editing':'')+'" data-dash-widget="'+esc(x.id)+'" '+
-      (bearbeiten?'draggable="true"':'')+'>'+
+      (bearbeiten?' dash-editing':'')+(navigierbar?' dash-navigierbar':'')+
+      '" data-dash-widget="'+esc(x.id)+'" '+
+      (bearbeiten?'draggable="true"':'')+
+      (navigierbar?' data-dash-ziel="'+esc(ziel)+'" role="link" tabindex="0"'+
+       ' aria-label="'+esc(def.titel+' – '+zielName+' öffnen')+'" title="'+esc(zielName+' öffnen')+'"':'')+'>'+
       (bearbeiten?'<div class="dash-drag-label"><span aria-hidden="true">⠿</span> '+
         esc(def.titel)+' <span class="dash-drag-hint">ziehen & verschieben</span></div>':'')+
       widgetHtml[x.id]+'</div>';
