@@ -146,6 +146,31 @@ CREATE TABLE IF NOT EXISTS copnet_zugaenge (
   aktualisiert timestamptz NOT NULL DEFAULT now()
 );
 
+/* Die beiden RP-Sperrlisten sind bewusst getrennte Datenbestände. */
+CREATE TABLE IF NOT EXISTS sperrfristen (
+  id bigserial PRIMARY KEY,
+  vorname text NOT NULL DEFAULT '',
+  nachname text NOT NULL,
+  art text NOT NULL CHECK (art IN ('Bewerber','Praktikant')),
+  grund text NOT NULL DEFAULT '',
+  von date,
+  bis date,
+  bemerkung text NOT NULL DEFAULT '',
+  erstellt timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS blacklist (
+  id bigserial PRIMARY KEY,
+  personalnummer text NOT NULL DEFAULT '',
+  vorname text NOT NULL,
+  nachname text NOT NULL,
+  datum date,
+  ablauf date,
+  handy text NOT NULL DEFAULT '',
+  bemerkung text NOT NULL DEFAULT '',
+  erstellt timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS raenge (
   name       text PRIMARY KEY,
   abk        text,
@@ -311,3 +336,12 @@ INSERT INTO role_perms (rolle, modul, stufe) VALUES
   ('Administrator','log',2),('Polizeirat','log',1)
 -- Bestehende Rechte bei Neustarts nicht überschreiben: Admin-Änderungen bleiben erhalten.
 ON CONFLICT (rolle, modul) DO NOTHING;
+
+/* Rollenrechte aus der Original-HTML, ohne zuvor angepasste Rechte zu überschreiben. */
+INSERT INTO role_perms (rolle, modul, stufe) VALUES
+  ('Administrator','sperr',2),('Polizeirat','sperr',2),('Leitungsdienst','sperr',2),('Ausbilder','sperr',2),('Mitarbeiter','sperr',2),
+  ('Administrator','geb',2),('Polizeirat','geb',2),('Leitungsdienst','geb',2),('Ausbilder','geb',2),('Mitarbeiter','geb',2),
+  ('Administrator','jub',2),('Polizeirat','jub',2),('Leitungsdienst','jub',2),('Ausbilder','jub',2),('Mitarbeiter','jub',2),
+  ('Administrator','bl',2),('Polizeirat','bl',2),('Leitungsdienst','bl',1),('Ausbilder','bl',0),('Mitarbeiter','bl',0)
+ON CONFLICT (rolle,modul) DO NOTHING;
+
