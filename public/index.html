@@ -317,6 +317,27 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 #textEditorForm input,#textEditorForm textarea{width:100%;min-width:0;box-sizing:border-box}
 #textEditorForm textarea{resize:vertical;min-height:220px;font-family:inherit;line-height:1.6}
 .text-editor-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
+
+/* Bearbeitbare Organigrammkarten mit separatem Recht */
+.org-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.org-header h1{margin:0 0 7px}
+.org-header button{white-space:nowrap}
+.org-card-head{display:flex;justify-content:space-between;align-items:start;gap:10px;margin-bottom:6px}
+.org-card-head h3{margin:0}
+.org-card-head button{white-space:nowrap}
+.org-card-actions{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+.org-remove{color:#ffb5b5;border-color:#8b5050}
+.org-main-actions{margin-top:20px}
+#orgDialog{width:min(750px,96vw);max-height:92vh;overflow:auto;background:#182433;
+  color:var(--txt);border:1px solid #536781;border-radius:12px;padding:25px}
+#orgDialog::backdrop{background:rgba(5,10,24,.75)}
+#orgDialog h2{margin:0 0 18px}
+#orgForm{display:flex;flex-direction:column;gap:8px}
+#orgForm label{margin-top:9px;font-weight:600}
+#orgForm input,#orgForm textarea{width:100%;box-sizing:border-box;min-width:0}
+#orgForm textarea{font-family:inherit;resize:vertical;min-height:140px;line-height:1.5}
+.org-dialog-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px;margin-top:16px}
+@media(max-width:500px){.org-card-head{flex-direction:column}}
 </style>
 </head>
 <body>
@@ -666,6 +687,7 @@ function zeichneMenue() {
 }
 
 function zeichne() {
+  if (tab==='org') { ladeOrganigramm(); return; }
   if (tab==='texte') { ladeTextbausteine(); return; }
   if (['sperr','geb','jub','bl'].includes(tab)) { ladeExtra(tab); return; }
   if (tab === 'log') {
@@ -1784,12 +1806,30 @@ function rlFiltern() {
 }
 /* Organigramm aus den 13 bereits importierten Zeilen rekonstruieren,
    ohne die Quelldaten oder Führungsstruktur zu überschreiben. */
-function orgStruktur() {
-  const zeilen=(D.organigramm||[]).map(row=>Array.isArray(row.zeile)?row.zeile:[]);
+
+let ORGANIGRAMM_STATE=null;
+async function ladeOrganigramm(){
+  if(!can('org'))return;
+  $('#inhalt').innerHTML='<h1>Organigramm</h1><p class="mut">Lade Führungsstruktur …</p>';
+  try{
+    const result=await api('/organigramm');
+    if(tab!=='org')return;
+    ORGANIGRAMM_STATE=result;
+    $('#inhalt').innerHTML=vOrg();
+  }catch(err){
+    if(tab==='org')$('#inhalt').innerHTML='<h1>Organigramm</h1>'+
+      '<p class="fehler">Organigramm konnte nicht geladen werden: '+esc(err.message)+'</p>'+
+      '<button type="button" id="orgRetry">Erneut laden</button>';
+  }
+}
+/* Das Archiv der importierten Excel-Struktur wird bis zur ersten Änderung
+   ausschließlich als Fallback gelesen, danach nur noch die editierbare Kopie. */
+function orgStruktur(){
+  if(ORGANIGRAMM_STATE?.inhalt)return ORGANIGRAMM_STATE.inhalt;
+  const zeilen=(D?.organigramm||[]).map(row=>Array.isArray(row.zeile)?row.zeile:[]);
   const leitung=String(zeilen[1]?.[0]||'');
   const raete=(zeilen[3]||[]).map(x=>String(x||'').trim()).filter(Boolean);
-  const ueberschriften=zeilen[5]||[];
-  const bereiche=ueberschriften.map((raw,col)=>{
+  const bereiche=(zeilen[5]||[]).map((raw,col)=>{
     const lines=String(raw||'').split('\n');
     const name=String(lines[0]||'').trim();
     const zust=lines.slice(1).join(' ').replace(/^\s*Zuständig\s*:\s*/i,'').trim();
@@ -1798,24 +1838,111 @@ function orgStruktur() {
   }).filter(b=>b.name);
   return {leitung,raete,bereiche};
 }
-function vOrg() {
-  const o=orgStruktur();
+function vOrg(){
+  const o=orgStruktur(),schreiben=can('org',2);
   const chefs=o.raete.map(r=>'<div class="org-rat">'+esc(r)+'</div>').join('');
-  const abteilungen=o.bereiche.map(b=>
-    '<section class="box org-bereich"><h3>'+esc(b.name)+'</h3>'+
+  const abteilungen=o.bereiche.map((b,i)=>
+    '<section class="box org-bereich"><div class="org-card-head"><h3>'+esc(b.name)+'</h3>'+
+      (schreiben?'<button type="button" data-org-edit="'+i+'">Bearbeiten</button>':'')+'</div>'+
     '<p class="org-zust">Zuständig: '+esc(b.zust||'–')+'</p>'+
-    '<ul>'+b.tasks.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul></section>'
+    '<ul>'+b.tasks.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul>'+
+    (schreiben?'<div class="org-card-actions"><button type="button" class="org-remove" data-org-remove="'+i+'">Aufgabenbereich entfernen</button></div>':'')+
+    '</section>'
   ).join('');
-  return '<h1>Organigramm</h1><p class="mut">Führungsstruktur und Aufgabenverteilung der fiktiven Polizei Hessen.</p>'+
+  return '<div class="org-header"><div><h1>Organigramm</h1>'+
+    '<p class="mut">Führungsstruktur und Aufgabenverteilung der fiktiven Polizei Hessen.</p></div>'+
+    (schreiben?'<button type="button" class="p" id="orgNeuBereich">+ Aufgabenbereich hinzufügen</button>':'')+
+    '</div>'+
     '<section class="box org-top">'+
     '<span class="org-label">Polizeioberrat</span>'+
     '<div class="org-oberrat">'+esc(o.leitung||'Nicht hinterlegt')+'</div>'+
     '<div class="org-connector"></div>'+
     '<span class="org-label">Polizeiräte</span>'+
     '<div class="org-raete">'+(chefs||'<span class="mut">Keine Einträge</span>')+'</div>'+
+    (schreiben?'<div class="org-main-actions"><button type="button" id="orgEditLeitung">Führung bearbeiten</button></div>':'')+
     '</section>'+
     '<div class="org-bereiche">'+abteilungen+'</div>';
 }
+function orgDialog(mode,index=null){
+  if(!can('org',2)||!ORGANIGRAMM_STATE)return;
+  const o=orgStruktur(),edit=mode==='bereich',add=mode==='neu';
+  const target=edit?o.bereiche[index]:null;
+  if(edit&&!target)return;
+  let dlg=$('#orgDialog');
+  if(!dlg){dlg=document.createElement('dialog');dlg.id='orgDialog';document.body.appendChild(dlg);}
+  const titel=mode==='leitung'?'Polizeiführung bearbeiten':
+    add?'Aufgabenbereich hinzufügen':'Aufgabenbereich bearbeiten';
+  let fields='';
+  if(mode==='leitung'){
+    fields='<label for="orgLeitung">Polizeioberrat</label>'+
+      '<input id="orgLeitung" maxlength="180" value="'+esc(o.leitung||'')+'" placeholder="Name des Polizeioberrats">'+
+      '<label for="orgRaete">Polizeiräte (je eine Person pro Zeile)</label>'+
+      '<textarea id="orgRaete" rows="5" placeholder="Je Zeile eine Person">'+esc(o.raete.join('\n'))+'</textarea>';
+  }else{
+    fields='<label for="orgName">Aufgabenbereich</label>'+
+      '<input id="orgName" maxlength="180" required value="'+esc(target?.name||'')+'" placeholder="z. B. Grundaufgaben">'+
+      '<label for="orgZust">Zuständig</label>'+
+      '<input id="orgZust" maxlength="250" value="'+esc(target?.zust||'')+'" placeholder="Name oder Team">'+
+      '<label for="orgTasks">Tätigkeiten (je eine Aufgabe pro Zeile)</label>'+
+      '<textarea id="orgTasks" rows="10" placeholder="Je Zeile eine Tätigkeit">'+esc((target?.tasks||[]).join('\n'))+'</textarea>'+
+      '<p class="mut">Neue Zeile = neue Aufgabe. Zum Entfernen einer Aufgabe die entsprechende Zeile löschen.</p>';
+  }
+  dlg.innerHTML='<h2>'+titel+'</h2><form id="orgForm">'+fields+
+    '<p id="orgFehler" class="fehler" role="alert"></p>'+
+    '<div class="org-dialog-actions"><button type="button" id="orgCancel">Abbrechen</button>'+
+    '<button type="submit" class="p" id="orgSave">Änderungen speichern</button></div></form>';
+  dlg.showModal();
+  $('#orgCancel').onclick=()=>dlg.close();
+  $('#orgForm').onsubmit=async e=>{
+    e.preventDefault();
+    const updated=JSON.parse(JSON.stringify(orgStruktur()));
+    if(mode==='leitung'){
+      updated.leitung=$('#orgLeitung').value.trim();
+      updated.raete=$('#orgRaete').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+    }else{
+      const bereich={
+        name:$('#orgName').value.trim(),
+        zust:$('#orgZust').value.trim(),
+        tasks:$('#orgTasks').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean)
+      };
+      if(edit)updated.bereiche[index]=bereich;else updated.bereiche.push(bereich);
+    }
+    const btn=$('#orgSave');
+    btn.disabled=true;$('#orgFehler').textContent='';
+    try{
+      await orgSpeichern(updated);
+      dlg.close();
+    }catch(err){$('#orgFehler').textContent='Speichern fehlgeschlagen: '+err.message;}
+    finally{btn.disabled=false;}
+  };
+}
+async function orgSpeichern(inhalt){
+  if(!can('org',2)||!ORGANIGRAMM_STATE)throw new Error('Kein Schreibrecht für das Organigramm');
+  const result=await api('/organigramm',{
+    method:'PUT',
+    body:JSON.stringify({version:ORGANIGRAMM_STATE.version,inhalt})
+  });
+  ORGANIGRAMM_STATE=result;
+  if(tab==='org')$('#inhalt').innerHTML=vOrg();
+}
+async function orgEntfernen(index){
+  if(!can('org',2)||!ORGANIGRAMM_STATE)return;
+  const o=orgStruktur(),bereich=o.bereiche[index];
+  if(!bereich||!confirm('Aufgabenbereich „'+bereich.name+'“ mit allen Tätigkeiten wirklich entfernen?'))return;
+  const changed=JSON.parse(JSON.stringify(o));
+  changed.bereiche.splice(index,1);
+  try{await orgSpeichern(changed);}
+  catch(err){alert('Entfernen fehlgeschlagen: '+err.message);}
+}
+document.addEventListener('click',e=>{
+  if(e.target.closest('#orgRetry')){ladeOrganigramm();return;}
+  if(e.target.closest('#orgEditLeitung')){orgDialog('leitung');return;}
+  if(e.target.closest('#orgNeuBereich')){orgDialog('neu');return;}
+  const edit=e.target.closest('[data-org-edit]');
+  if(edit){orgDialog('bereich',Number(edit.dataset.orgEdit));return;}
+  const del=e.target.closest('[data-org-remove]');
+  if(del){orgEntfernen(Number(del.dataset.orgRemove));return;}
+});
 document.addEventListener('input',e=>{
   if(e.target.matches('#rlSuche'))rlFiltern();
 });
