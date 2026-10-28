@@ -302,6 +302,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       daten.personal = (berechtigt('sonder') || berechtigt('dis') || berechtigt('bef'))
         ? daten.personal.map(p => ({
             personalnummer: p.personalnummer, vorname: p.vorname, nachname: p.nachname,
+            ...(berechtigt('dis') ? { dienstgrad: p.dienstgrad } : {}),
             ...(berechtigt('bef') ? {
               status: p.status, dienstgrad: p.dienstgrad,
               letzte_befoerderung: p.letzte_befoerderung,
