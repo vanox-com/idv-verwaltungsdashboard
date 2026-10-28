@@ -153,6 +153,15 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .copnet-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 #copInfo{min-height:18px}
 @media(max-width:600px){.copnet-felder{grid-template-columns:1fr}}
+
+/* Kündigungsverwaltung */
+.kue-statuscell{min-width:310px}.kue-status{display:inline-block;margin:2px;padding:4px 7px;font-size:12px;white-space:nowrap}
+.kue-delete{color:#ffb7b7;border-color:#7b4545}.kue-docsep{height:5px}
+#kueDialog{color:var(--txt);background:#182433;border:1px solid #536781;border-radius:12px;width:min(780px,96vw);max-height:92vh;overflow:auto;padding:26px}
+#kueDialog::backdrop{background:#050a18bb}#kueDialog h2{margin-top:0}
+.kue-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 14px}.kue-form .full{grid-column:1/-1}
+#kueDialog input,#kueDialog select{width:100%;min-width:0}.kue-commands{display:flex;gap:10px;justify-content:flex-end;margin-top:15px}
+@media(max-width:600px){.kue-form{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -952,13 +961,129 @@ document.addEventListener('click', e=>{
   const edit=e.target.closest('[data-sf-person]');
   if (edit) sfDialog(Number(edit.dataset.sfPerson));
 });
-function vKue() {
-  const zeilen = D.kuendigungen.map(k => [k.personalnummer, esc(k.vorname + ' ' + k.nachname), esc(k.rang || ''), esc(k.grund || ''),
-    ['waffe','copnet','emd','ic','discord','dienstgegenstaende'].map(f =>
-      `<span class="tag ${/offen/i.test(k[f] || '') ? 'warn' : 'ok'}">${esc(f)}: ${esc(k[f] || '')}</span>`).join('')]);
-  return `<h1>Kündigungen</h1>${tabelle(['Nr.','Name','Dienstgrad','Grund','Rückgaben'], zeilen)}`;
-}
 
+/* Kündigungen: direkte Status-Klicks und Neuanlage wie in der ursprünglichen HTML. */
+const KUE_STATUS = [
+  ['waffe','Waffen / Information'], ['copnet','CopNet'], ['emd','EMD'],
+  ['ic','IC'], ['discord','Discord'], ['dienstgegenstaende','Dienstgegenstände'],
+  ['anzeige','Anzeige']
+];
+function kueWert(k,feld) { return String(k[feld] || (feld === 'anzeige' ? 'Nein' : 'Offen')); }
+function kueDokument(raw) {
+  if (!raw) return '–';
+  let t=String(raw),url='';
+  try {
+    const d=JSON.parse(t);
+    if(d && typeof d==='object') {t=String(d.t || 'Dokument');url=String(d.u || '');}
+  }catch(e){}
+  if(!url && /^https:\/\/[^\s]+$/i.test(t)) url=t;
+  return /^https:\/\/[^\s]+$/i.test(url)
+    ? '<a class="l" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(t)+'</a>'
+    : esc(t);
+}
+function vKue() {
+  const schreiben=can('kue',2),eintraege=D.kuendigungen || [];
+  const rows=eintraege.map(k=>{
+    const offen=KUE_STATUS.filter(x=>x[0]!=='anzeige' && /^(offen)?$/i.test(kueWert(k,x[0]))).length;
+    const badges=KUE_STATUS.map(([feld,label])=>{
+      const wert=kueWert(k,feld), offen=wert==='Offen', cls=offen?'warn':wert==='Nein'?'':'ok';
+      const text=esc(label)+': '+esc(wert);
+      return schreiben ? '<button type="button" class="tag kue-status '+cls+'" title="Status umschalten" data-kue-id="'+Number(k.id)+'" data-kue-field="'+feld+'">'+text+'</button>'
+        : '<span class="tag '+cls+'">'+text+'</span>';
+    }).join(' ');
+    const docs=['vertrag','urkunde','zeugnis','kuendigung'].map(x=>kueDokument(k[x])).filter(x=>x!=='–').join('<div class="kue-docsep"></div>')||'–';
+    return '<tr><td>'+esc(k.personalnummer)+'</td><td><strong>'+esc([k.vorname,k.nachname].filter(Boolean).join(' '))+'</strong> '+
+      '<span class="tag '+(offen?'warn':'ok')+'">'+(offen?offen+' offen':'erledigt')+'</span></td>'+
+      '<td>'+esc(k.rang||'–')+'</td><td>'+esc(k.grund||'–')+'</td><td>'+fd(k.eintritt)+'</td>'+
+      '<td>'+docs+'</td><td class="kue-statuscell">'+badges+'</td>'+
+      '<td>'+(schreiben?'<button class="kue-delete" type="button" data-kue-delete="'+Number(k.id)+'" title="Kündigung löschen">Löschen</button>':'')+'</td></tr>';
+  }).join('');
+  return '<h1>Kündigungen</h1><div class="pers-bar"><span class="mut">Rückgaben und Sperrungen pro Vorgang verwalten.</span>'+
+    '<span class="spacer"></span>'+(schreiben?'<button type="button" class="p" id="kueNeu">+ Neue Kündigung</button>':'')+
+    '</div><div class="tw"><table><thead><tr>'+
+    ['Nr.','Name','Dienstgrad','Grund','Eintritt','Dokumente','Rückgaben & Zugangssperren','Aktion'].map(x=>'<th>'+x+'</th>').join('')+
+    '</tr></thead><tbody>'+(rows||'<tr><td colspan="8">Keine Kündigungen vorhanden</td></tr>')+'</tbody></table></div>';
+}
+async function kueStatusAendern(id,feld,knopf) {
+  if(!can('kue',2))return;
+  const k=(D.kuendigungen||[]).find(x=>Number(x.id)===id);
+  if(!k||!KUE_STATUS.some(x=>x[0]===feld))return;
+  const werte=feld==='waffe'?['Offen','Informiert']:feld==='anzeige'?['Nein','Ja']:['Offen','Entfernt'];
+  const neu=kueWert(k,feld)===werte[0]?werte[1]:werte[0];
+  knopf.disabled=true;
+  try{
+    await api('/kuendigung/'+id,{method:'PATCH',body:JSON.stringify({[feld]:neu})});
+    k[feld]=neu;
+    zeichne();
+  }catch(err){alert('Status konnte nicht gespeichert werden: '+err.message);knopf.disabled=false;}
+}
+function kueFormFeld(label,id,typ,wert) {
+  return '<div><label for="'+id+'">'+esc(label)+'</label><input id="'+id+'" type="'+(typ||'text')+
+    '" value="'+esc(wert||'')+'" autocomplete="off"></div>';
+}
+function kueNeuDialog() {
+  if(!can('kue',2))return;
+  let dlg=$('#kueDialog');
+  if(!dlg){dlg=document.createElement('dialog');dlg.id='kueDialog';document.body.appendChild(dlg);}
+  const personen=(D.personal||[]).filter(x=>x.vorname&&x.nachname).map(p=>
+    '<option value="'+Number(p.personalnummer)+'">'+esc(p.personalnummer+' · '+p.vorname+' '+p.nachname)+'</option>').join('');
+  dlg.innerHTML='<h2>Neue Kündigung erfassen</h2><p class="mut">Daten aus einer vorhandenen Personalakte übernehmen oder manuell eintragen.</p>'+
+    '<form id="kueForm"><label for="kuePerson">Personalakte übernehmen</label><select id="kuePerson"><option value="">Manuelle Eingabe</option>'+personen+'</select>'+
+    '<div class="kue-form">'+
+    kueFormFeld('Personalnummer','k_nr','number','')+
+    kueFormFeld('Dienstgrad','k_rang','text','')+
+    kueFormFeld('Vorname','k_vorname','text','')+
+    kueFormFeld('Nachname','k_nachname','text','')+
+    kueFormFeld('Eintrittsdatum','k_eintritt','date','')+
+    kueFormFeld('Telefon','k_handy','text','')+
+    '<div class="full">'+kueFormFeld('Kündigungsgrund','k_grund','text','')+'</div>'+
+    '<div class="full">'+kueFormFeld('Arbeitsvertrag / Link','k_vertrag','text','')+'</div>'+
+    '<div class="full">'+kueFormFeld('Ernennungsurkunde / Link','k_urkunde','text','')+'</div>'+
+    '<div class="full">'+kueFormFeld('Arbeitszeugnis / Link','k_zeugnis','text','')+'</div>'+
+    '<div class="full">'+kueFormFeld('Kündigung / Link','k_kuendigung','text','')+'</div>'+
+    '</div><p id="kueFehler" class="fehler" role="alert"></p>'+
+    '<div class="kue-commands"><button type="button" id="kueAbbruch">Abbrechen</button><button type="submit" class="p" id="kueSpeichern">Anlegen</button></div></form>';
+  dlg.showModal();
+  $('#kueAbbruch').onclick=()=>dlg.close();
+  $('#kuePerson').onchange=()=>{
+    const p=(D.personal||[]).find(x=>String(x.personalnummer)===$('#kuePerson').value);
+    if(!p)return;
+    for(const [f,val] of [['nr',p.personalnummer],['vorname',p.vorname],['nachname',p.nachname],
+      ['rang',p.dienstgrad],['eintritt',p.eintrittsdatum?String(p.eintrittsdatum).slice(0,10):''],
+      ['handy',p.handy||''],['vertrag',p.arbeitsvertrag||''],['urkunde',p.ernennungsurkunde||'']])
+      $('#k_'+f).value=val||'';
+  };
+  $('#kueForm').onsubmit=async e=>{
+    e.preventDefault();$('#kueFehler').textContent='';
+    const get=k=>$('#k_'+k).value.trim();
+    const nr=Number(get('nr'));
+    if(!Number.isSafeInteger(nr)||nr<1||!get('vorname')||!get('nachname')||!get('grund')){
+      $('#kueFehler').textContent='Personalnummer, Vorname, Nachname und Kündigungsgrund sind erforderlich.';return;
+    }
+    const body={nr,vorname:get('vorname'),nachname:get('nachname'),rang:get('rang'),
+      grund:get('grund'),eintritt:get('eintritt'),handy:get('handy'),vertrag:get('vertrag'),
+      urkunde:get('urkunde'),zeugnis:get('zeugnis'),kuendigung:get('kuendigung')};
+    const btn=$('#kueSpeichern');btn.disabled=true;
+    try{await api('/kuendigung',{method:'POST',body:JSON.stringify(body)});dlg.close();await starten();}
+    catch(err){$('#kueFehler').textContent='Anlegen fehlgeschlagen: '+err.message;}
+    finally{btn.disabled=false;}
+  };
+}
+async function kueLoeschen(id) {
+  if(!can('kue',2))return;
+  const k=(D.kuendigungen||[]).find(x=>Number(x.id)===id);
+  if(!k)return;
+  if(!confirm('Diesen Kündigungsvorgang endgültig löschen?\n'+[k.vorname,k.nachname].filter(Boolean).join(' ')))return;
+  try{await api('/kuendigung/'+id,{method:'DELETE'});await starten();}
+  catch(err){alert('Löschen fehlgeschlagen: '+err.message);}
+}
+document.addEventListener('click',event=>{
+  if(event.target.closest('#kueNeu')){kueNeuDialog();return;}
+  const state=event.target.closest('[data-kue-field]');
+  if(state){kueStatusAendern(Number(state.dataset.kueId),state.dataset.kueField,state);return;}
+  const del=event.target.closest('[data-kue-delete]');
+  if(del)kueLoeschen(Number(del.dataset.kueDelete));
+});
 function vDis() {
   const zeilen = D.disziplin.filter(d => (d.massnahmen || []).length).map(d => {
     const p = D.personal.find(x => x.personalnummer === d.nr) || {};
