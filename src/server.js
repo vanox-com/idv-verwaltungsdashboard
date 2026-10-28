@@ -257,7 +257,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
         info: dashboard.rows.filter(r => r.art === 'info').map(r => ({ text: r.text, url: r.url })),
         links: dashboard.rows.filter(r => r.art === 'link').map(r => ({ text: r.text, url: r.url }))
       },
-      routine: routine.rows.map(r => ({ nr: r.personalnummer, tage: r.tage, personen: r.personen })),
+      routine: routine.rows.map(r => ({ id: r.id, nr: r.personalnummer, tage: r.tage, personen: r.personen })),
       sonderzahlungen: sonderzahlungen.rows,
       organigramm: organigramm.rows,
       befoerderungen: befoerderungen.rows
@@ -299,7 +299,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
 
     if (!berechtigt('pers')) {
       /* Funktions- und Disziplinansichten benötigen Namen, aber keine Personalakte. */
-      daten.personal = (berechtigt('sonder') || berechtigt('dis') || berechtigt('bef'))
+      daten.personal = (berechtigt('sonder') || berechtigt('dis') || berechtigt('bef') || berechtigt('rout'))
         ? daten.personal.map(p => ({
             personalnummer: p.personalnummer, vorname: p.vorname, nachname: p.nachname,
             ...(berechtigt('dis') ? { dienstgrad: p.dienstgrad } : {}),
@@ -501,6 +501,135 @@ app.patch('/api/disziplin/:nr', requireLogin, requireRight('dis', 2), async(req,
     res.json({ok:true});
   }catch(err){next(err);}
 });
+
+
+/* ---------- Routine und Sonderzahlungen ---------- */
+/* Alle Routineänderungen sperren die betreffende Zeile für die Dauer der
+   Transaktion. So überschreiben zwei parallele Anwesenheitsklicks nicht
+   gegenseitig die Daten des anderen. */
+function routineFehler(status, text) {
+  const e = new Error(text);
+  e.httpStatus = status;
+  return e;
+}
+async function routineAendern(req, res, next, bearbeiten) {
+  const id = Number(req.params.id);
+  if(!Number.isSafeInteger(id) || id < 1)
+    return res.status(400).json({error:'Ungültige Routine'});
+  let client;
+  try {
+    client = await db.connect();
+    await client.query('BEGIN');
+    const result=await client.query(
+      'SELECT id,tage,personen FROM routine WHERE id=$1 FOR UPDATE', [id]);
+    if(!result.rows.length) throw routineFehler(404,'Routine nicht gefunden');
+    const r=result.rows[0],tage=r.tage,personen=r.personen;
+    if(!Array.isArray(tage)||!Array.isArray(personen))
+      throw routineFehler(409,'Routine-Daten sind nicht vollständig');
+    const text=await bearbeiten({tage,personen,client});
+    await client.query('UPDATE routine SET tage=$1::jsonb, personen=$2::jsonb WHERE id=$3',
+      [JSON.stringify(tage),JSON.stringify(personen),id]);
+    await client.query("INSERT INTO log (user_id,aktion,art) VALUES ($1,$2,'edit')",
+      [req.user.id,text]);
+    await client.query('COMMIT');
+    return res.json({ok:true});
+  }catch(e){
+    if(client)await client.query('ROLLBACK').catch(()=>{});
+    if(e.httpStatus) return res.status(e.httpStatus).json({error:e.message});
+    return next(e);
+  }finally{ if(client)client.release(); }
+}
+app.post('/api/routine/:id/anwesenheit',requireLogin,requireRight('rout',2),
+  async(req,res,next)=>routineAendern(req,res,next,async({tage,personen})=>{
+    const nr=Number(req.body?.nr),i=Number(req.body?.tagIndex),
+      anwesend=req.body?.anwesend;
+    if(!Number.isSafeInteger(nr)||nr<1||!Number.isSafeInteger(i)||i<0||i>=tage.length||
+       typeof anwesend!=='boolean')
+      throw routineFehler(400,'Ungültige Person, Termin oder Anwesenheit');
+    const p=personen.find(x=>Number(x.nr)===nr);
+    if(!p)throw routineFehler(404,'Person nicht im Routineplan');
+    if(!Array.isArray(p.anwesend)||p.anwesend.length!==tage.length)
+      throw routineFehler(409,'Anwesenheitsliste ist nicht synchron mit den Terminen');
+    p.anwesend[i]=anwesend;
+    return 'Routine '+req.params.id+': Anwesenheit '+nr+' / '+tage[i]+
+      ' → '+(anwesend?'ja':'nein');
+  }));
+function routineDatum(iso){
+  if(typeof iso!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(iso))return null;
+  const d=new Date(iso+'T00:00:00Z');
+  return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===iso ? d : null;
+}
+function routineIsoDatum(tag){
+  if(/^\d{4}-\d{2}-\d{2}$/.test(tag))return tag;
+  const m=/^(\d{2})\.(\d{2})\.(\d{4})$/.exec(tag);
+  return m?m[3]+'-'+m[2]+'-'+m[1]:null;
+}
+app.post('/api/routine/:id/termin',requireLogin,requireRight('rout',2),
+  async(req,res,next)=>routineAendern(req,res,next,async({tage,personen})=>{
+    const iso=req.body?.datum, d=routineDatum(iso);
+    if(!d)throw routineFehler(400,'Ungültiges Termindatum');
+    if(tage.length>=52)throw routineFehler(409,'Maximal 52 Routinetermine');
+    if(tage.some(t=>routineIsoDatum(t)===iso))
+      throw routineFehler(409,'Termin existiert bereits');
+    if(tage.some(t=>!routineDatum(routineIsoDatum(t))))
+      throw routineFehler(409,'Ein vorhandenes Termindatum ist ungültig');
+    const index=tage.findIndex(t=>routineIsoDatum(t)>iso);
+    const pos=index<0?tage.length:index;
+    const dd=iso.slice(8,10)+'.'+iso.slice(5,7)+'.'+iso.slice(0,4);
+    const alteLaenge=tage.length;
+    for(const p of personen){
+      if(!Array.isArray(p.anwesend)||p.anwesend.length!==alteLaenge)
+        throw routineFehler(409,'Anwesenheitsliste ist nicht synchron mit den Terminen');
+      p.anwesend.splice(pos,0,false);
+    }
+    tage.splice(pos,0,dd);
+    return 'Routine '+req.params.id+': Termin '+dd+' angelegt';
+  }));
+app.post('/api/routine/:id/teilnehmer',requireLogin,requireRight('rout',2),
+  async(req,res,next)=>routineAendern(req,res,next,async({tage,personen,client})=>{
+    const nr=Number(req.body?.nr);
+    if(!Number.isSafeInteger(nr)||nr<1)throw routineFehler(400,'Ungültige Personalnummer');
+    if(personen.some(p=>Number(p.nr)===nr))throw routineFehler(409,'Person ist bereits eingetragen');
+    if(personen.length>=500)throw routineFehler(409,'Maximal 500 Teilnehmende');
+    const {rows}=await client.query(
+      'SELECT vorname,nachname,status FROM personal WHERE personalnummer=$1',[nr]);
+    if(!rows.length)throw routineFehler(404,'Personalakte nicht gefunden');
+    personen.push({nr,vorname:rows[0].vorname||'',nachname:rows[0].nachname||'',
+      abgemeldet:rows[0].status==='Abgemeldet',
+      anwesend:Array.from({length:tage.length},()=>false)});
+    return 'Routine '+req.params.id+': Person '+nr+' aufgenommen';
+  }));
+app.patch('/api/routine/:id/teilnehmer/:nr',requireLogin,requireRight('rout',2),
+  async(req,res,next)=>routineAendern(req,res,next,async({personen})=>{
+    const nr=Number(req.params.nr),abgemeldet=req.body?.abgemeldet;
+    if(!Number.isSafeInteger(nr)||nr<1||typeof abgemeldet!=='boolean')
+      throw routineFehler(400,'Ungültiger Teilnehmerstatus');
+    const p=personen.find(x=>Number(x.nr)===nr);
+    if(!p)throw routineFehler(404,'Person nicht in dieser Routine');
+    p.abgemeldet=abgemeldet;
+    return 'Routine '+req.params.id+': Person '+nr+
+      (abgemeldet?' als abgemeldet markiert':' wieder aktiviert');
+  }));
+app.patch('/api/sonderzahlung/:id',requireLogin,requireRight('rout',2),
+  async(req,res,next)=>{
+    try {
+      const id=Number(req.params.id), b=req.body||{};
+      if(!Number.isSafeInteger(id)||id<1||
+         typeof b.erhalten!=='boolean'||typeof b.betrag!=='string'||
+         typeof b.grund!=='string'||typeof b.datum!=='string')
+        return res.status(400).json({error:'Ungültige Sonderzahlung'});
+      if(b.betrag.length>80||b.grund.length>1000||
+         (b.datum&&!routineDatum(b.datum)))
+        return res.status(400).json({error:'Ungültiger Betrag, Grund oder Datum'});
+      const {rows}=await db.query(
+        'UPDATE sonderzahlungen SET erhalten=$1,datum=$2,betrag=$3,grund=$4 WHERE id=$5 RETURNING id',
+        [b.erhalten,b.datum||null,b.betrag.trim(),b.grund.trim(),id]);
+      if(!rows.length)return res.status(404).json({error:'Sonderzahlung nicht gefunden'});
+      await db.query("INSERT INTO log (user_id,aktion,art) VALUES ($1,$2,'edit')",
+        [req.user.id,'Sonderzahlung '+id+' aktualisiert']);
+      res.json({ok:true});
+    }catch(e){next(e);}
+  });
 
 /* Freigabe durch den Polizeioberrat (POR) verwalten. */
 app.patch('/api/por/:nr', requireLogin, requireRight('bef', 2), async (req, res, next) => {
