@@ -856,7 +856,8 @@ function personalBearbeiten(nr) {
     personalFeld('Vorname','p_vorname',p.vorname,'text','required maxlength="120"'),
     personalFeld('Nachname','p_nachname',p.nachname,'text','required maxlength="120"'),
     personalSelect('Gruppe','p_gruppe',gruppen,p.gruppe || 'Hauptberuf'),
-    personalSelect('Dienstgrad','p_dienstgrad',[p.dienstgrad || '',...raenge],p.dienstgrad || ''),
+    (neu ? personalSelect('Dienstgrad (Einstufung bei Eintritt)','p_dienstgrad',raenge.length?raenge:[''],p.dienstgrad || '') :
+      personalFeld('Dienstgrad (nur über Beförderungen änderbar)','p_dienstgrad',p.dienstgrad,'text','readonly')),
     personalFeld('Eintrittsdatum','p_eintrittsdatum',datum(p.eintrittsdatum),'date'),
     personalFeld('Nebenjob','p_nebenjob',p.nebenjob)
   ];
@@ -876,7 +877,8 @@ function personalBearbeiten(nr) {
   const dialog = $('#personalDialog');
   if (dialog.open) dialog.close();
   dialog.innerHTML = '<h2>' + (neu?'Neue Person anlegen':'Person bearbeiten') + '</h2>' +
-    '<div class="mut">Änderungen werden im gemeinsamen Verwaltungsportal gespeichert.</div>' +
+    '<div class="mut">Änderungen werden im gemeinsamen Verwaltungsportal gespeichert.' +
+    (!neu ? ' Dienstgrade können nur mit der POR-Freigabe in der Beförderungsverwaltung geändert werden.' : '') + '</div>' +
     '<form id="personalForm"><div class="pers-form">' + felder.join('') + '</div>' +
     '<div class="error" id="persFormFehler" role="alert"></div><div class="actions">' +
     '<button id="persAbbrechen" type="button">Abbrechen</button>' +
@@ -893,7 +895,7 @@ async function personalSpeichern(event, neu, nr) {
   const body = {
     vorname: wert('p_vorname'), nachname: wert('p_nachname'),
     gruppe: wert('p_gruppe'), status: wert('p_status'),
-    dienstgrad: wert('p_dienstgrad'), eintrittsdatum: wert('p_eintrittsdatum'),
+    eintrittsdatum: wert('p_eintrittsdatum'),
     nebenjob: wert('p_nebenjob')
   };
   if (!body.vorname || !body.nachname) {
@@ -901,6 +903,7 @@ async function personalSpeichern(event, neu, nr) {
     return;
   }
   if (neu) {
+    body.dienstgrad = wert('p_dienstgrad');
     body.personalnummer = Number(wert('p_nr'));
     if (!Number.isSafeInteger(body.personalnummer) || body.personalnummer < 1) {
       $('#persFormFehler').textContent = 'Bitte eine gültige Personalnummer eingeben.';
