@@ -295,4 +295,5 @@ INSERT INTO role_perms (rolle, modul, stufe) VALUES
   ('Administrator','bl',2),('Polizeirat','bl',2),('Leitungsdienst','bl',1),
   ('Administrator','users',2),
   ('Administrator','log',2),('Polizeirat','log',1)
-ON CONFLICT (rolle, modul) DO UPDATE SET stufe = EXCLUDED.stufe;
+-- Bestehende Rechte bei Neustarts nicht überschreiben: Admin-Änderungen bleiben erhalten.
+ON CONFLICT (rolle, modul) DO NOTHING;
