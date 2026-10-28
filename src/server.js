@@ -79,6 +79,38 @@ function requireRight(modul, stufe = 1) {
 
 /* ---------- Anmeldung ---------- */
 
+/* ---------- Notzugang zum Einrichten ---------- */
+/*
+ * Legt den Administrator an, wenn in der Datenbank noch keiner vorhanden ist.
+ * Aufruf im Browser:  ADRESSE/einrichten?schluessel=DEIN-ADMIN-PASSWORT
+ * Der Schluessel ist das ADMIN_PASSWORT. Ohne ihn passiert nichts.
+ * Sobald ein Zugang existiert, ist der Aufruf wirkungslos.
+ */
+app.get('/einrichten', async (req, res, next) => {
+  try {
+    const schluessel = String(req.query.schluessel || '');
+    const passwort = process.env.ADMIN_PASSWORT;
+    if (!passwort || passwort.length < 8) {
+      return res.status(500).send('ADMIN_PASSWORT ist in Render nicht gesetzt (min. 8 Zeichen).');
+    }
+    if (schluessel !== passwort) {
+      return res.status(403).send('Falscher Schluessel.');
+    }
+    const vorhanden = await db.query('SELECT count(*)::int AS anzahl FROM users');
+    if (vorhanden.rows[0].anzahl > 0) {
+      return res.send('Es gibt bereits ' + vorhanden.rows[0].anzahl + ' Zugang/Zugaenge. Dieser Aufruf ist nicht mehr noetig.');
+    }
+    const dnr = process.env.ADMIN_DIENSTNUMMER || '00';
+    await db.query(
+      'INSERT INTO users (dienstnummer, anzeigename, rolle, passwort_hash, muss_passwort_aendern) ' +
+      'VALUES ($1, $2, $3, $4, false)',
+      [dnr, 'Administrator', 'Administrator', await hashPassword(passwort)]
+    );
+    await db.query("INSERT INTO log (aktion, art) VALUES ('Administrator angelegt', 'add')");
+    console.log('Administrator per Notzugang angelegt: ' + dnr);
+    res.send('Administrator angelegt. Dienstnummer: ' + dnr + ' — jetzt anmelden.');
+  } catch (e) { next(e); }
+});
 app.post('/api/login', loginLimiter, async (req, res, next) => {
   try {
     const dienstnummer = String(req.body.dienstnummer || '').trim();
