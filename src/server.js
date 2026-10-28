@@ -531,7 +531,7 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
   const erlaubt=['vorname','nachname','geburtsdatum','handy','waffenschein','spind',
     'nebenjob','eintrittsdatum','arbeitsvertrag','ernennungsurkunde',
     'arbeitsvertrag_url','ernennungsurkunde_url',
-    'urlaub_von','urlaub_bis','urlaub_tage','bemerkung','rsa','status','gruppe'];
+    'urlaub_von','urlaub_bis','urlaub_tage','bemerkung','rsa','status','gruppe','beschaeftigungsart'];
   const felder=[],werte=[];
   erlaubt.forEach(k=>{
     if(Object.hasOwn(body,k)){
@@ -622,15 +622,15 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
     if(b.status==='Gekündigt')
       return res.status(400).json({error:'Bitte erst die Personalakte anlegen und anschließend über „Bearbeiten“ kündigen'});
     const { rows } = await db.query(
-      `INSERT INTO personal (personalnummer, gruppe, status, vorname, nachname, geburtsdatum, handy,
+      `INSERT INTO personal (personalnummer, gruppe, beschaeftigungsart, status, vorname, nachname, geburtsdatum, handy,
         waffenschein, spind, nebenjob, dienstgrad, eintrittsdatum, arbeitsvertrag, ernennungsurkunde,
         urlaub_von, urlaub_bis, urlaub_tage, bemerkung, rsa, arbeitsvertrag_url, ernennungsurkunde_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+       VALUES ($1,$2,$3,$22,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        RETURNING personalnummer,vorname,nachname,gruppe,status,dienstgrad`,
-      [nr, b.gruppe || 'Hauptberuf', b.status || 'Aktiv', b.vorname, b.nachname, b.geburtsdatum || null,
+      [nr, b.gruppe || 'Nicht zugeordnet', b.status || 'Aktiv', b.vorname, b.nachname, b.geburtsdatum || null,
         b.handy, !!b.waffenschein, !!b.spind, b.nebenjob, b.dienstgrad, b.eintrittsdatum || null,
         b.arbeitsvertrag, b.ernennungsurkunde, b.urlaub_von || null, b.urlaub_bis || null, b.urlaub_tage, b.bemerkung, b.rsa,
-        b.arbeitsvertrag_url || '', b.ernennungsurkunde_url || '']);
+        b.arbeitsvertrag_url || '', b.ernennungsurkunde_url || '', b.beschaeftigungsart === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf']);
     await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'add')`,
       [req.user.id, `Personal ${nr} angelegt`]);
     res.json(rows[0]);
