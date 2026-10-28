@@ -304,6 +304,19 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
   border-radius:8px;padding:13px;margin:11px 0 0;max-height:400px;overflow-y:auto}
 @media(max-width:950px){.textbaustein-grid{grid-template-columns:1fr}}
 @media(max-width:460px){.textbaustein-titel{flex-direction:column;align-items:stretch}}
+
+/* Textbaustein-Verwaltung */
+.textbaustein-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.textbaustein-delete{color:#ffb7b7;border-color:#884b4b}
+#textEditorDialog{background:#182433;color:var(--txt);border:1px solid #536781;border-radius:12px;
+ width:min(760px,96vw);max-height:93vh;overflow:auto;padding:25px}
+#textEditorDialog::backdrop{background:rgba(5,10,24,.75)}
+#textEditorDialog h2{margin:0 0 18px}
+#textEditorForm{display:flex;flex-direction:column;gap:7px}
+#textEditorForm label{margin-top:9px;font-weight:600}
+#textEditorForm input,#textEditorForm textarea{width:100%;min-width:0;box-sizing:border-box}
+#textEditorForm textarea{resize:vertical;min-height:220px;font-family:inherit;line-height:1.6}
+.text-editor-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
 </style>
 </head>
 <body>
@@ -1985,10 +1998,14 @@ async function ladeTextbausteine(){
       '<h1>Textbausteine</h1><p class="fehler">Textbausteine konnten nicht geladen werden: '+esc(e.message)+'</p>';
   }
 }
+
 function textbausteineZeichnen(){
   if(tab!=='texte')return;
   const daten=TEXTBAUSTEINE_CACHE||[];
-  const cards=TEXT_KATEGORIEN.map(kategorie=>{
+  const schreiben=can('texte',2);
+  const kategorien=[...TEXT_KATEGORIEN,
+    ...[...new Set(daten.map(x=>x.kategorie))].filter(k=>!TEXT_KATEGORIEN.includes(k)).sort((a,b)=>a.localeCompare(b,'de'))];
+  const cards=kategorien.map(kategorie=>{
     const eintraege=daten.filter(x=>x.kategorie===kategorie);
     if(!eintraege.length)return '';
     return '<section class="textbaustein-gruppe"><h2>'+esc(kategorie)+
@@ -2001,13 +2018,19 @@ function textbausteineZeichnen(){
             '" aria-label="'+esc(x.titel)+' kopieren">Text kopieren</button></div>'+
           '<details><summary>Vollständigen Text anzeigen</summary>'+
           '<pre class="textbaustein-inhalt">'+esc(x.inhalt)+'</pre></details>'+
+          (schreiben?'<div class="textbaustein-actions">'+
+            '<button type="button" data-text-edit="'+esc(x.schluessel)+'">Bearbeiten</button>'+
+            '<button type="button" class="textbaustein-delete" data-text-delete="'+esc(x.schluessel)+'">Entfernen</button>'+
+            '</div>':'')+
         '</article>'
       ).join('')+'</div></section>';
   }).join('');
   $('#inhalt').innerHTML='<h1>Textbausteine</h1>'+
-    '<p class="mut">Originalvorlagen für Polizeiräte aus „Textvorlagen Rat.pdf“. Platzhalter bitte nach dem Einfügen anpassen.</p>'+
+    '<p class="mut">Vorlagen ursprünglich aus „Textvorlagen Rat.pdf“. Platzhalter nach dem Kopieren anpassen.</p>'+
     '<div class="pers-bar"><input id="textbausteinSuche" type="search" placeholder="Titel oder Inhalt durchsuchen …" aria-label="Textbausteine durchsuchen">'+
-      '<span class="spacer"></span><span id="textbausteinAnzahl" class="mut">'+daten.length+' Textbausteine</span></div>'+
+      '<span class="spacer"></span><span id="textbausteinAnzahl" class="mut">'+daten.length+' Textbausteine</span>'+
+      (schreiben?'<button type="button" class="p" id="textNeu">+ Textbaustein hinzufügen</button>':'')+
+    '</div>'+
     '<p id="textbausteinMeldung" class="mut" role="status" aria-live="polite"></p>'+
     (cards||'<p>Keine Textbausteine vorhanden.</p>');
 }
@@ -2052,10 +2075,84 @@ async function textbausteinKopieren(btn){
     btn.disabled=false;
   }
 }
+
+/* Erstellen und Bearbeiten ist ausschließlich für Texte-Schreibberechtigte
+   verfügbar; der API-Server prüft dieselbe Berechtigung erneut. */
+function textbausteinEditor(schluessel=null){
+  if(!can('texte',2))return;
+  const aktuell=schluessel?(TEXTBAUSTEINE_CACHE||[]).find(x=>x.schluessel===schluessel):null;
+  if(schluessel&&!aktuell)return;
+  let dlg=$('#textEditorDialog');
+  if(!dlg){
+    dlg=document.createElement('dialog');
+    dlg.id='textEditorDialog';
+    document.body.appendChild(dlg);
+  }
+  const kategorien=[...new Set([...TEXT_KATEGORIEN,...(TEXTBAUSTEINE_CACHE||[]).map(x=>x.kategorie)])];
+  dlg.innerHTML='<h2>'+(aktuell?'Textbaustein bearbeiten':'Neuen Textbaustein anlegen')+'</h2>'+
+    '<form id="textEditorForm">'+
+    '<label for="textEditorKategorie">Kategorie</label>'+
+    '<input id="textEditorKategorie" list="textKategorieListe" maxlength="80" required placeholder="z. B. Bewerbungen" value="'+esc(aktuell?.kategorie||'Bewerbungen')+'">'+
+    '<datalist id="textKategorieListe">'+kategorien.map(k=>'<option value="'+esc(k)+'"></option>').join('')+'</datalist>'+
+    '<label for="textEditorTitel">Titel</label>'+
+    '<input id="textEditorTitel" maxlength="160" required placeholder="Titel des Textbausteins" value="'+esc(aktuell?.titel||'')+'">'+
+    '<label for="textEditorInhalt">Vollständiger Text</label>'+
+    '<textarea id="textEditorInhalt" maxlength="10000" rows="14" required placeholder="Textbaustein eingeben …">'+esc(aktuell?.inhalt||'')+'</textarea>'+
+    '<p class="mut">Platzhalter wie &lt;Name&gt; bleiben beim Kopieren unverändert.</p>'+
+    '<p id="textEditorFehler" class="fehler" role="alert"></p>'+
+    '<div class="text-editor-actions">'+
+      '<button type="button" id="textEditorAbbrechen">Abbrechen</button>'+
+      '<button type="submit" class="p" id="textEditorSpeichern">Speichern</button>'+
+    '</div></form>';
+  dlg.showModal();
+  $('#textEditorAbbrechen').onclick=()=>dlg.close();
+  $('#textEditorForm').onsubmit=async e=>{
+    e.preventDefault();
+    if(!can('texte',2))return;
+    const body={
+      kategorie:$('#textEditorKategorie').value.trim(),
+      titel:$('#textEditorTitel').value.trim(),
+      inhalt:$('#textEditorInhalt').value.trim()
+    };
+    const button=$('#textEditorSpeichern');
+    button.disabled=true;
+    $('#textEditorFehler').textContent='';
+    try{
+      await api(aktuell?'/textbausteine/'+encodeURIComponent(aktuell.schluessel):'/textbausteine',
+        {method:aktuell?'PATCH':'POST',body:JSON.stringify(body)});
+      dlg.close();
+      await ladeTextbausteine();
+      const msg=$('#textbausteinMeldung');
+      if(msg)msg.textContent=aktuell?'Textbaustein gespeichert.':'Textbaustein hinzugefügt.';
+    }catch(err){$('#textEditorFehler').textContent='Speichern fehlgeschlagen: '+err.message;}
+    finally{button.disabled=false;}
+  };
+}
+async function textbausteinEntfernen(schluessel){
+  if(!can('texte',2))return;
+  const x=(TEXTBAUSTEINE_CACHE||[]).find(v=>v.schluessel===schluessel);
+  if(!x)return;
+  if(!confirm('Textbaustein „'+x.titel+'“ wirklich entfernen?'))return;
+  try{
+    await api('/textbausteine/'+encodeURIComponent(x.schluessel),{method:'DELETE'});
+    await ladeTextbausteine();
+    const status=$('#textbausteinMeldung');
+    if(status)status.textContent='Textbaustein entfernt.';
+  }catch(err){
+    const status=$('#textbausteinMeldung');
+    if(status){status.textContent='Entfernen fehlgeschlagen: '+err.message;status.style.color='#ffb6b6';}
+  }
+}
+
 document.addEventListener('input',e=>{
   if(e.target.matches('#textbausteinSuche'))textbausteineFiltern();
 });
 document.addEventListener('click',e=>{
+  if(e.target.closest('#textNeu')){textbausteinEditor();return;}
+  const edit=e.target.closest('[data-text-edit]');
+  if(edit){textbausteinEditor(edit.dataset.textEdit);return;}
+  const del=e.target.closest('[data-text-delete]');
+  if(del){textbausteinEntfernen(del.dataset.textDelete);return;}
   const btn=e.target.closest('[data-text-copy]');
   if(btn)textbausteinKopieren(btn);
 });

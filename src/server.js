@@ -1,6 +1,6 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
-import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { randomBytes, randomUUID, createCipheriv, createDecipheriv } from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1237,11 +1237,76 @@ app.patch('/api/users/:id/recht/:modul',requireLogin,nurAdmin,async(req,res,next
 
 /* Textbausteine werden ausschließlich serverseitig nach Rollen- und
    Dienstnummerrechten ausgeliefert, nie im öffentlichen Frontend eingebettet. */
-app.get('/api/textbausteine', requireLogin, requireRight('texte', 1), async (req,res,next)=>{
-  try {
+/* Anzeigen/Kopieren ab Stufe 1, Schreiben/Löschen ab Stufe 2.
+   Vorlagenrechte wirken für Rollen und einzelne Dienstnummern. */
+function textbausteinEingabe(body){
+  if(!body||typeof body!=='object'||Array.isArray(body))
+    return {error:'Ungültige Textbaustein-Daten'};
+  const grenzen={kategorie:80,titel:160,inhalt:10000};
+  const werte={};
+  for(const [feld,max] of Object.entries(grenzen)){
+    if(typeof body[feld]!=='string')return {error:feld+' muss Text sein'};
+    const wert=body[feld].trim();
+    if(!wert||wert.length>max)return {error:feld+' fehlt oder ist zu lang'};
+    werte[feld]=wert;
+  }
+  return {werte};
+}
+function textbausteinSchluessel(param){
+  return typeof param==='string'&&/^[a-z0-9-]{3,80}$/.test(param)?param:null;
+}
+app.get('/api/textbausteine',requireLogin,requireRight('texte',1),async(req,res,next)=>{
+  try{
     const {rows}=await db.query(
-      'SELECT schluessel,kategorie,titel,inhalt FROM textbausteine ORDER BY sortierung,schluessel');
+      'SELECT schluessel,kategorie,titel,inhalt FROM textbausteine WHERE geloescht=false ORDER BY sortierung,schluessel');
     res.json(rows);
+  }catch(e){next(e)}
+});
+app.post('/api/textbausteine',requireLogin,requireRight('texte',2),async(req,res,next)=>{
+  try{
+    const {werte,error}=textbausteinEingabe(req.body);
+    if(error)return res.status(400).json({error});
+    const schluessel='neu-'+randomUUID();
+    const {rows}=await db.query(
+      'INSERT INTO textbausteine(schluessel,kategorie,titel,inhalt,sortierung) '+
+      'VALUES($1,$2,$3,$4,(SELECT COALESCE(MAX(sortierung),0)+10 FROM textbausteine)) '+
+      'RETURNING schluessel,kategorie,titel,inhalt',
+      [schluessel,werte.kategorie,werte.titel,werte.inhalt]);
+    await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",
+      [req.user.id,'Textbaustein hinzugefügt: '+werte.titel]);
+    res.status(201).json(rows[0]);
+  }catch(e){next(e)}
+});
+app.patch('/api/textbausteine/:schluessel',requireLogin,requireRight('texte',2),async(req,res,next)=>{
+  try{
+    const schluessel=textbausteinSchluessel(req.params.schluessel);
+    if(!schluessel)return res.status(400).json({error:'Ungültiger Textbaustein-Schlüssel'});
+    const {werte,error}=textbausteinEingabe(req.body);
+    if(error)return res.status(400).json({error});
+    const {rows}=await db.query(
+      'UPDATE textbausteine SET kategorie=$2,titel=$3,inhalt=$4 '+
+      'WHERE schluessel=$1 AND geloescht=false '+
+      'RETURNING schluessel,kategorie,titel,inhalt',
+      [schluessel,werte.kategorie,werte.titel,werte.inhalt]);
+    if(!rows.length)return res.status(404).json({error:'Textbaustein nicht gefunden'});
+    await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
+      [req.user.id,'Textbaustein bearbeitet: '+werte.titel]);
+    res.json(rows[0]);
+  }catch(e){next(e)}
+});
+app.delete('/api/textbausteine/:schluessel',requireLogin,requireRight('texte',2),async(req,res,next)=>{
+  try{
+    const schluessel=textbausteinSchluessel(req.params.schluessel);
+    if(!schluessel)return res.status(400).json({error:'Ungültiger Textbaustein-Schlüssel'});
+    /* Soft-Delete: importierte Vorlagen dürfen bei Neustarts nicht zurückkommen. */
+    const {rows}=await db.query(
+      'UPDATE textbausteine SET geloescht=true '+
+      'WHERE schluessel=$1 AND geloescht=false RETURNING titel',
+      [schluessel]);
+    if(!rows.length)return res.status(404).json({error:'Textbaustein nicht gefunden'});
+    await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'del')",
+      [req.user.id,'Textbaustein entfernt: '+rows[0].titel]);
+    res.json({ok:true});
   }catch(e){next(e)}
 });
 
