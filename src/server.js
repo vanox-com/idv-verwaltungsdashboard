@@ -2,6 +2,7 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { db, initDb } from './db.js';
 import { hashPassword, verifyPassword, newSessionToken, SESSION_HOURS } from './auth.js';
@@ -110,6 +111,163 @@ app.get('/einrichten', async (req, res, next) => {
     console.log('Administrator per Notzugang angelegt: ' + dnr);
     res.send('Administrator angelegt. Dienstnummer: ' + dnr + ' — jetzt anmelden.');
   } catch (e) { next(e); }
+});
+/* ---------- Datenbestand einspielen ---------- */
+/*
+ * Holt Personen, Kündigungen, Ränge und Listen aus src/daten.json in die
+ * Datenbank. Aufruf im Browser:  ADRESSE/importieren?schluessel=ADMIN_PASSWORT
+ * Der Aufruf ist wiederholbar: vorhandene Zeilen werden ersetzt.
+ */
+app.get('/importieren', async (req, res, next) => {
+  try {
+    const passwort = process.env.ADMIN_PASSWORT;
+    if (!passwort || passwort.length < 8) {
+      return res.status(500).send('ADMIN_PASSWORT ist nicht gesetzt.');
+    }
+    if (String(req.query.schluessel || '') !== passwort) {
+      return res.status(403).send('Falscher Schluessel.');
+    }
+    const daten = JSON.parse(await readFile(path.join(__dirname, 'daten.json'), 'utf8'));
+    const bericht = [];
+
+    for (let i = 0; i < daten.raenge.length; i++) {
+      const r = daten.raenge[i];
+      await db.query(
+        'INSERT INTO raenge (name, abk, tage, bemerkung, grund, sortierung) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6) ' +
+        'ON CONFLICT (name) DO UPDATE SET abk=EXCLUDED.abk, tage=EXCLUDED.tage, ' +
+        'bemerkung=EXCLUDED.bemerkung, grund=EXCLUDED.grund, sortierung=EXCLUDED.sortierung',
+        [r.name, r.abk, r.tage, r.bemerkung, r.grund, i]);
+    }
+    bericht.push('Ränge: ' + daten.raenge.length);
+
+    for (const p of daten.personal) {
+      await db.query(
+        'INSERT INTO personal (personalnummer, gruppe, status, vorname, nachname, geburtsdatum, handy, ' +
+          'waffenschein, spind, nebenjob, dienstgrad, eintrittsdatum, arbeitsvertrag, ernennungsurkunde, ' +
+          'urlaub_von, urlaub_bis, urlaub_tage, bemerkung, rsa) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) ' +
+        'ON CONFLICT (personalnummer) DO UPDATE SET gruppe=EXCLUDED.gruppe, status=EXCLUDED.status, ' +
+          'vorname=EXCLUDED.vorname, nachname=EXCLUDED.nachname, geburtsdatum=EXCLUDED.geburtsdatum, ' +
+          'handy=EXCLUDED.handy, waffenschein=EXCLUDED.waffenschein, spind=EXCLUDED.spind, ' +
+          'nebenjob=EXCLUDED.nebenjob, dienstgrad=EXCLUDED.dienstgrad, eintrittsdatum=EXCLUDED.eintrittsdatum, ' +
+          'arbeitsvertrag=EXCLUDED.arbeitsvertrag, ernennungsurkunde=EXCLUDED.ernennungsurkunde, ' +
+          'urlaub_von=EXCLUDED.urlaub_von, urlaub_bis=EXCLUDED.urlaub_bis, urlaub_tage=EXCLUDED.urlaub_tage, ' +
+          'bemerkung=EXCLUDED.bemerkung, rsa=EXCLUDED.rsa',
+        [p.nr, p.gruppe, p.status, p.vorname, p.nachname, p.geburtsdatum || null, p.handy,
+          p.waffenschein, p.spind, p.nebenjob, p.dienstgrad, p.eintrittsdatum || null,
+          p.arbeitsvertrag, p.ernennungsurkunde, p.urlaub_von || null, p.urlaub_bis || null,
+          p.urlaub_tage, p.bemerkung, p.rsa]);
+    }
+    bericht.push('Personal: ' + daten.personal.length);
+
+    for (let i = 0; i < daten.funktionsspalten.length; i++) {
+      await db.query(
+        'INSERT INTO sonderfunktionsspalten (name, sortierung) VALUES ($1,$2) ' +
+        'ON CONFLICT (name) DO UPDATE SET sortierung=EXCLUDED.sortierung',
+        [daten.funktionsspalten[i], i]);
+    }
+    for (const f of daten.funktionen) {
+      await db.query(
+        'INSERT INTO sonderfunktionen (personalnummer, leitung, sonstige, werte) VALUES ($1,$2,$3,$4) ' +
+        'ON CONFLICT (personalnummer) DO UPDATE SET leitung=EXCLUDED.leitung, ' +
+        'sonstige=EXCLUDED.sonstige, werte=EXCLUDED.werte',
+        [f.nr, f.leitung, f.sonstige, JSON.stringify(f.werte || {})]);
+    }
+    bericht.push('Sonderfunktionen: ' + daten.funktionen.length);
+
+    await db.query('DELETE FROM kuendigungen');
+    for (const k of daten.kuendigungen) {
+      await db.query(
+        'INSERT INTO kuendigungen (personalnummer, vorname, nachname, rang, grund, handy, vertrag, eintritt, ' +
+          'urkunde, zeugnis, kuendigung, waffe, copnet, emd, ic, discord, dienstgegenstaende, anzeige) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)',
+        [k.nr, k.vorname, k.nachname, k.rang, k.grund, k.handy, k.vertrag, k.eintritt || null,
+          k.urkunde, k.zeugnis, k.kuendigung, k.waffe, k.copnet, k.emd, k.ic, k.discord,
+          k.dienstgegenstaende, k.anzeige]);
+    }
+    bericht.push('Kündigungen: ' + daten.kuendigungen.length);
+
+    for (let i = 0; i < daten.disziplinSpalten.length; i++) {
+      await db.query(
+        'INSERT INTO disziplinspalten (name, sortierung) VALUES ($1,$2) ' +
+        'ON CONFLICT (name) DO UPDATE SET sortierung=EXCLUDED.sortierung',
+        [daten.disziplinSpalten[i], i]);
+    }
+    for (const d of daten.disziplin) {
+      await db.query(
+        'INSERT INTO disziplin (personalnummer, massnahmen) VALUES ($1,$2) ' +
+        'ON CONFLICT (personalnummer) DO UPDATE SET massnahmen=EXCLUDED.massnahmen',
+        [d.nr, JSON.stringify(d.massnahmen || [])]);
+    }
+    bericht.push('Disziplin: ' + daten.disziplin.length);
+
+    await db.query('DELETE FROM richtlinie');
+    for (let i = 0; i < daten.richtlinie.zeilen.length; i++) {
+      const r = daten.richtlinie.zeilen[i];
+      await db.query(
+        'INSERT INTO richtlinie (stand, pdv, text_kurz, mild, hart, sonst, anmerkung, sortierung) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+        [daten.richtlinie.stand, r.pdv, r.text, r.mild, r.hart, r.sonst, r.anmerkung, i]);
+    }
+    bericht.push('Richtlinie: ' + daten.richtlinie.zeilen.length);
+
+    for (let i = 0; i < daten.checklisten.length; i++) {
+      const l = daten.checklisten[i];
+      await db.query(
+        'INSERT INTO checklisten (name, aufgaben, sortierung) VALUES ($1,$2,$3) ' +
+        'ON CONFLICT (name) DO UPDATE SET aufgaben=EXCLUDED.aufgaben, sortierung=EXCLUDED.sortierung',
+        [l.name, JSON.stringify(l.aufgaben), i]);
+    }
+    bericht.push('Checklisten: ' + daten.checklisten.length);
+
+    await db.query('DELETE FROM dashboard');
+    let ds = 0;
+    for (const p of daten.dashboard.personal) {
+      await db.query("INSERT INTO dashboard (art, text, anzahl, sortierung) VALUES ('personal',$1,$2,$3)",
+        [p.label, p.anzahl, ds++]);
+    }
+    for (const s2 of daten.dashboard.vorlagen) { await db.query("INSERT INTO dashboard (art, text, sortierung) VALUES ('vorlage',$1,$2)", [s2, ds++]); }
+    for (const s2 of daten.dashboard.info) { await db.query("INSERT INTO dashboard (art, text, sortierung) VALUES ('info',$1,$2)", [s2, ds++]); }
+    for (const s2 of daten.dashboard.links) { await db.query("INSERT INTO dashboard (art, text, sortierung) VALUES ('link',$1,$2)", [s2, ds++]); }
+    bericht.push('Dashboard: ' + daten.dashboard.personal.length);
+
+    await db.query('DELETE FROM routine');
+    await db.query('INSERT INTO routine (tage, personen, sortierung) VALUES ($1,$2,0)',
+      [JSON.stringify(daten.routine.tage), JSON.stringify(daten.routine.personen)]);
+    bericht.push('Routine: ' + daten.routine.personen.length + ' Personen');
+
+    await db.query('DELETE FROM sonderzahlungen');
+    for (const x of daten.sonderzahlungen) {
+      await db.query(
+        'INSERT INTO sonderzahlungen (personalnummer, vorname, nachname, rang, erhalten, datum, betrag, grund) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+        [x.nr, x.vorname, x.nachname, x.rang, x.erhalten, x.datum || null, x.betrag, x.grund]);
+    }
+    bericht.push('Sonderzahlungen: ' + daten.sonderzahlungen.length);
+
+    await db.query('DELETE FROM organigramm');
+    for (let i = 0; i < daten.organigramm.length; i++) {
+      await db.query('INSERT INTO organigramm (zeile, sortierung) VALUES ($1,$2)', [JSON.stringify(daten.organigramm[i]), i]);
+    }
+    bericht.push('Organigramm: ' + daten.organigramm.length);
+
+    await db.query('DELETE FROM befoerderungen');
+    for (const b of daten.befoerderungen) {
+      await db.query(
+        'INSERT INTO befoerderungen (personalnummer, vorname, nachname, rang, neu_rang, grund, am, por, erl) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+        [b.nr, b.vorname, b.nachname, b.rang, b.neu_rang, b.grund, b.am || null, b.por, b.erl]);
+    }
+    bericht.push('Beförderungen: ' + daten.befoerderungen.length);
+
+    await db.query("INSERT INTO log (aktion, art) VALUES ('Datenbestand eingespielt', 'add')");
+    console.log('Import abgeschlossen: ' + bericht.join(', '));
+    res.send('Import abgeschlossen.<br>' + bericht.join('<br>') + '<br><br>Jetzt die Startseite neu laden.');
+  } catch (e) {
+    console.error('Import fehlgeschlagen', e);
+    res.status(500).send('Import fehlgeschlagen: ' + (e.message || 'unbekannter Fehler'));
+  }
 });
 app.post('/api/login', loginLimiter, async (req, res, next) => {
   try {
