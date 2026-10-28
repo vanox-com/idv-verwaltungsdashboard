@@ -236,10 +236,53 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       befoerderungen: befoerderungen.rows
     };
 
-    /* Nur mit Recht auf Personal gibt es Handynummern und Personaldaten */
-    if ((rechte.pers || 0) < 1 || !sensibel) {
-      daten.personal = daten.personal.map(p => ({ ...p, handy: null, geburtsdatum: null, urlaub_von: null, urlaub_bis: null }));
+    /* Das Dashboard erhält nur Statistikwerte, keine versteckten Modulinhalte. */
+    daten.dashboard.summary = {
+      personal: personal.rows.length,
+      kuendigungen: kuendigungen.rows.length,
+      offeneRueckgaben: kuendigungen.rows.filter(k =>
+        ['waffe', 'copnet', 'emd', 'ic', 'discord', 'dienstgegenstaende']
+          .some(f => /offen/i.test(k[f] || ''))).length,
+      disziplinFaelle: disziplin.rows.filter(d => Array.isArray(d.massnahmen) && d.massnahmen.length > 0).length
+    };
+
+    /* Berechtigungen auch bei API-Ausgabe erzwingen, nicht nur Menüpunkte verstecken. */
+    const berechtigt = m => (rechte[m] || 0) >= 1;
+    if (!berechtigt('bef')) {
+      daten.befoerderungen = [];
+      daten.raenge = [];
     }
+    if (!berechtigt('sonder')) {
+      daten.funktionen = [];
+      daten.funktionsspalten = [];
+    }
+    if (!berechtigt('kue')) daten.kuendigungen = [];
+    if (!berechtigt('dis')) {
+      daten.disziplin = [];
+      daten.disziplinSpalten = [];
+    }
+    if (!berechtigt('rout')) {
+      daten.routine = [];
+      daten.sonderzahlungen = [];
+    }
+    if (!berechtigt('chk')) daten.checklisten = [];
+    if (!berechtigt('rl')) daten.richtlinie = { stand: '', zeilen: [] };
+    if (!berechtigt('org')) daten.organigramm = [];
+    if (!berechtigt('dash')) daten.dashboard = { personal: [], vorlagen: [], info: [], links: [], summary: {} };
+
+    if (!berechtigt('pers')) {
+      /* Funktions- und Disziplinansichten benötigen Namen, aber keine Personalakte. */
+      daten.personal = (berechtigt('sonder') || berechtigt('dis'))
+        ? daten.personal.map(p => ({
+            personalnummer: p.personalnummer, vorname: p.vorname, nachname: p.nachname
+          }))
+        : [];
+    } else if (!sensibel) {
+      daten.personal = daten.personal.map(p => ({
+        ...p, handy: null, geburtsdatum: null, urlaub_von: null, urlaub_bis: null
+      }));
+    }
+
     res.json({ user: { dienstnummer: req.user.dienstnummer, anzeigename: req.user.anzeigename, rolle, rechte, sensibel: !!sensibel }, daten });
   } catch (e) { next(e); }
 });
