@@ -270,6 +270,9 @@ CREATE TABLE IF NOT EXISTS textbausteine (
   sortierung integer NOT NULL DEFAULT 0
 );
 
+/* Soft-Delete: Beim Neustart dürfen gelöschte PDF-Originale nicht zurückkommen. */
+ALTER TABLE textbausteine ADD COLUMN IF NOT EXISTS geloescht boolean NOT NULL DEFAULT false;
+
 CREATE TABLE IF NOT EXISTS dashboard (
   id         serial PRIMARY KEY,
   art        text NOT NULL,               -- personal, vorlage, info, link
