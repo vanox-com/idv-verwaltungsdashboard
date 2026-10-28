@@ -720,8 +720,6 @@ function navIcon(id) {
 function zeichneMenue() {
   const menu=$('#menu');
   const module=new Map(MODS.map(m=>[m[0],m]));
-  const aktiv=NAV_GRUPPEN.find(g=>g.module.includes(tab));
-  if(aktiv)NAV_OFFEN.add(aktiv.id);
   menu.innerHTML=NAV_GRUPPEN.map(g=>{
     const sichtbar=g.module.filter(id=>module.has(id)&&can(id));
     if(!sichtbar.length)return ''; // Keine leeren Kategorien ohne Berechtigung.
@@ -755,6 +753,8 @@ function zeichneMenue() {
       const id=link.dataset.t;
       if(!module.has(id)||!can(id))return;
       tab=id;
+      const gruppe=NAV_GRUPPEN.find(g=>g.module.includes(id));
+      if(gruppe)NAV_OFFEN.add(gruppe.id);
       zeichneMenue();
       zeichne();
     }));
