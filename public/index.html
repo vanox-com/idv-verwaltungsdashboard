@@ -6,6 +6,7 @@
 <title>Polizei Hessen · Verwaltungsportal | IdentityValley</title>
 <meta name="description" content="Fiktives Polizei-Hessen-Verwaltungsportal für GTA-RP auf IdentityValley.">
 <link rel="icon" type="image/svg+xml" href="/assets/idv-signet.svg">
+<meta name="theme-color" content="#101b2b">
 <style>
 :root{--bg:#0f1722;--panel:#182333;--line:#26354b;--txt:#e6edf6;--mut:#8ea0b8;--acc:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444}
 *{box-sizing:border-box}
@@ -365,6 +366,155 @@ aside .sidebar-gruppe-taste:focus-visible{outline:2px solid #8cbaee;outline-offs
 @media(prefers-reduced-motion:reduce){
  .sidebar-gruppe-chevron{transition:none}
 }
+
+/* 2026 Brand refresh: originales Polizei–IdentityValley-Logo.
+   Bestehende Module, Datentabellen und ACL bleiben unverändert. */
+:root{
+  --bg:#111b28;
+  --panel:#1b2939;
+  --line:#34485c;
+  --txt:#eef4fa;
+  --mut:#a0b2c7;
+  --acc:#537fae;
+}
+body{background:#111b28;line-height:1.56}
+#app{background:linear-gradient(135deg,#111d2b 0%,#142233 68%,#121d2c 100%)}
+aside{
+  width:274px;
+  padding:15px 13px 13px;
+  background:linear-gradient(180deg,#0c151f 0%,#101c2c 53%,#0b1420 100%);
+  border-right:1px solid #34516d;
+  box-shadow:4px 0 28px rgba(0,0,0,.13);
+}
+aside .sidebar-brand{
+  display:flex;flex-direction:column;gap:0;align-items:center;
+  border-bottom:1px solid #304358;
+  border-radius:0;
+  margin:0 2px 12px;
+  padding:2px 2px 14px;
+}
+.idv-sidebar-logo{display:block;width:100%;max-width:248px;height:auto;aspect-ratio:255/100;object-fit:contain}
+.sidebar-brand-caption{
+  color:#85a6c6;font-size:9px;letter-spacing:.13em;font-weight:700;
+  text-align:center;margin-top:-4px
+}
+aside #menu{gap:5px}
+aside .sidebar-gruppe-taste{
+  border-radius:7px;padding:10px 12px;
+  color:#9eb6ce;font-size:10.5px;
+  transition:color .16s,background .16s;
+}
+aside .sidebar-gruppe-taste:hover,aside .sidebar-gruppe-taste.active{
+  background:#1c3046;color:#d9eaff
+}
+.sidebar-gruppe-inhalt{padding-left:7px}
+aside .sidebar-gruppe-inhalt a{
+  display:flex;align-items:center;gap:12px;
+  min-height:38px;border-radius:7px;
+  border:1px solid transparent;
+  border-left:3px solid transparent;
+  padding:8px 10px;
+  margin:2px 0;
+  font-size:13px;color:#aebfd1;
+  transition:background .15s,color .15s,border-color .15s;
+}
+aside .sidebar-gruppe-inhalt a:hover{background:#20374d;color:#f2f8ff}
+aside .sidebar-gruppe-inhalt a.on{
+  background:linear-gradient(90deg,#254967,#203449);
+  border-color:#345b7d;border-left-color:#90c5f1;
+  box-shadow:inset 0 0 0 1px rgba(134,181,222,.05);
+  color:#fff
+}
+aside .sidebar-gruppe-inhalt .nav-icon{width:17px;height:17px;color:#acc5dd}
+aside .me{
+  border-top:1px solid #34485d;
+  margin-top:auto;padding:18px 12px 5px;
+  background:linear-gradient(180deg,transparent,rgba(34,57,80,.16));
+  border-radius:7px
+}
+aside .me b{font-size:13px}
+aside .me button{min-height:40px;background:#1c3044;border-color:#38536c}
+.workspace-main{min-width:0;padding:0 clamp(18px,3vw,44px) 38px;max-width:1800px}
+.workspace-topbar{
+  display:flex;align-items:center;gap:12px;min-height:78px;
+  margin:0 0 28px;padding:17px 2px;
+  border-bottom:1px solid #33485d
+}
+.workspace-topbar-icon{
+  display:grid;place-items:center;
+  width:40px;height:40px;flex-shrink:0;border:1px solid #4d7191;
+  background:linear-gradient(145deg,#223e56,#1a2d41);
+  color:#b8d8f1;font-size:12px;letter-spacing:.04em;font-weight:800;border-radius:10px
+}
+.workspace-topbar-title{display:flex;flex-direction:column;line-height:1.4;min-width:0}
+.workspace-topbar-title strong{font-size:10px;letter-spacing:.13em;color:#88b2db}
+.workspace-topbar-title span{font-size:15px;font-weight:650;color:#e8f4ff}
+.workspace-topbar-caption{margin-left:auto;display:inline-flex;align-items:center;gap:8px;color:#9aacc0;
+  font-size:10px;letter-spacing:.075em;white-space:nowrap}
+.workspace-status-dot{width:7px;height:7px;flex-shrink:0;border-radius:50%;
+  background:#75c6a3;box-shadow:0 0 0 4px rgba(117,198,163,.09)}
+#inhalt>h1{margin:0 0 20px;font-size:clamp(22px,2.25vw,28px);letter-spacing:-.025em;font-weight:740}
+#inhalt>h1::after{content:"";display:block;width:45px;height:2px;margin-top:11px;
+  background:linear-gradient(90deg,#85b4e1,transparent)}
+.box,.kachel{
+  border-color:#374e64;background:linear-gradient(180deg,#1c2b3d,#1a2838);
+  border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.075);
+}
+.kachel{border-top:2px solid #6a9bc5;min-height:100px}
+.kachel b{font-size:30px;color:#f7fbff}
+.kachel span{color:#b0c2d3}
+.tw{border-radius:9px;border-color:#3c5064}
+th{background:#23364b;color:#bdd1e5}
+td{color:#d9e5f1}
+tr:hover td{background:#294055}
+.tag{border-radius:6px;border:1px solid rgba(156,188,217,.12)}
+button{min-height:36px;transition:filter .15s,background-color .15s,border-color .15s}
+button.p{background:linear-gradient(105deg,#477aad,#355e90);border-color:#689bca;color:#fff}
+button:not(:disabled):hover{filter:brightness(1.13)}
+button:disabled{opacity:.58;cursor:not-allowed}
+input,select,textarea{border-color:#456077;color:#f0f6fd}
+input:focus-visible,button:focus-visible,select:focus-visible,textarea:focus-visible,
+a:focus-visible,summary:focus-visible{outline:2px solid #9ec9f5;outline-offset:2px}
+a.l{color:#a9d1fa;text-underline-offset:3px}
+.org-bereich,.textbaustein-karte{border-color:#3d5268}
+#login{background-color:#070e18}
+#login:before{background:linear-gradient(90deg,rgba(5,12,22,.85),rgba(9,17,29,.46) 45%,rgba(7,13,22,.65)),
+  linear-gradient(0deg,rgba(6,13,24,.72),transparent 42%,rgba(9,18,29,.12))}
+.login-center{width:min(470px,100%);margin:22px auto 27px}
+.login-brand{margin-bottom:15px;display:flex;flex-direction:column;align-items:center}
+.idv-login-logo{display:block;width:310px;max-width:88vw;height:auto;aspect-ratio:255/100;object-fit:contain;
+  filter:drop-shadow(0 14px 28px rgba(0,0,0,.26))}
+.login-brand p{font-size:10px;letter-spacing:.33em;color:#cbdcf0;font-weight:700;margin:-3px 0 5px}
+#login .karte{background:rgba(13,23,36,.88);border:1px solid rgba(160,193,226,.4);
+  box-shadow:0 25px 80px rgba(0,0,0,.47);border-radius:12px;padding:32px 33px 27px}
+#login .karte h2{font-size:25px;letter-spacing:-.026em}
+#login .karte input{background:#17263a;border-color:#49647e}
+#login .karte button.p{font-size:14px}
+@media(max-width:950px){
+ aside{width:240px}
+ .idv-sidebar-logo{max-width:215px}
+ .workspace-topbar-caption{font-size:9px}
+}
+@media(max-width:820px){
+ aside{position:static;width:100%;height:auto;padding:12px 15px;box-shadow:none}
+ aside .sidebar-brand{align-items:flex-start;padding:0 0 8px;margin:0 0 5px;width:100%}
+ .idv-sidebar-logo{width:205px;max-width:62vw}
+ .sidebar-brand-caption{margin-left:5px}
+ aside #menu{width:100%}
+ aside .me{width:100%;margin:10px 0 0}
+ .workspace-main{padding:0 16px 28px}
+ .workspace-topbar{min-height:66px;margin-bottom:20px;padding:11px 2px}
+ .workspace-topbar-caption{display:none}
+}
+@media(max-width:480px){
+ #login .karte{padding:25px 21px 23px}
+ .idv-login-logo{width:285px}
+ .workspace-topbar-icon{width:35px;height:35px}
+ .workspace-topbar-title strong{font-size:9px}
+ .workspace-topbar-title span{font-size:14px}
+ #inhalt>h1{font-size:23px}
+}
+@media(prefers-reduced-motion:reduce){button,aside a{transition:none}}
 </style>
 </head>
 <body>
@@ -373,7 +523,7 @@ aside .sidebar-gruppe-taste:focus-visible{outline:2px solid #8cbaee;outline-offs
 <div id="login">
   <div class="login-top"><div class="login-top-left">POLIZEI HESSEN<br>VERWALTUNGSPORTAL</div><div class="login-top-right">IDENTITYVALLEY · ROLEPLAY</div></div>
   <div class="login-center">
-    <div class="login-brand"><svg class="polizei-signet" viewBox="0 0 64 72" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M32 3 58 13v19c0 18-12 30-26 37C18 62 6 50 6 32V13L32 3Z" fill="#122846" stroke="#d4e2f5" stroke-width="2"/><path d="M32 9 52 17v15c0 14-9 24-20 30C21 56 12 46 12 32V17L32 9Z" stroke="#608bbd" stroke-width="1.5"/><path d="M21 24v21m22-21v21M21 34.5h22" stroke="#eaf3ff" stroke-width="5" stroke-linecap="square"/><path d="m32 13 2 4-2 4-2-4 2-4Z" fill="#d5ad61"/></svg><h1>POLIZEI <span>HESSEN</span></h1><p>VERWALTUNGSPORTAL</p></div>
+    <div class="login-brand"><img class="idv-login-logo" src="/assets/idv-polizei-logo.svg" width="255" height="100" alt="Polizei IdentityValley GTA RP" decoding="async"><p>VERWALTUNGSPORTAL</p></div>
     <form class="karte" id="loginForm">
       <h2>Willkommen zurück</h2>
       <p class="hinweis">Melde dich an, um auf das Verwaltungsportal zuzugreifen.</p>
@@ -402,14 +552,14 @@ aside .sidebar-gruppe-taste:focus-visible{outline:2px solid #8cbaee;outline-offs
 </div>
 <div id="app" class="hide">
   <aside>
-    <div class="sidebar-brand"><svg class="polizei-signet" viewBox="0 0 64 72" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M32 3 58 13v19c0 18-12 30-26 37C18 62 6 50 6 32V13L32 3Z" fill="#122846" stroke="#d4e2f5" stroke-width="2"/><path d="M32 9 52 17v15c0 14-9 24-20 30C21 56 12 46 12 32V17L32 9Z" stroke="#608bbd" stroke-width="1.5"/><path d="M21 24v21m22-21v21M21 34.5h22" stroke="#eaf3ff" stroke-width="5" stroke-linecap="square"/><path d="m32 13 2 4-2 4-2-4 2-4Z" fill="#d5ad61"/></svg><h2>Polizei Hessen<small>Verwaltungsportal · IdentityValley</small></h2></div>
+    <div class="sidebar-brand"><img class="idv-sidebar-logo" src="/assets/idv-polizei-logo.svg" width="255" height="100" alt="Polizei IdentityValley GTA RP" decoding="async"><span class="sidebar-brand-caption">VERWALTUNGSPORTAL <span aria-hidden="true">·</span> GESCHÜTZTER ZUGANG</span></div>
     <div id="menu"></div>
     <div class="me">
       <b id="meName"></b><span id="meRolle"></span>
       <button style="width:100%;margin-top:10px" id="abmelden">Abmelden</button>
     </div>
   </aside>
-  <main id="inhalt"></main>
+  <main class="workspace-main"><header class="workspace-topbar"><div class="workspace-topbar-icon" aria-hidden="true">IV</div><div class="workspace-topbar-title"><strong>VERWALTUNGSZENTRALE</strong><span id="workspaceBereich">Dashboard</span></div><span class="workspace-topbar-caption"><span class="workspace-status-dot" aria-hidden="true"></span>IDENTITYVALLEY · GTA RP</span></header><div id="inhalt"></div></main>
 </div>
 <dialog id="personalDialog" aria-label="Personalakte"></dialog><dialog id="sfDialog" aria-label="Sonderfunktionen bearbeiten"></dialog><dialog id="porDialog" aria-label="POR-Freigabe"></dialog>
 
@@ -718,6 +868,9 @@ function navIcon(id) {
 }
 
 function zeichneMenue() {
+  const aktuellesModul=MODS.find(m=>m[0]===tab);
+  const aktuellerTitel=$('#workspaceBereich');
+  if(aktuellerTitel)aktuellerTitel.textContent=aktuellesModul?.[1]||'Dashboard';
   const menu=$('#menu');
   const module=new Map(MODS.map(m=>[m[0],m]));
   menu.innerHTML=NAV_GRUPPEN.map(g=>{
