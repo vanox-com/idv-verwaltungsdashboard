@@ -757,7 +757,7 @@ app.patch('/api/sonderzahlung/:id',requireLogin,requireRight('rout',2),
   });
 
 /* Freigabe durch den Polizeioberrat (POR) verwalten. */
-app.patch('/api/por/:nr', requireLogin, requireRight('bef', 1), requireRight('por', 2), async (req, res, next) => {
+app.patch('/api/por/:nr', requireLogin, requireRight('bef', 1), async (req, res, next) => {
   try {
     const nr = Number(req.params.nr);
     const status = String(req.body.status || '');
@@ -766,14 +766,31 @@ app.patch('/api/por/:nr', requireLogin, requireRight('bef', 1), requireRight('po
     if (!['offen', 'beantragt', 'genehmigt', 'abgelehnt'].includes(status))
       return res.status(400).json({ error: 'Ungültiger POR-Status' });
     if (notiz.length > 1000) return res.status(400).json({ error: 'Notiz zu lang' });
+    /* Antragsteller und Entscheider strikt trennen.
+       Status 'beantragt/offen' mit Beförderung bearbeiten; eine
+       Genehmigung/Ablehnung ausschließlich mit POR bearbeiten. */
+    const rechte = await effektiveRechte(req.user);
+    const darfPor = (rechte.por || 0) >= 2;
+    const darfAntrag = (rechte.bef || 0) >= 2;
+    if (!darfPor && (!darfAntrag || ['genehmigt','abgelehnt'].includes(status)))
+      return res.status(403).json({error:'Nur ein POR-Berechtigter darf genehmigen oder ablehnen'});
     const datum = status === 'genehmigt'
       ? String(req.body.datum || new Date().toISOString().slice(0, 10)) : null;
     if (datum && (!/^\d{4}-\d{2}-\d{2}$/.test(datum) || !Number.isFinite(Date.parse(datum))))
       return res.status(400).json({ error: 'Ungültiges Datum' });
+    /* Genehmigte oder abgelehnte Anträge können durch Antragsteller
+       nicht wieder zurückgesetzt oder überschrieben werden. */
     const { rows } = await db.query(
-      'UPDATE personal SET por_status = $1, por_notiz = $2, por_am = $3 WHERE personalnummer = $4 RETURNING personalnummer, por_status',
-      [status, notiz, datum, nr]);
-    if (!rows.length) return res.status(404).json({ error: 'Personalnummer nicht gefunden' });
+      `UPDATE personal SET por_status=$1,por_notiz=$2,por_am=$3
+         WHERE personalnummer=$4 AND ($5::boolean OR por_status IN ('offen','beantragt'))
+         RETURNING personalnummer,por_status`,
+      [status,notiz,datum,nr,darfPor]);
+    if (!rows.length) {
+      const found = (await db.query('SELECT 1 FROM personal WHERE personalnummer=$1',[nr])).rows.length;
+      return res.status(found ? 403 : 404).json({error:found
+        ? 'Eine POR-Entscheidung darf nur von POR-Berechtigten geändert werden'
+        : 'Personalnummer nicht gefunden'});
+    }
     await db.query("INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'edit')",
       [req.user.id, 'POR-Freigabe bei ' + nr + ': ' + status]);
     res.json({ ok: true, status });
