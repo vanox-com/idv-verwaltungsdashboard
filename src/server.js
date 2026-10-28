@@ -81,16 +81,17 @@ async function currentUser(req) {
   return u;
 }
 
-function requireLogin(handler) {
-  return async (req, res, next) => {
-    try {
-      const u = await currentUser(req);
-      if (!u) return res.status(401).json({ error: 'Nicht angemeldet' });
-      if (u.nur_passwortwechsel) return res.status(403).json({ error: 'Passwortwechsel erforderlich' });
-      req.user = u;
-      next();
-    } catch (e) { next(e); }
-  };
+/* Express ruft Middleware direkt mit (req, res, next) auf.
+   Die frühere Factory-Signatur gab nur eine Funktion zurück, rief next()
+   aber nie auf. Dadurch blieben alle geschützten Routen dauerhaft hängen. */
+async function requireLogin(req, res, next) {
+  try {
+    const u = await currentUser(req);
+    if (!u) return res.status(401).json({ error: 'Nicht angemeldet' });
+    if (u.nur_passwortwechsel) return res.status(403).json({ error: 'Passwortwechsel erforderlich' });
+    req.user = u;
+    next();
+  } catch (e) { next(e); }
 }
 
 function requireRight(modul, stufe = 1) {
