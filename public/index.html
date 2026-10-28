@@ -257,6 +257,15 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .dashboard-link{padding:6px 0;border-bottom:1px solid var(--line)}
 .dashboard-link:last-child{border:0}
 .box h3{font-size:16px;margin:0 0 14px;font-weight:690}
+
+/* Rollenrechte + Einzelrechte */
+#userDialog{width:min(810px,96vw)}
+.user-exceptions{margin-top:20px;border-top:1px solid var(--line);padding-top:16px}
+.user-exceptions h3{margin:0 0 7px;font-size:16px}
+.user-exception-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}
+.user-exception-label{display:flex;flex-direction:column;gap:3px;min-width:0}
+.user-exception-label small{color:var(--mut)}
+@media(max-width:620px){.user-exception-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -975,10 +984,10 @@ function vBef() {
     const nr = Number(p.personalnummer), days = Math.round((Date.parse(termin+'T00:00:00Z')-Date.parse(heute+'T00:00:00Z'))/86400000);
     const status = days<=0 ? 'fällig seit '+(-days)+' Tagen' : 'in '+days+' Tagen';
     const st = (p.por_status === 'genehmigt'?'ok':p.por_status === 'beantragt'?'warn':p.por_status === 'abgelehnt'?'bad':'');
-    const action = verwalten ?
-      '<button type="button" data-por-person="'+nr+'">POR</button> ' +
-      (days<=0 && p.por_status === 'genehmigt'?
-        '<button type="button" class="p" data-promote-person="'+nr+'">Befördern</button>':'') : '';
+    const action =
+      (can('por',2) ? '<button type="button" data-por-person="'+nr+'">POR</button> ' : '') +
+      (verwalten && days<=0 && p.por_status === 'genehmigt' ?
+        '<button type="button" class="p" data-promote-person="'+nr+'">Befördern</button>' : '');
     return '<tr><td>'+esc(p.vorname+' '+p.nachname)+'</td><td>'+esc(p.dienstgrad || '')+'</td>' +
       '<td>'+esc(next.name)+'</td><td>'+fd(p.letzte_befoerderung)+'</td><td>'+fd(termin)+'</td>' +
       '<td><span class="tag '+(days<=0?'bad':days<=14?'warn':'ok')+'">'+status+'</span></td>' +
@@ -997,7 +1006,7 @@ function vBef() {
 }
 function aktBem(name) { const r = (D.raenge||[]).find(x=>x.name===name); return r ? r.bemerkung||'' : ''; }
 function porBearbeiten(nr) {
-  if(!can('bef',2))return;
+  if(!can('bef',1)||!can('por',2))return;
   const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nr);if(!p)return;
   const d=$('#porDialog');
   const options=POR_STATUS.map(([status,label])=>'<option value="'+status+'"'+((p.por_status||'offen')===status?' selected':'')+'>'+label+'</option>').join('');
@@ -1804,6 +1813,7 @@ document.addEventListener('input',e=>{
 
 /* Benutzer- und Berechtigungsverwaltung, Vorbild: Original-HTML. */
 const RECHTE_STUFEN=['–','Lesen','Bearbeiten'];
+const RECHTE_MODULE=[...MODS.filter(m=>m[0]!=='users'),['por','POR-Freigabe','']];
 let USER_ADMIN=null;
 function vUsers() {
   if(ME.rolle!=='Administrator')return '<p>Nur der Administrator darf Zugänge verwalten.</p>';
@@ -1823,7 +1833,7 @@ async function ladeBenutzer() {
     '<button type="button" data-user-edit="'+Number(u.id)+'">Bearbeiten</button> '+
     (u.dienstnummer!==ME.dienstnummer?'<button type="button" class="user-delete" data-user-delete="'+Number(u.id)+'">Löschen</button>':'')
   ]);
-  const matrixRows=MODS.filter(m=>m[0]!=='users').map(m=>{
+  const matrixRows=RECHTE_MODULE.map(m=>{
     const cells=a.rollen.map(r=>{
       const p=a.perms.find(x=>x.rolle===r.name && x.modul===m[0]);
       const st=p?Number(p.stufe):0;
@@ -1838,7 +1848,7 @@ async function ladeBenutzer() {
   $('#benutzerBereich').innerHTML=
     '<div class="box"><h3>Benutzerkonten</h3>'+tabelle(['Dienstnummer','Name','Rolle','Passwort','Status','Aktion'],rows)+'</div>'+
     '<div class="box"><h3>Berechtigungsmatrix</h3>'+
-    '<p class="mut">Klick auf eine Berechtigung wechselt zwischen „Kein Recht“, „Lesen“ und „Bearbeiten“. Administratorrechte sind fest.</p>'+
+    '<p class="mut">Gruppenrechte gelten als Standard. Klick wechselt zwischen „Kein Recht“, „Lesen“ und „Bearbeiten“. Für Dienstnummern sind Ausnahmen möglich. POR-Freigabe ist von Beförderungsrechten getrennt.</p>'+
     '<div class="tw"><table class="user-matrix"><thead><tr><th>Modul</th>'+
     a.rollen.map(r=>'<th>'+esc(r.name)+'</th>').join('')+'</tr></thead><tbody>'+matrixRows+
     '</tbody></table></div></div>';
@@ -1862,6 +1872,7 @@ function userDialogForm(id) {
     '<p id="userFormError" class="fehler" role="alert"></p>'+
     '<div class="user-commands"><button type="button" id="userCancel">Abbrechen</button>'+
     '<button type="submit" class="p" id="userSave">Speichern</button></div></form>';
+  if(!neu) userAusnahmenAnzeigen(d,u);
   d.showModal();
   $('#userCancel').onclick=()=>d.close();
   $('#userForm').onsubmit=async e=>{
@@ -1891,6 +1902,50 @@ async function userLoeschen(id) {
   try{await api('/users/'+id,{method:'DELETE'});await ladeBenutzer();}
   catch(err){alert('Löschen fehlgeschlagen: '+err.message);}
 }
+
+function userAusnahmenAnzeigen(dialog,u){
+  if(!u||!USER_ADMIN)return;
+  const section=document.createElement('section');
+  section.className='user-exceptions';
+  const labels=RECHTE_MODULE.map(([modul,titel])=>{
+    const grund=USER_ADMIN.perms.find(p=>p.rolle===u.rolle&&p.modul===modul);
+    const ausnahme=(USER_ADMIN.userPerms||[]).find(p=>Number(p.user_id)===Number(u.id)&&p.modul===modul);
+    const value=ausnahme===undefined?'inherit':String(ausnahme.stufe);
+    return '<label class="user-exception-label">'+esc(titel)+
+      '<small>Rollenstandard: '+RECHTE_STUFEN[Number(grund?.stufe||0)]+'</small>'+
+      '<select data-user-override="'+Number(u.id)+'" data-user-modul="'+esc(modul)+'" '+
+      (u.rolle==='Administrator'?'disabled':'')+'>'+
+      [['inherit','Von Rolle übernehmen'],['0','Kein Zugriff'],['1','Lesen'],['2','Bearbeiten']].map(([v,t])=>
+        '<option value="'+v+'"'+(value===v?' selected':'')+'>'+t+'</option>').join('')+
+      '</select></label>';
+  }).join('');
+  section.innerHTML='<h3>Individuelle Berechtigungen</h3>'+
+    '<p class="mut">Änderungen gelten sofort und nur für diese Dienstnummer. „Von Rolle übernehmen“ entfernt die Ausnahme.</p>'+
+    '<div class="user-exception-grid">'+labels+'</div><p id="userOverrideInfo" role="status" class="mut"></p>';
+  dialog.appendChild(section);
+}
+async function userAusnahmeAendern(sel){
+  if(ME.rolle!=='Administrator')return;
+  const id=Number(sel.dataset.userOverride),modul=sel.dataset.userModul;
+  if(!Number.isSafeInteger(id)||!RECHTE_MODULE.some(x=>x[0]===modul))return;
+  const stufe=sel.value==='inherit'?null:Number(sel.value);
+  sel.disabled=true;
+  const info=$('#userOverrideInfo');
+  if(info)info.textContent='Speichere …';
+  try{
+    await api('/users/'+id+'/recht/'+encodeURIComponent(modul),
+      {method:'PATCH',body:JSON.stringify({stufe})});
+    if(info)info.textContent='Individuelles Recht gespeichert.';
+    await ladeBenutzer();
+  }catch(err){
+    if(info)info.textContent='Änderung fehlgeschlagen: '+err.message;
+    const v=USER_ADMIN.userPerms?.find(x=>Number(x.user_id)===id&&x.modul===modul);
+    sel.value=v?String(v.stufe):'inherit';
+  }finally{sel.disabled=false;}
+}
+document.addEventListener('change',e=>{
+  if(e.target.matches('[data-user-override]'))userAusnahmeAendern(e.target);
+});
 async function userRechtAendern(btn) {
   if(ME.rolle!=='Administrator')return;
   const rolle=btn.dataset.permRole,modul=btn.dataset.permModule,stufe=(Number(btn.dataset.permValue)+1)%3;
