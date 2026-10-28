@@ -266,6 +266,10 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .user-exception-label{display:flex;flex-direction:column;gap:3px;min-width:0}
 .user-exception-label small{color:var(--mut)}
 @media(max-width:620px){.user-exception-grid{grid-template-columns:1fr}}
+
+.rank-with-insignia{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;min-height:25px}
+.rank-insignia{flex:none;display:inline-block;vertical-align:middle;overflow:visible;
+ filter:drop-shadow(0 1px 1px rgba(0,0,0,.38))}
 </style>
 </head>
 <body>
@@ -330,6 +334,75 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fd = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('.') : '';
 const can = (m, l = 1) => ME && (ME.rechte[m] || 0) >= l;
+
+/* Dienstgradabzeichen: SVG-Farb- und Stern/Litzenzuordnung der Original-HTML.
+   Transparente Querklappe, mittlerer Dienst blau, gehobener silber,
+   höherer gold; Anwärter mit Litze; obere Dienstgrade mit Kranz. */
+const RANK_BLAU='#1f6fb2',RANK_SILBER='#d9dee5',RANK_GOLD='#e8b23a';
+const RANK_LITZEN={
+  'Polizeimeisteranwärter':[RANK_BLAU,'str'],
+  'Polizeimeister':[RANK_BLAU,'s2'],
+  'Polizeiobermeister':[RANK_BLAU,'s3'],
+  'Polizeihauptmeister':[RANK_BLAU,'s4'],
+  'Polizeihauptmeister AZ':[RANK_BLAU,'a5'],
+  'Polizeikommissaranwärter':[RANK_SILBER,'str'],
+  'Polizeikommissar':[RANK_SILBER,'s1'],
+  'Kriminalkommissar':[RANK_SILBER,'s1'],
+  'Polizeioberkommissar':[RANK_SILBER,'s2'],
+  'Kriminaloberkommissar':[RANK_SILBER,'s2'],
+  'Polizeihauptkommissar':[RANK_SILBER,'s3'],
+  'Kriminalhauptkommissar':[RANK_SILBER,'s3'],
+  'Polizeihauptkommissar A12':[RANK_SILBER,'s4'],
+  'Erster Polizeihauptkommissar':[RANK_SILBER,'a5'],
+  'Polizeiratanwärter':[RANK_GOLD,'str'],
+  'Polizeirat':[RANK_GOLD,'s1'],
+  'Polizeioberrat':[RANK_GOLD,'s2'],
+  'Polizeidirektor':[RANK_GOLD,'s4'],
+  'Leitender Polizeidirektor':[RANK_GOLD,'k1'],
+  'Polizeivizepräsident':[RANK_GOLD,'k2'],
+  'Polizeipräsident':[RANK_GOLD,'k3']
+};
+function rankStern(cx,cy,r,farbe){
+  const punkte=[];
+  for(let i=0;i<12;i++){
+    const rad=Math.PI/6*i-Math.PI/2,abstand=i%2?r*.45:r;
+    punkte.push((cx+Math.cos(rad)*abstand).toFixed(1)+','+(cy+Math.sin(rad)*abstand).toFixed(1));
+  }
+  return '<polygon points="'+punkte.join(' ')+'" fill="'+farbe+'"/>';
+}
+function rankKranz(farbe,laenge=22){
+  const d=3,links=10,oben=10,unten=34;
+  return '<rect x="'+links+'" y="'+(oben-d)+'" width="'+(2*d)+'" height="'+(unten-oben+2*d)+'" fill="'+farbe+'"/>'+
+    '<rect x="'+links+'" y="'+(oben-d)+'" width="'+laenge+'" height="'+(2*d)+'" fill="'+farbe+'"/>'+
+    '<rect x="'+links+'" y="'+(unten-d)+'" width="'+laenge+'" height="'+(2*d)+'" fill="'+farbe+'"/>';
+}
+function rangAbzeichen(rang,scale=1){
+  const v=RANK_LITZEN[String(rang||'')];
+  if(!v)return '';
+  const [f,art]=v,R=9.6,step=21.5,cy=22,xStart=12.6;
+  const stern=(x,y,r=R)=>rankStern(x,y,r,f);
+  let shapes='';
+  if(art==='str')shapes='<rect x="14" y="6" width="9" height="32" fill="'+f+'"/>';
+  else if(/^s[1-4]$/.test(art)){
+    shapes=Array.from({length:Number(art[1])},(_,i)=>stern(xStart+i*step,cy)).join('');
+  } else if(art==='a5'){
+    const r=7.4,z=15;
+    shapes=stern(xStart,cy-8,r)+stern(xStart,cy+8,r)+
+      stern(xStart+z,cy,r)+stern(xStart+2*z,cy,r)+stern(xStart+3*z,cy,r);
+  } else if(art==='k1')shapes=rankKranz(f)+stern(28,cy,7.6);
+  else if(art==='k2')shapes=rankKranz(f,30)+stern(26,cy,7.2)+stern(42,cy,7.2);
+  else if(art==='k3')shapes=rankKranz(f,40)+stern(25,cy,6.6)+stern(40,cy,6.6)+stern(55,cy,6.6);
+  const w=Math.round(132*scale*.558),h=Math.round(44*scale*.558);
+  return '<svg class="rank-insignia" width="'+w+'" height="'+h+
+    '" viewBox="0 0 132 44" role="img" aria-label="Dienstgradabzeichen '+esc(rang)+
+    '" xmlns="http://www.w3.org/2000/svg">'+shapes+'</svg>';
+}
+function rangMitAbzeichen(rang,scale=1){
+  const name=String(rang||'–');
+  return '<span class="rank-with-insignia">'+rangAbzeichen(name,scale)+
+    '<span>'+esc(name)+'</span></span>';
+}
+
 
 async function api(pfad, optionen) {
   /* Der Datenaufbau hat eine feste Obergrenze. Ein hängender Request darf
@@ -666,7 +739,7 @@ function vPers() {
     return '<tr class="pers-row" data-name="' + esc([p.personalnummer,p.vorname,p.nachname,p.dienstgrad,p.nebenjob].join(' ').toLowerCase()) + '" data-group="' + esc(p.gruppe || '') + '" data-status="' + esc(p.status || '') + '">' +
       '<td>' + nummer + '</td>' +
       '<td><button class="pers-link" type="button" data-show-person="' + nummer + '">' + name + '</button></td>' +
-      '<td>' + esc(p.dienstgrad || '–') + '</td><td>' + esc(p.gruppe || '–') + '</td>' +
+      '<td>' + rangMitAbzeichen(p.dienstgrad) + '</td><td>' + esc(p.gruppe || '–') + '</td>' +
       '<td>' + fd(p.eintrittsdatum) + '</td><td>' + handy + '</td>' +
       '<td>' + status + '</td><td>' + bearbeitung + '</td></tr>';
   }).join('');
@@ -988,13 +1061,13 @@ function vBef() {
       (can('por',2) ? '<button type="button" data-por-person="'+nr+'">POR</button> ' : '') +
       (verwalten && days<=0 && p.por_status === 'genehmigt' ?
         '<button type="button" class="p" data-promote-person="'+nr+'">Befördern</button>' : '');
-    return '<tr><td>'+esc(p.vorname+' '+p.nachname)+'</td><td>'+esc(p.dienstgrad || '')+'</td>' +
-      '<td>'+esc(next.name)+'</td><td>'+fd(p.letzte_befoerderung)+'</td><td>'+fd(termin)+'</td>' +
+    return '<tr><td>'+esc(p.vorname+' '+p.nachname)+'</td><td>'+rangMitAbzeichen(p.dienstgrad)+'</td>' +
+      '<td>'+rangMitAbzeichen(next.name)+'</td><td>'+fd(p.letzte_befoerderung)+'</td><td>'+fd(termin)+'</td>' +
       '<td><span class="tag '+(days<=0?'bad':days<=14?'warn':'ok')+'">'+status+'</span></td>' +
       '<td><span class="tag '+st+'">'+esc(porText(p))+'</span></td>' +
       '<td>'+esc(aktBem(p.dienstgrad))+'</td><td>'+action+'</td></tr>';
   }).join('');
-  const ranks = raenge.map(r => '<tr><td>'+esc(r.name)+'</td><td>'+esc(r.abk||'')+'</td>' +
+  const ranks = raenge.map(r => '<tr><td>'+rangMitAbzeichen(r.name)+'</td><td>'+esc(r.abk||'')+'</td>' +
     '<td>'+(r.tage ? r.tage+' Tage':'–')+'</td><td>'+esc(r.bemerkung||'')+'</td><td>'+esc(r.grund||'')+'</td></tr>').join('');
   return '<h1>Beförderungen</h1><p class="mut">Fristen nach Beförderungsbedingungen. Keine Beförderung ohne POR-Freigabe.</p>' +
     (wartet ? '<div class="box"><b>'+wartet+'</b> POR-Anträge warten auf eine Entscheidung.</div>' : '') +
