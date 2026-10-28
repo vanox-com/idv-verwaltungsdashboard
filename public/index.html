@@ -60,7 +60,8 @@ a.l{color:#7db3ff}
     <label for="pw">Passwort</label>
     <input id="pw" type="password" autocomplete="current-password">
     <div class="fehler" id="fehler"></div>
-    <button class="p" style="width:100%;margin-top:12px" id="anmelden">Anmelden</button>
+    <button type="submit" class="p" style="width:100%;margin-top:12px" id="anmelden">Anmelden</button>
+    <button type="button" style="width:100%;margin-top:8px" id="pruefen">Verbindung prüfen</button>
     <div class="klein">Fiktives Polizeidashboard für den GTA-RP-Server IdentityValley. Kein Angebot einer echten Polizeibehörde.</div>
   </form>
 </div>
@@ -104,10 +105,17 @@ async function api(pfad, optionen) {
 $('#loginForm').addEventListener('submit', async e => {
   e.preventDefault();
   $('#fehler').textContent = '';
+  const passwort = $('#pw').value;
   try {
-    const a = await api('/login', { method: 'POST', body: JSON.stringify({ dienstnummer: $('#dnr').value, passwort: $('#pw').value }) });
-    if (a.mussPasswortAendern) { await passwortWechseln(); }
+    const a = await api('/login', {
+      method: 'POST',
+      body: JSON.stringify({ dienstnummer: $('#dnr').value, passwort })
+    });
+    /* Erst die Oberfläche aufbauen, dann den Passwortwechsel anbieten.
+       Vorher gibt es das Element für das Fenster noch nicht. */
+    const offen = !!a.mussPasswortAendern;
     await starten();
+    if (offen) await passwortWechseln(passwort);
   } catch (err) { $('#fehler').textContent = err.message; }
 });
 
@@ -116,12 +124,36 @@ $('#abmelden').addEventListener('click', async () => {
   location.reload();
 });
 
-async function passwortWechseln() {
+async function passwortWechseln(alt) {
   const neu = prompt('Dein Startpasswort muss geändert werden.\nNeues Passwort (mindestens 8 Zeichen):');
   if (!neu) return;
-  await api('/passwort', { method: 'POST', body: JSON.stringify({ alt: $('#pw').value, neu }) });
-  alert('Passwort gespeichert.');
+  try {
+    await api('/passwort', { method: 'POST', body: JSON.stringify({ alt, neu }) });
+    alert('Passwort gespeichert.');
+  } catch (err) {
+    alert('Passwort konnte nicht geändert werden: ' + err.message);
+  }
 }
+
+/* Prüf-Knopf: fragt den Server, ob er antwortet. Zeigt das Ergebnis im Formular. */
+$('#pruefen').addEventListener('click', async () => {
+  const feld = $('#fehler');
+  feld.style.color = '#8ea0b8';
+  feld.textContent = 'Prüfe Verbindung …';
+  try {
+    const r = await fetch('/api/me');
+    if (r.status === 401) { feld.textContent = 'Server antwortet (401 = noch nicht angemeldet). Die Anmeldung selbst ist das Problem.'; }
+    else if (r.ok) { feld.textContent = 'Server antwortet, du bist bereits angemeldet.'; }
+    else { feld.textContent = 'Server antwortet mit Status ' + r.status; }
+  } catch (e) {
+    feld.textContent = 'Server nicht erreichbar: ' + e.message;
+  }
+});
+
+/* Enter im Passwortfeld löst die Anmeldung aus */
+$('#pw').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') { e.preventDefault(); $('#loginForm').requestSubmit(); }
+});
 
 /* ---------- Aufbau ---------- */
 
