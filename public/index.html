@@ -1436,6 +1436,7 @@ const DASH_WIDGETS=[
   {id:'kpi-bef',titel:'Fällige Beförderungen',typ:'kpi',recht:'bef',neu:true},
   {id:'panel-bef',titel:'Fällige Beförderungen',typ:'panel',recht:'bef'},
   {id:'panel-gruppen',titel:'Personal nach Gruppe',typ:'panel'},
+  {id:'panel-beschaeftigung',titel:'Beschäftigungsarten nach Mitarbeitergruppe',typ:'panel',recht:'pers',neu:true},
   {id:'panel-inaktiv',titel:'Nicht im aktiven Dienst',typ:'panel',recht:'pers'},
   {id:'panel-geb',titel:'Geburtstage (30 Tage)',typ:'panel',recht:'geb'},
   {id:'panel-jub',titel:'Dienstjubiläen (30 Tage)',typ:'panel',recht:'jub'},
@@ -1451,7 +1452,7 @@ const DASH_WIDGET_ZIELE={
   'kpi-personal':'pers','kpi-kuendigungen':'kue','kpi-rueckgaben':'kue',
   'kpi-disziplin':'dis','kpi-aktiv':'pers','kpi-neu30':'pers',
   'kpi-urlaub':'pers','kpi-bef':'bef','panel-bef':'bef',
-  'panel-gruppen':'pers','panel-inaktiv':'pers','panel-geb':'geb',
+  'panel-gruppen':'pers','panel-beschaeftigung':'pers','panel-inaktiv':'pers','panel-geb':'geb',
   'panel-jub':'jub','panel-dienstblatt':'pers','panel-status':'pers',
   'panel-neue':'pers'
 };
@@ -1640,6 +1641,19 @@ function vDash(){
       (due.length?due.map(p=>personZeile(p.name,p.dienstgrad+' → '+p.naechsterRang,
         'Fällig: '+fd(p.faellig),'bad')).join(''):'<span class="mut">Keine fälligen Beförderungen</span>')+'</section>',
     'panel-gruppen':progress('Personal nach Gruppe',d.gruppen||[]),
+    'panel-beschaeftigung':(()=>{
+      const auswertung=d.beschaeftigung||{};
+      const summen=auswertung.summen||{};
+      const gruppen=auswertung.gruppen||[];
+      return '<section class="box"><h3>Beschäftigungsarten nach Mitarbeitergruppe</h3>'+
+        '<div class="dashboard-stats"><span class="tag">Hauptberuf: <strong>'+Number(summen.hauptberuf||0)+'</strong></span>'+
+        '<span class="tag">Nebenberuf: <strong>'+Number(summen.nebenberuf||0)+'</strong></span>'+
+        '<span class="tag">Gesamt: <strong>'+Number(summen.gesamt||0)+'</strong></span></div>'+
+        '<div class="tw"><table><thead><tr><th>Mitarbeitergruppe</th><th>Hauptberuf</th><th>Nebenberuf</th><th>Gesamt</th></tr></thead><tbody>'+
+        gruppen.map(g=>'<tr><td>'+esc(g.gruppe)+'</td><td>'+Number(g.hauptberuf||0)+'</td><td>'+Number(g.nebenberuf||0)+'</td><td>'+Number(g.gesamt||0)+'</td></tr>').join('')+
+        '</tbody></table></div></section>';
+    })(),
+
     'panel-inaktiv':'<section class="box"><h3>Nicht im aktiven Dienst</h3>'+
       (off.length?off.map(p=>personZeile(p.name,p.dienstgrad||'',p.status,'warn')).join(''):
         '<span class="mut">Keine Einträge</span>')+'</section>',
