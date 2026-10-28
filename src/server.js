@@ -1235,6 +1235,79 @@ app.patch('/api/users/:id/recht/:modul',requireLogin,nurAdmin,async(req,res,next
   }catch(e){next(e)}
 });
 
+/* Organigramm: Leserecht 1, Bearbeitungsrecht 2. Bestehende
+   Original-Zeilen bleiben unverändert. Bearbeitung erfolgt in separater
+   JSON-Struktur, mit Versionsprüfung gegen paralleles Überschreiben. */
+function orgAusOriginal(rows){
+  const zeilen=rows.map(r=>Array.isArray(r.zeile)?r.zeile:[]);
+  const leitung=String(zeilen[1]?.[0]||'').trim();
+  const raete=(zeilen[3]||[]).map(x=>String(x||'').trim()).filter(Boolean);
+  const bereiche=(zeilen[5]||[]).map((raw,col)=>{
+    const lines=String(raw||'').split('\n');
+    const name=(lines[0]||'').trim();
+    const zust=lines.slice(1).join(' ').replace(/^\s*Zuständig\s*:\s*/i,'').trim();
+    const tasks=zeilen.slice(7).map(row=>String(row[col]||'').trim()).filter(Boolean);
+    return {name,zust,tasks};
+  }).filter(b=>b.name);
+  return {leitung,raete,bereiche};
+}
+function orgValidieren(payload){
+  if(!payload||typeof payload!=='object'||Array.isArray(payload))
+    return {error:'Ungültige Organigramm-Daten'};
+  const {leitung,raete,bereiche}=payload;
+  const text=(v,max,needed=false)=>typeof v==='string'&&
+    v.trim().length<=max&&(!needed||v.trim().length>0);
+  if(!text(leitung,180))return {error:'Ungültiger Polizeioberrat'};
+  if(!Array.isArray(raete)||raete.length>20||
+     !raete.every(v=>text(v,180,true)))
+    return {error:'Ungültige Polizeiräte (maximal 20)'};
+  if(!Array.isArray(bereiche)||bereiche.length>20||
+     !bereiche.every(b=>b&&typeof b==='object'&&!Array.isArray(b)&&
+       text(b.name,180,true)&&text(b.zust,250)&&
+       Array.isArray(b.tasks)&&b.tasks.length<=40&&
+       b.tasks.every(t=>text(t,500,true))))
+    return {error:'Ungültige Aufgabenbereiche (max. 20 Bereiche mit je 40 Aufgaben)'};
+  const namen=new Set(bereiche.map(x=>x.name.trim().toLocaleLowerCase('de-DE')));
+  if(namen.size!==bereiche.length)return {error:'Aufgabenbereiche dürfen nicht doppelt vorkommen'};
+  return {inhalt:{
+    leitung:leitung.trim(),raete:raete.map(x=>x.trim()),
+    bereiche:bereiche.map(b=>({
+      name:b.name.trim(),zust:b.zust.trim(),
+      tasks:b.tasks.map(t=>t.trim())
+    }))
+  }};
+}
+app.get('/api/organigramm',requireLogin,requireRight('org',1),async(req,res,next)=>{
+  try{
+    const {rows}=await db.query('SELECT inhalt,version FROM organigramm_layout WHERE id=1');
+    if(rows.length)return res.json(rows[0]);
+    const original=await db.query('SELECT zeile FROM organigramm ORDER BY sortierung,id');
+    res.json({inhalt:orgAusOriginal(original.rows),version:0});
+  }catch(e){next(e)}
+});
+app.put('/api/organigramm',requireLogin,requireRight('org',2),async(req,res,next)=>{
+  try{
+    const version=req.body?.version;
+    if(!Number.isSafeInteger(version)||version<0)
+      return res.status(400).json({error:'Ungültige Organigramm-Version'});
+    const {inhalt,error}=orgValidieren(req.body?.inhalt);
+    if(error)return res.status(400).json({error});
+    const {rows}=version===0?await db.query(
+      'INSERT INTO organigramm_layout(id,inhalt,version) VALUES(1,$1::jsonb,1) '+
+      'ON CONFLICT (id) DO NOTHING RETURNING inhalt,version',
+      [JSON.stringify(inhalt)]):
+      await db.query(
+        'UPDATE organigramm_layout SET inhalt=$1::jsonb,version=version+1,aktualisiert=now() '+
+        'WHERE id=1 AND version=$2 RETURNING inhalt,version',
+        [JSON.stringify(inhalt),version]);
+    if(!rows.length)
+      return res.status(409).json({error:'Das Organigramm wurde zwischenzeitlich geändert. Bitte neu laden.'});
+    await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
+      [req.user.id,'Organigramm geändert (Version '+rows[0].version+')']);
+    res.json(rows[0]);
+  }catch(e){next(e)}
+});
+
 /* Textbausteine werden ausschließlich serverseitig nach Rollen- und
    Dienstnummerrechten ausgeliefert, nie im öffentlichen Frontend eingebettet. */
 /* Anzeigen/Kopieren ab Stufe 1, Schreiben/Löschen ab Stufe 2.
