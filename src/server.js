@@ -508,38 +508,103 @@ function dokumentLinksValidieren(body) {
   }
   return null;
 }
-app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req, res, next) => {
-  try {
-    const nr = Number(req.params.nr);
-    if (!Number.isSafeInteger(nr) || nr < 1)
-      return res.status(400).json({ error: 'Ungültige Personalnummer' });
-    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
-    if (Object.hasOwn(body,'dienstgrad'))
-      return res.status(409).json({ error: 'Dienstgrad ausschließlich über die Beförderungsverwaltung ändern' });
-    if (!await darfVertraulichesPersonalBearbeiten(req.user.rolle, body))
-      return res.status(403).json({ error: 'Kein Recht für vertrauliche Personalfelder' });
-    const linkFehler = dokumentLinksValidieren(body);
-    if (linkFehler) return res.status(400).json({error:linkFehler});
-    const erlaubt = ['vorname', 'nachname', 'geburtsdatum', 'handy', 'waffenschein', 'spind',
-      'nebenjob', 'eintrittsdatum', 'arbeitsvertrag', 'ernennungsurkunde',
-      'arbeitsvertrag_url', 'ernennungsurkunde_url',
-      'urlaub_von', 'urlaub_bis', 'urlaub_tage', 'bemerkung', 'rsa', 'status', 'gruppe'];
-    const felder = [], werte = [];
-    erlaubt.forEach(k => {
-      if (Object.hasOwn(body,k)) {
-        werte.push(body[k] === '' ? null : body[k]);
-        felder.push(`${k} = $${werte.length}`);
+/* Kündigt jemand über die Personalakte, wird der Kündigungsvorgang
+   mit denselben Daten in EINER Datenbanktransaktion angelegt. Die
+   Personalsperre verhindert parallele automatische Doppelvorgänge.
+   Bereits vorhandene manuelle/alte Einträge werden nicht dupliziert. */
+app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req,res,next)=>{
+  const nr=Number(req.params.nr);
+  if(!Number.isSafeInteger(nr)||nr<1)
+    return res.status(400).json({error:'Ungültige Personalnummer'});
+  const body=req.body&&typeof req.body==='object'&&!Array.isArray(req.body)?req.body:{};
+  if(Object.hasOwn(body,'dienstgrad'))
+    return res.status(409).json({error:'Dienstgrad ausschließlich über die Beförderungsverwaltung ändern'});
+  if(!await darfVertraulichesPersonalBearbeiten(req.user.rolle,body))
+    return res.status(403).json({error:'Kein Recht für vertrauliche Personalfelder'});
+  const linkFehler=dokumentLinksValidieren(body);
+  if(linkFehler)return res.status(400).json({error:linkFehler});
+  const grund=body.kuendigungsgrund;
+  if(Object.hasOwn(body,'kuendigungsgrund')&&typeof grund!=='string')
+    return res.status(400).json({error:'Kündigungsgrund muss Text sein'});
+  if(typeof grund==='string'&&grund.trim().length>1000)
+    return res.status(400).json({error:'Kündigungsgrund darf maximal 1000 Zeichen lang sein'});
+  const erlaubt=['vorname','nachname','geburtsdatum','handy','waffenschein','spind',
+    'nebenjob','eintrittsdatum','arbeitsvertrag','ernennungsurkunde',
+    'arbeitsvertrag_url','ernennungsurkunde_url',
+    'urlaub_von','urlaub_bis','urlaub_tage','bemerkung','rsa','status','gruppe'];
+  const felder=[],werte=[];
+  erlaubt.forEach(k=>{
+    if(Object.hasOwn(body,k)){
+      werte.push(body[k]===''?null:body[k]);
+      felder.push(k+' = $'+werte.length);
+    }
+  });
+  if(!felder.length)return res.status(400).json({error:'Keine Felder übergeben'});
+  const client=await db.connect().catch(next);
+  if(!client)return;
+  try{
+    await client.query('BEGIN');
+    const {rows:vorher}=await client.query(
+      'SELECT personalnummer,status,vorname,nachname,dienstgrad,handy,'+
+      'arbeitsvertrag,ernennungsurkunde,arbeitsvertrag_url,ernennungsurkunde_url,eintrittsdatum '+
+      'FROM personal WHERE personalnummer=$1 FOR UPDATE',[nr]);
+    if(!vorher.length){
+      await client.query('ROLLBACK');
+      return res.status(404).json({error:'Personalakte nicht gefunden'});
+    }
+    const wechsel=Object.hasOwn(body,'status')&&body.status==='Gekündigt'&&vorher[0].status!=='Gekündigt';
+    if(wechsel){
+      /* Das Recht für die Personalakte alleine berechtigt NICHT zur
+         Erstellung von Kündigungsvorgängen. */
+      const {rows:rechte}=await client.query(
+        'SELECT COALESCE('+
+        "CASE WHEN $3='Administrator' THEN NULL ELSE "+
+        '(SELECT stufe FROM user_perms WHERE user_id=$1 AND modul=$2) END,'+
+        '(SELECT stufe FROM role_perms WHERE rolle=$3 AND modul=$2),0) AS stufe',
+        [req.user.id,'kue',req.user.rolle]);
+      if(Number(rechte[0]?.stufe||0)<2){
+        await client.query('ROLLBACK');
+        return res.status(403).json({error:'Zum Kündigen ist zusätzlich „Kündigungen → Bearbeiten“ erforderlich'});
       }
-    });
-    if (!felder.length) return res.status(400).json({ error: 'Keine Felder übergeben' });
+      if(!String(grund||'').trim()){
+        await client.query('ROLLBACK');
+        return res.status(400).json({error:'Bitte einen Kündigungsgrund angeben'});
+      }
+    }
     werte.push(nr);
-    const {rowCount} = await db.query(
-      `UPDATE personal SET ${felder.join(', ')} WHERE personalnummer = $${werte.length}`, werte);
-    if (!rowCount) return res.status(404).json({ error: 'Personalakte nicht gefunden' });
-    await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'edit')`,
-      [req.user.id, `Personal ${nr} geändert`]);
-    res.json({ ok: true });
-  } catch (e) { next(e); }
+    const {rows:aktualisiert}=await client.query(
+      'UPDATE personal SET '+felder.join(', ')+' WHERE personalnummer=$'+werte.length+
+      ' RETURNING personalnummer,vorname,nachname,dienstgrad,handy,arbeitsvertrag,'+
+      'ernennungsurkunde,arbeitsvertrag_url,ernennungsurkunde_url,eintrittsdatum',werte);
+    let kuendigungAngelegt=false,kuendigungVorhanden=false;
+    if(wechsel){
+      const {rows:vorhanden}=await client.query(
+        'SELECT id FROM kuendigungen WHERE personalnummer=$1 ORDER BY id DESC LIMIT 1',[nr]);
+      kuendigungVorhanden=vorhanden.length>0;
+      if(!kuendigungVorhanden){
+        const p=aktualisiert[0];
+        const dokument=(titel,url)=>url?JSON.stringify({t:String(titel||'Dokument'),u:String(url)}):
+          String(titel||'');
+        await client.query(
+          'INSERT INTO kuendigungen '+
+          '(personalnummer,vorname,nachname,rang,grund,handy,vertrag,eintritt,urkunde) '+
+          'VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+          [nr,p.vorname,p.nachname,p.dienstgrad,grund.trim(),p.handy,
+            dokument(p.arbeitsvertrag,p.arbeitsvertrag_url),p.eintrittsdatum,
+            dokument(p.ernennungsurkunde,p.ernennungsurkunde_url)]);
+        kuendigungAngelegt=true;
+        await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",
+          [req.user.id,'Kündigung automatisch angelegt: '+nr+' '+[p.vorname,p.nachname].filter(Boolean).join(' ')]);
+      }
+    }
+    await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
+      [req.user.id,'Personal '+nr+' geändert'+(wechsel?' (Status: Gekündigt)':'')]);
+    await client.query('COMMIT');
+    res.json({ok:true,kuendigung_angelegt:kuendigungAngelegt,kuendigung_vorhanden:kuendigungVorhanden});
+  }catch(e){
+    await client.query('ROLLBACK').catch(()=>{});
+    next(e);
+  }finally{client.release()}
 });
 
 app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res, next) => {
@@ -554,6 +619,8 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
       return res.status(400).json({ error: 'Ungültige Personalnummer' });
     if (!String(b.vorname || '').trim() || !String(b.nachname || '').trim())
       return res.status(400).json({ error: 'Vor- und Nachname nötig' });
+    if(b.status==='Gekündigt')
+      return res.status(400).json({error:'Bitte erst die Personalakte anlegen und anschließend über „Bearbeiten“ kündigen'});
     const { rows } = await db.query(
       `INSERT INTO personal (personalnummer, gruppe, status, vorname, nachname, geburtsdatum, handy,
         waffenschein, spind, nebenjob, dienstgrad, eintrittsdatum, arbeitsvertrag, ernennungsurkunde,

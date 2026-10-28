@@ -852,6 +852,17 @@ button.p:focus-visible{outline-color:#c5c8f7}
 }
 .pers-row .pers-link[data-show-person]{font-weight:600;cursor:pointer}
 .pers-row .pers-link[data-show-person]:hover{color:#dce4ff}
+
+/* Kündigungsgrund direkt im Personal-Editor bei Statuswechsel. */
+#personalDialog .personal-kuendigung[hidden]{display:none!important}
+#personalDialog .personal-kuendigung{
+  padding:15px;border:1px solid rgba(206,163,119,.38);
+  border-left:3px solid #d4ad7b;border-radius:10px;
+  background:linear-gradient(110deg,rgba(176,141,102,.095),rgba(140,152,196,.07));
+}
+#personalDialog .personal-kuendigung label{color:#f2d5ad}
+#personalDialog .personal-kuendigung textarea{box-sizing:border-box;width:100%;resize:vertical;min-height:95px;margin-top:6px}
+#personalDialog .personal-kuendigung .mut{margin:7px 0 0;line-height:1.5}
 </style>
 </head>
 <body>
@@ -1633,6 +1644,18 @@ function personalFiltern() {
 }
 
 function personalDialogSchliessen() {
+  if(!neu && p.status!=='Gekündigt'){
+    felder.splice(2,0,
+      '<div class="full personal-kuendigung" id="personalKuendigungFeld" hidden>'+
+      '<label for="p_kuendigungsgrund">Kündigungsgrund</label>'+
+      '<textarea id="p_kuendigungsgrund" rows="3" maxlength="1000" '+
+        'placeholder="Grund für die Kündigung eingeben"></textarea>'+
+      '<p class="mut">Beim Speichern wird automatisch ein Kündigungsvorgang angelegt. '+
+      'Bereits bestehende Vorgänge bleiben unverändert.</p>'+
+      (!can('kue',2)?'<p class="fehler">Für die Kündigung brauchst du zusätzlich '+
+        '„Kündigungen → Bearbeiten“.</p>':'')+
+      '</div>');
+  }
   const dialog = $('#personalDialog');
   if (dialog.open) dialog.close();
   copnetGeladen = null; copnetNummer = null;
@@ -1825,7 +1848,8 @@ function personalBearbeiten(nr) {
   const vorschlag = Math.max(0,...used) + 1;
   const raenge = (D.raenge || []).map(r => r.name).filter(Boolean);
   const gruppen = ['Leitungsdienst','Polizeirat','Hauptberuf','Nebenberuf',...(D.personal || []).map(x => x.gruppe).filter(Boolean)];
-  const status = ['Aktiv','Abgemeldet','Inaktiv','Suspendiert','Gekündigt','freihalten',...(D.personal || []).map(x => x.status).filter(Boolean)];
+  const statusAlle = ['Aktiv','Abgemeldet','Inaktiv','Suspendiert','Gekündigt','freihalten',...(D.personal || []).map(x => x.status).filter(Boolean)];
+  const status = neu ? statusAlle.filter(x => x !== 'Gekündigt') : statusAlle;
   const datum = x => x ? String(x).slice(0,10) : '';
   const felder = [
     personalFeld('Personalnummer','p_nr',neu?vorschlag:nr,'number',neu?'min="1" required':'readonly'),
@@ -1865,6 +1889,17 @@ function personalBearbeiten(nr) {
     '<button id="persAbbrechen" type="button">Abbrechen</button>' +
     '<button id="persSpeichern" class="p" type="submit">Speichern</button></div></form>';
   dialog.showModal();
+  if(!neu&&p.status!=='Gekündigt'){
+    const wechselAktualisieren=()=>{
+      const wirdGekuendigt=$('#p_status').value==='Gekündigt';
+      const feld=$('#personalKuendigungFeld');
+      feld.hidden=!wirdGekuendigt;
+      const grund=$('#p_kuendigungsgrund');
+      grund.required=wirdGekuendigt&&can('kue',2);
+    };
+    $('#p_status').addEventListener('change',wechselAktualisieren);
+    wechselAktualisieren();
+  }
   $('#persAbbrechen').addEventListener('click',personalDialogSchliessen);
   $('#personalForm').addEventListener('submit',event => personalSpeichern(event, neu, nr));
 }
@@ -1902,16 +1937,35 @@ async function personalSpeichern(event, neu, nr) {
     body.waffenschein = $('#p_waffenschein').checked;
     body.spind = $('#p_spind').checked;
   }
+  if(!neu && body.status==='Gekündigt'){
+    const alt=(D.personal||[]).find(p=>Number(p.personalnummer)===Number(nr));
+    if(alt?.status!=='Gekündigt'){
+      if(!can('kue',2)){
+        $('#persFormFehler').textContent='Für den Status „Gekündigt“ brauchst du zusätzlich „Kündigungen → Bearbeiten“.';
+        return;
+      }
+      body.kuendigungsgrund=$('#p_kuendigungsgrund')?.value.trim()||'';
+      if(!body.kuendigungsgrund){
+        $('#persFormFehler').textContent='Bitte einen Kündigungsgrund eingeben.';
+        $('#p_kuendigungsgrund')?.focus();
+        return;
+      }
+    }
+  }
   const button = $('#persSpeichern');
   button.disabled = true;
   button.textContent = 'Speichere …';
   $('#persFormFehler').textContent = '';
   try {
-    await api(neu ? '/personal' : '/personal/' + nr, {
+    const antwort=await api(neu ? '/personal' : '/personal/' + nr, {
       method: neu ? 'POST' : 'PATCH', body: JSON.stringify(body)
     });
     personalDialogSchliessen();
     await starten();
+    if(antwort?.kuendigung_angelegt)
+      alert('Status auf „Gekündigt“ gesetzt. Der Kündigungsvorgang wurde automatisch angelegt.');
+    else if(antwort?.kuendigung_vorhanden)
+      alert('Status auf „Gekündigt“ gesetzt. Es ist bereits ein Kündigungsvorgang vorhanden; es wurde kein zweiter angelegt.');
   } catch (err) {
     $('#persFormFehler').textContent = 'Speichern fehlgeschlagen: ' + err.message;
   } finally {
