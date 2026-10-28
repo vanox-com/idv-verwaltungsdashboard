@@ -2084,7 +2084,7 @@ async function userAusnahmeAendern(sel){
   if(!Number.isSafeInteger(id)||!RECHTE_MODULE.some(x=>x[0]===modul))return;
   const stufe=sel.value==='inherit'?null:Number(sel.value);
   sel.disabled=true;
-  const info=$('#userOverrideInfo');
+  const info=sel.closest('dialog')?.querySelector('#userOverrideInfo');
   if(info)info.textContent='Speichere …';
   try{
     await api('/users/'+id+'/recht/'+encodeURIComponent(modul),
