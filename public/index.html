@@ -224,6 +224,22 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .extra-delete{color:#ffb7b7;border-color:#7b4545}
 .extra-row[hidden]{display:none}
 @media(max-width:600px){.extra-fields{grid-template-columns:1fr}}
+
+/* Richtlinie und Organigramm */
+.rl-row[hidden]{display:none}
+.org-top{text-align:center;padding:27px 20px 30px}
+.org-label{display:block;color:var(--mut);font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:9px}
+.org-oberrat{display:inline-block;background:linear-gradient(125deg,#59333e,#8b4d49);border:1px solid #a5756e;
+ color:#fff;font-weight:740;border-radius:7px;padding:15px 34px;min-width:min(360px,90%);font-size:19px}
+.org-connector{height:32px;width:1px;margin:0 auto;background:#58738e}
+.org-raete{display:flex;justify-content:center;flex-wrap:wrap;gap:11px}
+.org-rat{border:1px solid #53708e;background:#283e55;border-radius:6px;padding:11px 18px;min-width:154px;font-weight:650}
+.org-bereiche{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;margin-top:18px}
+.org-bereich{margin-bottom:0}.org-bereich h3{font-size:17px;margin:0 0 6px}
+.org-zust{color:var(--mut);font-size:13px;margin:0 0 10px}
+.org-bereich ul{margin:8px 0 0;padding-left:18px}
+.org-bereich li{padding:3px 0}
+@media(max-width:740px){.org-bereiche{grid-template-columns:1fr}.org-raete{display:grid;grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -1505,21 +1521,76 @@ document.addEventListener('click',e=>{
   if(e.target.closest('#checkReset'))chkZuruecksetzen();
 });
 
+
+/* Die Originaldatei zeigt die Disziplinarrichtlinie als durchsuchbare
+   Referenztabelle – keine Bearbeitungsfunktion war darin enthalten. */
 function vRl() {
-  const r = D.richtlinie;
-  return `<h1>Richtlinie Disziplinarmaßnahmen</h1><p style="color:var(--mut)">${esc(r.stand || '')}</p>
-  ${tabelle(['PDV §','Kurzbeschreibung','Mild','Hart','Sonstiges','Anmerkung'],
-    (r.zeilen || []).map(z => [esc(z.pdv || ''), esc(z.text_kurz || ''), esc(z.mild || ''), esc(z.hart || ''), esc(z.sonst || ''), esc(z.anmerkung || '')]))}`;
-}
-
-function vOrg() {
-  const zeilen = D.organigramm.map(function (z) {
-    return '<div>' + (z.zeile || []).map(esc).join(' · ') + '</div>';
+  const r = D.richtlinie || {stand:'',zeilen:[]};
+  const rows = (r.zeilen || []).map(z => {
+    const spalten=[z.pdv||'',z.text_kurz||'',z.mild||'',z.hart||'',z.sonst||'',z.anmerkung||''];
+    const search=spalten.join(' ').toLowerCase();
+    return '<tr class="rl-row" data-rl-query="'+esc(search)+'">'+
+      '<td><strong>'+esc(spalten[0])+'</strong></td>'+
+      '<td>'+esc(spalten[1])+'</td>'+
+      '<td><span class="tag warn">'+esc(spalten[2]||'–')+'</span></td>'+
+      '<td><span class="tag bad">'+esc(spalten[3]||'–')+'</span></td>'+
+      '<td>'+esc(spalten[4]||'–')+'</td><td>'+esc(spalten[5]||'–')+'</td></tr>';
   }).join('');
-  return '<h1>Organigramm</h1><div class="box">' + zeilen + '</div>';
+  return '<h1>Richtlinie Disziplinarmaßnahmen</h1>'+
+    '<div class="pers-bar"><input id="rlSuche" type="search" aria-label="Disziplinarrichtlinie durchsuchen" '+
+    'placeholder="PDV-Nummer, Verstoß oder Maßnahme suchen …">'+
+    '<span class="spacer"></span><span class="mut" id="rlAnzahl">'+(r.zeilen||[]).length+' Einträge</span>'+
+    (r.stand?'<span class="tag">Stand: '+esc(r.stand)+'</span>':'')+'</div>'+
+    '<div class="tw"><table><thead><tr>'+
+    ['PDV §','Kurzbeschreibung','Mild','Hart','Sonstiges','Anmerkungen'].map(x=>'<th>'+x+'</th>').join('')+
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
-
-
+function rlFiltern() {
+  const q=($('#rlSuche')?.value||'').trim().toLowerCase();
+  let count=0;
+  document.querySelectorAll('.rl-row').forEach(tr=>{
+    tr.hidden=!!q&&!tr.dataset.rlQuery.includes(q);
+    if(!tr.hidden)count++;
+  });
+  if($('#rlAnzahl'))$('#rlAnzahl').textContent=count+' Einträge';
+}
+/* Organigramm aus den 13 bereits importierten Zeilen rekonstruieren,
+   ohne die Quelldaten oder Führungsstruktur zu überschreiben. */
+function orgStruktur() {
+  const zeilen=(D.organigramm||[]).map(row=>Array.isArray(row.zeile)?row.zeile:[]);
+  const leitung=String(zeilen[1]?.[0]||'');
+  const raete=(zeilen[3]||[]).map(x=>String(x||'').trim()).filter(Boolean);
+  const ueberschriften=zeilen[5]||[];
+  const bereiche=ueberschriften.map((raw,col)=>{
+    const lines=String(raw||'').split('\n');
+    const name=String(lines[0]||'').trim();
+    const zust=lines.slice(1).join(' ').replace(/^\s*Zuständig\s*:\s*/i,'').trim();
+    const tasks=zeilen.slice(7).map(row=>String(row[col]||'').trim()).filter(Boolean);
+    return {name,zust,tasks};
+  }).filter(b=>b.name);
+  return {leitung,raete,bereiche};
+}
+function vOrg() {
+  const o=orgStruktur();
+  const chefs=o.raete.map(r=>'<div class="org-rat">'+esc(r)+'</div>').join('');
+  const abteilungen=o.bereiche.map(b=>
+    '<section class="box org-bereich"><h3>'+esc(b.name)+'</h3>'+
+    '<p class="org-zust">Zuständig: '+esc(b.zust||'–')+'</p>'+
+    '<ul>'+b.tasks.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul></section>'
+  ).join('');
+  return '<h1>Organigramm</h1><p class="mut">Führungsstruktur und Aufgabenverteilung der fiktiven Polizei Hessen.</p>'+
+    '<section class="box org-top">'+
+    '<span class="org-label">Polizeioberrat</span>'+
+    '<div class="org-oberrat">'+esc(o.leitung||'Nicht hinterlegt')+'</div>'+
+    '<div class="org-connector"></div>'+
+    '<span class="org-label">Polizeiräte</span>'+
+    '<div class="org-raete">'+(chefs||'<span class="mut">Keine Einträge</span>')+'</div>'+
+    '</section>'+
+    '<div class="org-bereiche">'+abteilungen+'</div>';
+}
+document.addEventListener('input',e=>{
+  if(e.target.matches('#rlSuche'))rlFiltern();
+});
 
 /* Zusätzliche Register aus der Originaldatei. Daten bleiben serverseitig. */
 const EXTRAS={
