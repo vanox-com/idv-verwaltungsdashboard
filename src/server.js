@@ -99,6 +99,24 @@ function requireRight(modul, stufe = 1) {
   };
 }
 
+/* Das Display im RP-Dashboard erhält seinen Namen aus der Personalakte:
+   Dienstnummer "01" entspricht Personalnummer 1. Ein frei angelegter
+   Admin-/Testzugang behält seinen eigenen Anzeigenamen. */
+async function nameFuerDienstnummer(u) {
+  const nummer = String(u.dienstnummer || '').trim();
+  if (/^\d{1,6}$/.test(nummer) && Number(nummer) > 0) {
+    const { rows } = await db.query(
+      'SELECT vorname, nachname FROM personal WHERE personalnummer = $1 LIMIT 1',
+      [Number(nummer)]
+    );
+    if (rows.length) {
+      const name = [rows[0].vorname, rows[0].nachname].filter(Boolean).join(' ').trim();
+      if (name && name !== '- -') return name;
+    }
+  }
+  return u.anzeigename;
+}
+
 /* ---------- Anmeldung ---------- */
 
 /* Administrator wird ausschließlich serverseitig beim Start angelegt.
@@ -159,7 +177,7 @@ app.get('/api/me', async (req, res, next) => {
     const rechte = {};
     rows.forEach(r => { rechte[r.modul] = r.stufe; });
     res.json({
-      id: u.id, dienstnummer: u.dienstnummer, anzeigename: u.anzeigename,
+      id: u.id, dienstnummer: u.dienstnummer, anzeigename: await nameFuerDienstnummer(u),
       rolle: u.rolle, mussPasswortAendern: !!u.muss_passwort_aendern, rechte
     });
   } catch (e) { next(e); }
@@ -283,7 +301,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       }));
     }
 
-    res.json({ user: { dienstnummer: req.user.dienstnummer, anzeigename: req.user.anzeigename, rolle, rechte, sensibel: !!sensibel }, daten });
+    res.json({ user: { dienstnummer: req.user.dienstnummer, anzeigename: await nameFuerDienstnummer(req.user), rolle, rechte, sensibel: !!sensibel }, daten });
   } catch (e) { next(e); }
 });
 
