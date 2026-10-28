@@ -278,6 +278,16 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .personnel-document-link:hover{color:#d2e8ff}
 .personnel-document-missing{display:block;overflow-wrap:anywhere}
 .personnel-document-missing small{display:block;font-size:11px;color:var(--mut);margin-top:2px}
+
+/* Direkt zugängliche Benutzer-Einzelrechte */
+#userRightsDialog{background:#182433;color:var(--txt);border:1px solid #536781;border-radius:12px;width:min(810px,96vw);max-height:90vh;overflow:auto;padding:22px}
+#userRightsDialog::backdrop{background:#050a18bb}
+#userRightsDialog .user-exceptions{margin-top:4px;padding-top:8px;border-top:0}
+.rights-dialog-head{display:flex;justify-content:space-between;align-items:start;gap:14px}
+.rights-dialog-head h2{margin:0 0 5px}
+.rights-dialog-head .mut{margin:0}
+.rights-dialog-head button{white-space:nowrap}
+@media(max-width:550px){.rights-dialog-head{flex-direction:column}}
 </style>
 </head>
 <body>
@@ -1954,6 +1964,7 @@ async function ladeBenutzer() {
     u.muss_passwort_aendern?'<span class="tag warn">Startpasswort</span>':'<span class="tag ok">geändert</span>',
     u.gesperrt?'<span class="tag bad">Gesperrt</span>':'<span class="tag ok">Aktiv</span>',
     '<button type="button" data-user-edit="'+Number(u.id)+'">Bearbeiten</button> '+
+    (u.rolle!=='Administrator'?'<button type="button" class="p" data-user-rights="'+Number(u.id)+'">Einzelrechte</button> ':'')+
     (u.dienstnummer!==ME.dienstnummer?'<button type="button" class="user-delete" data-user-delete="'+Number(u.id)+'">Löschen</button>':'')
   ]);
   const matrixRows=RECHTE_MODULE.map(m=>{
@@ -2026,6 +2037,26 @@ async function userLoeschen(id) {
   catch(err){alert('Löschen fehlgeschlagen: '+err.message);}
 }
 
+/* Einzelrechte direkt aus der Benutzerliste erreichbar, ohne
+   das lange Kontobearbeitungsformular durchsuchen zu müssen. */
+function userEinzelrechteDialog(id) {
+  if(ME.rolle!=='Administrator'||!USER_ADMIN)return;
+  const u=USER_ADMIN.users.find(x=>Number(x.id)===Number(id));
+  if(!u||u.rolle==='Administrator')return;
+  let d=$('#userRightsDialog');
+  if(!d){
+    d=document.createElement('dialog');
+    d.id='userRightsDialog';
+    document.body.appendChild(d);
+  }
+  d.innerHTML='<div class="rights-dialog-head"><div><h2>Einzelrechte verwalten</h2>'+
+    '<p class="mut">'+esc(u.anzeigename)+' · Dienstnummer '+esc(u.dienstnummer)+
+    ' · Rolle '+esc(u.rolle)+'</p></div>'+
+    '<button type="button" id="rightsSchliessen">Schließen</button></div>';
+  userAusnahmenAnzeigen(d,u);
+  d.showModal();
+  $('#rightsSchliessen').onclick=()=>d.close();
+}
 function userAusnahmenAnzeigen(dialog,u){
   if(!u||!USER_ADMIN)return;
   const section=document.createElement('section');
@@ -2053,7 +2084,7 @@ async function userAusnahmeAendern(sel){
   if(!Number.isSafeInteger(id)||!RECHTE_MODULE.some(x=>x[0]===modul))return;
   const stufe=sel.value==='inherit'?null:Number(sel.value);
   sel.disabled=true;
-  const info=$('#userOverrideInfo');
+  const info=sel.closest('dialog')?.querySelector('#userOverrideInfo');
   if(info)info.textContent='Speichere …';
   try{
     await api('/users/'+id+'/recht/'+encodeURIComponent(modul),
@@ -2081,6 +2112,8 @@ async function userRechtAendern(btn) {
 }
 document.addEventListener('click',e=>{
   if(e.target.closest('#userNeu')){userDialogForm(null);return;}
+  const rights=e.target.closest('[data-user-rights]');
+  if(rights){userEinzelrechteDialog(Number(rights.dataset.userRights));return;}
   const ed=e.target.closest('[data-user-edit]');
   if(ed){userDialogForm(Number(ed.dataset.userEdit));return;}
   const del=e.target.closest('[data-user-delete]');
