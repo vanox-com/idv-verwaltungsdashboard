@@ -1060,6 +1060,133 @@ app.delete('/api/kuendigung/:id', requireLogin, requireRight('kue', 2), async (r
 });
 
 
+/* Checklisten selbst modular verwalten. Status bleibt auch beim Verschieben
+   einzelner Punkte erhalten, indem der Client die ursprünglichen Indizes mitsendet.
+   Änderungen und Löschen erfolgen vollständig in einer Transaktion. */
+function chkValidieren(raw){
+  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Object.assign(new Error('Ungültige Checkliste'),{httpStatus:400});
+  const name=String(raw.name||'').trim();
+  if(typeof raw.name!=='string'||!name||name.length>120)throw Object.assign(new Error('Name muss 1–120 Zeichen lang sein'),{httpStatus:400});
+  if(!Array.isArray(raw.aufgaben)||raw.aufgaben.length>100)throw Object.assign(new Error('Maximal 100 Aufgaben pro Checkliste erlaubt'),{httpStatus:400});
+  const aufgaben=raw.aufgaben.map((x,i)=>{
+    if(!x||typeof x!=='object'||Array.isArray(x)||typeof x.t!=='string'||
+       typeof (x.u??'')!=='string')throw Object.assign(new Error('Ungültige Aufgabe '+(i+1)),{httpStatus:400});
+    const t=x.t.trim(),u=(x.u||'').trim();
+    if(!t||t.length>500||u.length>2048)throw Object.assign(new Error('Aufgabe '+(i+1)+': Text fehlt oder ist zu lang'),{httpStatus:400});
+    if(u){
+      try{
+        const url=new URL(u);
+        if(url.protocol!=='https:'||!url.hostname.includes('.')||url.username||url.password)
+          throw new Error('bad');
+      }catch{throw Object.assign(new Error('Aufgabe '+(i+1)+': nur gültige HTTPS-Links erlaubt'),{httpStatus:400})}
+    }
+    return {t,u};
+  });
+  return {name,aufgaben};
+}
+function chkFehler(res,next,e){
+  if(e.httpStatus)return res.status(e.httpStatus).json({error:e.message});
+  if(e.code==='23505')return res.status(409).json({error:'Eine Checkliste mit diesem Namen existiert bereits'});
+  next(e);
+}
+app.post('/api/checklisten',requireLogin,requireRight('chk',2),async(req,res,next)=>{
+  let valid;
+  try{valid=chkValidieren(req.body)}catch(e){return chkFehler(res,next,e)}
+  const client=await db.connect().catch(next);
+  if(!client)return;
+  try{
+    await client.query('BEGIN');
+    const {rows}=await client.query(
+      'INSERT INTO checklisten(name,aufgaben,sortierung) VALUES($1,$2::jsonb,'+
+      'COALESCE((SELECT MAX(sortierung)+1 FROM checklisten),0)) RETURNING name,aufgaben,sortierung',
+      [valid.name,JSON.stringify(valid.aufgaben)]);
+    await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",
+      [req.user.id,'Checkliste angelegt: '+valid.name]);
+    await client.query('COMMIT');
+    res.status(201).json(rows[0]);
+  }catch(e){
+    await client.query('ROLLBACK').catch(()=>{});
+    chkFehler(res,next,e);
+  }finally{client.release()}
+});
+app.put('/api/checklisten/:name',requireLogin,requireRight('chk',2),async(req,res,next)=>{
+  const alt=String(req.params.name||'');
+  if(!alt||alt.length>250)return res.status(400).json({error:'Ungültiger Checklistenname'});
+  let valid;
+  try{valid=chkValidieren(req.body)}catch(e){return chkFehler(res,next,e)}
+  const zuordnung=req.body.zuordnung;
+  if(!Array.isArray(zuordnung)||zuordnung.length!==valid.aufgaben.length||
+     !zuordnung.every(i=>i===null||(Number.isSafeInteger(i)&&i>=0))||
+     new Set(zuordnung.filter(i=>i!==null)).size!==zuordnung.filter(i=>i!==null).length)
+    return res.status(400).json({error:'Ungültige Aufgaben-Zuordnung'});
+  const client=await db.connect().catch(next);
+  if(!client)return;
+  try{
+    await client.query('BEGIN');
+    const {rows:old}=await client.query(
+      'SELECT name,aufgaben,sortierung FROM checklisten WHERE name=$1 FOR UPDATE',[alt]);
+    if(!old.length){
+      await client.query('ROLLBACK');
+      return res.status(404).json({error:'Checkliste nicht gefunden'});
+    }
+    const bestand=Array.isArray(old[0].aufgaben)?old[0].aufgaben:[];
+    if(zuordnung.some(i=>i!==null&&i>=bestand.length)){
+      await client.query('ROLLBACK');
+      return res.status(400).json({error:'Ungültige alte Aufgabenposition'});
+    }
+    const {rows:status}=await client.query(
+      'SELECT punkt,erledigt FROM checklisten_status WHERE name=$1 ORDER BY punkt FOR UPDATE',[alt]);
+    const altStatus=new Map(status.map(x=>[Number(x.punkt),x.erledigt===true]));
+    if(valid.name!==alt){
+      /* Neuer Name muss zunächst angelegt werden: FK auf name hat nur ON DELETE CASCADE. */
+      await client.query(
+        'INSERT INTO checklisten(name,aufgaben,sortierung) VALUES($1,$2::jsonb,$3)',
+        [valid.name,JSON.stringify(valid.aufgaben),old[0].sortierung]);
+      for(let i=0;i<zuordnung.length;i++)
+        if(zuordnung[i]!==null&&altStatus.has(zuordnung[i]))
+          await client.query(
+            'INSERT INTO checklisten_status(name,punkt,erledigt) VALUES($1,$2,$3)',
+            [valid.name,i,altStatus.get(zuordnung[i])]);
+      await client.query('DELETE FROM checklisten WHERE name=$1',[alt]);
+    }else{
+      await client.query('UPDATE checklisten SET aufgaben=$2::jsonb WHERE name=$1',
+        [alt,JSON.stringify(valid.aufgaben)]);
+      await client.query('DELETE FROM checklisten_status WHERE name=$1',[alt]);
+      for(let i=0;i<zuordnung.length;i++)
+        if(zuordnung[i]!==null&&altStatus.has(zuordnung[i]))
+          await client.query(
+            'INSERT INTO checklisten_status(name,punkt,erledigt) VALUES($1,$2,$3)',
+            [alt,i,altStatus.get(zuordnung[i])]);
+    }
+    await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
+      [req.user.id,'Checkliste bearbeitet: '+alt+(valid.name!==alt?' → '+valid.name:'')]);
+    await client.query('COMMIT');
+    res.json({name:valid.name,aufgaben:valid.aufgaben});
+  }catch(e){
+    await client.query('ROLLBACK').catch(()=>{});
+    chkFehler(res,next,e);
+  }finally{client.release()}
+});
+app.delete('/api/checklisten/:name',requireLogin,requireRight('chk',2),async(req,res,next)=>{
+  const name=String(req.params.name||'');
+  if(!name||name.length>250)return res.status(400).json({error:'Ungültiger Checklistenname'});
+  const client=await db.connect().catch(next);
+  if(!client)return;
+  try{
+    await client.query('BEGIN');
+    const {rowCount}=await client.query('DELETE FROM checklisten WHERE name=$1',[name]);
+    if(!rowCount){
+      await client.query('ROLLBACK');
+      return res.status(404).json({error:'Checkliste nicht gefunden'});
+    }
+    await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'del')",
+      [req.user.id,'Checkliste entfernt: '+name]);
+    await client.query('COMMIT');
+    res.json({ok:true});
+  }catch(e){await client.query('ROLLBACK').catch(()=>{});next(e)}
+  finally{client.release()}
+});
+
 /* ---------- Checklisten: serverseitig berechtigtes Abhaken ---------- */
 app.patch('/api/checklisten/:name/punkte/:index', requireLogin, requireRight('chk',2),
   async (req,res,next)=>{

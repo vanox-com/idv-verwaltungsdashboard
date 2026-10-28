@@ -885,6 +885,74 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 @media(prefers-reduced-motion:reduce){
  .dash-cell.dash-navigierbar>.kachel,.dash-cell.dash-navigierbar>.box{transition:none}
 }
+/* Das Original-Logo besitzt einen echten Alphakanal; keine Aufhellung durch Screen-Blending. */
+.idv-sidebar-logo,.idv-login-logo{mix-blend-mode:normal}
+
+/* Modernes Graphit-Dashboard, klare Schatten und zurückhaltende Struktur.
+   Keine externe Bildquelle, keine zusätzlichen Ladezeiten. */
+#app{
+  background:
+    radial-gradient(ellipse 720px 520px at 90% -4%,rgba(155,163,195,.105),transparent 72%),
+    radial-gradient(ellipse 900px 680px at 42% 95%,rgba(104,115,143,.095),transparent 73%),
+    linear-gradient(145deg,#1b1f25 0%,#1e2229 38%,#181d23 100%);
+}
+.workspace-main{
+  position:relative;isolation:isolate;
+}
+.workspace-main::before{
+  content:"";position:fixed;inset:0 0 0 267px;z-index:-1;pointer-events:none;
+  opacity:.43;
+  background-image:
+    linear-gradient(to right,rgba(195,207,222,.039) 1px,transparent 1px),
+    linear-gradient(to bottom,rgba(195,207,222,.035) 1px,transparent 1px);
+  background-size:55px 55px;
+  mask-image:linear-gradient(90deg,transparent,black 26%,black 83%,transparent);
+}
+.workspace-topbar{
+  background:linear-gradient(90deg,rgba(255,255,255,.012),rgba(255,255,255,0));
+  border-bottom:1px solid rgba(174,185,208,.19);
+}
+#inhalt>.hello{
+  background:linear-gradient(110deg,rgba(58,65,77,.96),rgba(40,45,55,.95)),
+    radial-gradient(circle at 90% 18%,rgba(169,177,210,.15),transparent 40%);
+  border-color:rgba(177,187,208,.25);
+}
+#inhalt>.hello::after{
+  content:"";position:absolute;right:20px;top:20px;width:130px;height:130px;
+  opacity:.11;pointer-events:none;border:1px solid #c1c9db;border-radius:50%;
+  box-shadow:0 0 0 23px rgba(179,188,211,.065),0 0 0 47px rgba(179,188,211,.04);
+}
+.dash-cell>.box,.dash-cell>.kachel{
+  background:linear-gradient(150deg,rgba(51,57,68,.94),rgba(37,43,52,.97));
+  backdrop-filter:blur(3px);
+}
+.dash-cell>.box:hover,.dash-cell>.kachel:hover{
+  border-color:rgba(164,177,214,.31);
+}
+@media(max-width:950px){.workspace-main::before{inset:0 0 0 244px}}
+@media(max-width:820px){.workspace-main::before{inset:0;opacity:.18}}
+/* Checklisten: Aufgaben als einzeln editierbare Bausteine. */
+.chk-card-actions{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 13px}
+.chk-card-actions button{min-height:33px;padding:5px 11px;font-size:12px}
+.chk-card-actions [data-check-remove]{color:#eab7c3}
+#checkEditDialog{width:min(720px,94vw);max-height:90vh;overflow-y:auto;
+  border:1px solid #646e86;border-radius:17px;background:#272d37;
+  color:#edf1f7;box-shadow:0 25px 78px rgba(0,0,0,.47);padding:25px}
+#checkEditDialog::backdrop{background:rgba(9,12,17,.77);backdrop-filter:blur(4px)}
+#checkEditDialog h2{margin:0 0 5px;font-size:23px}
+#checkEditDialog input{display:block;width:100%;box-sizing:border-box;margin:5px 0 0}
+.chk-edit-items{display:grid;gap:11px;margin:20px 0}
+.chk-edit-row{padding:13px 15px;border-radius:11px;border:1px solid #4b586b;
+  background:linear-gradient(135deg,#303844,#2d333d);display:grid;gap:11px}
+.chk-edit-row-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.chk-edit-row-head strong{font-size:13px;color:#d9e0ed}
+.chk-edit-actions{display:flex;align-items:center;gap:6px}
+.chk-edit-actions button{min-height:29px;padding:2px 10px;font-size:12px}
+.chk-edit-actions [data-chk-entfernen]{color:#eab7c3}
+.chk-edit-row label{display:block;font-size:12px;color:#aebdce}
+.chk-dialog-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px;margin-top:20px}
+#chkEditError{min-height:20px;margin-top:9px}
+
 </style>
 </head>
 <body>
@@ -893,7 +961,7 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 <div id="login">
   <div class="login-top"><div class="login-top-left">POLIZEI HESSEN<br>VERWALTUNGSPORTAL</div><div class="login-top-right">IDENTITYVALLEY · ROLEPLAY</div></div>
   <div class="login-center">
-    <div class="login-brand"><img class="idv-login-logo" src="/assets/idv-polizei-logo.svg" width="255" height="100" alt="Polizei IdentityValley GTA RP" decoding="async"><p>VERWALTUNGSPORTAL</p></div>
+    <div class="login-brand"><img class="idv-login-logo" src="/assets/idv-polizei-logo-transparent.svg" width="255" height="100" alt="Polizei IdentityValley GTA RP" decoding="async"><p>VERWALTUNGSPORTAL</p></div>
     <form class="karte" id="loginForm">
       <h2>Willkommen zurück</h2>
       <p class="hinweis">Melde dich an, um auf das Verwaltungsportal zuzugreifen.</p>
@@ -922,7 +990,7 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 </div>
 <div id="app" class="hide">
   <aside>
-    <div class="sidebar-brand"><img class="idv-sidebar-logo" src="/assets/idv-polizei-logo.svg" width="255" height="100" alt="Polizei IdentityValley GTA RP" decoding="async"><span class="sidebar-brand-caption">VERWALTUNGSPORTAL <span aria-hidden="true">·</span> GESCHÜTZTER ZUGANG</span></div>
+    <div class="sidebar-brand"><img class="idv-sidebar-logo" src="/assets/idv-polizei-logo-transparent.svg" width="255" height="100" alt="Polizei IdentityValley GTA RP" decoding="async"><span class="sidebar-brand-caption">VERWALTUNGSPORTAL <span aria-hidden="true">·</span> GESCHÜTZTER ZUGANG</span></div>
     <div id="menu"></div>
     <div class="me">
       <b id="meName"></b><span id="meRolle"></span>
@@ -2601,6 +2669,120 @@ const CHECKLIST_LINKS={
 function chkIstErledigt(name,i){
   return !!(D.checklistenStatus||[]).find(x=>x.name===name&&Number(x.punkt)===i&&x.erledigt);
 }
+
+/* Modularer Checklisten-Editor. Jede Aufgabe trägt ihren alten Index, damit
+   der serverseitige Häkchenstatus auch bei Umordnung erhalten bleibt. */
+let CHK_EDIT=null;
+function chkAufgabenAusDialog(){
+  const dialog=$('#checkEditDialog');
+  if(!dialog||!CHK_EDIT)return;
+  CHK_EDIT.items=[...dialog.querySelectorAll('[data-chk-row]')].map(row=>({
+    t:row.querySelector('[data-chk-text]')?.value||'',
+    u:row.querySelector('[data-chk-url]')?.value||'',
+    alt:Number.isInteger(Number(row.dataset.chkAlt))&&row.dataset.chkAlt!==''?Number(row.dataset.chkAlt):null
+  }));
+}
+function chkAufgabenZeichnen(){
+  const wrap=$('#checkEditItems');
+  if(!wrap||!CHK_EDIT)return;
+  wrap.innerHTML=CHK_EDIT.items.map((x,i)=>
+    '<div class="chk-edit-row" data-chk-row data-chk-alt="'+(x.alt===null?'':x.alt)+'">'+
+      '<div class="chk-edit-row-head"><strong>Aufgabe '+(i+1)+'</strong>'+
+        '<div class="chk-edit-actions">'+
+        '<button type="button" data-chk-auf="'+i+'" '+(i===0?'disabled':'')+' aria-label="Aufgabe nach oben">↑</button>'+
+        '<button type="button" data-chk-ab="'+i+'" '+(i===CHK_EDIT.items.length-1?'disabled':'')+' aria-label="Aufgabe nach unten">↓</button>'+
+        '<button type="button" data-chk-entfernen="'+i+'" aria-label="Aufgabe entfernen">Entfernen</button>'+
+        '</div></div>'+
+      '<label>Aufgabentext<input data-chk-text maxlength="500" required value="'+esc(x.t)+'" placeholder="Aufgabe beschreiben"></label>'+
+      '<label>Dokumentlink (optional)<input data-chk-url type="url" maxlength="2048" value="'+esc(x.u)+'" placeholder="https://..."></label>'+
+    '</div>'
+  ).join('')||'<p class="mut">Noch keine Aufgaben vorhanden. Füge unten eine Aufgabe hinzu.</p>';
+}
+function chkBearbeiten(name=null){
+  if(!can('chk',2))return;
+  const c=name===null?null:(D.checklisten||[]).find(x=>x.name===name);
+  if(name!==null&&!c)return;
+  CHK_EDIT={
+    original:name,
+    items:(c?.aufgaben||[]).map((x,i)=>({
+      t:typeof x==='string'?x:String(x?.t||''),
+      u:typeof x==='string'?String(CHECKLIST_LINKS[name]?.[i]||''):String(x?.u||''),
+      alt:i
+    }))
+  };
+  let dlg=$('#checkEditDialog');
+  if(!dlg){dlg=document.createElement('dialog');dlg.id='checkEditDialog';document.body.appendChild(dlg);}
+  dlg.innerHTML='<form id="checkEditForm">'+
+    '<h2>'+(c?'Checkliste bearbeiten':'Neue Checkliste')+'</h2>'+
+    '<p class="mut">Aufgaben einzeln hinzufügen, bearbeiten, umsortieren und entfernen. '+
+    'Vorhandene Häkchen bleiben bei einer Umordnung erhalten.</p>'+
+    '<label for="chkEditName">Name der Checkliste</label>'+
+    '<input id="chkEditName" maxlength="120" required value="'+esc(c?.name||'')+'" placeholder="z. B. Einstellung">'+
+    '<div id="checkEditItems" class="chk-edit-items"></div>'+
+    '<button type="button" id="chkItemAdd">+ Aufgabe hinzufügen</button>'+
+    '<p id="chkEditError" class="fehler" role="alert"></p>'+
+    '<div class="chk-dialog-actions"><button type="button" id="chkEditCancel">Abbrechen</button>'+
+    '<button class="p" id="chkEditSave" type="submit">Speichern</button></div></form>';
+  chkAufgabenZeichnen();
+  dlg.showModal();
+  dlg.onclick=e=>{
+    if(e.target.closest('#chkEditCancel')){dlg.close();CHK_EDIT=null;return}
+    if(e.target.closest('#chkItemAdd')){
+      chkAufgabenAusDialog();
+      CHK_EDIT.items.push({t:'',u:'',alt:null});
+      chkAufgabenZeichnen();
+      dlg.querySelector('[data-chk-row]:last-of-type [data-chk-text]')?.focus();
+      return;
+    }
+    const up=e.target.closest('[data-chk-auf]');
+    const down=e.target.closest('[data-chk-ab]');
+    const rem=e.target.closest('[data-chk-entfernen]');
+    if(!up&&!down&&!rem)return;
+    chkAufgabenAusDialog();
+    const i=Number((up||down||rem).dataset[up?'chkAuf':down?'chkAb':'chkEntfernen']);
+    if(!Number.isSafeInteger(i)||i<0||i>=CHK_EDIT.items.length)return;
+    if(rem)CHK_EDIT.items.splice(i,1);
+    else{
+      const j=i+(up?-1:1);
+      if(j>=0&&j<CHK_EDIT.items.length)
+        [CHK_EDIT.items[i],CHK_EDIT.items[j]]=[CHK_EDIT.items[j],CHK_EDIT.items[i]];
+    }
+    chkAufgabenZeichnen();
+  };
+  dlg.onsubmit=async e=>{
+    e.preventDefault();
+    if(!can('chk',2)||!CHK_EDIT)return;
+    chkAufgabenAusDialog();
+    const name=$('#chkEditName').value.trim();
+    const items=CHK_EDIT.items.map(x=>({t:x.t.trim(),u:x.u.trim()}));
+    const zuordnung=CHK_EDIT.items.map(x=>x.alt);
+    if(!name||name.length>120||items.length>100||items.some(x=>!x.t||x.t.length>500)){
+      $('#chkEditError').textContent='Bitte einen Namen und gültige Aufgabentexte eingeben (maximal 100 Aufgaben).';
+      return;
+    }
+    const speichern=$('#chkEditSave');speichern.disabled=true;
+    try{
+      const alt=CHK_EDIT.original;
+      await api(alt===null?'/checklisten':'/checklisten/'+encodeURIComponent(alt),{
+        method:alt===null?'POST':'PUT',
+        body:JSON.stringify({name,aufgaben:items,zuordnung})
+      });
+      dlg.close();CHK_EDIT=null;
+      await starten();
+    }catch(err){$('#chkEditError').textContent='Speichern fehlgeschlagen: '+err.message}
+    finally{speichern.disabled=false}
+  };
+  dlg.onclose=()=>{CHK_EDIT=null};
+}
+async function chkLoeschen(name){
+  if(!can('chk',2))return;
+  if(!confirm('Checkliste „'+name+'“ samt aller Aufgaben und Häkchen endgültig entfernen?'))return;
+  try{
+    await api('/checklisten/'+encodeURIComponent(name),{method:'DELETE'});
+    await starten();
+  }catch(err){const out=$('#checkInfo');if(out)out.textContent='Entfernen fehlgeschlagen: '+err.message}
+}
+
 function vChk(){
   const schreiben=can('chk',2),blocks=(D.checklisten||[]).map(c=>{
     const items=Array.isArray(c.aufgaben)?c.aufgaben:[];
@@ -2620,12 +2802,17 @@ function vChk(){
     }).join('');
     return '<section class="box checklist-box"><div class="checklist-head"><h3>'+esc(c.name)+'</h3>'+
       '<span class="tag '+(pct===100?'ok':'')+'">'+fertig+' / '+items.length+'</span></div>'+
+      (schreiben?'<div class="chk-card-actions">'+
+        '<button type="button" data-check-edit="'+esc(c.name)+'">Bearbeiten</button>'+
+        '<button type="button" data-check-remove="'+esc(c.name)+'">Entfernen</button>'+
+        '</div>':'')+
       '<div class="checklist-progress"><div style="width:'+pct+'%"></div></div>'+
       '<ul class="checklist-points">'+rows+'</ul></section>';
   }).join('');
   return '<h1>Checklisten</h1><div class="pers-bar">'+
     '<span class="mut">Gemeinsame Arbeitschecklisten für die Verwaltung. Fortschritt wird gespeichert.</span>'+
     '<span class="spacer"></span>'+(schreiben?
+      '<button type="button" class="p" id="checkAdd">+ Neue Checkliste</button>'+
       '<button type="button" id="checkReset">Alle Häkchen zurücksetzen</button>':'')+
     '</div><p id="checkInfo" class="mut" role="status"></p>'+
     '<div class="grid2">'+blocks+'</div>';
@@ -2664,7 +2851,12 @@ document.addEventListener('change',e=>{
   if(e.target.matches('[data-check-name]'))chkSetzen(e.target);
 });
 document.addEventListener('click',e=>{
-  if(e.target.closest('#checkReset'))chkZuruecksetzen();
+  if(e.target.closest('#checkReset')){chkZuruecksetzen();return;}
+  if(e.target.closest('#checkAdd')){chkBearbeiten();return;}
+  const bearbeiten=e.target.closest('[data-check-edit]');
+  if(bearbeiten){chkBearbeiten(bearbeiten.dataset.checkEdit);return;}
+  const del=e.target.closest('[data-check-remove]');
+  if(del)chkLoeschen(del.dataset.checkRemove);
 });
 
 
