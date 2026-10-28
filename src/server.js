@@ -394,21 +394,79 @@ app.patch('/api/sonder/:nr', requireLogin, requireRight('sonder', 2), async (req
   } catch (e) { next(e); }
 });
 
-/* Beförderung durchführen */
-app.post('/api/befoerdern', requireLogin, requireRight('bef', 2), async (req, res, next) => {
+/* Freigabe durch den Polizeioberrat (POR) verwalten. */
+app.patch('/api/por/:nr', requireLogin, requireRight('bef', 2), async (req, res, next) => {
   try {
-    const { nr, neuer_rang, grund, am } = req.body;
-    const { rows } = await db.query(`SELECT dienstgrad, vorname, nachname FROM personal WHERE personalnummer = $1`, [nr]);
-    if (!rows.length) return res.status(404).json({ error: 'Person nicht gefunden' });
-    await db.query(`UPDATE personal SET dienstgrad = $1 WHERE personalnummer = $2`, [neuer_rang, nr]);
-    await db.query(
-      `INSERT INTO befoerderungen (personalnummer, vorname, nachname, rang, neu_rang, grund, am)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [nr, rows[0].vorname, rows[0].nachname, rows[0].dienstgrad, neuer_rang, grund, am || null]);
-    await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'add')`,
-      [req.user.id, `Befördert: ${rows[0].nachname} ${rows[0].dienstgrad} → ${neuer_rang}`]);
-    res.json({ ok: true });
+    const nr = Number(req.params.nr);
+    const status = String(req.body.status || '');
+    const notiz = String(req.body.notiz || '').trim();
+    if (!Number.isSafeInteger(nr) || nr < 1) return res.status(400).json({ error: 'Ungültige Personalnummer' });
+    if (!['offen', 'beantragt', 'genehmigt', 'abgelehnt'].includes(status))
+      return res.status(400).json({ error: 'Ungültiger POR-Status' });
+    if (notiz.length > 1000) return res.status(400).json({ error: 'Notiz zu lang' });
+    const datum = status === 'genehmigt'
+      ? String(req.body.datum || new Date().toISOString().slice(0, 10)) : null;
+    if (datum && (!/^\d{4}-\d{2}-\d{2}$/.test(datum) || !Number.isFinite(Date.parse(datum))))
+      return res.status(400).json({ error: 'Ungültiges Datum' });
+    const { rows } = await db.query(
+      'UPDATE personal SET por_status = $1, por_notiz = $2, por_am = $3 WHERE personalnummer = $4 RETURNING personalnummer, por_status',
+      [status, notiz, datum, nr]);
+    if (!rows.length) return res.status(404).json({ error: 'Personalnummer nicht gefunden' });
+    await db.query("INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'edit')",
+      [req.user.id, 'POR-Freigabe bei ' + nr + ': ' + status]);
+    res.json({ ok: true, status });
   } catch (e) { next(e); }
+});
+
+/* Beförderung: Frist und POR-Status innerhalb einer DB-Transaktion prüfen.
+   Ein Client darf weder einen Rang überspringen noch den POR-Status umgehen. */
+app.post('/api/befoerdern', requireLogin, requireRight('bef', 2), async (req, res, next) => {
+  const nr = Number(req.body.nr);
+  if (!Number.isSafeInteger(nr) || nr < 1) return res.status(400).json({ error: 'Ungültige Personalnummer' });
+  const fail = (status, message) => Object.assign(new Error(message), { httpStatus: status });
+  const client = await db.connect().catch(next);
+  if (!client) return;
+  try {
+    await client.query('BEGIN');
+    const pResult = await client.query(
+      'SELECT personalnummer, vorname, nachname, status, dienstgrad, por_status, por_am, letzte_befoerderung, naechste_befoerderung FROM personal WHERE personalnummer = $1 FOR UPDATE',
+      [nr]);
+    if (!pResult.rows.length) throw fail(404, 'Personalnummer nicht gefunden');
+    const p = pResult.rows[0];
+    if (p.status === 'Gekündigt') throw fail(409, 'Gekündigtes Personal kann nicht befördert werden');
+    if (p.por_status !== 'genehmigt') throw fail(403, 'Beförderung nur mit gültiger POR-Freigabe möglich');
+    const raenge = (await client.query('SELECT name, tage FROM raenge ORDER BY sortierung, name')).rows;
+    const i = raenge.findIndex(r => r.name === p.dienstgrad);
+    if (i < 0 || !raenge[i].tage || !raenge[i + 1])
+      throw fail(409, 'Für diesen Dienstgrad ist keine weitere Beförderung vorgesehen');
+    const naechsterRang = raenge[i + 1].name;
+    if (req.body.neuer_rang && req.body.neuer_rang !== naechsterRang)
+      throw fail(409, 'Der nächste Dienstgrad stimmt nicht mit der Dienstgradfolge überein');
+    const pruefung = await client.query(
+      'SELECT COALESCE($1::date, $2::date + $3::integer) AS faellig',
+      [p.naechste_befoerderung, p.letzte_befoerderung, Number(raenge[i].tage)]);
+    const faellig = pruefung.rows[0].faellig;
+    if (!faellig) throw fail(409, 'Es fehlt ein gültiges Datum für die Beförderungsfrist');
+    if (Date.parse(String(faellig)) > Date.now())
+      throw fail(409, 'Beförderungsfrist ist noch nicht abgelaufen');
+    const grund = String(req.body.grund || 'Beförderung nach Dienstzeit').trim();
+    if (grund.length > 1000) throw fail(400, 'Beförderungsgrund zu lang');
+    await client.query(
+      "UPDATE personal SET dienstgrad=$1, letzte_befoerderung=CURRENT_DATE, naechste_befoerderung=NULL, por_status='offen', por_notiz='', por_am=NULL WHERE personalnummer=$2",
+      [naechsterRang, nr]);
+    await client.query(
+      "INSERT INTO befoerderungen (personalnummer, vorname, nachname, rang, neu_rang, grund, am, por) VALUES ($1,$2,$3,$4,$5,$6,CURRENT_DATE,$7)",
+      [nr, p.vorname, p.nachname, p.dienstgrad, naechsterRang, grund, 'POR genehmigt']);
+    await client.query(
+      "INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'add')",
+      [req.user.id, 'Befördert: ' + nr + ' ' + p.dienstgrad + ' → ' + naechsterRang + ' (POR genehmigt)']);
+    await client.query('COMMIT');
+    res.json({ ok: true, neuer_rang: naechsterRang });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (e.httpStatus) res.status(e.httpStatus).json({ error: e.message });
+    else next(e);
+  } finally { client.release(); }
 });
 
 /* Kündigung anlegen */
