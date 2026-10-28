@@ -233,8 +233,22 @@ function zeichneMenue() {
 }
 
 function zeichne() {
-  const f = { dash: vDash, pers: vPers, bef: vBef, sonder: vSonder, kue: vKue, dis: vDis, rout: vRout, chk: vChk, rl: vRl, org: vOrg, users: vUsers, log: vLog }[tab];
-  $('#inhalt').innerHTML = f ? f() : '<p>Dieser Bereich ist für deine Rolle nicht freigegeben.</p>';
+  if (tab === 'log') {
+    $('#inhalt').innerHTML = '<h1>Protokoll</h1><p>Lade Einträge …</p>';
+    vLog_().catch(err => {
+      $('#inhalt').innerHTML = '<h1>Protokoll</h1><p class="fehler">Protokoll konnte nicht geladen werden: ' + esc(err.message) + '</p>';
+    });
+    return;
+  }
+  try {
+    const ansichten = { dash: vDash, pers: vPers, bef: vBef, sonder: vSonder, kue: vKue,
+      dis: vDis, rout: vRout, chk: vChk, rl: vRl, org: vOrg, users: vUsers };
+    const f = ansichten[tab];
+    $('#inhalt').innerHTML = f ? f() : '<p>Dieser Bereich ist für deine Rolle nicht freigegeben.</p>';
+  } catch (err) {
+    $('#inhalt').innerHTML = '<h1>Fehler beim Laden</h1><p class="fehler">' + esc(err.message) + '</p>';
+    console.error('Ansicht konnte nicht aufgebaut werden:', err);
+  }
 }
 
 function tabelle(kopf, zeilen) {
