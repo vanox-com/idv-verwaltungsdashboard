@@ -493,7 +493,11 @@ app.get('/api/personalentwicklung',requireLogin,requireRight('pers',1),async(req
    db.query("SELECT to_char(eintrittsdatum,'YYYY-MM') AS monat,COUNT(*)::int AS anzahl FROM personal WHERE eintrittsdatum IS NOT NULL AND eintrittsdatum<=CURRENT_DATE GROUP BY 1 ORDER BY 1"),
    db.query("SELECT to_char(zeit,'YYYY-MM') AS monat,COUNT(*)::int AS anzahl FROM log WHERE art='edit' AND aktion ILIKE 'Personal % gekündigt%' GROUP BY 1 ORDER BY 1")
   ]);
-  res.json({eintritte:ein.rows,austritteProtokoll:aus.rows,hinweis:'Eintritte beruhen auf gespeicherten Eintrittsdaten. Austritte werden nur aus eindeutig protokollierten Vorgängen gezeigt; historische Bestandszahlen sind nicht vollständig rekonstruierbar.'});
+  const [kuendigungen,unbekannt]=await Promise.all([
+   db.query("SELECT to_char(kuendigungsdatum,'YYYY-MM') AS monat,COUNT(*)::int AS anzahl FROM kuendigungen WHERE kuendigungsdatum IS NOT NULL GROUP BY 1 ORDER BY 1"),
+   db.query('SELECT COUNT(*)::int AS anzahl FROM kuendigungen WHERE kuendigungsdatum IS NULL')
+  ]);
+  res.json({eintritte:ein.rows,austritteProtokoll:aus.rows,kuendigungen:kuendigungen.rows,kuendigungenOhneDatum:unbekannt.rows[0]?.anzahl||0,hinweis:'Eintritte und datierte Kündigungen stammen aus gespeicherten Vorgängen. Ältere Kündigungen ohne belegtes Datum werden nicht einem Monat zugeordnet.'});
  }catch(e){next(e)}
 });
 /* ---------- Lesen ---------- */
