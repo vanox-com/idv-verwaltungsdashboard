@@ -762,6 +762,8 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
     return res.status(409).json({error:'Dienstgrad ausschließlich über die Beförderungsverwaltung ändern'});
   const beantragterRang=String(body.beantragter_rang||'').trim();
   const rangBegruendung=String(body.rang_begruendung||'').trim();
+  const rangDatum=body.rang_datum?String(body.rang_datum):null;
+  if(rangDatum&&(!/^\d{4}-\d{2}-\d{2}$/.test(rangDatum)||!Number.isFinite(Date.parse(rangDatum))))return res.status(400).json({error:'Ungültiges Beförderungsdatum',feld:'letzte_befoerderung'});
   if(beantragterRang && (beantragterRang.length>150||rangBegruendung.length>1000))
     return res.status(400).json({error:'Ungültiger Rangänderungsantrag',feld:'dienstgrad'});
   if(!await darfVertraulichesPersonalBearbeiten(req.user.rolle,body))
@@ -829,7 +831,7 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
       'ernennungsurkunde,arbeitsvertrag_url,ernennungsurkunde_url,eintrittsdatum',werte);
     let rangantragAngelegt=false;
     if(beantragterRang && beantragterRang!==vorher[0].dienstgrad){
-      await client.query('INSERT INTO personal_rangantraege(personalnummer,alter_rang,beantragter_rang,begruendung,antragsteller_id) VALUES($1,$2,$3,$4,$5)',[nr,vorher[0].dienstgrad||'',beantragterRang,rangBegruendung,req.user.id]);
+      await client.query('INSERT INTO personal_rangantraege(personalnummer,alter_rang,beantragter_rang,begruendung,antragsteller_id,korrigiertes_befoerderungsdatum) VALUES($1,$2,$3,$4,$5,$6)',[nr,vorher[0].dienstgrad||'',beantragterRang,rangBegruendung,req.user.id,rangDatum]);
       rangantragAngelegt=true;
     }
     let kuendigungAngelegt=false,kuendigungVorhanden=false;
@@ -1180,7 +1182,7 @@ app.patch('/api/sonderzahlung/:id',requireLogin,requireRight('rout',2),
 /* Eigene Rangänderungen sind keine reguläre Beförderung und verlangen POR-Entscheidung. */
 app.get('/api/rangantraege',requireLogin,requireRight('pers',1),async(req,res,next)=>{
  try{
-  const {rows}=await db.query(`SELECT a.id,a.personalnummer,a.alter_rang,a.beantragter_rang,a.begruendung,a.status,a.erstellt,
+  const {rows}=await db.query(`SELECT a.id,a.personalnummer,a.alter_rang,a.beantragter_rang,a.begruendung,a.status,a.erstellt,a.korrigiertes_befoerderungsdatum,
    p.vorname,p.nachname FROM personal_rangantraege a JOIN personal p ON p.personalnummer=a.personalnummer
    ORDER BY CASE WHEN a.status='beantragt' THEN 0 ELSE 1 END,a.erstellt DESC LIMIT 100`);
   res.json(rows);
@@ -1211,8 +1213,8 @@ app.post('/api/rangantraege/:id/entscheidung',requireLogin,requireRight('por',2)
   const {rows}=await client.query('SELECT * FROM personal_rangantraege WHERE id=$1 FOR UPDATE',[id]);
   const a=rows[0];if(!a||a.status!=='beantragt'){await client.query('ROLLBACK');return res.status(409).json({error:'Antrag nicht mehr offen'});}
   if(genehmigt){
-   const result=await client.query('UPDATE personal SET dienstgrad=$1 WHERE personalnummer=$2 AND COALESCE(dienstgrad,\'\')=$3',
-    [a.beantragter_rang,a.personalnummer,a.alter_rang]);
+   const result=await client.query("UPDATE personal SET dienstgrad=$1,letzte_befoerderung=COALESCE($4::date,letzte_befoerderung),naechste_befoerderung=CASE WHEN $4::date IS NOT NULL THEN NULL ELSE naechste_befoerderung END WHERE personalnummer=$2 AND COALESCE(dienstgrad,'')=$3",
+    [a.beantragter_rang,a.personalnummer,a.alter_rang,a.korrigiertes_befoerderungsdatum]);
    if(!result.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'Dienstgrad hat sich inzwischen geändert; Antrag bitte neu stellen'});}
   }
   await client.query('UPDATE personal_rangantraege SET status=$1,entscheider_id=$2,entschieden_am=now() WHERE id=$3',
