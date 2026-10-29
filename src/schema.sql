@@ -594,3 +594,18 @@ ALTER TABLE portal_design_personal ADD COLUMN IF NOT EXISTS extras jsonb NOT NUL
 /* Historische Kündigungen ohne belegtes Datum bleiben unbekannt; neue Vorgänge werden datiert. */
 ALTER TABLE kuendigungen ADD COLUMN IF NOT EXISTS kuendigungsdatum date;
 ALTER TABLE kuendigungen ALTER COLUMN kuendigungsdatum SET DEFAULT CURRENT_DATE;
+
+/* Leserecht für abgeschlossene Rangänderungsentscheidungen.
+   POR-Berechtigte dürfen ebenso Einsicht nehmen. Keine allgemeine
+   Einsicht nur durch Beförderungs- oder Personal-Leserechte. */
+INSERT INTO role_perms(rolle,modul,stufe) VALUES
+ ('Administrator','ranghistorie',1),
+ ('Polizeirat','ranghistorie',1),
+ ('Leitungsdienst','ranghistorie',0),
+ ('Ausbilder','ranghistorie',0),
+ ('Mitarbeiter','ranghistorie',0)
+ON CONFLICT(rolle,modul) DO NOTHING;
+
+CREATE INDEX IF NOT EXISTS personal_rangantraege_historie_idx
+ ON personal_rangantraege(entschieden_am DESC,id DESC)
+ WHERE status IN ('genehmigt','abgelehnt');

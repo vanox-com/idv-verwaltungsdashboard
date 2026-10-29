@@ -1218,6 +1218,17 @@ html[data-portal-mode="hell"]:is(
  ):not([data-design-preset="flori"]) #app{background-attachment:scroll!important}
 }
 
+
+/* Beförderungsverwaltung: POR-Queue und auf Wunsch eingeblendete Historie. */
+.ranghist-top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.ranghist-top h3{margin-bottom:3px}
+.ranghist-top p{margin:0 0 10px}
+.ranghist-entry{align-items:center;gap:16px}
+.ranghist-entry p{margin:8px 0}
+.ranghist-entry small{display:block;color:var(--mut);margin:3px 0}
+.ranghist-entry .actions{flex-shrink:0}
+#ranghistorieListe[hidden]{display:none!important}
+
 </style>
 </head>
 <body>
@@ -2521,7 +2532,8 @@ function vBef() {
     '<td>'+(r.tage ? r.tage+' Tage':'–')+'</td><td>'+esc(r.bemerkung||'')+'</td><td>'+esc(r.grund||'')+'</td></tr>').join('');
   return '<h1>Beförderungen</h1><p class="mut">Fristen nach Beförderungsbedingungen. Keine Beförderung ohne POR-Freigabe.</p>' +
     (wartet ? '<div class="box idv-warnung"><b>'+wartet+'</b> POR-Anträge warten auf eine Entscheidung.</div>' : '') +
-    '<div id="rangantraegeBereich" class="box"><h3>Rangänderungen zur POR-Freigabe</h3><p class="mut">Lade Anträge …</p></div>'+ 
+    '<div id="rangantraegeBereich" class="box"><h3>Offene Rangänderungsanträge</h3><p class="mut">Lade Anträge …</p></div>'+ 
+    ((can('por',1)||can('ranghistorie',1))?'<section class="box" id="ranghistorieBereich"><div class="ranghist-top"><div><h3>Rangänderungs-Historie</h3><p class="mut">Abgeschlossene POR-Entscheidungen – nur für Berechtigte einsehbar.</p></div><button type="button" data-ranghistorie-toggle aria-expanded="false">Historie anzeigen</button></div><div id="ranghistorieListe" hidden></div></section>':'')+ 
     '<div class="tw"><table><thead><tr>'+['Person','Aktuell','Nächster Rang','Letzte Bef.','Fällig am','Friststatus','POR-Freigabe','Hinweis','Aktion'].map(t=>'<th>'+t+'</th>').join('') +
     '</tr></thead><tbody>'+(rows||'<tr><td colspan="9">Keine geplanten Beförderungen</td></tr>')+'</tbody></table></div>' +
     '<div class="box"><h3>Beförderungsbedingungen</h3><div class="tw"><table><thead><tr>'+
@@ -3782,7 +3794,7 @@ document.addEventListener('click',e=>{
   if(btn)textbausteinKopieren(btn);
 });
 
-const RECHTE_MODULE=[...MODS.filter(m=>!['users','system','statistik','meldungen'].includes(m[0])),['mitteilungen','Mitteilungen verwalten',''],['por','POR-Freigabe','']];
+const RECHTE_MODULE=[...MODS.filter(m=>!['users','system','statistik','meldungen'].includes(m[0])),['mitteilungen','Mitteilungen verwalten',''],['por','POR-Freigabe',''],['ranghistorie','Rangänderungs-Historie','']];
 let USER_ADMIN=null;
 function vUsers() {
   if(ME.rolle!=='Administrator')return '<p>Nur der Administrator darf Zugänge verwalten.</p>';
@@ -4372,17 +4384,75 @@ document.addEventListener('change',ev=>{
  if(gruppe)gruppe.value=automatischeGruppe(document.getElementById('p_nr')?.value,document.getElementById('p_dienstgrad')?.value||'');
 });
 
+function rangAntragName(a){
+ const name=[a.vorname,a.nachname].map(n=>String(n||'').trim()).filter(n=>n&&n!=='-').join(' ');
+ return name||('Personalnummer '+Number(a.personalnummer));
+}
 async function ladeRangantraege(){
  const area=$('#rangantraegeBereich');if(!area||!can('bef'))return;
  try{
   const list=await api('/rangantraege');if(!area.isConnected)return;
-  area.innerHTML='<h3>Rangänderungen zur POR-Freigabe</h3>'+
-   (list.length?list.map(a=>'<div class="dashboard-line" style="padding:12px 4px"><div><strong>'+esc(a.vorname+' '+a.nachname)+'</strong> · Nr. '+Number(a.personalnummer)+
-    '<p>'+esc(a.alter_rang)+' → '+esc(a.beantragter_rang)+' · '+esc(a.status)+'</p><small>'+esc(a.begruendung||'')+'</small></div>'+
-    (a.status==='beantragt'&&can('por',2)?'<div class="actions"><button type="button" data-rang-genehmigen="'+Number(a.id)+'">Genehmigen</button><button type="button" data-rang-ablehnen="'+Number(a.id)+'">Ablehnen</button></div>':'')+
-    '</div>').join(''):'<p class="mut">Keine Rangänderungsanträge vorhanden.</p>');
- }catch(e){area.textContent='Ranganträge konnten nicht geladen werden: '+e.message;}
+  area.innerHTML='<h3>Offene Rangänderungsanträge <span class="tag warn">'+list.length+'</span></h3>'+
+   '<p class="mut">Hier erscheinen ausschließlich Anträge, über die der POR noch nicht entschieden hat. Genehmigte Änderungen werden bei der Entscheidung sofort in der Personalakte übernommen.</p>'+
+   (list.length?list.map(a=>'<div class="dashboard-line ranghist-entry"><div><strong>'+esc(rangAntragName(a))+'</strong> · Nr. '+Number(a.personalnummer)+
+    '<p>'+esc(a.alter_rang||'Kein bisheriger Rang')+' → <strong>'+esc(a.beantragter_rang)+'</strong> <span class="tag warn">Wartet auf POR</span></p>'+
+    (a.korrigiertes_befoerderungsdatum?'<small>Maßgebliches Beförderungsdatum: '+fd(a.korrigiertes_befoerderungsdatum)+'</small>':'')+
+    (a.begruendung?'<small>Begründung: '+esc(a.begruendung)+'</small>':'')+'</div>'+
+    (can('por',2)?'<div class="actions"><button type="button" class="p" data-rang-genehmigen="'+Number(a.id)+'">Genehmigen</button><button type="button" data-rang-ablehnen="'+Number(a.id)+'">Ablehnen</button></div>':'<span class="tag warn">Entscheidung ausstehend</span>')+
+    '</div>').join(''):'<p class="mut">Keine offenen Rangänderungsanträge.</p>');
+ }catch(e){area.innerHTML='<h3>Offene Rangänderungsanträge</h3><p class="fehler">Anträge konnten nicht geladen werden: '+esc(e.message)+'</p>';}
 }
+function rangHistorieDatum(wert){
+ if(!wert)return 'Datum unbekannt';
+ const d=new Date(wert);
+ return Number.isNaN(d.valueOf())?'Datum unbekannt':d.toLocaleString('de-DE',{dateStyle:'medium',timeStyle:'short'});
+}
+let rangHistorieEintraege=[],rangHistorieOffset=0,rangHistorieWeiter=false,rangHistorieLaedt=false;
+function rangHistorieZeichnen(){
+ const area=$('#ranghistorieListe');if(!area||area.hidden)return;
+ area.innerHTML=(rangHistorieEintraege.length?rangHistorieEintraege.map(a=>{
+   const ok=a.status==='genehmigt';
+   return '<div class="dashboard-line ranghist-entry"><div><strong>'+esc(rangAntragName(a))+'</strong> · Nr. '+Number(a.personalnummer)+
+    ' <span class="tag '+(ok?'ok':'bad')+'">'+(ok?'Genehmigt und durchgeführt':'Abgelehnt')+'</span>'+
+    '<p>'+esc(a.alter_rang||'Kein bisheriger Rang')+' → <strong>'+esc(a.beantragter_rang)+'</strong></p>'+
+    '<small>Entscheidung: '+esc(rangHistorieDatum(a.entschieden_am))+
+    (a.entschieden_von?' · '+esc(a.entschieden_von):'')+'</small>'+
+    (a.beantragt_von?'<small>Beantragt von: '+esc(a.beantragt_von)+'</small>':'')+
+    (a.begruendung?'<small>Begründung: '+esc(a.begruendung)+'</small>':'')+
+    (a.korrigiertes_befoerderungsdatum?'<small>Maßgebliches Beförderungsdatum: '+fd(a.korrigiertes_befoerderungsdatum)+'</small>':'')+
+    '</div></div>';
+  }).join(''):'<p class="mut">Noch keine abgeschlossenen Rangänderungsanträge.</p>')+
+  (rangHistorieWeiter?'<div class="actions"><button type="button" data-ranghistorie-mehr>Weitere Einträge anzeigen</button></div>':'');
+}
+async function ladeRangHistorie(weitere=false){
+ const area=$('#ranghistorieListe');
+ if(!area||!can('bef',1)||!(can('por',1)||can('ranghistorie',1))||rangHistorieLaedt)return;
+ if(!weitere){rangHistorieEintraege=[];rangHistorieOffset=0;rangHistorieWeiter=false;}
+ rangHistorieLaedt=true;
+ area.hidden=false;
+ if(!weitere)area.innerHTML='<p class="mut">Historie wird geladen …</p>';
+ const aktuelleArea=area;
+ try{
+  const antwort=await api('/rangantraege/historie?limit=40&offset='+rangHistorieOffset);
+  if(!aktuelleArea.isConnected)return;
+  rangHistorieEintraege.push(...antwort.items);
+  rangHistorieOffset+=antwort.items.length;
+  rangHistorieWeiter=!!antwort.weitere;
+  rangHistorieZeichnen();
+ }catch(e){
+  if(aktuelleArea.isConnected)aktuelleArea.innerHTML='<p class="fehler" role="alert">Historie konnte nicht geladen werden: '+esc(e.message)+'</p>';
+ }finally{rangHistorieLaedt=false;}
+}
+document.addEventListener('click',event=>{
+ const toggle=event.target.closest('[data-ranghistorie-toggle]');
+ if(toggle){
+  const area=$('#ranghistorieListe');if(!area)return;
+  if(!area.hidden){area.hidden=true;toggle.textContent='Historie anzeigen';toggle.setAttribute('aria-expanded','false');}
+  else{toggle.textContent='Historie ausblenden';toggle.setAttribute('aria-expanded','true');void ladeRangHistorie(false);}
+  return;
+ }
+ if(event.target.closest('[data-ranghistorie-mehr]'))void ladeRangHistorie(true);
+});
 document.addEventListener('click',async event=>{
  const approve=event.target.closest('[data-rang-genehmigen]'),reject=event.target.closest('[data-rang-ablehnen]');
  if(!approve&&!reject||!can('por',2))return;

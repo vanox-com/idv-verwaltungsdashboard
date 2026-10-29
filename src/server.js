@@ -1195,13 +1195,50 @@ app.patch('/api/sonderzahlung/:id',requireLogin,requireRight('rout',2),
   });
 
 
-/* Eigene Rangänderungen sind keine reguläre Beförderung und verlangen POR-Entscheidung. */
-app.get('/api/rangantraege',requireLogin,requireRight('pers',1),async(req,res,next)=>{
+/* Offene Rangänderungen: ausschließlich unbearbeitete Anträge ausliefern.
+   Personalsachbearbeitung und Beförderungsverwaltung dürfen offene Anträge sehen;
+   getroffene Entscheidungen sind ausschließlich über den gesondert geschützten
+   Historien-Endpunkt abrufbar. */
+app.get('/api/rangantraege',requireLogin,async(req,res,next)=>{
  try{
-  const {rows}=await db.query(`SELECT a.id,a.personalnummer,a.alter_rang,a.beantragter_rang,a.begruendung,a.status,a.erstellt,a.korrigiertes_befoerderungsdatum,
-   p.vorname,p.nachname FROM personal_rangantraege a JOIN personal p ON p.personalnummer=a.personalnummer
-   ORDER BY CASE WHEN a.status='beantragt' THEN 0 ELSE 1 END,a.erstellt DESC LIMIT 100`);
+  const rechte=await effektiveRechte(req.user);
+  if((rechte.pers||0)<1&&(rechte.bef||0)<1)
+   return res.status(403).json({error:'Keine Berechtigung für Rangänderungsanträge'});
+  const {rows}=await db.query(`SELECT a.id,a.personalnummer,a.alter_rang,a.beantragter_rang,
+     a.begruendung,a.status,a.erstellt,a.korrigiertes_befoerderungsdatum,
+     p.vorname,p.nachname
+    FROM personal_rangantraege a
+    JOIN personal p ON p.personalnummer=a.personalnummer
+    WHERE a.status='beantragt'
+    ORDER BY a.erstellt ASC,a.id ASC LIMIT 200`);
   res.json(rows);
+ }catch(e){next(e)}
+});
+
+/* Abgeschlossene Rangänderungen sind revisionsfähig gespeichert.
+   Die Historie setzt Beförderungen-Leserecht UND POR- oder Historienrecht voraus;
+   weder gewöhnliche Personal- noch Beförderungsleser erhalten sie automatisch. */
+app.get('/api/rangantraege/historie',requireLogin,requireRight('bef',1),async(req,res,next)=>{
+ try{
+  const rechte=await effektiveRechte(req.user);
+  if((rechte.por||0)<1&&(rechte.ranghistorie||0)<1)
+   return res.status(403).json({error:'Kein Recht zur Einsicht in die Rangänderungs-Historie'});
+  const limit=Number(req.query.limit??40),offset=Number(req.query.offset??0);
+  if(!Number.isSafeInteger(limit)||limit<1||limit>100||
+     !Number.isSafeInteger(offset)||offset<0||offset>100000)
+   return res.status(400).json({error:'Ungültige Historien-Seite'});
+  const {rows}=await db.query(`SELECT a.id,a.personalnummer,a.alter_rang,a.beantragter_rang,
+      a.begruendung,a.status,a.erstellt,a.entschieden_am,a.korrigiertes_befoerderungsdatum,
+      p.vorname,p.nachname,
+      entscheidung.anzeigename AS entschieden_von, antrag.anzeigename AS beantragt_von
+     FROM personal_rangantraege a
+     LEFT JOIN personal p ON p.personalnummer=a.personalnummer
+     LEFT JOIN users entscheidung ON entscheidung.id=a.entscheider_id
+     LEFT JOIN users antrag ON antrag.id=a.antragsteller_id
+     WHERE a.status IN ('genehmigt','abgelehnt')
+     ORDER BY a.entschieden_am DESC NULLS LAST,a.id DESC
+     LIMIT $1 OFFSET $2`,[limit+1,offset]);
+  res.json({items:rows.slice(0,limit),weitere:rows.length>limit});
  }catch(e){next(e)}
 });
 app.post('/api/rangantraege',requireLogin,requireRight('pers',2),async(req,res,next)=>{
@@ -1825,7 +1862,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
   try {
     const rolle = req.params.rolle, modul = req.params.modul;
     const stufe = req.body?.stufe;
-    const erlaubteModule = new Set(['dash','pers','bef','rout','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','texte','rechtesimulator','design','backup','mitteilungen']);
+    const erlaubteModule = new Set(['dash','pers','bef','rout','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','texte','rechtesimulator','design','backup','mitteilungen']);
     if (rolle === 'Administrator')
       return res.status(403).json({ error: 'Administratorrechte sind fest' });
     if (!erlaubteModule.has(modul) || ![0, 1, 2].includes(stufe))
@@ -1847,7 +1884,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
 app.patch('/api/users/:id/recht/:modul',requireLogin,nurAdmin,async(req,res,next)=>{
   try{
     const userId=Number(req.params.id),modul=req.params.modul,stufe=req.body?.stufe;
-    const erlaubte=new Set(['dash','pers','bef','rout','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','texte','rechtesimulator','design','backup','mitteilungen']);
+    const erlaubte=new Set(['dash','pers','bef','rout','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','texte','rechtesimulator','design','backup','mitteilungen']);
     if(!Number.isSafeInteger(userId)||userId<1||!erlaubte.has(modul)||
        ![null,0,1,2].includes(stufe))
       return res.status(400).json({error:'Ungültige Berechtigung'});
