@@ -1474,6 +1474,7 @@ function zeichne() {
     if(tab === 'backup') ladeBackup();
     if(tab === 'rechtesimulator') ladeRechteSimulator();
     if(tab === 'design') ladeDesign();
+    if(tab === 'bef') ladeRangantraege();
     if(tab === 'users') ladeBenutzer().catch(err => { if($('#benutzerBereich')) $('#benutzerBereich').textContent = 'Benutzerverwaltung konnte nicht geladen werden: ' + err.message; });
   } catch (err) {
     $('#inhalt').innerHTML = '<h1>Fehler beim Laden</h1><p class="fehler">' + esc(err.message) + '</p>';
@@ -1954,6 +1955,14 @@ function personalAnzeigen(nr) {
     '<div class="actions"><button type="button" id="persAbbrechen">Schließen</button>' +
     (can('pers',2) ? '<button type="button" class="p" data-edit-person="' + Number(nr) + '">Bearbeiten</button>' : '') + '</div>';
   dialog.showModal();
+  if(!neu)$('#persRangantrag').addEventListener('click',async()=>{
+    const neuerRang=$('#p_dienstgrad').value;
+    if(neuerRang===(p.dienstgrad||'')){alert('Bitte zuerst einen anderen Dienstgrad auswählen.');return;}
+    const grund=prompt('Begründung für die POR-Freigabe der Rangänderung:')||'';
+    if(!grund.trim())return;
+    try{await api('/rangantraege',{method:'POST',body:JSON.stringify({personalnummer:Number(nr),beantragter_rang:neuerRang,begruendung:grund})});alert('Rangänderung beim POR beantragt. Die Personalakte behält bis zur Genehmigung den bisherigen Dienstgrad.');}
+    catch(e){alert('Antrag fehlgeschlagen: '+e.message);}
+  });
   $('#persAbbrechen').addEventListener('click',personalDialogSchliessen);
   if (ME.sensibel) copnetLaden(Number(nr), p).catch(() => {});
 }
@@ -2081,7 +2090,7 @@ function personalBearbeiten(nr) {
     personalSelect('Mitarbeitergruppe (automatischer Vorschlag, manuell änderbar)','p_gruppe',gruppen,p.gruppe || 'Nicht zugeordnet'),
     personalSelect('Beschäftigungsart','p_beschaeftigungsart',D.systemOptionen?.beschaeftigungsarten||['Hauptberuf','Nebenberuf'],p.beschaeftigungsart || (p.gruppe === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf')),
     (neu ? personalSelect('Dienstgrad (Einstufung bei Eintritt)','p_dienstgrad',raenge.length?raenge:[''],p.dienstgrad || '') :
-      personalFeld('Dienstgrad (nur über Beförderungen änderbar)','p_dienstgrad',p.dienstgrad,'text','readonly')),
+      personalSelect('Dienstgrad (Änderung nur nach POR-Freigabe)','p_dienstgrad',raenge,p.dienstgrad||'')),
     personalFeld('Eintrittsdatum','p_eintrittsdatum',datum(p.eintrittsdatum),'date'),
     personalFeld('Nebenjob','p_nebenjob',p.nebenjob)
   ];
@@ -2121,6 +2130,7 @@ function personalBearbeiten(nr) {
     (!neu ? ' Dienstgrade können nur mit der POR-Freigabe in der Beförderungsverwaltung geändert werden.' : '') + '</div>' +
     '<form id="personalForm"><div class="pers-form">' + felder.join('') + '</div>' +
     '<div class="error" id="persFormFehler" role="alert"></div><div class="actions">' +
+    (!neu ? '<button id="persRangantrag" type="button">Rangänderung beim POR beantragen</button>' : '') +
     '<button id="persAbbrechen" type="button">Abbrechen</button>' +
     '<button id="persSpeichern" class="p" type="submit">Speichern</button></div></form>';
   dialog.showModal();
@@ -2262,6 +2272,7 @@ function vBef() {
     '<td>'+(r.tage ? r.tage+' Tage':'–')+'</td><td>'+esc(r.bemerkung||'')+'</td><td>'+esc(r.grund||'')+'</td></tr>').join('');
   return '<h1>Beförderungen</h1><p class="mut">Fristen nach Beförderungsbedingungen. Keine Beförderung ohne POR-Freigabe.</p>' +
     (wartet ? '<div class="box idv-warnung"><b>'+wartet+'</b> POR-Anträge warten auf eine Entscheidung.</div>' : '') +
+    '<div id="rangantraegeBereich" class="box"><h3>Rangänderungen zur POR-Freigabe</h3><p class="mut">Lade Anträge …</p></div>'+ 
     '<div class="tw"><table><thead><tr>'+['Person','Aktuell','Nächster Rang','Letzte Bef.','Fällig am','Friststatus','POR-Freigabe','Hinweis','Aktion'].map(t=>'<th>'+t+'</th>').join('') +
     '</tr></thead><tbody>'+(rows||'<tr><td colspan="9">Keine geplanten Beförderungen</td></tr>')+'</tbody></table></div>' +
     '<div class="box"><h3>Beförderungsbedingungen</h3><div class="tw"><table><thead><tr>'+
@@ -3918,6 +3929,27 @@ document.addEventListener('change',ev=>{
  if(!['p_nr','p_dienstgrad'].includes(ev.target.id))return;
  const gruppe=document.getElementById('p_gruppe');
  if(gruppe)gruppe.value=automatischeGruppe(document.getElementById('p_nr')?.value,document.getElementById('p_dienstgrad')?.value||'');
+});
+
+async function ladeRangantraege(){
+ const area=$('#rangantraegeBereich');if(!area||!can('bef'))return;
+ try{
+  const list=await api('/rangantraege');if(!area.isConnected)return;
+  area.innerHTML='<h3>Rangänderungen zur POR-Freigabe</h3>'+
+   (list.length?list.map(a=>'<div class="dashboard-line" style="padding:12px 4px"><div><strong>'+esc(a.vorname+' '+a.nachname)+'</strong> · Nr. '+Number(a.personalnummer)+
+    '<p>'+esc(a.alter_rang)+' → '+esc(a.beantragter_rang)+' · '+esc(a.status)+'</p><small>'+esc(a.begruendung||'')+'</small></div>'+
+    (a.status==='beantragt'&&can('por',2)?'<div class="actions"><button type="button" data-rang-genehmigen="'+Number(a.id)+'">Genehmigen</button><button type="button" data-rang-ablehnen="'+Number(a.id)+'">Ablehnen</button></div>':'')+
+    '</div>').join(''):'<p class="mut">Keine Rangänderungsanträge vorhanden.</p>');
+ }catch(e){area.textContent='Ranganträge konnten nicht geladen werden: '+e.message;}
+}
+document.addEventListener('click',async event=>{
+ const approve=event.target.closest('[data-rang-genehmigen]'),reject=event.target.closest('[data-rang-ablehnen]');
+ if(!approve&&!reject||!can('por',2))return;
+ const id=Number((approve||reject).dataset[approve?'rangGenehmigen':'rangAblehnen']);
+ const yes=!!approve;
+ if(!confirm('Rangänderung '+(yes?'genehmigen und sofort übernehmen':'ablehnen')+'?'))return;
+ try{await api('/rangantraege/'+id+'/entscheidung',{method:'POST',body:JSON.stringify({genehmigt:yes})});await starten();if(tab==='bef')ladeRangantraege();}
+ catch(e){alert('POR-Entscheidung fehlgeschlagen: '+e.message);}
 });
 /* ---------- Start ---------- */
 
