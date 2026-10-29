@@ -479,14 +479,34 @@ aside .me button{
   padding:16px 3px;
   border-bottom:1px solid rgba(182,202,219,.15);
 }
+/* Gleiches SVG wie der aktuelle Menüpunkt, farbig je Navigationsgruppe. */
 .workspace-topbar-icon{
+  --module-accent:#74c9f4;
+  --module-soft:rgba(54,160,214,.23);
+  --module-border:rgba(102,200,249,.45);
   display:grid;place-items:center;
   width:43px;height:43px;flex-shrink:0;border-radius:12px;
-  background:linear-gradient(145deg,rgba(135,155,204,.23),rgba(151,137,196,.2));
-  border:1px solid rgba(167,180,221,.35);
-  color:#d6def7;
-  box-shadow:0 7px 25px rgba(103,113,174,.12);
-  font-weight:850;font-size:12px;letter-spacing:.045em;
+  background:linear-gradient(145deg,var(--module-soft),rgba(23,32,51,.75));
+  border:1px solid var(--module-border);
+  color:var(--module-accent);
+  box-shadow:0 7px 25px rgba(0,0,0,.15),inset 0 1px 0 rgba(255,255,255,.06);
+  transition:color .2s,background .2s,border-color .2s;
+}
+.workspace-topbar-icon .nav-icon{
+  width:24px;height:24px;color:inherit;
+  stroke-width:1.85;
+}
+.workspace-topbar-icon[data-group="personal"]{
+  --module-accent:#82b6ff;--module-soft:rgba(70,121,231,.3);--module-border:rgba(112,164,255,.44);
+}
+.workspace-topbar-icon[data-group="organisation"]{
+  --module-accent:#c4a0fc;--module-soft:rgba(143,91,206,.3);--module-border:rgba(196,160,252,.42);
+}
+.workspace-topbar-icon[data-group="vorgaenge"]{
+  --module-accent:#ffbd78;--module-soft:rgba(222,133,52,.26);--module-border:rgba(255,189,120,.42);
+}
+.workspace-topbar-icon[data-group="verwaltung"]{
+  --module-accent:#70ddcb;--module-soft:rgba(45,169,156,.26);--module-border:rgba(112,221,203,.42);
 }
 .workspace-topbar-title{display:flex;flex-direction:column;line-height:1.48}
 .workspace-topbar-title strong{
@@ -1361,7 +1381,7 @@ body:has(#login:not(.hide)){
       <div style="margin-top:12px;font-size:11px"><a href="/datenschutz" target="_blank" rel="noopener noreferrer">Datenschutz</a> · <a href="/start" target="_blank" rel="noopener noreferrer">Über das Portal</a></div>
     </div>
   </aside>
-  <main class="workspace-main"><header class="workspace-topbar"><div class="workspace-topbar-icon" aria-hidden="true">IV</div><div class="workspace-topbar-title"><strong>VERWALTUNGSZENTRALE</strong><span id="workspaceBereich">Dashboard</span></div><span class="workspace-topbar-caption"><span class="workspace-status-dot" aria-hidden="true"></span>IDENTITYVALLEY · GTA RP</span></header><div id="inhalt"></div></main>
+  <main class="workspace-main"><header class="workspace-topbar"><div class="workspace-topbar-icon" id="workspaceTopbarIcon" data-group="uebersicht" aria-hidden="true"></div><div class="workspace-topbar-title"><strong>VERWALTUNGSZENTRALE</strong><span id="workspaceBereich">Dashboard</span></div><span class="workspace-topbar-caption"><span class="workspace-status-dot" aria-hidden="true"></span>IDENTITYVALLEY · GTA RP</span></header><div id="inhalt"></div></main>
 </div>
 <dialog id="personalDialog" aria-label="Personalakte"></dialog><dialog id="sfDialog" aria-label="Sonderfunktionen bearbeiten"></dialog><dialog id="porDialog" aria-label="POR-Freigabe"></dialog>
 
@@ -1730,6 +1750,12 @@ function zeichneMenue() {
   const aktuellesModul=MODS.find(m=>m[0]===tab);
   const aktuellerTitel=$('#workspaceBereich');
   if(aktuellerTitel)aktuellerTitel.textContent=aktuellesModul?.[1]||'Dashboard';
+  // Identisches Liniensymbol wie links im Menü, mit farbigem Gruppendesign.
+  const bereichSymbol=$('#workspaceTopbarIcon');
+  if(bereichSymbol){
+    bereichSymbol.innerHTML=navIcon(tab);
+    bereichSymbol.dataset.group=NAV_GRUPPEN.find(g=>g.module.includes(tab))?.id||'uebersicht';
+  }
   const menu=$('#menu');
   const module=new Map(MODS.map(m=>[m[0],m]));
   menu.innerHTML=NAV_GRUPPEN.map(g=>{
