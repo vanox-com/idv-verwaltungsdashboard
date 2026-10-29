@@ -429,7 +429,7 @@ app.get('/api/backup-status',requireLogin,requireRight('backup',1),async(req,res
 
 /* Design wird zentral gespeichert; nur Administratoren dürfen es ändern. */
 
-const DESIGN_MOTIVE=['wappen','verlauf','ohne','nachtblau','stahl','raster','licht','minimal','einsatzszene'];
+const DESIGN_MOTIVE=['wappen','verlauf','ohne','nachtblau','stahl','raster','licht','minimal','einsatzszene','streife-nacht','streife-einsatz','polizeiweste'];
 const DESIGN_KEYS=['flaeche','seitenleiste','rahmen','schrift','sekundaer','highlight'];
 const HEX=/^#[0-9a-fA-F]{6}$/;
 function valideDesign(d){
