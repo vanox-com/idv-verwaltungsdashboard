@@ -587,3 +587,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS personal_rangantraege_ein_offener_idx
  ON personal_rangantraege(personalnummer) WHERE status='beantragt';
 
 ALTER TABLE personal_rangantraege ADD COLUMN IF NOT EXISTS korrigiertes_befoerderungsdatum date;
+
+ALTER TABLE portal_design ADD COLUMN IF NOT EXISTS extras jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE portal_design_personal ADD COLUMN IF NOT EXISTS extras jsonb NOT NULL DEFAULT '{}'::jsonb;
