@@ -316,7 +316,7 @@ app.put('/api/system-optionen/:key',requireLogin,async(req,res,next)=>{
   res.json({ok:true});
  }catch(e){next(e)}
 });
-app.get('/api/personal/:nr/verlauf',requireLogin,requireRight('pers',1),async(req,res,next)=>{
+app.get('/api/personal/:nr/verlauf',requireLogin,requireRight('pers',1),requireRight('persverlauf',1),async(req,res,next)=>{
  try{
   const nr=Number(req.params.nr);
   if(!Number.isSafeInteger(nr)||nr<1)return res.status(400).json({error:'Ungültige Personalnummer'});
@@ -336,23 +336,39 @@ app.get('/api/personal/:nr/verlauf',requireLogin,requireRight('pers',1),async(re
   res.json(events.sort((a,b)=>String(b.zeit||'').localeCompare(String(a.zeit||''))));
  }catch(e){next(e)}
 });
-app.get('/api/benachrichtigungen',requireLogin,async(req,res,next)=>{
+
+/* Mitteilungen sind nur für die konkret zugewiesenen Konten abrufbar. */
+app.get('/api/mitteilungen',requireLogin,requireRight('mitteilungen',1),async(req,res,next)=>{
  try{
-  const rights=await effektiveRechte(req.user);
-  if(!(rights.log>=1))return res.json([]);
-  const {rows}=await db.query("SELECT l.id,l.zeit,l.aktion,l.art, (g.user_id IS NOT NULL) AS gelesen FROM log l LEFT JOIN benachrichtigungen_gelesen g ON g.meldung_id=l.id AND g.user_id=$1 WHERE l.art IN ('add','edit','del') ORDER BY l.zeit DESC LIMIT 35",[req.user.id]);
+  const {rows}=await db.query(
+   'SELECT m.id,m.titel,m.inhalt,m.erstellt FROM portal_meldungen m JOIN portal_meldung_empfaenger e ON e.meldung_id=m.id WHERE e.user_id=$1 ORDER BY m.erstellt DESC LIMIT 30',[req.user.id]);
   res.json(rows);
  }catch(e){next(e)}
 });
-app.post('/api/benachrichtigungen/:id/gelesen',requireLogin,async(req,res,next)=>{
+app.get('/api/mitteilungen/empfaenger',requireLogin,requireRight('mitteilungen',2),async(req,res,next)=>{
  try{
-  const rights=await effektiveRechte(req.user);
-  if(!(rights.log>=1))return res.status(403).json({error:'Keine Berechtigung'});
-  const id=Number(req.params.id);
-  if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:'Ungültige ID'});
-  await db.query('INSERT INTO benachrichtigungen_gelesen(user_id,meldung_id) SELECT $1,id FROM log WHERE id=$2 ON CONFLICT DO NOTHING',[req.user.id,id]);
-  res.json({ok:true});
+  const {rows}=await db.query('SELECT id,anzeigename,rolle,dienstnummer FROM users WHERE gesperrt=false ORDER BY anzeigename');
+  res.json(rows);
  }catch(e){next(e)}
+});
+app.post('/api/mitteilungen',requireLogin,requireRight('mitteilungen',2),async(req,res,next)=>{
+ const b=req.body||{},titel=String(b.titel||'').trim(),inhalt=String(b.inhalt||'').trim();
+ const ids=Array.isArray(b.userIds)?b.userIds:[];
+ const rollen=Array.isArray(b.rollen)?b.rollen:[];
+ if(!titel||!inhalt||titel.length>140||inhalt.length>3000||ids.length>500||rollen.length>30||
+    !ids.every(x=>Number.isSafeInteger(x)&&x>0)||!rollen.every(x=>typeof x==='string'&&x.length<100)||
+    (!ids.length&&!rollen.length))return res.status(400).json({error:'Ungültige Mitteilung oder Empfänger'});
+ const client=await db.connect().catch(next);if(!client)return;
+ try{
+  await client.query('BEGIN');
+  const recipients=await client.query('SELECT id FROM users WHERE gesperrt=false AND (id=ANY($1::int[]) OR rolle=ANY($2::text[]))',[ids,rollen]);
+  if(!recipients.rows.length){await client.query('ROLLBACK');return res.status(400).json({error:'Keine gültigen Empfänger'});}
+  const {rows}=await client.query('INSERT INTO portal_meldungen(titel,inhalt,absender_id) VALUES($1,$2,$3) RETURNING id',[titel,inhalt,req.user.id]);
+  for(const r of recipients.rows)await client.query('INSERT INTO portal_meldung_empfaenger(meldung_id,user_id) VALUES($1,$2)',[rows[0].id,r.id]);
+  await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",[req.user.id,'Mitteilung an '+recipients.rows.length+' Empfänger erstellt']);
+  await client.query('COMMIT');
+  res.json({ok:true,anzahl:recipients.rows.length});
+ }catch(e){await client.query('ROLLBACK').catch(()=>{});next(e)}finally{client.release()}
 });
 app.get('/api/personalstatistik',requireLogin,requireRight('pers',1),async(req,res,next)=>{
  try{
