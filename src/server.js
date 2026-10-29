@@ -292,6 +292,72 @@ app.delete('/api/bekanntmachungen/:id',requireLogin,async(req,res,next)=>{
   }catch(e){next(e)}
 });
 
+
+/* Administrierbare Auswahlfelder: globale Werte werden serverseitig geprüft. */
+app.get('/api/system-optionen',requireLogin,async(req,res,next)=>{
+ try{
+  const {rows}=await db.query('SELECT schluessel,werte FROM system_optionen ORDER BY schluessel');
+  res.json(Object.fromEntries(rows.map(x=>[x.schluessel,x.werte])));
+ }catch(e){next(e)}
+});
+app.put('/api/system-optionen/:key',requireLogin,async(req,res,next)=>{
+ try{
+  if(req.user.rolle!=='Administrator')return res.status(403).json({error:'Nur Administratoren'});
+  const key=req.params.key;
+  if(!['mitarbeitergruppen','beschaeftigungsarten'].includes(key))return res.status(400).json({error:'Unbekanntes Feld'});
+  const werte=req.body?.werte;
+  if(!Array.isArray(werte)||werte.length<1||werte.length>40||!werte.every(x=>typeof x==='string'&&x.trim().length>0&&x.length<=80)||new Set(werte).size!==werte.length)
+   return res.status(400).json({error:'Ungültige Auswahlwerte'});
+  const required=key==='beschaeftigungsarten'?['Hauptberuf','Nebenberuf']:['Mittlerer Dienst','Gehobener Dienst','Polizeirat','Leitungsdienst','Nicht zugeordnet'];
+  if(required.some(x=>!werte.includes(x)))return res.status(400).json({error:'Basiswerte dürfen nicht entfernt werden'});
+  await db.query('INSERT INTO system_optionen(schluessel,werte) VALUES($1,$2::jsonb) ON CONFLICT(schluessel) DO UPDATE SET werte=EXCLUDED.werte,aktualisiert=now()',[key,JSON.stringify(werte)]);
+  await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",[req.user.id,'Systemoptionen geändert: '+key]);
+  res.json({ok:true});
+ }catch(e){next(e)}
+});
+app.get('/api/personal/:nr/verlauf',requireLogin,requireRight('pers',1),async(req,res,next)=>{
+ try{
+  const nr=Number(req.params.nr);
+  if(!Number.isSafeInteger(nr)||nr<1)return res.status(400).json({error:'Ungültige Personalnummer'});
+  const {rows:person}=await db.query('SELECT personalnummer,eintrittsdatum FROM personal WHERE personalnummer=$1',[nr]);
+  if(!person.length)return res.status(404).json({error:'Personalakte nicht gefunden'});
+  const events=[];
+  if(person[0].eintrittsdatum)events.push({zeit:person[0].eintrittsdatum,aktion:'Eintritt in den Dienst',art:'eintritt'});
+  const logs=await db.query("SELECT l.zeit,l.aktion,l.art,COALESCE(u.anzeigename,'–') AS benutzer FROM log l LEFT JOIN users u ON u.id=l.user_id WHERE (l.aktion ~* ('(Personal|Personalnummer|Disziplinarakte|Kündigung automatisch angelegt):? '||$1::text||'([^0-9]|$)')) ORDER BY l.zeit DESC LIMIT 100",[nr]);
+  events.push(...logs.rows);
+  if((await effektiveRechte(req.user)).dis>=1){
+   const ds=await db.query('SELECT slots FROM disziplin WHERE personalnummer=$1',[nr]);
+   const names=['Ermahnung','Verwarnung','Abmahnung','Suspendierung','Degradierung','Entlassung'];
+   (ds.rows[0]?.slots||[]).forEach((x,i)=>{if(x?.done)events.push({zeit:x.d||null,aktion:'Disziplinarmaßnahme: '+(x.t||names[i]||'Maßnahme'),art:'disziplin'});});
+  }
+  res.json(events.sort((a,b)=>String(b.zeit||'').localeCompare(String(a.zeit||''))));
+ }catch(e){next(e)}
+});
+app.get('/api/benachrichtigungen',requireLogin,async(req,res,next)=>{
+ try{
+  const rights=await effektiveRechte(req.user);
+  if(!(rights.log>=1))return res.json([]);
+  const {rows}=await db.query("SELECT l.id,l.zeit,l.aktion,l.art, (g.user_id IS NOT NULL) AS gelesen FROM log l LEFT JOIN benachrichtigungen_gelesen g ON g.meldung_id=l.id AND g.user_id=$1 WHERE l.art IN ('add','edit','del') ORDER BY l.zeit DESC LIMIT 35",[req.user.id]);
+  res.json(rows);
+ }catch(e){next(e)}
+});
+app.post('/api/benachrichtigungen/:id/gelesen',requireLogin,async(req,res,next)=>{
+ try{
+  const rights=await effektiveRechte(req.user);
+  if(!(rights.log>=1))return res.status(403).json({error:'Keine Berechtigung'});
+  const id=Number(req.params.id);
+  if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:'Ungültige ID'});
+  await db.query('INSERT INTO benachrichtigungen_gelesen(user_id,meldung_id) SELECT $1,id FROM log WHERE id=$2 ON CONFLICT DO NOTHING',[req.user.id,id]);
+  res.json({ok:true});
+ }catch(e){next(e)}
+});
+app.get('/api/personalstatistik',requireLogin,requireRight('pers',1),async(req,res,next)=>{
+ try{
+  const {rows}=await db.query("SELECT COALESCE(NULLIF(gruppe,''),'Nicht zugeordnet') AS gruppe,beschaeftigungsart,status,COUNT(*)::int AS anzahl FROM personal GROUP BY 1,2,3");
+  const mon=await db.query("SELECT to_char(eintrittsdatum,'YYYY-MM') AS monat,count(*)::int AS anzahl FROM personal WHERE eintrittsdatum >= CURRENT_DATE - INTERVAL '12 months' GROUP BY 1 ORDER BY 1");
+  res.json({gruppen:rows,eintritte:mon.rows});
+ }catch(e){next(e)}
+});
 /* ---------- Lesen ---------- */
 
 app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
