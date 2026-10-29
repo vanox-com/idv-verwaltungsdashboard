@@ -2236,7 +2236,7 @@ app.get('/api/log', requireLogin, requireRight('log', 1), async (req, res, next)
 /* ---------- Fehler ---------- */
 
 /* Neue Dokumentgeneratoren, mit bestehenden Benutzerrechten. */
-dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAuth);
+dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAuth,nameFuerDienstnummer);
 
 app.use((err, req, res, next) => {
   console.error(err);
