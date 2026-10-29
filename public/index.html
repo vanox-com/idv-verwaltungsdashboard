@@ -2068,7 +2068,7 @@ function personalBearbeiten(nr) {
     personalSelect('Status','p_status',status,p.status || 'Aktiv'),
     personalFeld('Vorname','p_vorname',p.vorname,'text','required maxlength="120"'),
     personalFeld('Nachname','p_nachname',p.nachname,'text','required maxlength="120"'),
-    personalSelect('Mitarbeitergruppe','p_gruppe',gruppen,p.gruppe || 'Nicht zugeordnet'),
+    personalFeld('Mitarbeitergruppe (automatisch)','p_gruppe',p.gruppe || 'Nicht zugeordnet','text','readonly'),
     personalSelect('Beschäftigungsart','p_beschaeftigungsart',D.systemOptionen?.beschaeftigungsarten||['Hauptberuf','Nebenberuf'],p.beschaeftigungsart || (p.gruppe === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf')),
     (neu ? personalSelect('Dienstgrad (Einstufung bei Eintritt)','p_dienstgrad',raenge.length?raenge:[''],p.dienstgrad || '') :
       personalFeld('Dienstgrad (nur über Beförderungen änderbar)','p_dienstgrad',p.dienstgrad,'text','readonly')),
@@ -3854,6 +3854,20 @@ document.addEventListener('click',async ev=>{
     tabelle(['Modul','Zugriff'],rows.map(([m,v])=>[esc(MODS.find(x=>x[0]===m)?.[1]||m),v===2?'Bearbeiten':v===1?'Lesen':'Kein Zugriff']));
   }catch(e){out.textContent='Rechte konnten nicht geladen werden: '+e.message;}
  }
+});
+
+/* Die Serverregel ist maßgeblich; hier zusätzlich unmittelbare Formular-Vorschau. */
+function automatischeGruppe(nr,rang){
+ if(Number(nr)>=1&&Number(nr)<=5)return 'Leitungsdienst';
+ if(['Polizeirat','Polizeiratanwärter'].includes(rang))return 'Polizeirat';
+ if(['Polizeimeisteranwärter','Polizeimeister','Polizeiobermeister','Polizeihauptmeister','Polizeihauptmeister AZ','Polizeihauptmeister mit Amtszulage'].includes(rang))return 'Mittlerer Dienst';
+ if(['Polizeikommissaranwärter','Polizeikommissar','Kriminalkommissar','Polizeioberkommissar','Kriminaloberkommissar','Polizeihauptkommissar','Kriminalhauptkommissar','Polizeihauptkommissar A12','Erster Polizeihauptkommissar'].includes(rang))return 'Gehobener Dienst';
+ return 'Nicht zugeordnet';
+}
+document.addEventListener('change',ev=>{
+ if(!['p_nr','p_dienstgrad'].includes(ev.target.id))return;
+ const gruppe=document.getElementById('p_gruppe');
+ if(gruppe)gruppe.value=automatischeGruppe(document.getElementById('p_nr')?.value,document.getElementById('p_dienstgrad')?.value||'');
 });
 /* ---------- Start ---------- */
 
