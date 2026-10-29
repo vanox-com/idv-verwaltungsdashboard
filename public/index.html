@@ -1873,6 +1873,7 @@ function personalAnzeigen(nr) {
         ? personalDokumentLink(k,v,k==='Arbeitsvertrag'?p.arbeitsvertrag_url:p.ernennungsurkunde_url)
         : esc(v == null || v === '' ? '–' : v)) + '</div>'
     ).join('') + '</div>' +
+    (can('pers',2)&&can('dienststellen') ? '<section class="box"><h3>Dienststellenzuordnung</h3><p>Personalnummer: '+Number(nr)+'</p><button type="button" data-person-dienststelle="'+Number(nr)+'">Dienststelle zuordnen</button></section>' : '') +
     (can('persverlauf') ? '<section class="box"><button type="button" data-open-verlauf="'+Number(nr)+'">Personalakten-Verlauf öffnen</button><div id="personalVerlauf" hidden></div></section>' : '') +
     (can('dis') ? (() => {
       const akte=disAkte(Number(nr));
@@ -3739,6 +3740,20 @@ async function ladeBackup(){
    '<p class="mut">Letzte Datenbankabfrage: '+esc(new Date(x.geprueft_am).toLocaleString('de-DE'))+'</p></section>';
  }catch(e){el.textContent='Datenbankstatus konnte nicht geladen werden: '+e.message;}
 }
+document.addEventListener('click',async event=>{
+ const assign=event.target.closest('[data-person-dienststelle]');
+ if(assign&&can('pers',2)&&can('dienststellen')){
+  try{
+   const options=await api('/dienststellen');
+   const choice=prompt('Dienststelle wählen (ID):\\n'+options.filter(x=>x.aktiv).map(x=>x.id+' – '+x.name).join('\\n')+'\\nLeer lassen = Zuordnung entfernen');
+   if(choice===null)return;
+   const id=choice.trim();
+   if(id&&!options.some(x=>x.aktiv&&String(x.id)===id)){alert('Ungültige Dienststelle');return;}
+   await api('/personal/'+Number(assign.dataset.personDienststelle)+'/dienststelle',{method:'PATCH',body:JSON.stringify({dienststelle_id:id?Number(id):null})});
+   alert('Dienststelle gespeichert.');await starten();
+  }catch(err){alert('Zuordnung fehlgeschlagen: '+err.message);}
+ }
+});
 document.addEventListener('click',async event=>{
  const addDs=event.target.closest('#dsAdd'),editDs=event.target.closest('[data-ds-edit]');
  const addFrist=event.target.closest('#fristAdd'),toggleFrist=event.target.closest('[data-frist-toggle]');
