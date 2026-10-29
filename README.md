@@ -148,9 +148,8 @@ dem aktuellen Code, ist aber kein geprüfter endgültiger Rechtstext.
 Die **neue Hauptdomain** lautet **https://idv-ppverwaltung.de**. Die
 bestehende Render-Adresse `https://idv-verwaltungsdashboard-1.onrender.com`
 bleibt bis zur bestätigten DNS-Verbindung als Rückfalladresse bestehen.
-Die zuvor vorgesehene Domain `idv-polizeiverwaltung.de` darf in Google
-OAuth, Branding, Datenschutzerklärung oder aktuellen Verlinkungen nicht mehr
-als primäre Domain verwendet werden.
+Die bisherige, nicht funktionierende Domain darf nicht mehr in den
+aktuellen Google-OAuth-Brandingangaben oder als primäre Domain stehen.
 
 **IONOS und Render müssen einmalig extern konfiguriert werden:**
 
