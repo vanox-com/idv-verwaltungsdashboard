@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db, initDb } from './db.js';
+import { fillCertificateDocx } from './urkundenDocx.js';
 import { hashPassword, verifyPassword, newSessionToken, SESSION_HOURS } from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1425,55 +1426,26 @@ function zertDD(d){return d.slice(8,10)+'.'+d.slice(5,7)+'.'+d.slice(0,4);}
    Originalunterschriften und fiktiver Hinweis bleiben unverändert.
    Dokumente gehören dem beim Klick autorisierten Google-Konto. */
 const ZERT_VORLAGE='10aZ55_hWkzXLbrVDu8fZIAcRFD1qPIyMjaMqEgiyDxE';
-async function zertAusOriginalvorlage(token,titel,p,eid){
- let id=null;
- try{
-  try{
-   const copy=await zertGoogle(token,
-    'https://www.googleapis.com/drive/v3/files/'+ZERT_VORLAGE+'/copy?fields=id,mimeType',
-    'POST',{name:titel});
-   id=copy.id;
-  }catch(copyError){
-   // Ein fremdes Google-Dokument ist über drive.file nicht immer direkt
-   // kopierbar. Die öffentlich lesbare Originalvorlage als DOCX importieren.
-   const url='https://docs.google.com/document/d/'+ZERT_VORLAGE+'/export?format=docx';
-   const source=await fetch(url,{redirect:'follow',signal:AbortSignal.timeout(25000)});
-   if(!source.ok)throw new Error('Originalvorlage ist nicht öffentlich lesbar. Bitte Google-Docs-Freigabe prüfen.');
-   const docx=Buffer.from(await source.arrayBuffer());
-   if(docx.length<1000||docx.length>4000000||docx[0]!==80||docx[1]!==75)
-    throw new Error('Originalvorlage konnte nicht als gültige Word-Datei geladen werden');
-   const boundary='idv_'+randomBytes(12).toString('hex');
-   const metadata=JSON.stringify({name:titel,mimeType:'application/vnd.google-apps.document'});
-   const header=Buffer.from('--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+metadata+
-    '\r\n--'+boundary+'\r\nContent-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\n\r\n');
-   const body=Buffer.concat([header,docx,Buffer.from('\r\n--'+boundary+'--\r\n')]);
-   const uploaded=await zertGoogle(token,
-    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,mimeType',
-    'POST',body,'multipart/related; boundary='+boundary);
-   id=uploaded.id;
-  }
-  if(!id)throw new Error('Google Drive hat keine Dokument-ID geliefert');
-  const entries=[
-   ['<Vorname>',String(p.vorname||'').trim()],
-   ['<Name>',String(p.nachname||'').trim()],
-   ['<Geburtsdatum>',zertDD(p.geburtsdatum)],
-   ['<Datum>',zertDD(eid)]
-  ];
-  if(entries.some(x=>!x[1]))throw new Error('Name oder Geburtsdatum für die Urkunde fehlt');
-  const requests=entries.map(([text,replaceText])=>({
-   replaceAllText:{containsText:{text,matchCase:true},replaceText}
-  }));
-  const result=await zertGoogle(token,
-   'https://docs.googleapis.com/v1/documents/'+id+':batchUpdate',
-   'POST',{requests});
-  if(result.replies?.length!==requests.length||
-     result.replies.some((r,i)=>Number(r.replaceAllText?.occurrencesChanged||0)!==(i===3?2:1)))
-   throw new Error('Die Platzhalter der Originalvorlage stimmen nicht mehr überein');
-  return id;
- }catch(error){
-  if(id)error.createdId=id;
-  throw error;
+async function zertAusOriginalvorlage(token,titel,p,eid,ernannt){
+ const word=await fillCertificateDocx({
+  templateId:ZERT_VORLAGE,person:p,oathDate:eid,appointmentDate:ernannt
+ });
+ const boundary='idv_'+randomBytes(12).toString('hex');
+ const meta=JSON.stringify({name:titel,mimeType:'application/vnd.google-apps.document'});
+ const upload=Buffer.concat([
+  Buffer.from('--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+meta+
+   '\r\n--'+boundary+'\r\nContent-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\n\r\n'),
+  word,
+  Buffer.from('\r\n--'+boundary+'--\r\n')
+ ]);
+ const created=await zertGoogle(token,
+  'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,mimeType',
+  'POST',upload,'multipart/related; boundary='+boundary);
+ if(!created.id||created.mimeType!=='application/vnd.google-apps.document'){
+  const error=new Error('Urkunde konnte nicht in ein Google-Dokument umgewandelt werden.');
+  error.createdId=created.id;throw error;
  }
+ return created.id;
 }
 async function zertGoogle(token,url,method='GET',data,type='application/json'){
  const res=await fetch(url,{method,
@@ -1536,7 +1508,7 @@ app.post('/api/urkunden/polizeimeister/:nr',requireLogin,requireRight('bef',2),a
    return res.status(401).json({error:'Google-Kontoanmeldung fehlgeschlagen. Bitte erneut anmelden.'});
   token=auth.access_token;
   const title='Ernennungsurkunde '+name;
-  createdId=await zertAusOriginalvorlage(token,title,person,eid);
+  createdId=await zertAusOriginalvorlage(token,title,person,eid,ernannt);
   const url='https://docs.google.com/document/d/'+createdId+'/edit';
   const inserted=await db.query(
    "UPDATE personal SET ernennungsurkunde=$1,ernennungsurkunde_url=$2 "+
