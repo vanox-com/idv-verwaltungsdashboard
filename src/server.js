@@ -776,7 +776,7 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
   const felder=[],werte=[];
   erlaubt.forEach(k=>{
     if(Object.hasOwn(body,k)){
-      werte.push(body[k]===''?null:body[k]);
+      werte.push(body[k]==='' ? (['arbeitsvertrag_url','ernennungsurkunde_url'].includes(k)?'':null) : body[k]);
       felder.push(k+' = $'+werte.length);
     }
   });
@@ -1161,6 +1161,52 @@ app.patch('/api/sonderzahlung/:id',requireLogin,requireRight('rout',2),
     }catch(e){next(e);}
   });
 
+
+/* Eigene Rangänderungen sind keine reguläre Beförderung und verlangen POR-Entscheidung. */
+app.get('/api/rangantraege',requireLogin,requireRight('bef',1),async(req,res,next)=>{
+ try{
+  const {rows}=await db.query(`SELECT a.id,a.personalnummer,a.alter_rang,a.beantragter_rang,a.begruendung,a.status,a.erstellt,
+   p.vorname,p.nachname FROM personal_rangantraege a JOIN personal p ON p.personalnummer=a.personalnummer
+   ORDER BY CASE WHEN a.status='beantragt' THEN 0 ELSE 1 END,a.erstellt DESC LIMIT 100`);
+  res.json(rows);
+ }catch(e){next(e)}
+});
+app.post('/api/rangantraege',requireLogin,requireRight('pers',2),async(req,res,next)=>{
+ try{
+  const nr=Number(req.body?.personalnummer),rang=String(req.body?.beantragter_rang||'').trim(),
+   grund=String(req.body?.begruendung||'').trim();
+  if(!Number.isSafeInteger(nr)||nr<1||grund.length>1000||!rang)return res.status(400).json({error:'Ungültiger Rangantrag'});
+  const valid=await db.query('SELECT 1 FROM raenge WHERE name=$1',[rang]);
+  if(!valid.rowCount)return res.status(400).json({error:'Unbekannter Dienstgrad'});
+  const {rows}=await db.query(`INSERT INTO personal_rangantraege
+  (personalnummer,alter_rang,beantragter_rang,begruendung,antragsteller_id)
+  SELECT personalnummer,COALESCE(dienstgrad,''),$2,$3,$4 FROM personal
+  WHERE personalnummer=$1 AND COALESCE(dienstgrad,'')<>$2
+  RETURNING id`,[nr,rang,grund,req.user.id]);
+  if(!rows.length)return res.status(409).json({error:'Personalakte fehlt oder Rang ist unverändert'});
+  res.json({ok:true,id:rows[0].id});
+ }catch(e){if(e.code==='23505')return res.status(409).json({error:'Für diese Person besteht bereits ein offener Rangantrag'});next(e)}
+});
+app.post('/api/rangantraege/:id/entscheidung',requireLogin,requireRight('por',2),async(req,res,next)=>{
+ const id=Number(req.params.id),genehmigt=req.body?.genehmigt;
+ if(!Number.isSafeInteger(id)||id<1||typeof genehmigt!=='boolean')return res.status(400).json({error:'Ungültige Entscheidung'});
+ const client=await db.connect().catch(next);if(!client)return;
+ try{
+  await client.query('BEGIN');
+  const {rows}=await client.query('SELECT * FROM personal_rangantraege WHERE id=$1 FOR UPDATE',[id]);
+  const a=rows[0];if(!a||a.status!=='beantragt'){await client.query('ROLLBACK');return res.status(409).json({error:'Antrag nicht mehr offen'});}
+  if(genehmigt){
+   const result=await client.query('UPDATE personal SET dienstgrad=$1 WHERE personalnummer=$2 AND COALESCE(dienstgrad,\'\')=$3',
+    [a.beantragter_rang,a.personalnummer,a.alter_rang]);
+   if(!result.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'Dienstgrad hat sich inzwischen geändert; Antrag bitte neu stellen'});}
+  }
+  await client.query('UPDATE personal_rangantraege SET status=$1,entscheider_id=$2,entschieden_am=now() WHERE id=$3',
+   [genehmigt?'genehmigt':'abgelehnt',req.user.id,id]);
+  await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
+   [req.user.id,'Rangantrag '+id+' '+(genehmigt?'genehmigt':'abgelehnt')]);
+  await client.query('COMMIT');res.json({ok:true});
+ }catch(e){await client.query('ROLLBACK').catch(()=>{});next(e)}finally{client.release()}
+});
 /* Freigabe durch den Polizeioberrat (POR) verwalten. */
 app.patch('/api/por/:nr', requireLogin, requireRight('bef', 1), async (req, res, next) => {
   try {
