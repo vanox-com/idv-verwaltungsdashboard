@@ -411,3 +411,12 @@ INSERT INTO role_perms(rolle,modul,stufe) VALUES
  ('Ausbilder','texte',0),
  ('Mitarbeiter','texte',0)
 ON CONFLICT(rolle,modul) DO NOTHING;
+
+
+/* Durch Administratoren pflegbare dienstliche Bekanntmachungen. */
+CREATE TABLE IF NOT EXISTS bekanntmachungen (
+ id serial PRIMARY KEY,
+ titel text NOT NULL,
+ inhalt text NOT NULL,
+ erstellt timestamptz NOT NULL DEFAULT now()
+);
