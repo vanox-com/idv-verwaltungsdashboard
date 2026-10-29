@@ -3597,9 +3597,14 @@ document.addEventListener('click',e=>{
 });
 
 async function vLog_() {
-  const zeilen = await api('/log');
-  $('#inhalt').innerHTML = `<h1>Protokoll</h1>` + tabelle(['Zeit','Benutzer','Art','Aktion'],
-    zeilen.map(z => [new Date(z.zeit).toLocaleString('de-DE'), esc(z.benutzer), esc(z.art), esc(z.aktion)]));
+  const [zeilen,audit] = await Promise.all([api('/log'),api('/personal-audit')]);
+  $('#inhalt').innerHTML = '<h1>Änderungsprotokoll</h1><h3>Systemereignisse</h3>' + tabelle(['Zeit','Benutzer','Art','Aktion'],
+    zeilen.map(z => [new Date(z.zeit).toLocaleString('de-DE'), esc(z.benutzer), esc(z.art), esc(z.aktion)])) +
+    '<h3>Personaländerungen (vorher / nachher)</h3>' +
+    tabelle(['Zeit','Personalnr.','Bearbeiter','Änderungen'],audit.map(a=>[
+      new Date(a.zeit).toLocaleString('de-DE'),Number(a.personalnummer),esc(a.benutzer),
+      Object.entries(a.aenderungen||{}).map(([feld,v])=>esc(feld+': '+String(v.alt??'–')+' → '+String(v.neu??'–'))).join('<div class="kue-docsep"></div>')
+    ]));
 }
 
 
