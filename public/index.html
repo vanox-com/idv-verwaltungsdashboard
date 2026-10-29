@@ -1026,6 +1026,36 @@ html[data-portal-mode="hell"] aside a{color:var(--txt)}
 html[data-portal-mode="hell"] aside a:hover,html[data-portal-mode="hell"] aside a.aktiv{background:var(--portal-highlight)}
 .design-preset-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin-top:16px}.design-preset-grid button{display:flex;flex-direction:column;align-items:stretch;gap:9px;text-align:left}.design-preset-swatch{height:66px;display:flex;align-items:end;padding:12px;border-radius:9px;border:1px solid rgba(140,160,185,.25)}.design-preset-swatch i{width:42%;height:15px;border-radius:6px}
 .kue-doc-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:4px 0}.kue-doc-edit{font-size:11px;padding:3px 7px;white-space:nowrap}.kue-doc-row a{overflow-wrap:anywhere}
+
+/* Kündigungsverwaltung: kompakte, umbrechende Tabelle statt horizontalem Scrollen. */
+.kue-table-wrap{overflow-x:visible!important;max-width:100%;width:100%}
+.kue-table{table-layout:fixed;width:100%;min-width:0!important;border-collapse:collapse}
+.kue-table th,.kue-table td{white-space:normal!important;overflow-wrap:anywhere;word-break:normal;padding:8px 5px;vertical-align:top;font-size:12px}
+.kue-table th:nth-child(1){width:5%}.kue-table th:nth-child(2){width:13%}
+.kue-table th:nth-child(3){width:10%}.kue-table th:nth-child(4){width:11%}
+.kue-table th:nth-child(5){width:8%}.kue-table th:nth-child(6){width:19%}
+.kue-table th:nth-child(7){width:25%}.kue-table th:nth-child(8){width:9%}
+.kue-table .kue-doc-row{display:block;padding:3px 0;border-bottom:1px solid var(--line)}
+.kue-table .kue-doc-edit{display:inline-block;max-width:100%;white-space:normal;margin:3px 0;font-size:10px;padding:3px 5px}
+.kue-table .kue-statuscell{line-height:1.8}.kue-table .kue-statuscell button{display:inline-block;white-space:normal;text-align:left;font-size:10px;padding:3px 5px;margin:2px}
+.kue-table .kue-delete{font-size:11px;padding:6px 7px;max-width:100%;white-space:normal}
+@media(max-width:850px){.kue-table,.kue-table tbody,.kue-table tr,.kue-table td{display:block;width:100%!important}
+.kue-table thead{display:none}.kue-table tr{padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:14px;background:var(--panel)}
+.kue-table td{display:grid;grid-template-columns:115px minmax(0,1fr);gap:8px;border:0!important;padding:5px}
+.kue-table td::before{font-weight:700;color:var(--mut)}
+.kue-table td:nth-child(1)::before{content:'Nr.'}.kue-table td:nth-child(2)::before{content:'Person'}
+.kue-table td:nth-child(3)::before{content:'Dienstgrad'}.kue-table td:nth-child(4)::before{content:'Grund'}
+.kue-table td:nth-child(5)::before{content:'Eintritt'}.kue-table td:nth-child(6)::before{content:'Dokumente'}
+.kue-table td:nth-child(7)::before{content:'Rückgaben'}.kue-table td:nth-child(8)::before{content:'Aktion'}
+}
+html[data-design-preset="flori"] #app{background-color:#e2efbf!important;background-image:radial-gradient(ellipse 42px 25px at 13% 16%,#4b352c 96%,transparent 100%),radial-gradient(ellipse 55px 32px at 80% 25%,#4b352c 96%,transparent 100%),radial-gradient(ellipse 28px 48px at 48% 70%,#4b352c 96%,transparent 100%),linear-gradient(145deg,#fdf9e9,#d2e5b9)!important;background-size:280px 250px!important}
+html[data-design-preset="flori"] aside{background:repeating-linear-gradient(160deg,#fff3d7 0 70px,#d8c4a0 70px 92px)!important;border-right:5px dashed #876148!important}
+html[data-design-preset="flori"] .box,html[data-design-preset="flori"] .karte,html[data-design-preset="flori"] .kachel{background:#fff8e9!important;border:3px solid #906f4b!important;border-radius:18px!important;box-shadow:5px 6px 0 #af8755!important}
+html[data-design-preset="flori"] h1::after{content:' 🐄🌻'}
+html[data-design-preset="flori"] button:hover{transform:rotate(-1.3deg)}
+html[data-design-preset="flori"] #inhalt h2::after{content:' 🐮'}
+html[data-design-preset="flori"] .p{border:2px solid #6a431d!important}
+html[data-design-preset="flori"] .design-preset-grid [data-design-preset="flori"]{outline:3px dashed #976737}
 </style>
 </head>
 <body>
@@ -2489,7 +2519,7 @@ function vKue() {
   }).join('');
   return '<h1>Kündigungen</h1><div class="pers-bar"><span class="mut">Rückgaben und Sperrungen pro Vorgang verwalten.</span>'+
     '<span class="spacer"></span>'+(schreiben?'<button type="button" class="p" id="kueNeu">+ Neue Kündigung</button>':'')+
-    '</div><div class="tw"><table><thead><tr>'+
+    '</div><div class="tw kue-table-wrap"><table class="kue-table"><thead><tr>'+
     ['Nr.','Name','Dienstgrad','Grund','Eintritt','Dokumente','Rückgaben & Zugangssperren','Aktion'].map(x=>'<th>'+x+'</th>').join('')+
     '</tr></thead><tbody>'+(rows||'<tr><td colspan="8">Keine Kündigungen vorhanden</td></tr>')+'</tbody></table></div>';
 }
@@ -3915,6 +3945,7 @@ function applyPortalDesign(d){
  document.documentElement.style.setProperty('--acc',a);
  const ex=d.extras||{},light=ex.modus==='hell';
  document.documentElement.dataset.portalMode=light?'hell':'dunkel';
+ document.documentElement.dataset.designPreset=ex.preset==='flori'?'flori':'';
  const defaults=light?{flaeche:'#ffffff',seitenleiste:'#e9eff7',rahmen:'#c6d1df',schrift:'#15253b',sekundaer:'#52677f',highlight:'#e6f0ff'}:
  {flaeche:'#182333',seitenleiste:'#0b111a',rahmen:'#26354b',schrift:'#e6edf6',sekundaer:'#8ea0b8',highlight:'#203958'};
  const map={flaeche:'--panel',seitenleiste:'--portal-sidebar',rahmen:'--line',schrift:'--txt',sekundaer:'--mut',highlight:'--portal-highlight'};
@@ -3931,13 +3962,15 @@ const PORTAL_PRESETS={
  smaragd:{name:'Smaragd',akzent:'#2fb78b',hintergrund:'minimal',extras:{modus:'dunkel',flaeche:'#19302c',seitenleiste:'#0c201b',rahmen:'#2c5348',schrift:'#ebfff6',sekundaer:'#aacdc1',highlight:'#245648'}},
  amethyst:{name:'Amethyst',akzent:'#a18ae7',hintergrund:'stahl',extras:{modus:'dunkel',flaeche:'#2c2740',seitenleiste:'#1c182a',rahmen:'#4a4165',schrift:'#f2edff',sekundaer:'#bfb3da',highlight:'#443761'}},
  bernstein:{name:'Bernstein',akzent:'#e8a34f',hintergrund:'stahl',extras:{modus:'dunkel',flaeche:'#332b24',seitenleiste:'#201a16',rahmen:'#65503c',schrift:'#fff5e7',sekundaer:'#d4bba0',highlight:'#5a3f23'}},
- hell:{name:'Arktis Hell',akzent:'#2872bc',hintergrund:'ohne',extras:{modus:'hell',flaeche:'#ffffff',seitenleiste:'#e9eff7',rahmen:'#c6d1df',schrift:'#15253b',sekundaer:'#52677f',highlight:'#d6e9fa'}}
+ hell:{name:'Arktis Hell',akzent:'#2872bc',hintergrund:'ohne',extras:{modus:'hell',flaeche:'#ffffff',seitenleiste:'#e9eff7',rahmen:'#c6d1df',schrift:'#15253b',sekundaer:'#52677f',highlight:'#d6e9fa'}},
+ flori:{name:'🐄 Florimodus (Muh!)',akzent:'#b6772e',hintergrund:'ohne',extras:{preset:'flori',modus:'hell',flaeche:'#fff8e9',seitenleiste:'#e4cfa7',rahmen:'#916d48',schrift:'#3d2c19',sekundaer:'#796044',highlight:'#eed59a'}}
 };
 async function ladeDesign(){
  const area=$('#inhalt');
  area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p>Lade Gestaltung …</p>';
  try{
   const d=await api('/portal-design');
+  ausgewaehltesDesignPreset=d.extras?.preset==='flori'?'flori':'';
   area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p class="mut">Du kannst dein eigenes Design speichern. Administratoren können zusätzlich den Standard für alle vorgeben.</p>'+
    '<section class="box"><h3>Farb-Presets</h3><p class="mut">Ein Preset übernimmt passende Farben. Über Vorschau testen und anschließend persönlich speichern.</p>'+
    '<div class="design-preset-grid">'+Object.entries(PORTAL_PRESETS).map(([id,p])=>'<button type="button" data-design-preset="'+id+'" title="'+esc(p.name)+'"><span class="design-preset-swatch" style="background:linear-gradient(125deg,'+p.extras.seitenleiste+','+p.extras.flaeche+')"><i style="background:'+p.akzent+'"></i></span><strong>'+esc(p.name)+'</strong></button>').join('')+'</div></section>'+
@@ -3952,13 +3985,15 @@ async function ladeDesign(){
    '<p class="mut">Das Originalwappen bleibt unverändert. Die Vorschau verändert nur deinen Browser bis zum erneuten Laden.</p></section>';
  }catch(err){area.textContent='Design konnte nicht geladen werden: '+err.message;}
 }
+let ausgewaehltesDesignPreset='';
 function aktuelleDesignWerte(){
- return {akzent:$('#designAkzent').value,schleier:Number($('#designSchleier').value),hintergrund:$('#designMotiv').value,extras:{modus:$('#designModus').value,...Object.fromEntries([...document.querySelectorAll('[data-design-color]')].map(x=>[x.dataset.designColor,x.value]))}};
+ return {akzent:$('#designAkzent').value,schleier:Number($('#designSchleier').value),hintergrund:$('#designMotiv').value,extras:{...(ausgewaehltesDesignPreset==='flori'?{preset:'flori'}:{}),modus:$('#designModus').value,...Object.fromEntries([...document.querySelectorAll('[data-design-color]')].map(x=>[x.dataset.designColor,x.value]))}};
 }
 document.addEventListener('click',async ev=>{
  const preset=ev.target.closest('[data-design-preset]');
  if(preset){
   const p=PORTAL_PRESETS[preset.dataset.designPreset];if(!p)return;
+  ausgewaehltesDesignPreset=preset.dataset.designPreset;
   $('#designAkzent').value=p.akzent;$('#designMotiv').value=p.hintergrund;$('#designModus').value=p.extras.modus;
   document.querySelectorAll('[data-design-color]').forEach(input=>{input.value=p.extras[input.dataset.designColor]||input.value;});
   applyPortalDesign(aktuelleDesignWerte());return;
@@ -3972,6 +4007,29 @@ document.addEventListener('click',async ev=>{
  }
 });
 
+
+
+/* Florimodus: eigene synthetische 'Muh'-Klänge, nur nach direktem Klick. */
+let floriAudioContext=null,floriLetztesMuh=0;
+function florimodusMuh(){
+ if(document.documentElement.dataset.designPreset!=='flori')return;
+ const jetzt=Date.now();if(jetzt-floriLetztesMuh<250)return;floriLetztesMuh=jetzt;
+ try{
+  const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
+  const ctx=floriAudioContext||(floriAudioContext=new C());
+  if(ctx.state==='suspended')ctx.resume().catch(()=>{});
+  const t=ctx.currentTime,osc=ctx.createOscillator(),mod=ctx.createOscillator(),gain=ctx.createGain(),mg=ctx.createGain(),filter=ctx.createBiquadFilter();
+  osc.type='sawtooth';mod.type='sine';mod.frequency.value=7;mg.gain.value=11;
+  mod.connect(mg);mg.connect(osc.frequency);
+  osc.frequency.setValueAtTime(155,t);osc.frequency.exponentialRampToValueAtTime(105,t+.6);
+  filter.type='lowpass';filter.frequency.value=480;
+  gain.gain.setValueAtTime(.0001,t);gain.gain.exponentialRampToValueAtTime(.12,t+.09);
+  gain.gain.exponentialRampToValueAtTime(.0001,t+.7);
+  osc.connect(filter);filter.connect(gain);gain.connect(ctx.destination);
+  mod.start(t);osc.start(t);mod.stop(t+.72);osc.stop(t+.72);
+ }catch(e){}
+}
+document.addEventListener('click',e=>{if(e.target.closest('button,a,[role="button"]'))florimodusMuh();});
 
 /* Personalisierung und Rechteansicht – bestehende Module werden nur verlinkt. */
 async function ladeStatistikEntwicklung(){
