@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hashPassword } from './auth.js';
+import { createHash } from 'node:crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,6 +26,7 @@ export async function initDb() {
   await seedBenutzer();
   await originalDokumentLinksUebernehmen();
   await excelPersonalLinksUebernehmen();
+  await kuendigungsLinksAusExcelUebernehmen();
   await disziplinLinksUebernehmen();
   await originaleDashboardLinksUebernehmen();
   await textbausteineAusPdfUebernehmen();
@@ -125,6 +127,57 @@ async function excelPersonalLinksUebernehmen() {
   if(uebersprungen)console.log('Excel-Personal-Dokumentlinks unverändert: '+uebersprungen);
 }
 
+
+/* Kündigungslinks aus privatem Render-Environment: keine URLs im GitHub-Code.
+   Historische Kündigungen werden nur bei übereinstimmender Vorgangs-ID,
+   Personalnummer und Namenssignatur verknüpft; vorhandene Links nie überschreiben. */
+async function kuendigungsLinksAusExcelUebernehmen(){
+ const raw=process.env.KUE_EXCEL_LINKS_IMPORT;if(!raw)return;
+ if(raw.length>16000)throw new Error('Kündigungsimport: zu große Quelle');
+ const records=raw.split(';').filter(Boolean);
+ if(records.length>100)throw new Error('Kündigungsimport: zu viele Vorgänge');
+ const fields=['vertrag','urkunde','zeugnis','kuendigung'];
+ const labels=['Arbeitsvertrag','Ernennungsurkunde','Arbeitszeugnis','Kündigung'];
+ const hash=value=>createHash('sha256').update(String(value).trim().toLowerCase()).digest('hex').slice(0,12);
+ const expand=code=>{
+  const v=code.slice(1);
+  if(code[0]==='?'&&/^[a-z0-9_-]{15,120}$/i.test(v))return 'https://docs.google.com/document/d/'+v+'/edit';
+  if(code[0]==='@'&&/^[a-z0-9_-]{15,120}$/i.test(v))return 'https://drive.google.com/file/d/'+v+'/view';
+  if(code[0]==='#'&&v.split('/').length===3&&v.split('/').every(x=>/^[0-9]+$/.test(x)))return 'https://discord.com/channels/'+v;
+  throw new Error('Kündigungsimport: ungültiger Link');
+ };
+ let neu=0,vorhanden=0,abweichend=0;
+ const keys=new Set();
+ for(const record of records){
+  const pos1=record.indexOf('-'),pos2=record.indexOf('-',pos1+1),pos3=record.indexOf('-',pos2+1);
+  const id=Number(record.slice(0,pos1)),nr=Number(record.slice(pos1+1,pos2)),signatur=record.slice(pos2+1,pos3),pairs=record.slice(pos3+1);
+  if(!Number.isSafeInteger(id)||id<1||!Number.isSafeInteger(nr)||nr<1||!/^[a-f0-9]{12}$/.test(signatur)||!pairs)
+   throw new Error('Kündigungsimport: ungültige Vorgangskennung');
+  const result=await db.query('SELECT id,personalnummer,vorname,nachname,vertrag,urkunde,zeugnis,kuendigung FROM kuendigungen WHERE id=$1 AND personalnummer=$2',[id,nr]);
+  const k=result.rows[0],ident=k?hash(nr+'|'+String(k.vorname||'').trim()+'|'+String(k.nachname||'').trim()):'';
+  for(const pair of pairs.split(',')){
+   const sep=pair.indexOf(':'),ix=Number(pair.slice(0,sep));
+   if(sep!==1||![0,1,2,3].includes(ix))throw new Error('Kündigungsimport: ungültiger Dokumenttyp');
+   const field=fields[ix],url=expand(pair.slice(sep+1)),key=id+'|'+field;
+   if(keys.has(key))throw new Error('Kündigungsimport: doppelte Dokumentzuordnung');
+   keys.add(key);
+   if(!k||ident!==signatur){abweichend++;continue;}
+   let title=String(k[field]||'').trim();
+   if(title.startsWith('{')){
+    try{const parsed=JSON.parse(title);
+     if(parsed&&typeof parsed==='object'&&parsed.u){vorhanden++;continue;}
+     if(parsed&&typeof parsed==='object')title=String(parsed.t||'').trim();
+    }catch(e){}
+   }
+   if(title.toLowerCase().startsWith('https://')){vorhanden++;continue;}
+   const display=(!title||title==='////')?labels[ix]:title;
+   const updated=await db.query('UPDATE kuendigungen SET '+field+'=$1 WHERE id=$2 AND COALESCE('+field+",'')=$3",
+     [JSON.stringify({t:display,u:url}),id,k[field]??'']);
+   if(updated.rowCount){neu++;k[field]=JSON.stringify({t:display,u:url});}else abweichend++;
+  }
+ }
+ console.log('Kündigungslinks aus Excel: '+neu+' ergänzt, '+vorhanden+' vorhanden, '+abweichend+' nicht zugeordnet');
+}
 /* Die ursprünglich in Excel hinter den Dashboard-Titeln verborgenen Links.
    Quellen stehen in einer privaten Render-Environment-Variable und nicht in
    GitHub. Nur neue Einträge werden ergänzt; bestehende redaktionelle
