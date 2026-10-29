@@ -1024,6 +1024,7 @@ html[data-portal-mode="hell"] .box,html[data-portal-mode="hell"] .karte,html[dat
 html[data-portal-mode="hell"] .dashboard-line{color:var(--txt)}
 html[data-portal-mode="hell"] aside a{color:var(--txt)}
 html[data-portal-mode="hell"] aside a:hover,html[data-portal-mode="hell"] aside a.aktiv{background:var(--portal-highlight)}
+.design-preset-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin-top:16px}.design-preset-grid button{display:flex;flex-direction:column;align-items:stretch;gap:9px;text-align:left}.design-preset-swatch{height:66px;display:flex;align-items:end;padding:12px;border-radius:9px;border:1px solid rgba(140,160,185,.25)}.design-preset-swatch i{width:42%;height:15px;border-radius:6px}
 </style>
 </head>
 <body>
@@ -3908,12 +3909,22 @@ function applyPortalDesign(d){
  document.documentElement.style.setProperty('--portal-rgb',r+','+g+','+b);
  document.documentElement.dataset.portalWallpaper=['wappen','verlauf','ohne','nachtblau','stahl','raster','licht','minimal'].includes(d.hintergrund)?d.hintergrund:'wappen';
 }
+const PORTAL_PRESETS={
+ klassisch:{name:'Polizei-Klassik',akzent:'#508ac9',hintergrund:'wappen',extras:{modus:'dunkel',flaeche:'#182333',seitenleiste:'#0b111a',rahmen:'#26354b',schrift:'#e6edf6',sekundaer:'#8ea0b8',highlight:'#203958'}},
+ eisblau:{name:'Eisblau',akzent:'#56c0e7',hintergrund:'nachtblau',extras:{modus:'dunkel',flaeche:'#172c3b',seitenleiste:'#091b2b',rahmen:'#325267',schrift:'#effbff',sekundaer:'#a5c8d8',highlight:'#184762'}},
+ smaragd:{name:'Smaragd',akzent:'#2fb78b',hintergrund:'minimal',extras:{modus:'dunkel',flaeche:'#19302c',seitenleiste:'#0c201b',rahmen:'#2c5348',schrift:'#ebfff6',sekundaer:'#aacdc1',highlight:'#245648'}},
+ amethyst:{name:'Amethyst',akzent:'#a18ae7',hintergrund:'stahl',extras:{modus:'dunkel',flaeche:'#2c2740',seitenleiste:'#1c182a',rahmen:'#4a4165',schrift:'#f2edff',sekundaer:'#bfb3da',highlight:'#443761'}},
+ bernstein:{name:'Bernstein',akzent:'#e8a34f',hintergrund:'stahl',extras:{modus:'dunkel',flaeche:'#332b24',seitenleiste:'#201a16',rahmen:'#65503c',schrift:'#fff5e7',sekundaer:'#d4bba0',highlight:'#5a3f23'}},
+ hell:{name:'Arktis Hell',akzent:'#2872bc',hintergrund:'ohne',extras:{modus:'hell',flaeche:'#ffffff',seitenleiste:'#e9eff7',rahmen:'#c6d1df',schrift:'#15253b',sekundaer:'#52677f',highlight:'#d6e9fa'}}
+};
 async function ladeDesign(){
  const area=$('#inhalt');
  area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p>Lade Gestaltung …</p>';
  try{
   const d=await api('/portal-design');
   area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p class="mut">Du kannst dein eigenes Design speichern. Administratoren können zusätzlich den Standard für alle vorgeben.</p>'+
+   '<section class="box"><h3>Farb-Presets</h3><p class="mut">Ein Preset übernimmt passende Farben. Über Vorschau testen und anschließend persönlich speichern.</p>'+
+   '<div class="design-preset-grid">'+Object.entries(PORTAL_PRESETS).map(([id,p])=>'<button type="button" data-design-preset="'+id+'" title="'+esc(p.name)+'"><span class="design-preset-swatch" style="background:linear-gradient(125deg,'+p.extras.seitenleiste+','+p.extras.flaeche+')"><i style="background:'+p.akzent+'"></i></span><strong>'+esc(p.name)+'</strong></button>').join('')+'</div></section>'+
    '<section class="box"><h3>Portal-Design</h3>'+
    '<label for="designAkzent">Akzentfarbe</label><input id="designAkzent" type="color" value="'+esc(d.akzent)+'" style="width:110px;height:48px;padding:5px">'+
    '<label for="designSchleier">Dunkler Schleier ('+Number(d.schleier)+' %)</label><input id="designSchleier" type="range" min="65" max="97" value="'+Number(d.schleier)+'">'+
@@ -3929,6 +3940,13 @@ function aktuelleDesignWerte(){
  return {akzent:$('#designAkzent').value,schleier:Number($('#designSchleier').value),hintergrund:$('#designMotiv').value,extras:{modus:$('#designModus').value,...Object.fromEntries([...document.querySelectorAll('[data-design-color]')].map(x=>[x.dataset.designColor,x.value]))}};
 }
 document.addEventListener('click',async ev=>{
+ const preset=ev.target.closest('[data-design-preset]');
+ if(preset){
+  const p=PORTAL_PRESETS[preset.dataset.designPreset];if(!p)return;
+  $('#designAkzent').value=p.akzent;$('#designMotiv').value=p.hintergrund;$('#designModus').value=p.extras.modus;
+  document.querySelectorAll('[data-design-color]').forEach(input=>{input.value=p.extras[input.dataset.designColor]||input.value;});
+  applyPortalDesign(aktuelleDesignWerte());return;
+ }
  if(ev.target.closest('#designPreview'))applyPortalDesign(aktuelleDesignWerte());
  if(ev.target.closest('#designPersonalSave')){try{const d=aktuelleDesignWerte();await api('/portal-design/personal',{method:'PUT',body:JSON.stringify(d)});applyPortalDesign(d);alert('Persönliches Design gespeichert.');}catch(err){alert(err.message);}}
  if(ev.target.closest('#designReset')){try{await api('/portal-design/personal',{method:'DELETE'});const d=await api('/portal-design');applyPortalDesign(d);await ladeDesign();}catch(err){alert(err.message);}}
@@ -3948,6 +3966,9 @@ async function ladeStatistikEntwicklung(){
   el.innerHTML='<p class="mut">'+esc(data.hinweis)+'</p>'+
    '<section class="box"><h3>Dokumentierte Eintritte nach Monat</h3>'+
    (list.length?list.map(x=>'<div class="stat-dev-row"><span>'+esc(x.monat)+'</span><div class="stat-dev-track"><i style="width:'+Math.round(100*Number(x.anzahl)/max)+'%"></i></div><strong>'+Number(x.anzahl)+'</strong></div>').join(''):'<p class="mut">Keine datierten Eintritte vorhanden.</p>')+'</section>'+
+   '<section class="box"><h3>Kündigungen pro Monat</h3><p class="mut">Aus tatsächlich datierten Kündigungsvorgängen.</p>'+
+   ((data.kuendigungen||[]).length?(()=>{const max=Math.max(1,...data.kuendigungen.map(x=>Number(x.anzahl)));return data.kuendigungen.map(x=>'<div class="stat-dev-row"><span>'+esc(x.monat)+'</span><div class="stat-dev-track"><i style="width:'+Math.round(100*Number(x.anzahl)/max)+'%"></i></div><strong>'+Number(x.anzahl)+'</strong></div>').join('');})():'<p class="mut">Noch keine Kündigungen mit belegtem Datum.</p>')+
+   (Number(data.kuendigungenOhneDatum)?'<p class="mut">'+Number(data.kuendigungenOhneDatum)+' ältere Kündigung(en) ohne bekanntes Datum wurden keiner Monatsstatistik zugeordnet.</p>':'')+'</section>'+
    '<section class="box"><h3>Explizit protokollierte Austritte</h3>'+
    tabelle(['Monat','Einträge'],(data.austritteProtokoll||[]).map(x=>[esc(x.monat),Number(x.anzahl)]))+'</section>';
  }catch(e){el.textContent='Personalentwicklung konnte nicht geladen werden: '+e.message;}
