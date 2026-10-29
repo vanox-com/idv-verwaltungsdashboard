@@ -542,8 +542,7 @@ DROP TRIGGER IF EXISTS idv_personal_gruppe_auto ON personal;
 CREATE TRIGGER idv_personal_gruppe_auto
 BEFORE INSERT OR UPDATE OF personalnummer,dienstgrad,gruppe ON personal
 FOR EACH ROW EXECUTE FUNCTION idv_personal_gruppe_setzen();
-UPDATE personal SET gruppe=idv_mitarbeitergruppe(personalnummer,dienstgrad)
-WHERE gruppe IS DISTINCT FROM idv_mitarbeitergruppe(personalnummer,dienstgrad);
+-- Vorhandene manuelle Gruppen nicht bei jedem Neustart überschreiben.
 
 /* Bei manueller Zuordnung bleibt die Gruppe bestehen, bis das Feld explizit geleert wird. */
 CREATE OR REPLACE FUNCTION idv_personal_gruppe_setzen() RETURNS trigger LANGUAGE plpgsql AS $$
