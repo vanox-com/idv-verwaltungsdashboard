@@ -36,9 +36,15 @@ function fieldsFor(type,input){
  if(type==='abmahnung'&&![1,2,3].includes(Number(f.stufe)))throw fail(400,'Ungültige Abmahnungsstufe');
  return f;
 }
-export function dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAuth){
- app.get('/api/dokumentgenerator/status',requireLogin,(req,res)=>{
-  const c=zertGoogleOAuth();res.json({eingerichtet:!!c,clientId:c?.id||null});
+export function dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAuth,nameFuerDienstnummer){
+ app.get('/api/dokumentgenerator/status',requireLogin,async(req,res,next)=>{
+  try{
+   const c=zertGoogleOAuth();
+   const ersteller=String(await nameFuerDienstnummer(req.user)||'').trim();
+   const nameVollstaendig=ersteller.split(/\s+/).length>=2&&ersteller.length<=160;
+   res.json({eingerichtet:!!c,clientId:c?.id||null,
+    ersteller,erstellerVollstaendig:nameVollstaendig});
+  }catch(e){next(e)}
  });
  app.get('/api/dokumentgenerator/archiv',requireLogin,async(req,res,next)=>{
   try{
@@ -63,7 +69,12 @@ export function dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAu
    const code=body.google_code;
    if(typeof code!=='string'||code.length<15||code.length>2048)
     throw fail(400,'Persönliche Google-Anmeldung fehlt');
-   const f=fieldsFor(type,body.felder);
+   // Identität serverseitig aus der aktuellen Sitzung/Personalakte ableiten.
+   // Der Browser kann den polizeilichen Unterzeichner nicht überschreiben.
+   const creatorName=String(await nameFuerDienstnummer(req.user)||'').trim();
+   if(creatorName.split(/\s+/).length<2||creatorName.length>160)
+    throw fail(409,'Im angemeldeten Benutzerkonto fehlt ein vollständiger Vor- und Nachname.');
+   const f=fieldsFor(type,{...(body.felder||{}),unterzeichner:creatorName});
    const nr=Number(body.nr||0),kontext=Number(body.kontext||0);
    if(!Number.isSafeInteger(nr)||nr<0||!Number.isSafeInteger(kontext)||kontext<0)
     throw fail(400,'Ungültige Aktenzuordnung');
