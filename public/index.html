@@ -2617,7 +2617,7 @@ document.addEventListener('click',async e=>{
     if(!can('bef',2))return;
     const eid=prompt('Datum des tatsächlich geleisteten Amtseids (JJJJ-MM-TT):');
     if(eid===null)return;
-    if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(eid)){alert('Bitte Datum im Format JJJJ-MM-TT eingeben.');return;}
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(eid)){alert('Bitte Datum im Format JJJJ-MM-TT eingeben.');return;}
     urkunde.disabled=true;urkunde.textContent='Urkunde wird erstellt …';
     try{
       const result=await api('/urkunden/polizeimeister/'+nr,{method:'POST',body:JSON.stringify({eid_datum:eid})});

@@ -1416,14 +1416,14 @@ function urkundeGoogleConfig(){
 }
 function urkundenDatum(d){
  return typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&
-  new Date(d+'T00:00:00Z').toISOString().slice(0,10)===d;
+  !Number.isNaN(Date.parse(d+'T00:00:00Z')) && new Date(d+'T00:00:00Z').toISOString().slice(0,10)===d;
 }
 function formatUrkundenDatum(d){const [y,m,t]=d.split('-');return t+'.'+m+'.'+y}
 async function urkundenToken(account){
  const enc=v=>Buffer.from(JSON.stringify(v)).toString('base64url');
  const now=Math.floor(Date.now()/1000);
  const header=enc({alg:'RS256',typ:'JWT'});
- const payload=enc({iss:account.client_email,scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/documents',aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+3500});
+ const payload=enc({iss:account.client_email,scope:'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents',aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+3500});
  const unsigned=header+'.'+payload;
  const signer=createSign('RSA-SHA256');signer.update(unsigned);signer.end();
  const assertion=unsigned+'.'+signer.sign(account.private_key).toString('base64url');
@@ -1487,7 +1487,7 @@ app.post('/api/urkunden/polizeimeister/:nr',requireLogin,requireRight('bef',2),a
   copyId=copied.id;
   if(!copyId)throw new Error('Google Drive hat keine Dokument-ID zurückgegeben');
   const edits=[
-   ['{{ANREDE_NAME}}','Herr '+name],
+   ['{{ANREDE_NAME}}',name],
    ['{{GEBURTSDATUM}}',formatUrkundenDatum(date(person.geburtsdatum))],
    ['{{ERNENNUNGSDATUM}}',formatUrkundenDatum(ernannt)],
    ['{{AMTSBEZEICHNUNG}}','Polizeimeister'],
