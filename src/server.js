@@ -430,27 +430,38 @@ app.get('/api/backup-status',requireLogin,requireRight('backup',1),async(req,res
 /* Design wird zentral gespeichert; nur Administratoren dürfen es ändern. */
 
 const DESIGN_MOTIVE=['wappen','verlauf','ohne','nachtblau','stahl','raster','licht','minimal'];
-function valideDesign(d){return d&&typeof d.akzent==='string'&&/^#[0-9a-fA-F]{6}$/.test(d.akzent)&&Number.isInteger(d.schleier)&&d.schleier>=65&&d.schleier<=97&&DESIGN_MOTIVE.includes(d.hintergrund)}
+const DESIGN_KEYS=['flaeche','seitenleiste','rahmen','schrift','sekundaer','highlight'];
+const HEX=/^#[0-9a-fA-F]{6}$/;
+function valideDesign(d){
+ return d&&typeof d.akzent==='string'&&HEX.test(d.akzent)&&Number.isInteger(d.schleier)&&d.schleier>=65&&d.schleier<=97&&DESIGN_MOTIVE.includes(d.hintergrund)&&
+ (d.extras===undefined||(d.extras&&typeof d.extras==='object'&&!Array.isArray(d.extras)&&
+ Object.keys(d.extras).every(k=>[...DESIGN_KEYS,'modus'].includes(k))&&
+ DESIGN_KEYS.every(k=>d.extras[k]===undefined||HEX.test(d.extras[k]))&&
+ (d.extras.modus===undefined||['dunkel','hell'].includes(d.extras.modus))));
+}
+const THEME_DEFAULT={akzent:'#5b86ba',schleier:88,hintergrund:'wappen',extras:{}};
 app.get('/api/portal-design',requireLogin,async(req,res,next)=>{
  try{
   const [def,own]=await Promise.all([
-   db.query('SELECT akzent,schleier,hintergrund FROM portal_design WHERE id=1'),
-   db.query('SELECT akzent,schleier,hintergrund FROM portal_design_personal WHERE user_id=$1',[req.user.id])
+   db.query('SELECT akzent,schleier,hintergrund,extras FROM portal_design WHERE id=1'),
+   db.query('SELECT akzent,schleier,hintergrund,extras FROM portal_design_personal WHERE user_id=$1',[req.user.id])
   ]);
-  res.json({...(own.rows[0]||def.rows[0]||{akzent:'#5b86ba',schleier:88,hintergrund:'wappen'}),standard:def.rows[0],persoenlich:!!own.rows.length});
+  res.json({...(own.rows[0]||def.rows[0]||THEME_DEFAULT),standard:def.rows[0]||THEME_DEFAULT,persoenlich:!!own.rows.length});
  }catch(e){next(e)}
 });
 app.put('/api/portal-design',requireLogin,requireRight('design',2),async(req,res,next)=>{
- try{if(!valideDesign(req.body))return res.status(400).json({error:'Ungültige Designeinstellungen'});
-  const {akzent,schleier,hintergrund}=req.body;
-  await db.query('UPDATE portal_design SET akzent=$1,schleier=$2,hintergrund=$3,aktualisiert=now() WHERE id=1',[akzent,schleier,hintergrund]);
+ try{
+  if(!valideDesign(req.body))return res.status(400).json({error:'Ungültige Designeinstellungen'});
+  const {akzent,schleier,hintergrund,extras={}}=req.body;
+  await db.query('UPDATE portal_design SET akzent=$1,schleier=$2,hintergrund=$3,extras=$4::jsonb,aktualisiert=now() WHERE id=1',[akzent,schleier,hintergrund,JSON.stringify(extras)]);
   res.json({ok:true});
  }catch(e){next(e)}
 });
 app.put('/api/portal-design/personal',requireLogin,async(req,res,next)=>{
- try{if(!valideDesign(req.body))return res.status(400).json({error:'Ungültige Designeinstellungen'});
-  const {akzent,schleier,hintergrund}=req.body;
-  await db.query('INSERT INTO portal_design_personal(user_id,akzent,schleier,hintergrund) VALUES($1,$2,$3,$4) ON CONFLICT(user_id) DO UPDATE SET akzent=$2,schleier=$3,hintergrund=$4,aktualisiert=now()',[req.user.id,akzent,schleier,hintergrund]);
+ try{
+  if(!valideDesign(req.body))return res.status(400).json({error:'Ungültige Designeinstellungen'});
+  const {akzent,schleier,hintergrund,extras={}}=req.body;
+  await db.query('INSERT INTO portal_design_personal(user_id,akzent,schleier,hintergrund,extras) VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(user_id) DO UPDATE SET akzent=$2,schleier=$3,hintergrund=$4,extras=$5::jsonb,aktualisiert=now()',[req.user.id,akzent,schleier,hintergrund,JSON.stringify(extras)]);
   res.json({ok:true});
  }catch(e){next(e)}
 });
