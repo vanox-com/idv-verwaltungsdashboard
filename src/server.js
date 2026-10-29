@@ -398,7 +398,7 @@ app.put('/api/portal-design',requireLogin,requireRight('design',2),async(req,res
   const {akzent,schleier,hintergrund}=req.body||{};
   if(typeof akzent!=='string'||!/^#[0-9a-fA-F]{6}$/.test(akzent)||
      !Number.isInteger(schleier)||schleier<65||schleier>97||
-     !['wappen','verlauf','ohne'].includes(hintergrund))
+     !['wappen','verlauf','ohne','nachtblau','stahl','raster','licht','minimal'].includes(hintergrund))
    return res.status(400).json({error:'Ungültige Designeinstellungen'});
   await db.query('UPDATE portal_design SET akzent=$1,schleier=$2,hintergrund=$3,aktualisiert=now() WHERE id=1',[akzent,schleier,hintergrund]);
   await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",[req.user.id,'Portaldesign geändert']);
