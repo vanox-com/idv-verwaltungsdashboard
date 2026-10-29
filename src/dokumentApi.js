@@ -126,6 +126,11 @@ export function dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAu
   }catch(e){
    if(fileId&&token&&!saved)await deleteGoogleDoc(token,fileId);
    if(e.httpStatus)return res.status(e.httpStatus).json({error:e.message});
+   // Fehler an den Originalvorlagen dem Bearbeiter konkret anzeigen.
+   if(/^(Originalvorlage|Vorlage|Word-Inhalt|Google Drive hat|Kein bearbeitbares)/.test(e.message)){
+    console.warn('[Dokumentgenerator] Vorlage/Google:',e.message);
+    return res.status(422).json({error:e.message});
+   }
    console.error('[Dokumentgenerator]',e.message);next(e);
   }
  });
