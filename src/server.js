@@ -390,20 +390,34 @@ app.get('/api/backup-status',requireLogin,requireRight('backup',1),async(req,res
 });
 
 /* Design wird zentral gespeichert; nur Administratoren dürfen es ändern. */
+
+const DESIGN_MOTIVE=['wappen','verlauf','ohne','nachtblau','stahl','raster','licht','minimal'];
+function valideDesign(d){return d&&typeof d.akzent==='string'&&/^#[0-9a-fA-F]{6}$/.test(d.akzent)&&Number.isInteger(d.schleier)&&d.schleier>=65&&d.schleier<=97&&DESIGN_MOTIVE.includes(d.hintergrund)}
 app.get('/api/portal-design',requireLogin,async(req,res,next)=>{
- try{const {rows}=await db.query('SELECT akzent,schleier,hintergrund FROM portal_design WHERE id=1');res.json(rows[0]||{akzent:'#5b86ba',schleier:88,hintergrund:'wappen'});}catch(e){next(e)}
+ try{
+  const [def,own]=await Promise.all([
+   db.query('SELECT akzent,schleier,hintergrund FROM portal_design WHERE id=1'),
+   db.query('SELECT akzent,schleier,hintergrund FROM portal_design_personal WHERE user_id=$1',[req.user.id])
+  ]);
+  res.json({...(own.rows[0]||def.rows[0]||{akzent:'#5b86ba',schleier:88,hintergrund:'wappen'}),standard:def.rows[0],persoenlich:!!own.rows.length});
+ }catch(e){next(e)}
 });
 app.put('/api/portal-design',requireLogin,requireRight('design',2),async(req,res,next)=>{
- try{
-  const {akzent,schleier,hintergrund}=req.body||{};
-  if(typeof akzent!=='string'||!/^#[0-9a-fA-F]{6}$/.test(akzent)||
-     !Number.isInteger(schleier)||schleier<65||schleier>97||
-     !['wappen','verlauf','ohne','nachtblau','stahl','raster','licht','minimal'].includes(hintergrund))
-   return res.status(400).json({error:'Ungültige Designeinstellungen'});
+ try{if(!valideDesign(req.body))return res.status(400).json({error:'Ungültige Designeinstellungen'});
+  const {akzent,schleier,hintergrund}=req.body;
   await db.query('UPDATE portal_design SET akzent=$1,schleier=$2,hintergrund=$3,aktualisiert=now() WHERE id=1',[akzent,schleier,hintergrund]);
-  await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",[req.user.id,'Portaldesign geändert']);
   res.json({ok:true});
  }catch(e){next(e)}
+});
+app.put('/api/portal-design/personal',requireLogin,async(req,res,next)=>{
+ try{if(!valideDesign(req.body))return res.status(400).json({error:'Ungültige Designeinstellungen'});
+  const {akzent,schleier,hintergrund}=req.body;
+  await db.query('INSERT INTO portal_design_personal(user_id,akzent,schleier,hintergrund) VALUES($1,$2,$3,$4) ON CONFLICT(user_id) DO UPDATE SET akzent=$2,schleier=$3,hintergrund=$4,aktualisiert=now()',[req.user.id,akzent,schleier,hintergrund]);
+  res.json({ok:true});
+ }catch(e){next(e)}
+});
+app.delete('/api/portal-design/personal',requireLogin,async(req,res,next)=>{
+ try{await db.query('DELETE FROM portal_design_personal WHERE user_id=$1',[req.user.id]);res.json({ok:true})}catch(e){next(e)}
 });
 /* Der Generator liefert nur Akten, die der Nutzer ohnehin lesen darf. */
 
