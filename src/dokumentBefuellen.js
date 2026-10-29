@@ -25,7 +25,7 @@ function fill(xml,typ,person,f){
   hauptvertrag:[[name,name,first],[last,last,signLast]],
   pmavertrag:[[name,name,first],[last,last,signLast]],
   nebenvertrag:[[name,name,first],[last,last,signLast]],
-  praktikum:[[first,first,name],[signLast,last,signLast,last]],
+  praktikum:[[first,name,first],[signLast,last,signLast,last]],
   praktikumsbestaetigung:[[first,name,first],[signLast,last,last,signLast]],
   nebenjob:[[first,name,first],[signLast,last,last,signLast]]
  }[typ];
