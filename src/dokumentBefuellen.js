@@ -15,6 +15,47 @@ const replacement = (xml,pattern,values,mandatory=false) => {
  for(const value of values)xml=xml.replace(key,escapeXml(value));
  return xml;
 };
+/* Nur das polizeiliche Unterschriftenfeld als ausgeschriebenen Namen befüllen.
+   Die Namenswiedergabe ersetzt keine rechtsverbindliche elektronische Signatur.
+   Arbeitnehmer/Praktikanten unterschreiben weiterhin selbst. */
+function fillPoliceSignature(xml,typ,fullName){
+ const name=String(fullName||'').trim();
+ if(name.split(/\s+/).length<2||name.length>160)
+  throw new Error('Vollständiger Name des angemeldeten Dokumentenerstellers fehlt');
+ const encoded=escapeXml(name);
+ const marker='&lt;Unterschrift&gt;';
+ if(['hauptvertrag','pmavertrag','nebenvertrag'].includes(typ)){
+  const count=xml.split(marker).length-1;
+  if(count!==2)throw new Error('Arbeitsvertragsvorlage: zwei Unterschriftenfelder erwartet, gefunden: '+count);
+  let seen=0;
+  return xml.replace(/&lt;Unterschrift&gt;/g,match=>++seen===2?encoded:match);
+ }
+ if(typ==='praktikum'){
+  // Nur Absätze, deren sichtbarer Inhalt EXAKT "Unterschrift" lautet:
+  // 1. Praktikant (bleibt), 2. betreuende Dienstkraft (wird befüllt).
+  let found=0,changed=0;
+  const output=xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g,paragraph=>{
+   const text=[...paragraph.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)]
+    .map(m=>m[1]).join('');
+   if(text!=='Unterschrift')return paragraph;
+   found++;
+   if(found!==2)return paragraph;
+   const updated=paragraph.replace(
+    /(<w:t(?:\s[^>]*)?>)Unterschrift(<\/w:t>)/,
+    (_,open,close)=>open+encoded+close
+   );
+   if(updated!==paragraph)changed++;
+   return updated;
+  });
+  if(found!==2||changed!==1)
+   throw new Error('Praktikumsvertrag: Unterschriftszeilen nicht eindeutig ('+found+')');
+  return output;
+ }
+ const count=xml.split(marker).length-1;
+ if(count!==1)throw new Error('Polizeiliches Unterschriftenfeld nicht eindeutig ('+count+')');
+ return xml.replace(marker,encoded);
+}
+
 function fill(xml,typ,person,f){
  const name=String(person.vorname),last=String(person.nachname);
  const signer=f.unterzeichner.trim().split(/\s+/),first=signer.shift(),signLast=signer.join(' ');
@@ -46,6 +87,7 @@ function fill(xml,typ,person,f){
   xml=replacement(xml,'<1., 2., 3.>',[String(f.stufe)],true);
   xml=replacement(xml,'< evtl. genaue Beschreibung >',[f.paragraphen+' – '+f.sachverhalt],true);
  }
+ xml=fillPoliceSignature(xml,typ,f.unterzeichner);
  if(typ==='hauptvertrag')xml=xml.replace('XX',escapeXml(f.probezeit));
  if(typ==='nebenvertrag'){
   xml=xml.replace('XXX',escapeXml(f.taetigkeit)).replace('XXX',escapeXml(f.arbeitgeber));
