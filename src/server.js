@@ -388,6 +388,38 @@ app.get('/api/backup-status',requireLogin,requireRight('backup',1),async(req,res
  res.json({datenbank:rows[0].datenbank,bytes:String(rows[0].datenbank_bytes),geprueft_am:rows[0].geprueft_am,plan:'free',automatische_sicherungen:'Nicht bestätigt',wiederherstellung:'Nicht im Portal verfügbar',ablauf_am:'2026-11-27',hinweis:'Der kostenlose Render-Postgres-Dienst kann ablaufen. Diese Übersicht ist KEIN Backup und erstellt keine Sicherung.'});
  }catch(e){next(e)}
 });
+
+/* Design wird zentral gespeichert; nur Administratoren dürfen es ändern. */
+app.get('/api/portal-design',requireLogin,async(req,res,next)=>{
+ try{const {rows}=await db.query('SELECT akzent,schleier,hintergrund FROM portal_design WHERE id=1');res.json(rows[0]||{akzent:'#5b86ba',schleier:88,hintergrund:'wappen'});}catch(e){next(e)}
+});
+app.put('/api/portal-design',requireLogin,requireRight('design',2),async(req,res,next)=>{
+ try{
+  const {akzent,schleier,hintergrund}=req.body||{};
+  if(typeof akzent!=='string'||!/^#[0-9a-fA-F]{6}$/.test(akzent)||
+     !Number.isInteger(schleier)||schleier<65||schleier>97||
+     !['wappen','verlauf','ohne'].includes(hintergrund))
+   return res.status(400).json({error:'Ungültige Designeinstellungen'});
+  await db.query('UPDATE portal_design SET akzent=$1,schleier=$2,hintergrund=$3,aktualisiert=now() WHERE id=1',[akzent,schleier,hintergrund]);
+  await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",[req.user.id,'Portaldesign geändert']);
+  res.json({ok:true});
+ }catch(e){next(e)}
+});
+/* Der Generator liefert nur Akten, die der Nutzer ohnehin lesen darf. */
+app.get('/api/urkunden/personen',requireLogin,requireRight('urkunden',1),requireRight('pers',1),async(req,res,next)=>{
+ try{const {rows}=await db.query('SELECT personalnummer,vorname,nachname,dienstgrad,gruppe,eintrittsdatum FROM personal ORDER BY nachname,vorname');res.json(rows);}catch(e){next(e)}
+});
+app.post('/api/urkunden/protokoll',requireLogin,requireRight('urkunden',2),async(req,res,next)=>{
+ try{
+  const nr=Number(req.body?.personalnummer),typ=String(req.body?.typ||'');
+  if(!Number.isSafeInteger(nr)||nr<1||!['ernennung','befoerderung','belobigung','bescheinigung'].includes(typ))
+   return res.status(400).json({error:'Ungültige Urkunde'});
+  const {rowCount}=await db.query('SELECT personalnummer FROM personal WHERE personalnummer=$1',[nr]);
+  if(!rowCount)return res.status(404).json({error:'Personalakte nicht gefunden'});
+  await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",[req.user.id,'Urkunde '+typ+' für Personal '+nr+' zum Druck vorbereitet']);
+  res.json({ok:true});
+ }catch(e){next(e)}
+});
 /* ---------- Lesen ---------- */
 
 app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
