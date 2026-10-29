@@ -3903,7 +3903,7 @@ async function ladeDesign(){
    '<label for="designSchleier">Dunkler Schleier ('+Number(d.schleier)+' %)</label><input id="designSchleier" type="range" min="65" max="97" value="'+Number(d.schleier)+'">'+
    '<label for="designMotiv">Hintergrundmotiv</label><select id="designMotiv">'+
    [['wappen','Original-Polizeiwappen'],['verlauf','Dezenter Farbverlauf'],['nachtblau','Nachtblau'],['stahl','Stahlgrau'],['raster','Digitales Raster'],['licht','Blaue Lichtakzente'],['minimal','Minimalistischer Verlauf'],['ohne','Einfarbig dunkel']].map(([v,t])=>'<option value="'+v+'"'+(d.hintergrund===v?' selected':'')+'>'+t+'</option>').join('')+
-   '</select><div class="actions"><button type="button" id="designPreview">Vorschau</button><button type="button" class="p" id="designSave">Für alle speichern</button></div>'+
+   '</select><div class="actions"><button type="button" id="designPreview">Vorschau</button><button type="button" class="p" id="designPersonalSave">Mein Design speichern</button><button type="button" id="designReset">Admin-Standard übernehmen</button>'+(ME.rolle==='Administrator'?'<button type="button" id="designSave">Standard für alle speichern</button>':'')+'</div>'+
    '<p class="mut">Das Originalwappen bleibt unverändert. Die Vorschau verändert nur deinen Browser bis zum erneuten Laden.</p></section>';
  }catch(err){area.textContent='Design konnte nicht geladen werden: '+err.message;}
 }
@@ -3914,7 +3914,7 @@ document.addEventListener('click',async ev=>{
  if(ev.target.closest('#designPreview'))applyPortalDesign(aktuelleDesignWerte());
  if(ev.target.closest('#designPersonalSave')){try{const d=aktuelleDesignWerte();await api('/portal-design/personal',{method:'PUT',body:JSON.stringify(d)});applyPortalDesign(d);alert('Persönliches Design gespeichert.');}catch(err){alert(err.message);}}
  if(ev.target.closest('#designReset')){try{await api('/portal-design/personal',{method:'DELETE'});const d=await api('/portal-design');applyPortalDesign(d);await ladeDesign();}catch(err){alert(err.message);}}
- if(ev.target.closest('#designSave')&&can('design',2)){
+ if(ev.target.closest('#designSave')&&ME.rolle==='Administrator'){
   try{const d=aktuelleDesignWerte();await api('/portal-design',{method:'PUT',body:JSON.stringify(d)});applyPortalDesign(d);alert('Portaldesign gespeichert.');}
   catch(err){alert('Speichern fehlgeschlagen: '+err.message);}
  }
