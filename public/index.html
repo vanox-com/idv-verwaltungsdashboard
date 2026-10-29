@@ -1025,13 +1025,13 @@ const MODS = [
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
-  ['fristen','Fristenmanagement','⏳'],['dienststellen','Dienststellen','🏢'],['backup','Backup-Übersicht','🗄️'],['users','Benutzer & Rollen','🔐'],['system','Systemverwaltung','⚙️'],['meldungen','Mitteilungen verwalten','📣'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾']
+  ['backup','Backup-Übersicht','🗄️'],['users','Benutzer & Rollen','🔐'],['system','Systemverwaltung','⚙️'],['meldungen','Mitteilungen verwalten','📣'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾']
 ];
 /* Sidebar: dieselben Module und Rechte, nur übersichtlich gruppiert.
    Ein aktives Modul hält seine Kategorie immer geöffnet. */
 const NAV_GRUPPEN = [
   {id:'uebersicht',titel:'Übersicht',module:['dash']},
-  {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','rout','geb','jub','statistik','fristen','dienststellen']},
+  {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','rout','geb','jub' ,'statistik']},
   {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
   {id:'verwaltung',titel:'Administration',module:['users','system','meldungen','backup','log']}
@@ -1349,6 +1349,7 @@ function navIcon(id) {
     geb: '<path d="M3 21h18M5 21V11h14v10M9 11V7h6v4M12 3v4M5 16h14"/>',
     jub: '<circle cx="12" cy="8" r="6"/><path d="M8 13 6 22l6-3 6 3-2-9"/>',
     bl: '<circle cx="12" cy="12" r="9"/><path d="M5.5 5.5 18.5 18.5"/>',
+    statistik: '<path d="M3 21h18M5 17V9h4v8M11 17V4h4v13M17 17v-6h4v6"/><path d="M3 21V3"/>',
     users: '<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M18 6v6M15 9h6"/>',
     log: '<path d="M7 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 8h8M9 12h8M9 16h5"/>'
   }[id] || '';
@@ -1425,8 +1426,6 @@ function zeichne() {
     if(tab === 'system') ladeSystemoptionen();
     if(tab === 'meldungen') ladeMeldungen();
     if(tab === 'statistik') ladeStatistik();
-    if(tab === 'fristen') ladeFristen();
-    if(tab === 'dienststellen') ladeDienststellen();
     if(tab === 'backup') ladeBackup();
     if(tab === 'users') ladeBenutzer().catch(err => { if($('#benutzerBereich')) $('#benutzerBereich').textContent = 'Benutzerverwaltung konnte nicht geladen werden: ' + err.message; });
   } catch (err) {
@@ -1890,7 +1889,6 @@ function personalAnzeigen(nr) {
         ? personalDokumentLink(k,v,k==='Arbeitsvertrag'?p.arbeitsvertrag_url:p.ernennungsurkunde_url)
         : esc(v == null || v === '' ? '–' : v)) + '</div>'
     ).join('') + '</div>' +
-    (can('pers',2)&&can('dienststellen') ? '<section class="box"><h3>Dienststellenzuordnung</h3><p>Personalnummer: '+Number(nr)+'</p><button type="button" data-person-dienststelle="'+Number(nr)+'">Dienststelle zuordnen</button></section>' : '') +
     (can('persverlauf') ? '<section class="box"><button type="button" data-open-verlauf="'+Number(nr)+'">Personalakten-Verlauf öffnen</button><div id="personalVerlauf" hidden></div></section>' : '') +
     (can('dis') ? (() => {
       const akte=disAkte(Number(nr));
@@ -3693,15 +3691,29 @@ async function ladeDashboardMeldungen(){
  }catch(e){if(area.isConnected)area.textContent='Mitteilungen konnten nicht geladen werden.';}
 }
 async function ladeStatistik(){
- const el=$('#inhalt');el.innerHTML='<h1>Personalstatistiken</h1><p>Lade …</p>';
+ const el=$('#inhalt');el.innerHTML='<h1>Personalstatistiken</h1><p>Lade Auswertungen …</p>';
  try{
-  const data=await api('/personalstatistik');
-  const items=data.gruppen||[],sum=items.reduce((n,x)=>n+Number(x.anzahl),0);
-  el.innerHTML='<h1>Personalstatistiken</h1><div class="kacheln"><div class="kachel"><b>'+sum+'</b><span>Personalakten gesamt</span></div>'+
-  '<div class="kachel"><b>'+items.filter(x=>x.beschaeftigungsart==='Nebenberuf').reduce((n,x)=>n+Number(x.anzahl),0)+'</b><span>Nebenberuflich</span></div></div>'+
-  '<section class="box"><h3>Verteilung nach Dienstgruppen und Beschäftigung</h3>'+tabelle(['Mitarbeitergruppe','Beschäftigungsart','Status','Anzahl'],items.map(x=>[esc(x.gruppe),esc(x.beschaeftigungsart),esc(x.status),Number(x.anzahl)]))+'</section>'+
-  '<section class="box"><h3>Eintritte der letzten 12 Monate</h3>'+tabelle(['Monat','Eintritte'],(data.eintritte||[]).map(x=>[esc(x.monat),Number(x.anzahl)]))+'</section>';
- }catch(e){el.textContent='Statistik konnte nicht geladen werden: '+e.message;}
+  const data=await api('/personalstatistik'),items=data.gruppen||[];
+  const total=items.reduce((n,x)=>n+Number(x.anzahl),0);
+  const sum=fn=>items.filter(fn).reduce((n,x)=>n+Number(x.anzahl),0);
+  const gruppen=[...new Set(items.map(x=>x.gruppe))];
+  const status=[...new Set(items.map(x=>x.status))];
+  const chart=(title,values)=>{const max=Math.max(1,...values.map(x=>x[1]));return '<section class="box"><h3>'+esc(title)+'</h3>'+values.map(([name,num])=>
+    '<div class="dashboard-group"><div class="dashboard-group-head"><span>'+esc(name)+'</span><strong>'+num+'</strong></div>'+
+    '<div class="dashboard-progress"><i style="width:'+Math.round(num/max*100)+'%"></i></div></div>').join('')+'</section>';};
+  const kpi=(label,value)=>'<div class="kachel"><b>'+value+'</b><small>'+esc(label)+'</small></div>';
+  el.innerHTML='<h1>Personalstatistiken</h1><p class="mut">Aktuelle Personalstruktur und Entwicklung – automatisch aus den Personalakten berechnet.</p>'+
+    '<div class="kacheln">'+kpi('Personalakten insgesamt',total)+kpi('Hauptberuf',sum(x=>x.beschaeftigungsart!=='Nebenberuf'))+
+    kpi('Nebenberuf',sum(x=>x.beschaeftigungsart==='Nebenberuf'))+kpi('Aktiv',sum(x=>x.status==='Aktiv'))+
+    kpi('Nicht aktiv',sum(x=>x.status!=='Aktiv'))+'</div>'+
+    '<div class="dash-layout-grid">'+chart('Mitarbeitergruppen',gruppen.map(g=>[g,sum(x=>x.gruppe===g)]))+
+    chart('Beschäftigungsarten',[['Hauptberuf',sum(x=>x.beschaeftigungsart!=='Nebenberuf')],['Nebenberuf',sum(x=>x.beschaeftigungsart==='Nebenberuf')]])+
+    chart('Personalstatus',status.map(st=>[st,sum(x=>x.status===st)]))+'</div>'+
+    '<section class="box"><h3>Verteilung nach Mitarbeitergruppe und Beschäftigung</h3>'+
+    tabelle(['Mitarbeitergruppe','Hauptberuf','Nebenberuf','Gesamt'],gruppen.map(g=>[esc(g),sum(x=>x.gruppe===g&&x.beschaeftigungsart!=='Nebenberuf'),sum(x=>x.gruppe===g&&x.beschaeftigungsart==='Nebenberuf'),sum(x=>x.gruppe===g)]))+'</section>'+
+    '<section class="box"><h3>Eintritte der letzten 12 Monate</h3>'+
+    chart('Neueinstellungen pro Monat',(data.eintritte||[]).map(x=>[x.monat,Number(x.anzahl)]))+'</section>';
+ }catch(err){el.textContent='Personalstatistiken konnten nicht geladen werden: '+err.message;}
 }
 document.addEventListener('click',async e=>{
  const option=e.target.closest('[data-save-options]');
@@ -3718,33 +3730,6 @@ document.addEventListener('click',async e=>{
 });
 
 
-/* Module zur Verwaltung von Dienststellen, Fristen und Datenbankstatus. */
-async function ladeDienststellen(){
- const el=$('#inhalt');el.innerHTML='<h1>Dienststellenverwaltung</h1><p>Lade …</p>';
- try{
-  const entries=await api('/dienststellen'),write=can('dienststellen',2);
-  el.innerHTML='<h1>Dienststellenverwaltung</h1><p class="mut">Dienststellen können deaktiviert werden, ohne vorhandene Personalzuordnungen zu löschen.</p>'+
-   (write?'<section class="box"><h3>Neue Dienststelle</h3><label>Name</label><input id="dsName" maxlength="100"><label>Beschreibung</label><input id="dsBeschreibung" maxlength="500"><button type="button" class="p" id="dsAdd">Dienststelle anlegen</button></section>':'')+
-   '<div class="tw"><table><thead><tr><th>Dienststelle</th><th>Beschreibung</th><th>Personal</th><th>Status</th><th>Aktion</th></tr></thead><tbody>'+
-   entries.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.beschreibung)+'</td><td>'+Number(x.personal)+'</td><td>'+(x.aktiv?'Aktiv':'Inaktiv')+'</td><td>'+
-   (write?'<button type="button" data-ds-edit="'+Number(x.id)+'">Bearbeiten</button>':'')+'</td></tr>').join('')+'</tbody></table></div>';
-  el._dienststellen=entries;
- }catch(e){el.textContent='Dienststellen konnten nicht geladen werden: '+e.message;}
-}
-async function ladeFristen(){
- const el=$('#inhalt');el.innerHTML='<h1>Fristenmanagement</h1><p>Lade …</p>';
- try{
-  const entries=await api('/fristen'),write=can('fristen',2);
-  const faellig=entries.filter(x=>!x.erledigt&&Number(x.tage)<=Number(x.vorwarn_tage));
-  el.innerHTML='<h1>Fristenmanagement</h1><p class="mut">Fristen werden anhand des Fälligkeitsdatums und der individuellen Vorwarnzeit ausgewertet.</p>'+
-   '<div class="kacheln"><div class="kachel"><b>'+entries.filter(x=>!x.erledigt).length+'</b><span>Offene Fristen</span></div><div class="kachel"><b>'+faellig.length+'</b><span>Warnungen</span></div></div>'+
-   (write?'<section class="box"><h3>Frist anlegen</h3><label>Bezeichnung</label><input id="fristTitel" maxlength="180"><label>Fällig am</label><input id="fristDatum" type="date"><label>Vorwarnzeit (Tage)</label><input id="fristTage" type="number" min="0" max="365" value="14"><label>Personalnummer (optional)</label><input id="fristNr" type="number" min="1"><button type="button" class="p" id="fristAdd">Frist speichern</button></section>':'')+
-   '<div class="tw"><table><thead><tr><th>Frist</th><th>Personal</th><th>Datum</th><th>Resttage</th><th>Status</th><th>Aktion</th></tr></thead><tbody>'+
-   entries.map(x=>'<tr><td>'+esc(x.titel)+'</td><td>'+esc([x.vorname,x.nachname].filter(Boolean).join(' ')||'Allgemein')+'</td><td>'+fd(x.faellig_am)+'</td><td>'+Number(x.tage)+'</td><td>'+
-    (x.erledigt?'Erledigt':Number(x.tage)<0?'Überfällig':Number(x.tage)<=Number(x.vorwarn_tage)?'Bald fällig':'Offen')+'</td><td>'+
-    (write?'<button type="button" data-frist-toggle="'+Number(x.id)+'" data-done="'+!!x.erledigt+'">'+(x.erledigt?'Wieder öffnen':'Erledigen')+'</button>':'')+'</td></tr>').join('')+'</tbody></table></div>';
- }catch(e){el.textContent='Fristen konnten nicht geladen werden: '+e.message;}
-}
 async function ladeBackup(){
  const el=$('#inhalt');el.innerHTML='<h1>Backup-Übersicht</h1><p>Lade Datenbankstatus …</p>';
  try{
@@ -3757,41 +3742,6 @@ async function ladeBackup(){
    '<p class="mut">Letzte Datenbankabfrage: '+esc(new Date(x.geprueft_am).toLocaleString('de-DE'))+'</p></section>';
  }catch(e){el.textContent='Datenbankstatus konnte nicht geladen werden: '+e.message;}
 }
-document.addEventListener('click',async event=>{
- const assign=event.target.closest('[data-person-dienststelle]');
- if(assign&&can('pers',2)&&can('dienststellen')){
-  try{
-   const options=await api('/dienststellen');
-   const choice=prompt('Dienststelle wählen (ID):\\n'+options.filter(x=>x.aktiv).map(x=>x.id+' – '+x.name).join('\\n')+'\\nLeer lassen = Zuordnung entfernen');
-   if(choice===null)return;
-   const id=choice.trim();
-   if(id&&!options.some(x=>x.aktiv&&String(x.id)===id)){alert('Ungültige Dienststelle');return;}
-   await api('/personal/'+Number(assign.dataset.personDienststelle)+'/dienststelle',{method:'PATCH',body:JSON.stringify({dienststelle_id:id?Number(id):null})});
-   alert('Dienststelle gespeichert.');await starten();
-  }catch(err){alert('Zuordnung fehlgeschlagen: '+err.message);}
- }
-});
-document.addEventListener('click',async event=>{
- const addDs=event.target.closest('#dsAdd'),editDs=event.target.closest('[data-ds-edit]');
- const addFrist=event.target.closest('#fristAdd'),toggleFrist=event.target.closest('[data-frist-toggle]');
- if(!addDs&&!editDs&&!addFrist&&!toggleFrist)return;
- try{
-  if(addDs&&can('dienststellen',2)){
-   await api('/dienststellen',{method:'POST',body:JSON.stringify({name:$('#dsName').value,beschreibung:$('#dsBeschreibung').value})});await ladeDienststellen();
-  }else if(editDs&&can('dienststellen',2)){
-   const x=($('#inhalt')._dienststellen||[]).find(z=>Number(z.id)===Number(editDs.dataset.dsEdit));if(!x)return;
-   const name=prompt('Name der Dienststelle',x.name);if(name===null)return;
-   const beschreibung=prompt('Beschreibung',x.beschreibung);if(beschreibung===null)return;
-   const aktiv=confirm('Soll diese Dienststelle aktiv sein? OK = Aktiv, Abbrechen = Inaktiv.');
-   await api('/dienststellen/'+x.id,{method:'PATCH',body:JSON.stringify({name,beschreibung,aktiv})});await ladeDienststellen();
-  }else if(addFrist&&can('fristen',2)){
-   await api('/fristen',{method:'POST',body:JSON.stringify({titel:$('#fristTitel').value,faellig_am:$('#fristDatum').value,vorwarn_tage:Number($('#fristTage').value),personalnummer:$('#fristNr').value||null})});await ladeFristen();
-  }else if(toggleFrist&&can('fristen',2)){
-   await api('/fristen/'+Number(toggleFrist.dataset.fristToggle),{method:'PATCH',body:JSON.stringify({erledigt:toggleFrist.dataset.done!=='true'})});await ladeFristen();
-  }
- }catch(e){alert('Änderung nicht gespeichert: '+e.message);}
-});
-
 /* ---------- Start ---------- */
 
 (async () => {
