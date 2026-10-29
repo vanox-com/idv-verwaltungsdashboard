@@ -544,3 +544,24 @@ BEFORE INSERT OR UPDATE OF personalnummer,dienstgrad,gruppe ON personal
 FOR EACH ROW EXECUTE FUNCTION idv_personal_gruppe_setzen();
 UPDATE personal SET gruppe=idv_mitarbeitergruppe(personalnummer,dienstgrad)
 WHERE gruppe IS DISTINCT FROM idv_mitarbeitergruppe(personalnummer,dienstgrad);
+
+/* Bei manueller Zuordnung bleibt die Gruppe bestehen, bis das Feld explizit geleert wird. */
+CREATE OR REPLACE FUNCTION idv_personal_gruppe_setzen() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_OP='INSERT' THEN
+  IF NEW.gruppe IS NULL OR NEW.gruppe='' OR NEW.gruppe='Nicht zugeordnet'
+  THEN NEW.gruppe:=idv_mitarbeitergruppe(NEW.personalnummer,NEW.dienstgrad); END IF;
+ ELSIF NEW.gruppe IS DISTINCT FROM OLD.gruppe THEN
+  IF NEW.gruppe IS NULL OR NEW.gruppe='' OR NEW.gruppe='Nicht zugeordnet'
+  THEN NEW.gruppe:=idv_mitarbeitergruppe(NEW.personalnummer,NEW.dienstgrad); END IF;
+ ELSIF NEW.dienstgrad IS DISTINCT FROM OLD.dienstgrad OR NEW.personalnummer IS DISTINCT FROM OLD.personalnummer THEN
+  IF OLD.gruppe=idv_mitarbeitergruppe(OLD.personalnummer,OLD.dienstgrad)
+  THEN NEW.gruppe:=idv_mitarbeitergruppe(NEW.personalnummer,NEW.dienstgrad); END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TABLE IF NOT EXISTS portal_design_personal (
+ user_id integer PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+ akzent text NOT NULL, schleier smallint NOT NULL, hintergrund text NOT NULL,
+ aktualisiert timestamptz NOT NULL DEFAULT now()
+);
