@@ -1349,6 +1349,23 @@ app.post('/api/kuendigung', requireLogin, requireRight('kue', 2), async (req, re
 });
 
 /* Statuswechsel in der Kündigungsliste. Werte serverseitig prüfen. */
+/* Dokumentadressen gezielt pro historischem Kündigungsvorgang pflegen. */
+app.patch('/api/kuendigung/:id/dokument',requireLogin,requireRight('kue',2),async(req,res,next)=>{
+ try{
+  const id=Number(req.params.id),feld=req.body?.feld;
+  const erlaubte=['vertrag','urkunde','zeugnis','kuendigung'];
+  const name=String(req.body?.name||'').trim(),url=String(req.body?.url||'').trim();
+  if(!Number.isSafeInteger(id)||id<1||!erlaubte.includes(feld)||name.length>250||url.length>2048)
+   return res.status(400).json({error:'Ungültiger Dokumenteintrag'});
+  if(url){try{const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||!u.hostname.includes('.'))throw Error('bad');}
+   catch{return res.status(400).json({error:'Bitte einen gültigen HTTPS-Link eingeben'});}}
+  const value=name||url?JSON.stringify({t:name||'Dokument',u:url}):'';
+  const r=await db.query('UPDATE kuendigungen SET '+feld+'=$1 WHERE id=$2',[value,id]);
+  if(!r.rowCount)return res.status(404).json({error:'Kündigung nicht gefunden'});
+  await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",[req.user.id,'Kündigungsdokument '+feld+' im Vorgang '+id+' geändert']);
+  res.json({ok:true});
+ }catch(e){next(e)}
+});
 app.patch('/api/kuendigung/:id', requireLogin, requireRight('kue', 2), async (req, res, next) => {
   try {
     const erlaubte = {
