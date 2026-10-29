@@ -4106,6 +4106,7 @@ function florimodusMuh(test=false){
    floriKuhAudio.preload='auto';
    floriKuhAudio.volume=1;
    floriKuhAudio.playbackRate=.86; // Ein tiefes, langgezogenes MUUUH!
+   if('preservesPitch' in floriKuhAudio)floriKuhAudio.preservesPitch=false;
    floriKuhAudio.addEventListener('error',()=>{
     if(!floriKuhFehler){floriKuhFehler=true;florimodusSynth();}
    },{once:true});
