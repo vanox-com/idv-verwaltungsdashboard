@@ -310,6 +310,7 @@ app.put('/api/system-optionen/:key',requireLogin,async(req,res,next)=>{
    return res.status(400).json({error:'Ungültige Auswahlwerte'});
   const required=key==='beschaeftigungsarten'?['Hauptberuf','Nebenberuf']:['Mittlerer Dienst','Gehobener Dienst','Polizeirat','Leitungsdienst','Nicht zugeordnet'];
   if(required.some(x=>!werte.includes(x)))return res.status(400).json({error:'Basiswerte dürfen nicht entfernt werden'});
+  if(key==='beschaeftigungsarten' && (werte.length!==2||werte.some(x=>!required.includes(x))))return res.status(400).json({error:'Beschäftigungsarten bleiben Hauptberuf und Nebenberuf'});
   await db.query('INSERT INTO system_optionen(schluessel,werte) VALUES($1,$2::jsonb) ON CONFLICT(schluessel) DO UPDATE SET werte=EXCLUDED.werte,aktualisiert=now()',[key,JSON.stringify(werte)]);
   await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",[req.user.id,'Systemoptionen geändert: '+key]);
   res.json({ok:true});
@@ -320,11 +321,13 @@ app.get('/api/personal/:nr/verlauf',requireLogin,requireRight('pers',1),async(re
   const nr=Number(req.params.nr);
   if(!Number.isSafeInteger(nr)||nr<1)return res.status(400).json({error:'Ungültige Personalnummer'});
   const {rows:person}=await db.query('SELECT personalnummer,eintrittsdatum FROM personal WHERE personalnummer=$1',[nr]);
+  const audit=await db.query("SELECT a.zeit,a.aenderungen,COALESCE(u.anzeigename,'–') AS benutzer FROM personal_audit a LEFT JOIN users u ON u.id=a.user_id WHERE a.personalnummer=$1 ORDER BY a.zeit DESC LIMIT 100",[nr]);
   if(!person.length)return res.status(404).json({error:'Personalakte nicht gefunden'});
   const events=[];
   if(person[0].eintrittsdatum)events.push({zeit:person[0].eintrittsdatum,aktion:'Eintritt in den Dienst',art:'eintritt'});
   const logs=await db.query("SELECT l.zeit,l.aktion,l.art,COALESCE(u.anzeigename,'–') AS benutzer FROM log l LEFT JOIN users u ON u.id=l.user_id WHERE (l.aktion ~* ('(Personal|Personalnummer|Disziplinarakte|Kündigung automatisch angelegt):? '||$1::text||'([^0-9]|$)')) ORDER BY l.zeit DESC LIMIT 100",[nr]);
   events.push(...logs.rows);
+  for(const a of audit.rows){for(const [feld,werte] of Object.entries(a.aenderungen||{}))events.push({zeit:a.zeit,aktion:feld+': '+String(werte.alt??'–')+' → '+String(werte.neu??'–'),benutzer:a.benutzer,art:'aenderung'});}
   if((await effektiveRechte(req.user)).dis>=1){
    const ds=await db.query('SELECT slots FROM disziplin WHERE personalnummer=$1',[nr]);
    const names=['Ermahnung','Verwarnung','Abmahnung','Suspendierung','Degradierung','Entlassung'];
@@ -659,7 +662,7 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
   try{
     await client.query('BEGIN');
     const {rows:vorher}=await client.query(
-      'SELECT personalnummer,status,vorname,nachname,dienstgrad,handy,'+
+      'SELECT personalnummer,status,vorname,nachname,dienstgrad,handy,gruppe,beschaeftigungsart,nebenjob,'+
       'arbeitsvertrag,ernennungsurkunde,arbeitsvertrag_url,ernennungsurkunde_url,eintrittsdatum '+
       'FROM personal WHERE personalnummer=$1 FOR UPDATE',[nr]);
     if(!vorher.length){
@@ -711,6 +714,17 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
           [req.user.id,'Kündigung automatisch angelegt: '+nr+' '+[p.vorname,p.nachname].filter(Boolean).join(' ')]);
       }
     }
+    const auditFelder=['vorname','nachname','status','gruppe','beschaeftigungsart','nebenjob','eintrittsdatum'];
+    const geaendert={};
+    for(const feld of auditFelder){
+      if(Object.hasOwn(body,feld)){
+        const vorherWert=vorher[0][feld]??null, nachherWert=body[feld]||null;
+        if(String(vorherWert??'')!==String(nachherWert??''))geaendert[feld]={alt:vorherWert,neu:nachherWert};
+      }
+    }
+    if(Object.keys(geaendert).length)await client.query(
+      'INSERT INTO personal_audit(personalnummer,user_id,aenderungen) VALUES($1,$2,$3::jsonb)',
+      [nr,req.user.id,JSON.stringify(geaendert)]);
     await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
       [req.user.id,'Personal '+nr+' geändert'+(wechsel?' (Status: Gekündigt)':'')]);
     await client.query('COMMIT');
@@ -1753,6 +1767,12 @@ app.delete('/api/textbausteine/:schluessel',requireLogin,requireRight('texte',2)
   }catch(e){next(e)}
 });
 
+app.get('/api/personal-audit',requireLogin,requireRight('log',1),async(req,res,next)=>{
+ try{
+  const {rows}=await db.query("SELECT a.personalnummer,a.zeit,a.aenderungen,COALESCE(u.anzeigename,'–') AS benutzer FROM personal_audit a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.zeit DESC LIMIT 200");
+  res.json(rows);
+ }catch(e){next(e)}
+});
 app.get('/api/log', requireLogin, requireRight('log', 1), async (req, res, next) => {
   try {
     const { rows } = await db.query(
