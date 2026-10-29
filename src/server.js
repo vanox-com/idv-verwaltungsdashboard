@@ -1759,8 +1759,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
   try {
     const rolle = req.params.rolle, modul = req.params.modul;
     const stufe = req.body?.stufe;
-    const erlaubteModule = new Set(['dash', 'pers', 'bef', 'rout', 'sonder', 'dis',
-      'kue', 'chk', 'rl', 'org', 'sperr', 'geb', 'jub', 'bl', 'log', 'por', 'texte']);
+    const erlaubteModule = new Set(['dash','pers','bef','rout','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','texte','rechtesimulator','design','backup','mitteilungen']);
     if (rolle === 'Administrator')
       return res.status(403).json({ error: 'Administratorrechte sind fest' });
     if (!erlaubteModule.has(modul) || ![0, 1, 2].includes(stufe))
@@ -1782,8 +1781,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
 app.patch('/api/users/:id/recht/:modul',requireLogin,nurAdmin,async(req,res,next)=>{
   try{
     const userId=Number(req.params.id),modul=req.params.modul,stufe=req.body?.stufe;
-    const erlaubte=new Set(['dash','pers','bef','por','sonder','kue','dis','rout',
-      'chk','rl','org','sperr','geb','jub','bl','log','texte']);
+    const erlaubte=new Set(['dash','pers','bef','rout','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','texte','rechtesimulator','design','backup','mitteilungen']);
     if(!Number.isSafeInteger(userId)||userId<1||!erlaubte.has(modul)||
        ![null,0,1,2].includes(stufe))
       return res.status(400).json({error:'Ungültige Berechtigung'});
