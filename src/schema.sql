@@ -420,3 +420,20 @@ CREATE TABLE IF NOT EXISTS bekanntmachungen (
  inhalt text NOT NULL,
  erstellt timestamptz NOT NULL DEFAULT now()
 );
+
+/* Erweiterbare Systemoptionen, pro Benutzer gelesene Benachrichtigungen. */
+CREATE TABLE IF NOT EXISTS system_optionen (
+  schluessel text PRIMARY KEY,
+  werte jsonb NOT NULL DEFAULT '[]'::jsonb,
+  aktualisiert timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO system_optionen(schluessel,werte) VALUES
+('mitarbeitergruppen','["Mittlerer Dienst","Gehobener Dienst","Polizeirat","Leitungsdienst","Nicht zugeordnet"]'::jsonb),
+('beschaeftigungsarten','["Hauptberuf","Nebenberuf"]'::jsonb)
+ON CONFLICT (schluessel) DO NOTHING;
+CREATE TABLE IF NOT EXISTS benachrichtigungen_gelesen (
+  user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  meldung_id integer NOT NULL REFERENCES log(id) ON DELETE CASCADE,
+  gelesen_am timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(user_id,meldung_id)
+);
