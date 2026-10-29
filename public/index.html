@@ -1436,6 +1436,7 @@ const DASH_WIDGETS=[
   {id:'kpi-bef',titel:'Fällige Beförderungen',typ:'kpi',recht:'bef',neu:true},
   {id:'panel-bef',titel:'Fällige Beförderungen',typ:'panel',recht:'bef'},
   {id:'panel-gruppen',titel:'Personal nach Gruppe',typ:'panel'},
+  {id:'panel-bekanntmachungen',titel:'Dienstliche Bekanntmachungen',typ:'panel'},
   {id:'panel-beschaeftigung',titel:'Beschäftigungsarten nach Mitarbeitergruppe',typ:'panel',recht:'pers',neu:true},
   {id:'panel-inaktiv',titel:'Nicht im aktiven Dienst',typ:'panel',recht:'pers'},
   {id:'panel-geb',titel:'Geburtstage (30 Tage)',typ:'panel',recht:'geb'},
@@ -1452,7 +1453,7 @@ const DASH_WIDGET_ZIELE={
   'kpi-personal':'pers','kpi-kuendigungen':'kue','kpi-rueckgaben':'kue',
   'kpi-disziplin':'dis','kpi-aktiv':'pers','kpi-neu30':'pers',
   'kpi-urlaub':'pers','kpi-bef':'bef','panel-bef':'bef',
-  'panel-gruppen':'pers','panel-beschaeftigung':'pers','panel-inaktiv':'pers','panel-geb':'geb',
+  'panel-gruppen':'pers','panel-bekanntmachungen':'dash','panel-beschaeftigung':'pers','panel-inaktiv':'pers','panel-geb':'geb',
   'panel-jub':'jub','panel-dienstblatt':'pers','panel-status':'pers',
   'panel-neue':'pers'
 };
@@ -1641,6 +1642,14 @@ function vDash(){
       (due.length?due.map(p=>personZeile(p.name,p.dienstgrad+' → '+p.naechsterRang,
         'Fällig: '+fd(p.faellig),'bad')).join(''):'<span class="mut">Keine fälligen Beförderungen</span>')+'</section>',
     'panel-gruppen':progress('Personal nach Gruppe',d.gruppen||[]),
+    'panel-bekanntmachungen':'<section class="box"><h3>Dienstliche Bekanntmachungen</h3>'+
+      (ME.rolle==='Administrator'?'<button type="button" data-bek-neu>+ Bekanntmachung erstellen</button>':'')+
+      (d.bekanntmachungen||[]).map(b=>'<div class="dashboard-line" style="display:block;padding:12px 0"><strong>'+esc(b.titel)+'</strong>'+
+        '<p style="white-space:pre-wrap;margin:7px 0">'+esc(b.inhalt)+'</p>'+
+        (ME.rolle==='Administrator'?'<button type="button" data-bek-edit="'+Number(b.id)+'">Bearbeiten</button> <button type="button" data-bek-delete="'+Number(b.id)+'">Löschen</button>':'')+
+        '</div>').join('')+
+      (!(d.bekanntmachungen||[]).length?'<p class="mut">Keine Bekanntmachungen vorhanden.</p>':'')+'</section>',
+
     'panel-beschaeftigung':(()=>{
       const auswertung=d.beschaeftigung||{};
       const summen=auswertung.summen||{};
@@ -3602,6 +3611,31 @@ async function vLog_() {
     meldung('Server nicht erreichbar: ' + e.message, true);
   }
 })();
+
+/* Bekanntmachungen direkt im Portal pflegen; Inhalte werden serverseitig gespeichert. */
+document.addEventListener('click',async e=>{
+  const neu=e.target.closest('[data-bek-neu]');
+  const edit=e.target.closest('[data-bek-edit]');
+  const del=e.target.closest('[data-bek-delete]');
+  if(!neu&&!edit&&!del||ME?.rolle!=='Administrator')return;
+  const id=Number(edit?.dataset.bekEdit||del?.dataset.bekDelete);
+  const item=(D.dashboard?.bekanntmachungen||[]).find(x=>Number(x.id)===id);
+  try{
+    if(del){
+      if(!confirm('Bekanntmachung wirklich löschen?'))return;
+      await api('/bekanntmachungen/'+id,{method:'DELETE'});
+    }else{
+      const titel=prompt('Titel der Bekanntmachung (max. 140 Zeichen)',item?.titel||'');
+      if(titel===null)return;
+      const inhalt=prompt('Inhalt der Bekanntmachung (max. 3000 Zeichen)',item?.inhalt||'');
+      if(inhalt===null)return;
+      if(!titel.trim()||!inhalt.trim()){alert('Titel und Inhalt sind erforderlich.');return;}
+      await api('/bekanntmachungen'+(edit?'/'+id:''),{method:edit?'PUT':'POST',body:JSON.stringify({titel,inhalt})});
+    }
+    await starten();
+  }catch(err){alert('Bekanntmachung konnte nicht gespeichert werden: '+err.message);}
+});
+
 </script>
 </body>
 </html>
