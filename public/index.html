@@ -1404,6 +1404,7 @@ function zeichne() {
     if(tab==='system' && ME.rolle!=='Administrator'){$('#inhalt').innerHTML='<p>Nur Administratoren.</p>';return;}
     const f = ansichten[tab];
     $('#inhalt').innerHTML = f ? f() : '<p>Dieser Bereich ist für deine Rolle nicht freigegeben.</p>';
+    if(tab==='dash'&&can('mitteilungen'))ladeDashboardMeldungen();
     if(tab === 'system') ladeSystemoptionen();
     if(tab === 'meldungen') ladeMeldungen();
     if(tab === 'statistik') ladeStatistik();
@@ -1606,7 +1607,6 @@ document.addEventListener('dragend',()=>{
 
 function vDash(){
   const d=D.dashboard||{},summary=d.summary||{},bearbeiten=!!DASH_EDITOR&&dashboardEditierbar();
-  if(can('mitteilungen'))queueMicrotask(()=>ladeDashboardMeldungen());
   const bezeichnung={personal:'pers',kuendigungen:'kue',rueckgaben:'rout',disziplin:'dis',aktiv:'pers',neu30:'pers',urlaub:'pers',bef:'bef'};
   const kpi=(titel,value,icon,tone,hinweis='IM SYSTEM ERFASST')=>
     '<div class="kachel '+tone+'"><div class="kachel-head"><span>'+esc(titel)+
