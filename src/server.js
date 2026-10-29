@@ -342,7 +342,7 @@ app.get('/api/personal/:nr/verlauf',requireLogin,requireRight('pers',1),requireR
 app.get('/api/mitteilungen',requireLogin,requireRight('mitteilungen',1),async(req,res,next)=>{
  try{
   const {rows}=await db.query(
-   'SELECT m.id,m.titel,m.inhalt,m.erstellt FROM portal_meldungen m JOIN portal_meldung_empfaenger e ON e.meldung_id=m.id WHERE e.user_id=$1 ORDER BY m.erstellt DESC LIMIT 30',[req.user.id]);
+   'SELECT m.id,m.titel,m.inhalt,m.erstellt FROM portal_meldungen m JOIN portal_meldung_empfaenger e ON e.meldung_id=m.id WHERE e.user_id=$1 AND e.ausgeblendet_am IS NULL AND (m.sichtbar_ab IS NULL OR m.sichtbar_ab<=now()) AND (m.sichtbar_bis IS NULL OR m.sichtbar_bis>now()) ORDER BY m.erstellt DESC LIMIT 30',[req.user.id]);
   res.json(rows);
  }catch(e){next(e)}
 });
@@ -355,6 +355,8 @@ app.get('/api/mitteilungen/empfaenger',requireLogin,requireRight('mitteilungen',
 });
 app.post('/api/mitteilungen',requireLogin,requireRight('mitteilungen',2),async(req,res,next)=>{
  const b=req.body||{},titel=String(b.titel||'').trim(),inhalt=String(b.inhalt||'').trim();
+ const start=b.sichtbar_ab?new Date(b.sichtbar_ab):null,ende=b.sichtbar_bis?new Date(b.sichtbar_bis):null;
+ if((start&&!Number.isFinite(start.getTime()))||(ende&&!Number.isFinite(ende.getTime()))||(start&&ende&&ende<=start))return res.status(400).json({error:'Ungültiger Anzeigezeitraum'});
  const ids=Array.isArray(b.userIds)?b.userIds:[];
  const rollen=Array.isArray(b.rollen)?b.rollen:[];
  const gruppen=Array.isArray(b.gruppen)?b.gruppen:[];
@@ -368,12 +370,48 @@ app.post('/api/mitteilungen',requireLogin,requireRight('mitteilungen',2),async(r
     "SELECT DISTINCT u.id FROM users u LEFT JOIN personal p ON p.personalnummer = CASE WHEN u.dienstnummer ~ '^[0-9]{1,9}$' THEN u.dienstnummer::int ELSE NULL END WHERE u.gesperrt=false AND (u.id=ANY($1::int[]) OR u.rolle=ANY($2::text[]) OR p.gruppe=ANY($3::text[]))",
     [ids,rollen,gruppen]);
   if(!recipients.rows.length){await client.query('ROLLBACK');return res.status(400).json({error:'Keine gültigen Empfänger'});}
-  const {rows}=await client.query('INSERT INTO portal_meldungen(titel,inhalt,absender_id) VALUES($1,$2,$3) RETURNING id',[titel,inhalt,req.user.id]);
+  const {rows}=await client.query('INSERT INTO portal_meldungen(titel,inhalt,absender_id,sichtbar_ab,sichtbar_bis) VALUES($1,$2,$3,$4,$5) RETURNING id',[titel,inhalt,req.user.id,start,ende]);
   for(const r of recipients.rows)await client.query('INSERT INTO portal_meldung_empfaenger(meldung_id,user_id) VALUES($1,$2)',[rows[0].id,r.id]);
   await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",[req.user.id,'Mitteilung an '+recipients.rows.length+' Empfänger erstellt']);
   await client.query('COMMIT');
   res.json({ok:true,anzahl:recipients.rows.length});
  }catch(e){await client.query('ROLLBACK').catch(()=>{});next(e)}finally{client.release()}
+});
+
+/* Senderverwaltung: alle Nachrichten samt Zeitraum, unabhängig von ihrer Sichtbarkeit. */
+app.get('/api/mitteilungen/verwaltung',requireLogin,requireRight('mitteilungen',2),async(req,res,next)=>{
+ try{const {rows}=await db.query(`SELECT m.id,m.titel,m.inhalt,m.erstellt,m.sichtbar_ab,m.sichtbar_bis,
+ COUNT(e.user_id)::int AS empfaenger FROM portal_meldungen m
+ LEFT JOIN portal_meldung_empfaenger e ON e.meldung_id=m.id
+ GROUP BY m.id ORDER BY m.erstellt DESC LIMIT 150`);res.json(rows)}catch(e){next(e)}
+});
+app.patch('/api/mitteilungen/:id',requireLogin,requireRight('mitteilungen',2),async(req,res,next)=>{
+ try{
+  const id=Number(req.params.id),b=req.body||{},titel=String(b.titel||'').trim(),inhalt=String(b.inhalt||'').trim();
+  const start=b.sichtbar_ab?new Date(b.sichtbar_ab):null,ende=b.sichtbar_bis?new Date(b.sichtbar_bis):null;
+  if(!Number.isSafeInteger(id)||id<1||!titel||!inhalt||titel.length>140||inhalt.length>3000||
+    (start&&!Number.isFinite(start.getTime()))||(ende&&!Number.isFinite(ende.getTime()))||(start&&ende&&ende<=start))
+   return res.status(400).json({error:'Ungültige Mitteilung oder Zeitraum'});
+  const result=await db.query('UPDATE portal_meldungen SET titel=$1,inhalt=$2,sichtbar_ab=$3,sichtbar_bis=$4 WHERE id=$5',[titel,inhalt,start,ende,id]);
+  if(!result.rowCount)return res.status(404).json({error:'Mitteilung nicht gefunden'});
+  res.json({ok:true});
+ }catch(e){next(e)}
+});
+app.delete('/api/mitteilungen/:id',requireLogin,requireRight('mitteilungen',2),async(req,res,next)=>{
+ try{
+  const id=Number(req.params.id);if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:'Ungültige ID'});
+  const r=await db.query('DELETE FROM portal_meldungen WHERE id=$1',[id]);
+  if(!r.rowCount)return res.status(404).json({error:'Mitteilung nicht gefunden'});
+  res.json({ok:true});
+ }catch(e){next(e)}
+});
+app.post('/api/mitteilungen/:id/ausblenden',requireLogin,requireRight('mitteilungen',1),async(req,res,next)=>{
+ try{
+  const id=Number(req.params.id);if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:'Ungültige ID'});
+  const r=await db.query('UPDATE portal_meldung_empfaenger SET ausgeblendet_am=now() WHERE meldung_id=$1 AND user_id=$2',[id,req.user.id]);
+  if(!r.rowCount)return res.status(404).json({error:'Mitteilung nicht vorhanden'});
+  res.json({ok:true});
+ }catch(e){next(e)}
 });
 app.get('/api/personalstatistik',requireLogin,requireRight('pers',1),async(req,res,next)=>{
  try{
