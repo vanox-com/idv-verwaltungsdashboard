@@ -25,6 +25,7 @@ export async function initDb() {
   await seedBenutzer();
   await originalDokumentLinksUebernehmen();
   await excelPersonalLinksUebernehmen();
+  await disziplinLinksUebernehmen();
   await originaleDashboardLinksUebernehmen();
   await textbausteineAusPdfUebernehmen();
 }
@@ -194,4 +195,33 @@ async function textbausteineAusPdfUebernehmen(){
     angelegt+=r.rowCount;
   }
   console.log('Textbausteine aus PDF ergänzt: '+angelegt);
+}
+
+/* Disziplinardokumente aus privatem Altbestand: nur freie Slots ergänzen.
+   URLs werden nicht in das öffentliche Repository aufgenommen. */
+async function disziplinLinksUebernehmen(){
+ const raw=process.env.DISZIPLIN_DOKUMENTE_IMPORT;if(!raw)return;
+ let rows;try{rows=JSON.parse(raw)}catch{throw new Error('Disziplin-Linkimport: ungültiges JSON')}
+ if(!Array.isArray(rows)||rows.length>100)throw new Error('Disziplin-Linkimport: ungültige Liste');
+ let count=0;
+ for(const item of rows){
+  if(!Number.isSafeInteger(item.nr)||item.nr<1||!Number.isInteger(item.slot)||item.slot<0||item.slot>5||
+     typeof item.t!=='string'||!item.t.trim()||typeof item.u!=='string'||typeof item.d!=='string')
+   throw new Error('Disziplin-Linkimport: ungültiger Datensatz');
+  const url=new URL(item.u);
+  if(url.protocol!=='https:'||url.hostname!=='docs.google.com'||url.username||url.password)
+   throw new Error('Disziplin-Linkimport: nur Google Docs erlaubt');
+  const r=await db.query(`UPDATE disziplin SET slots=jsonb_set(
+   CASE WHEN jsonb_typeof(slots)='array' AND jsonb_array_length(slots)=6 THEN slots
+    ELSE '[null,null,null,null,null,null]'::jsonb END,
+   ARRAY[$2::text],$3::jsonb,true)
+   WHERE personalnummer=$1 AND (
+    slots IS NULL OR slots='[]'::jsonb OR
+    (jsonb_typeof(slots)='array' AND jsonb_array_length(slots)=6
+     AND (slots->$2::int IS NULL OR slots->$2::int='null'::jsonb OR
+       (slots->$2::int->>'u' IS NULL AND slots->$2::int->>'t'=$4 AND slots->$2::int->>'d'=$5)))
+   )`,[item.nr,item.slot,JSON.stringify({done:true,t:item.t,u:url.href,d:item.d}),item.t,item.d]);
+  count+=r.rowCount;
+ }
+ console.log('Disziplin-Dokumentlinks aus Altbestand ergänzt: '+count);
 }
