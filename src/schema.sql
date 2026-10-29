@@ -590,3 +590,7 @@ ALTER TABLE personal_rangantraege ADD COLUMN IF NOT EXISTS korrigiertes_befoerde
 
 ALTER TABLE portal_design ADD COLUMN IF NOT EXISTS extras jsonb NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE portal_design_personal ADD COLUMN IF NOT EXISTS extras jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+/* Historische Kündigungen ohne belegtes Datum bleiben unbekannt; neue Vorgänge werden datiert. */
+ALTER TABLE kuendigungen ADD COLUMN IF NOT EXISTS kuendigungsdatum date;
+ALTER TABLE kuendigungen ALTER COLUMN kuendigungsdatum SET DEFAULT CURRENT_DATE;
