@@ -465,3 +465,27 @@ INSERT INTO role_perms(rolle,modul,stufe) VALUES
 ('Administrator','mitteilungen',2),('Polizeirat','mitteilungen',2),
 ('Leitungsdienst','mitteilungen',1),('Ausbilder','mitteilungen',1),('Mitarbeiter','mitteilungen',1)
 ON CONFLICT(rolle,modul) DO NOTHING;
+
+/* Dienststellen und individuell pflegbare Fristen. Bestehende Personalakten bleiben unverändert. */
+CREATE TABLE IF NOT EXISTS dienststellen (
+ id bigserial PRIMARY KEY,
+ name text NOT NULL UNIQUE,
+ beschreibung text NOT NULL DEFAULT '',
+ aktiv boolean NOT NULL DEFAULT true
+);
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS dienststelle_id bigint REFERENCES dienststellen(id) ON DELETE SET NULL;
+CREATE TABLE IF NOT EXISTS personal_fristen (
+ id bigserial PRIMARY KEY,
+ personalnummer integer REFERENCES personal(personalnummer) ON DELETE CASCADE,
+ titel text NOT NULL,
+ faellig_am date NOT NULL,
+ vorwarn_tage integer NOT NULL DEFAULT 14 CHECK(vorwarn_tage BETWEEN 0 AND 365),
+ erledigt boolean NOT NULL DEFAULT false,
+ erstellt timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS personal_fristen_datum_idx ON personal_fristen(faellig_am) WHERE erledigt=false;
+INSERT INTO role_perms(rolle,modul,stufe) VALUES
+('Administrator','dienststellen',2),('Polizeirat','dienststellen',2),('Leitungsdienst','dienststellen',1),
+('Administrator','fristen',2),('Polizeirat','fristen',2),('Leitungsdienst','fristen',1),
+('Administrator','backup',1)
+ON CONFLICT(rolle,modul) DO NOTHING;
