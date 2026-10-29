@@ -163,18 +163,27 @@ window.dgShow=dgShow;
 window.dgArchivLaden=async (nr,target)=>{
  const el=document.getElementById(target);if(!el)return;
  try{
-  const docs=await api('/dokumentgenerator/archiv'+(nr?'?nr='+Number(nr):''));
+  let docs=await api('/dokumentgenerator/archiv'+(nr?'?nr='+Number(nr):''));
+  if(target==='dgPraktikaArchiv')docs=docs.filter(d=>['praktikum','praktikumsbestaetigung'].includes(d.typ));
   if(!el.isConnected)return;
   el.innerHTML=docs.length?docs.map(x=>'<div class="dashboard-line"><span>'+dgEsc(x.titel)+' · '+new Date(x.erstellt).toLocaleDateString('de-DE')+
    '</span><a class="l" target="_blank" rel="noopener noreferrer" href="'+dgEsc(x.url)+'">Dokument öffnen</a></div>').join(''):
    '<p class="mut">Noch keine generierten Dokumente.</p>';
  }catch(err){el.textContent='Archiv nicht verfügbar: '+err.message;}
 };
-window.dgPraktika=()=>'<h1>Praktika</h1><p class="mut">Praktikumsverträge und Bestätigungen mit persönlichen Google-Konten erstellen.</p>'+
- '<div class="box"><button class="p" type="button" data-dg-type="praktikum">Praktikumsvertrag erstellen</button> '+
- '<button type="button" data-dg-type="praktikumsbestaetigung">Praktikumsbestätigung erstellen</button></div>'+
- '<section class="box"><h3>Dokumentenarchiv</h3><div id="dgPraktikaArchiv">Lade …</div></section>';
+window.dgPraktika=()=>{
+ const persons=(D.personal||[]).filter(p=>p.vorname&&p.nachname);
+ return '<h1>Praktika</h1><p class="mut">Praktikumsverträge und Bestätigungen erstellen. Auch Praktikanten ohne Personalnummer sind möglich.</p>'+
+ '<div class="box">'+(can('pers',2)?
+ '<label for="dgPraktikaPerson">Personalakte übernehmen (optional)</label>'+
+ '<select id="dgPraktikaPerson"><option value="0">Externer Praktikant – Daten manuell eintragen</option>'+
+ persons.map(p=>'<option value="'+Number(p.personalnummer)+'">'+dgEsc(p.personalnummer+' · '+p.vorname+' '+p.nachname)+'</option>').join('')+'</select>'+
+ '<div style="margin-top:12px"><button class="p" type="button" data-dg-type="praktikum">Praktikumsvertrag erstellen</button> '+
+ '<button type="button" data-dg-type="praktikumsbestaetigung">Praktikumsbestätigung erstellen</button></div>':
+ '<p class="mut">Du hast nur Leserechte für diesen Bereich.</p>')+'</div>'+
+ '<section class="box"><h3>Praktikumsarchiv</h3><div id="dgPraktikaArchiv">Lade …</div></section>';
+};
 document.addEventListener('click',e=>{
  const b=e.target.closest('[data-dg-type]');
- if(b){const k=Number(b.dataset.dgContext||0),nr=Number(b.dataset.dgNr||0);void dgShow(b.dataset.dgType,nr,k);}
+ if(b){const k=Number(b.dataset.dgContext||0),nr=Number(b.dataset.dgNr||document.getElementById('dgPraktikaPerson')?.value||0);void dgShow(b.dataset.dgType,nr,k);}
 });
