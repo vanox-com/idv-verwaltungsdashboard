@@ -1855,6 +1855,19 @@ function personalAnzeigen(nr) {
         ? personalDokumentLink(k,v,k==='Arbeitsvertrag'?p.arbeitsvertrag_url:p.ernennungsurkunde_url)
         : esc(v == null || v === '' ? '–' : v)) + '</div>'
     ).join('') + '</div>' +
+    (can('dis') ? (() => {
+      const akte=disAkte(Number(nr));
+      const massnahmen=akte.slots.map((eintrag,i)=>eintrag?.done ?
+        '<div class="dis-record"><span class="tag bad">'+esc(DIS_TITEL[i])+'</span> '+
+        (eintrag.d ? esc(fd(eintrag.d)) : '')+
+        '<div>'+esc(eintrag.t||'Keine Bezeichnung hinterlegt')+
+        (eintrag.u ? ' <a class="l" href="'+esc(eintrag.u)+'" target="_blank" rel="noopener noreferrer">Dokument öffnen</a>' : '')+
+        '</div></div>' : '').filter(Boolean);
+      return '<section class="box"><h3>Disziplinarmaßnahmen</h3>'+
+        (massnahmen.length ? massnahmen.join('') : '<p class="mut">Keine Disziplinarmaßnahmen eingetragen.</p>')+
+        (akte.bemerkung ? '<p><strong>Bemerkung:</strong> '+esc(akte.bemerkung)+'</p>' : '')+
+        '</section>';
+    })() : '') +
     (ME.sensibel ? '<section class="copnet-box"><h3>CopNet-Zugangsdaten</h3><div id="copnetArea" aria-live="polite">Zugangsdaten werden geschützt geladen …</div></section>' : '') +
     '<div class="actions"><button type="button" id="persAbbrechen">Schließen</button>' +
     (can('pers',2) ? '<button type="button" class="p" data-edit-person="' + Number(nr) + '">Bearbeiten</button>' : '') + '</div>';
