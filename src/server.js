@@ -380,6 +380,57 @@ app.get('/api/personalstatistik',requireLogin,requireRight('pers',1),async(req,r
   res.json({gruppen:rows,eintritte:mon.rows});
  }catch(e){next(e)}
 });
+
+/* Dienststellenverwaltung – nur autorisierte Nutzer können ändern. */
+app.get('/api/dienststellen',requireLogin,requireRight('dienststellen',1),async(req,res,next)=>{
+ try{const {rows}=await db.query('SELECT d.id,d.name,d.beschreibung,d.aktiv,COUNT(p.personalnummer)::int AS personal FROM dienststellen d LEFT JOIN personal p ON p.dienststelle_id=d.id GROUP BY d.id ORDER BY d.name');res.json(rows)}catch(e){next(e)}
+});
+app.post('/api/dienststellen',requireLogin,requireRight('dienststellen',2),async(req,res,next)=>{
+ try{const name=String(req.body?.name||'').trim(),beschreibung=String(req.body?.beschreibung||'').trim();
+ if(!name||name.length>100||beschreibung.length>500)return res.status(400).json({error:'Ungültige Dienststelle'});
+ const {rows}=await db.query('INSERT INTO dienststellen(name,beschreibung) VALUES($1,$2) RETURNING id',[name,beschreibung]);
+ await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",[req.user.id,'Dienststelle angelegt: '+name]);res.json(rows[0]);
+ }catch(e){if(e.code==='23505')return res.status(409).json({error:'Name bereits vorhanden'});next(e)}
+});
+app.patch('/api/dienststellen/:id',requireLogin,requireRight('dienststellen',2),async(req,res,next)=>{
+ try{const id=Number(req.params.id),name=String(req.body?.name||'').trim(),beschreibung=String(req.body?.beschreibung||'').trim();
+ if(!Number.isSafeInteger(id)||id<1||!name||name.length>100||beschreibung.length>500||typeof req.body?.aktiv!=='boolean')return res.status(400).json({error:'Ungültige Daten'});
+ const {rowCount}=await db.query('UPDATE dienststellen SET name=$1,beschreibung=$2,aktiv=$3 WHERE id=$4',[name,beschreibung,req.body.aktiv,id]);
+ if(!rowCount)return res.status(404).json({error:'Dienststelle nicht gefunden'});
+ await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",[req.user.id,'Dienststelle geändert: '+name]);res.json({ok:true});
+ }catch(e){if(e.code==='23505')return res.status(409).json({error:'Name bereits vorhanden'});next(e)}
+});
+app.patch('/api/personal/:nr/dienststelle',requireLogin,requireRight('pers',2),async(req,res,next)=>{
+ try{const nr=Number(req.params.nr),id=req.body?.dienststelle_id==null?null:Number(req.body.dienststelle_id);
+ if(!Number.isSafeInteger(nr)||nr<1||(id!==null&&(!Number.isSafeInteger(id)||id<1)))return res.status(400).json({error:'Ungültige Zuordnung'});
+ if(id!==null){const {rowCount}=await db.query('SELECT id FROM dienststellen WHERE id=$1 AND aktiv=true',[id]);if(!rowCount)return res.status(400).json({error:'Dienststelle nicht aktiv'});}
+ const {rowCount}=await db.query('UPDATE personal SET dienststelle_id=$1 WHERE personalnummer=$2',[id,nr]);
+ if(!rowCount)return res.status(404).json({error:'Personalakte nicht gefunden'});
+ await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",[req.user.id,'Dienststelle für Personal '+nr+' geändert']);res.json({ok:true});
+ }catch(e){next(e)}
+});
+/* Fälligkeit und Vorwarnzeit bleiben im Portal konfigurierbar. */
+app.get('/api/fristen',requireLogin,requireRight('fristen',1),async(req,res,next)=>{
+ try{const {rows}=await db.query("SELECT f.id,f.personalnummer,f.titel,f.faellig_am,f.vorwarn_tage,f.erledigt,p.vorname,p.nachname,(f.faellig_am-CURRENT_DATE)::int AS tage FROM personal_fristen f LEFT JOIN personal p ON p.personalnummer=f.personalnummer ORDER BY f.erledigt ASC,f.faellig_am ASC LIMIT 500");res.json(rows)}catch(e){next(e)}
+});
+app.post('/api/fristen',requireLogin,requireRight('fristen',2),async(req,res,next)=>{
+ try{const b=req.body||{},titel=String(b.titel||'').trim(),tage=Number(b.vorwarn_tage),nr=b.personalnummer==null||b.personalnummer===''?null:Number(b.personalnummer);
+ if(!titel||titel.length>180||!/^\d{4}-\d{2}-\d{2}$/.test(String(b.faellig_am||''))||!Number.isInteger(tage)||tage<0||tage>365||(nr!==null&&(!Number.isSafeInteger(nr)||nr<1)))return res.status(400).json({error:'Ungültige Frist'});
+ const {rows}=await db.query('INSERT INTO personal_fristen(titel,faellig_am,vorwarn_tage,personalnummer) VALUES($1,$2,$3,$4) RETURNING id',[titel,b.faellig_am,tage,nr]);
+ await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",[req.user.id,'Frist erstellt: '+titel]);res.json(rows[0]);
+ }catch(e){if(e.code==='23503')return res.status(400).json({error:'Personalnummer nicht gefunden'});next(e)}
+});
+app.patch('/api/fristen/:id',requireLogin,requireRight('fristen',2),async(req,res,next)=>{
+ try{const id=Number(req.params.id);if(!Number.isSafeInteger(id)||id<1||typeof req.body?.erledigt!=='boolean')return res.status(400).json({error:'Ungültiger Status'});
+ const {rowCount}=await db.query('UPDATE personal_fristen SET erledigt=$1 WHERE id=$2',[req.body.erledigt,id]);if(!rowCount)return res.status(404).json({error:'Frist nicht gefunden'});
+ await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",[req.user.id,'Frist '+id+' Status geändert']);res.json({ok:true});
+ }catch(e){next(e)}
+});
+app.get('/api/backup-status',requireLogin,requireRight('backup',1),async(req,res,next)=>{
+ try{const {rows}=await db.query('SELECT CURRENT_TIMESTAMP AS geprueft_am,pg_database_size(current_database())::bigint AS datenbank_bytes,current_database() AS datenbank,version() AS postgres_version');
+ res.json({datenbank:rows[0].datenbank,bytes:String(rows[0].datenbank_bytes),geprueft_am:rows[0].geprueft_am,plan:'free',automatische_sicherungen:'Nicht bestätigt',wiederherstellung:'Nicht im Portal verfügbar',ablauf_am:'2026-11-27',hinweis:'Der kostenlose Render-Postgres-Dienst kann ablaufen. Diese Übersicht ist KEIN Backup und erstellt keine Sicherung.'});
+ }catch(e){next(e)}
+});
 /* ---------- Lesen ---------- */
 
 app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
