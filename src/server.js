@@ -1957,6 +1957,17 @@ app.get('/api/log', requireLogin, requireRight('log', 1), async (req, res, next)
 
 app.use((err, req, res, next) => {
   console.error(err);
+  /* Nur bekannte Personalspalten als nutzerfreundliche Feldmeldung herausgeben. */
+  const spalten=new Set(['vorname','nachname','personalnummer','dienstgrad','gruppe',
+    'geburtsdatum','eintrittsdatum','urlaub_von','urlaub_bis','arbeitsvertrag_url','ernennungsurkunde_url']);
+  if(req.path.startsWith('/api/personal') && ['23502','23514','22007','22008','22P02','23505'].includes(err.code)){
+    const feld=spalten.has(err.column)?err.column:null;
+    const meldung=err.code==='23505'?'Dieser Wert ist bereits vergeben.':
+      err.code==='23502'?'Dieses Feld darf nicht leer sein.':
+      ['22007','22008'].includes(err.code)?'Bitte ein gültiges Datum eingeben.':
+      'Bitte den Feldwert überprüfen.';
+    return res.status(400).json({error:feld?feld+': '+meldung:meldung,feld});
+  }
   res.status(500).json({ error: 'Interner Fehler' });
 });
 
