@@ -1482,7 +1482,14 @@ async function starten() {
     }
     ME = antwort.user;
     D = antwort.daten;
-    api('/portal-design').then(applyPortalDesign).catch(()=>{});
+    // Persönliche Gestaltung vor dem Anzeigen des Dashboards aus der DB holen.
+    // Ein Fehler darf den Login nicht blockieren, wird aber nicht mehr verschluckt.
+    try {
+      const gespeichertesDesign=await api('/portal-design');
+      applyPortalDesign(gespeichertesDesign);
+    } catch(designFehler) {
+      console.warn('Persönliches Design konnte nicht geladen werden:',designFehler);
+    }
     api('/system-optionen').then(o=>{if(D)D.systemOptionen=o;}).catch(()=>{});
     $('#meName').textContent = ME.anzeigename || 'Dienstkonto';
     $('#meRolle').textContent = ME.rolle + (ME.sensibel ? ' · Personaldaten' : '');
@@ -4114,13 +4121,40 @@ async function ladeDesign(){
    '<label for="designSchleier">Dunkler Schleier ('+Number(d.schleier)+' %)</label><input id="designSchleier" type="range" min="65" max="97" value="'+Number(d.schleier)+'">'+
    '<label for="designMotiv">Hintergrundmotiv</label><select id="designMotiv">'+
    [['wappen','Original-Polizeiwappen'],['verlauf','Dezenter Farbverlauf'],['nachtblau','Nachtblau'],['stahl','Stahlgrau'],['raster','Digitales Raster'],['licht','Blaue Lichtakzente'],['minimal','Minimalistischer Verlauf'],['einsatzszene','Polizei-Einsatzszene (Foto)'],['ohne','Einfarbig dunkel']].map(([v,t])=>'<option value="'+v+'"'+(d.hintergrund===v?' selected':'')+'>'+t+'</option>').join('')+
-   '</select><h3>Farben &amp; Anzeigemodus</h3><label for="designModus">Anzeigemodus</label><select id="designModus"><option value="dunkel"'+((d.extras?.modus||'dunkel')==='dunkel'?' selected':'')+'>Dunkel</option><option value="hell"'+(d.extras?.modus==='hell'?' selected':'')+'>Hell</option></select>'+
+   '</select><p class="mut" id="designSpeicherStatus" role="status" aria-live="polite">Motivwahl wird automatisch für dein Konto gespeichert.</p><h3>Farben &amp; Anzeigemodus</h3><label for="designModus">Anzeigemodus</label><select id="designModus"><option value="dunkel"'+((d.extras?.modus||'dunkel')==='dunkel'?' selected':'')+'>Dunkel</option><option value="hell"'+(d.extras?.modus==='hell'?' selected':'')+'>Hell</option></select>'+
    '<div class="design-colors">'+[['flaeche','Karten und Flächen'],['seitenleiste','Seitenleiste'],['rahmen','Rahmen und Trennlinien'],['schrift','Schriftfarbe'],['sekundaer','Sekundärtext'],['highlight','Hervorhebungen']].map(([key,title])=>'<label>'+title+'<input type="color" data-design-color="'+key+'" value="'+esc(d.extras?.[key]||((d.extras?.modus==='hell'?{flaeche:'#ffffff',seitenleiste:'#e9eff7',rahmen:'#c6d1df',schrift:'#15253b',sekundaer:'#52677f',highlight:'#e6f0ff'}:{flaeche:'#182333',seitenleiste:'#0b111a',rahmen:'#26354b',schrift:'#e6edf6',sekundaer:'#8ea0b8',highlight:'#203958'})[key]))+'"></label>').join('')+'</div>'+
    '<div class="actions"><button type="button" id="designPreview">Vorschau</button><button type="button" class="p" id="designPersonalSave">Mein Design speichern</button><button type="button" id="designReset">Admin-Standard übernehmen</button>'+(ME.rolle==='Administrator'?'<button type="button" id="designSave">Standard für alle speichern</button>':'')+'</div>'+
-   '<p class="mut">Änderungen an Motiv, Farben und Schleier werden sofort als Vorschau angezeigt. Erst „Mein Design speichern“ übernimmt sie dauerhaft für dein Konto.</p></section>';
+   '<p class="mut">Das Hintergrundmotiv wird sofort für dein Konto gespeichert. Farben, Schleier und andere Anpassungen werden zunächst nur als Vorschau angezeigt. Über „Mein Design speichern“ übernimmst du auch diese dauerhaft.</p></section>';
  }catch(err){area.textContent='Design konnte nicht geladen werden: '+err.message;}
 }
 let ausgewaehltesDesignPreset='';
+let designSpeicherQueue=Promise.resolve();
+function persoDesignSpeichern(d){
+  const auftrag=designSpeicherQueue.catch(()=>{}).then(()=>api('/portal-design/personal',{
+    method:'PUT',body:JSON.stringify(d)
+  }));
+  designSpeicherQueue=auftrag;
+  return auftrag;
+}
+async function designMotivSofortSpeichern(){
+  const meldung=document.getElementById('designSpeicherStatus');
+  const design=aktuelleDesignWerte();
+  if(meldung){meldung.textContent='Hintergrundmotiv wird gespeichert …';meldung.style.color='';}
+  try{
+    await persoDesignSpeichern(design);
+    if(meldung&&meldung.isConnected&&document.querySelector('#designMotiv')?.value===design.hintergrund){
+      meldung.textContent='✓ Hintergrundmotiv dauerhaft für dein Konto gespeichert.';
+      meldung.style.color='var(--ok)';
+    }
+  }catch(err){
+    console.error('Motiv konnte nicht gespeichert werden:',err);
+    if(meldung&&meldung.isConnected){
+      meldung.textContent='Speichern fehlgeschlagen: '+err.message;
+      meldung.style.color='var(--bad)';
+    }
+    alert('Das Hintergrundmotiv konnte nicht gespeichert werden: '+err.message);
+  }
+}
 /* Designänderungen unmittelbar anzeigen. Bei manueller Motiv- oder Moduswahl
    verlässt das Benutzerkonto das reine Florimodus-Preset, damit dessen
    Kuhflecken den ausgewählten Hintergrund nicht überdecken. */
@@ -4130,6 +4164,7 @@ function designEingabeVorschau(ev){
  if(!document.querySelector('#designMotiv')||!document.querySelector('#designModus'))return;
  if(el.matches('#designMotiv,#designModus'))ausgewaehltesDesignPreset='';
  applyPortalDesign(aktuelleDesignWerte());
+ if(el.id==='designMotiv'&&ev.type==='change')void designMotivSofortSpeichern();
  if(el.id==='designSchleier'){
   const lbl=document.querySelector('label[for="designSchleier"]');
   if(lbl)lbl.textContent='Dunkler Schleier ('+Number(el.value)+' %)';
@@ -4150,8 +4185,8 @@ document.addEventListener('click',async ev=>{
   applyPortalDesign(aktuelleDesignWerte());return;
  }
  if(ev.target.closest('#designPreview'))applyPortalDesign(aktuelleDesignWerte());
- if(ev.target.closest('#designPersonalSave')){try{const d=aktuelleDesignWerte();await api('/portal-design/personal',{method:'PUT',body:JSON.stringify(d)});applyPortalDesign(d);alert('Persönliches Design gespeichert.');}catch(err){alert(err.message);}}
- if(ev.target.closest('#designReset')){try{await api('/portal-design/personal',{method:'DELETE'});const d=await api('/portal-design');applyPortalDesign(d);await ladeDesign();}catch(err){alert(err.message);}}
+ if(ev.target.closest('#designPersonalSave')){try{const d=aktuelleDesignWerte();await persoDesignSpeichern(d);applyPortalDesign(d);alert('Persönliches Design gespeichert.');}catch(err){alert(err.message);}}
+ if(ev.target.closest('#designReset')){try{await designSpeicherQueue.catch(()=>{});await api('/portal-design/personal',{method:'DELETE'});const d=await api('/portal-design');applyPortalDesign(d);await ladeDesign();}catch(err){alert(err.message);}}
  if(ev.target.closest('#designSave')&&ME.rolle==='Administrator'){
   try{const d=aktuelleDesignWerte();await api('/portal-design',{method:'PUT',body:JSON.stringify(d)});applyPortalDesign(d);alert('Portaldesign gespeichert.');}
   catch(err){alert('Speichern fehlgeschlagen: '+err.message);}
