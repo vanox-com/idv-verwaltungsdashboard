@@ -113,8 +113,7 @@ kurzlebigen Zugriffs-Token getauscht und das Dokument direkt im gewählten
 Drive-Konto angelegt. Der Browser erhält keinen Google-Token zurück.
 Personen mit Leserecht der Personalakte können den gespeicherten Link sehen,
 wenn die Google-Datei für sie freigegeben wurde; **die Google-Dateiberechtigungen
-bleiben beim Ersteller**. Die Vorlage wird im Backend aus dem Text und Layout
-des bisherigen Musters generiert (bearbeitbares Google-Dokument).
+bleiben beim Ersteller**. Die Funktion verwendet die originale Google-Docs-Blankovorlage mit Wappen und Unterschriften. Aus der Vorlage werden die Platzhalter `<Vorname>`, `<Name>`, `<Geburtsdatum>` und die beiden `<Datum>`-Felder ersetzt. Nach der persönlichen Google-Anmeldung wird eine Kopie im Drive-Konto des klickenden Nutzers gespeichert. Kann Google die Vorlage mit dem begrenzten `drive.file`-Recht nicht direkt kopieren, wird die öffentlich lesbare DOCX-Fassung der Originalvorlage importiert (kleine Formatabweichungen bei der Konvertierung sind möglich). Die frühere vereinfachte HTML-Ersatzurkunde wird nicht mehr verwendet.
 Ein Google-Konto kann nicht allein aus der RP-Dienstnummer erkannt werden;
 die Google-Kontoauswahl ist daher bewusst erforderlich.
 
