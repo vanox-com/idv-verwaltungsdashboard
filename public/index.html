@@ -1701,7 +1701,7 @@ function zeichne() {
     if(tab === 'backup') ladeBackup();
     if(tab === 'rechtesimulator') ladeRechteSimulator();
     if(tab === 'design') ladeDesign();
-    if(tab === 'bef') ladeRangantraege();
+    if(tab === 'bef') { ladeRangantraege(); void urkundenAuthVorbereiten(); }
     if(tab === 'pers') ladePersonalRangantraege();
     if(tab === 'users') ladeBenutzer().catch(err => { if($('#benutzerBereich')) $('#benutzerBereich').textContent = 'Benutzerverwaltung konnte nicht geladen werden: ' + err.message; });
   } catch (err) {
@@ -2560,8 +2560,8 @@ function vBef() {
     (wartet ? '<div class="box idv-warnung"><b>'+wartet+'</b> POR-Anträge warten auf eine Entscheidung.</div>' : '') +
     '<div id="rangantraegeBereich" class="box"><h3>Offene Rangänderungsanträge</h3><p class="mut">Lade Anträge …</p></div>'+ 
     ((can('por',1)||can('ranghistorie',1))?'<section class="box" id="ranghistorieBereich"><div class="ranghist-top"><div><h3>Rangänderungs-Historie</h3><p class="mut">Abgeschlossene POR-Entscheidungen – nur für Berechtigte einsehbar.</p></div><button type="button" data-ranghistorie-toggle aria-expanded="false">Historie anzeigen</button></div><div id="ranghistorieListe" hidden></div></section>':'')+ 
-    (verwalten?'<section class="box"><h3>Ernennungsurkunden · Polizeimeister</h3><p class="mut">Für bereits durchgeführte Beförderungen von PMA zu PM. Die PDF-/Dokument-Dateien werden extern in Google Drive gespeichert, in der Personalakte steht nur der Link.</p>'+
-      (urkundenRows||'<p class="mut">Noch keine entsprechenden Beförderungen.</p>')+'</section>':'')+
+    (verwalten?'<section class="box"><h3>Ernennungsurkunden · Polizeimeister</h3><p class="mut">Für bereits durchgeführte Beförderungen von PMA zu PM. Dokumente werden im Google-Drive-Konto des klickenden Nutzers erstellt. Die Datenbank speichert nur den Link.</p>'+
+      '<p class="mut" id="urkundenGoogleStatus">Prüfe Google-Anmeldung …</p>'+(urkundenRows||'<p class="mut">Noch keine entsprechenden Beförderungen.</p>')+'</section>':'')+
     '<div class="tw"><table><thead><tr>'+['Person','Aktuell','Nächster Rang','Letzte Bef.','Fällig am','Friststatus','POR-Freigabe','Hinweis','Aktion'].map(t=>'<th>'+t+'</th>').join('') +
     '</tr></thead><tbody>'+(rows||'<tr><td colspan="9">Keine geplanten Beförderungen</td></tr>')+'</tbody></table></div>' +
     '<div class="box"><h3>Beförderungsbedingungen</h3><div class="tw"><table><thead><tr>'+
@@ -2610,21 +2610,67 @@ async function befAusfuehren(nr){
     alert('Befördert. Dienstgrad im Bossmenü/Dienstblatt ebenfalls anpassen.');
   }catch(e){alert('Beförderung nicht möglich: '+e.message)}
 }
-document.addEventListener('click',async e=>{
+/* Code-Popup: Google-Identität gehört immer dem Nutzer am Auslösen-Knopf.
+   Access/Refresh-Tokens werden nicht dauerhaft im Browser oder Backend gespeichert. */
+let urkundenCodeClient=null,urkundenGoogleScript=null,urkundenPending=null;
+async function urkundenAuthVorbereiten(){
+ if(!can('bef',2))return;
+ const status=$('#urkundenGoogleStatus');
+ try{
+  const config=await api('/urkunden/status');
+  if(!config.eingerichtet){
+   if(status)status.textContent='Google-Kontoanmeldung noch nicht eingerichtet: OAuth-Webclient in Render konfigurieren.';
+   return;
+  }
+  if(!urkundenGoogleScript){
+   urkundenGoogleScript=new Promise((resolve,reject)=>{
+    if(window.google?.accounts?.oauth2)return resolve();
+    const script=document.createElement('script');
+    script.src='https://accounts.google.com/gsi/client';script.async=true;
+    script.onload=resolve;script.onerror=()=>reject(new Error('Google-Anmeldung nicht erreichbar'));
+    document.head.appendChild(script);
+   });
+  }
+  await urkundenGoogleScript;
+  if(!urkundenCodeClient)urkundenCodeClient=google.accounts.oauth2.initCodeClient({
+   client_id:config.clientId,scope:'https://www.googleapis.com/auth/drive.file',ux_mode:'popup',
+   callback:async response=>{
+    const pending=urkundenPending;urkundenPending=null;
+    if(!pending)return;
+    try{
+     if(!response.code)throw Error('Google-Kontoauswahl abgebrochen');
+     const result=await api('/urkunden/polizeimeister/'+pending.nr,{
+      method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
+      body:JSON.stringify({eid_datum:pending.eid,google_code:response.code})
+     });
+     await starten();
+     alert('Urkunde wurde im gewählten Google-Konto angelegt und mit der Personalakte verknüpft.');
+     window.open(result.url,'_blank','noopener,noreferrer');
+    }catch(e){alert('Urkunde konnte nicht erstellt werden: '+e.message);}
+    finally{if(pending.button.isConnected){
+      pending.button.disabled=false;pending.button.textContent='Ernennungsurkunde erstellen';
+    }}
+   }
+  });
+  if(status)status.textContent='Beim Erstellen das eigene Google-Konto auswählen. Die Urkunde gehört diesem Google-Drive-Konto.';
+ }catch(e){if(status)status.textContent='Google-Anmeldung nicht bereit: '+e.message;}
+}
+document.addEventListener('click',e=>{
   const urkunde=e.target.closest('[data-urkunde-generate]');
   if(urkunde){
-    const nr=Number(urkunde.dataset.urkundeGenerate);
     if(!can('bef',2))return;
-    const eid=prompt('Datum des tatsächlich geleisteten Amtseids (JJJJ-MM-TT):');
+    if(!urkundenCodeClient){
+     alert('Google-Anmeldung noch nicht bereit. Bitte den Hinweis im Urkundenbereich prüfen.');
+     void urkundenAuthVorbereiten();return;
+    }
+    if(urkundenPending)return;
+    const eid=prompt('Datum des geleisteten Amtseids (JJJJ-MM-TT):');
     if(eid===null)return;
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(eid)){alert('Bitte Datum im Format JJJJ-MM-TT eingeben.');return;}
-    urkunde.disabled=true;urkunde.textContent='Urkunde wird erstellt …';
-    try{
-      const result=await api('/urkunden/polizeimeister/'+nr,{method:'POST',body:JSON.stringify({eid_datum:eid})});
-      await starten();
-      alert('Die Urkunde wurde in Google Drive erstellt und in der Personalakte verlinkt.');
-      const a=document.createElement('a');a.href=result.url;a.target='_blank';a.rel='noopener noreferrer';a.click();
-    }catch(err){alert('Urkunde konnte nicht erstellt werden: '+err.message);if(urkunde.isConnected){urkunde.disabled=false;urkunde.textContent='Ernennungsurkunde erstellen';}}
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(eid)){alert('Bitte Datum JJJJ-MM-TT angeben.');return;}
+    urkundenPending={nr:Number(urkunde.dataset.urkundeGenerate),eid,button:urkunde};
+    urkunde.disabled=true;urkunde.textContent='Google-Konto auswählen …';
+    try{urkundenCodeClient.requestCode();}
+    catch(err){urkundenPending=null;urkunde.disabled=false;urkunde.textContent='Ernennungsurkunde erstellen';alert(err.message);}
     return;
   }
   const por=e.target.closest('[data-por-person]');if(por){porBearbeiten(Number(por.dataset.porPerson));return}
