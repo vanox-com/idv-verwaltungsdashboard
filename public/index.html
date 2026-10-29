@@ -2634,6 +2634,7 @@ async function urkundenAuthVorbereiten(){
   await urkundenGoogleScript;
   if(!urkundenCodeClient)urkundenCodeClient=google.accounts.oauth2.initCodeClient({
    client_id:config.clientId,scope:'https://www.googleapis.com/auth/drive.file',ux_mode:'popup',
+   select_account:true,
    callback:async response=>{
     const pending=urkundenPending;urkundenPending=null;
     if(!pending)return;
@@ -2652,12 +2653,20 @@ async function urkundenAuthVorbereiten(){
     }}
    },
    error_callback:err=>{
+    const status=$('#urkundenGoogleStatus');
     if(urkundenPending){
      urkundenPending.button.disabled=false;
      urkundenPending.button.textContent='Ernennungsurkunde erstellen';
      urkundenPending=null;
     }
-    if(err.type==='popup_failed_to_open')alert('Google-Popup wurde blockiert. Bitte Popups für die Portal-Domain zulassen.');
+    if(err.type==='popup_failed_to_open'){
+     if(status)status.textContent='Google-Popup konnte nicht geöffnet werden. Bitte Popups für diese Website erlauben.';
+     alert('Google-Popup wurde blockiert. Bitte Popups für die Portal-Domain zulassen.');
+    }else if(err.type==='popup_closed'){
+     if(status)status.textContent='Google-Anmeldung wurde nicht abgeschlossen. Bei Google-Fehler 500 bitte im privaten Browserfenster mit nur einem Google-Konto erneut testen.';
+    }else{
+     if(status)status.textContent='Google-Anmeldung konnte nicht abgeschlossen werden. Bitte Google-OAuth-Konfiguration und Kontoauswahl prüfen.';
+    }
    }
   });
   if(status)status.textContent='Beim Erstellen das eigene Google-Konto auswählen. Die Urkunde gehört diesem Google-Drive-Konto.';
