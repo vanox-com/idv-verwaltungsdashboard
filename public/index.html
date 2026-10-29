@@ -1000,6 +1000,13 @@ html[data-portal-wallpaper="raster"] #app{background-image:linear-gradient(125de
 html[data-portal-wallpaper="licht"] #app{background-image:linear-gradient(125deg,rgba(7,17,31,var(--veil)),rgba(11,25,43,var(--veil))),radial-gradient(ellipse at 85% 8%,rgba(var(--portal-rgb,91,134,186),.85),transparent 55%),radial-gradient(ellipse at 5% 90%,#23486a,transparent 55%),linear-gradient(125deg,#0b1728,#172c43)!important;background-size:cover!important}
 html[data-portal-wallpaper="minimal"] #app{background-image:linear-gradient(125deg,rgba(15,23,34,var(--veil)),rgba(22,33,47,var(--veil))),linear-gradient(115deg,#192635 0%,#273749 50%,#14202c 100%)!important;background-size:cover!important}
 .idv-warnung{background:rgba(245,158,11,.17)!important;border:1px solid rgba(245,158,11,.75)!important;border-radius:9px;color:#ffda9b!important;box-shadow:inset 3px 0 #f59e0b}.idv-warnung strong,.idv-warnung b{color:#ffc46b!important}
+
+/* Deutlich sichtbare dienstliche Mitteilungen, unabhängig von allgemeinen Box-Stilen. */
+#mitteilungenDashboard .idv-mitteilungen-orange{background:linear-gradient(120deg,rgba(114,65,13,.70),rgba(75,47,19,.90))!important;border:1px solid #e6a043!important;box-shadow:0 0 0 1px rgba(245,158,11,.22),inset 4px 0 #f59e0b!important;color:#fff1d4!important}
+#mitteilungenDashboard .idv-mitteilungen-orange h3{color:#ffd18a!important}
+#mitteilungenDashboard .idv-mitteilung-eintrag{background:rgba(245,158,11,.13)!important;border:1px solid rgba(255,178,68,.42)!important;border-radius:9px;margin:12px 0;color:#ffebca!important}
+#mitteilungenDashboard .idv-mitteilung-eintrag strong{color:#fff4dc!important}
+#mitteilungenDashboard .idv-mitteilung-eintrag small{color:#ffd39a!important}
 </style>
 </head>
 <body>
@@ -3724,8 +3731,8 @@ async function ladeDashboardMeldungen(){
  try{
   const data=await api('/mitteilungen');
   if(!area.isConnected)return;
-  area.innerHTML=data.length?'<section class="box"><h3>Dienstliche Mitteilungen</h3>'+data.map(m=>
-   '<div class="dashboard-line" style="display:block;padding:12px 0"><strong>'+esc(m.titel)+'</strong><small style="display:block">'+esc(new Date(m.erstellt).toLocaleString('de-DE'))+'</small><p style="white-space:pre-wrap">'+esc(m.inhalt)+'</p></div>').join('')+'</section>':'';
+  area.innerHTML=data.length?'<section class="box idv-mitteilungen-orange"><h3>Dienstliche Mitteilungen</h3>'+data.map(m=>
+   '<div class="dashboard-line idv-mitteilung-eintrag" style="display:block;padding:14px 16px"><strong>'+esc(m.titel)+'</strong><small style="display:block">'+esc(new Date(m.erstellt).toLocaleString('de-DE'))+'</small><p style="white-space:pre-wrap">'+esc(m.inhalt)+'</p></div>').join('')+'</section>':'';
  }catch(e){if(area.isConnected)area.textContent='Mitteilungen konnten nicht geladen werden.';}
 }
 async function ladeStatistik(){
