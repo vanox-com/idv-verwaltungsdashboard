@@ -45,6 +45,16 @@ app.use((req, res, next) => {
   if (req.path === '/' || req.path.endsWith('.html')) res.set('Cache-Control', 'no-store');
   next();
 });
+/* Öffentlich abrufbare Informationsseiten für Google-OAuth-Branding.
+   Der Verwaltungszugang unter / bleibt bewusst unverändert geschützt. */
+app.get('/start', (req,res) => {
+ res.set('Cache-Control','public, max-age=300');
+ res.sendFile(path.join(__dirname,'..','public','start.html'));
+});
+app.get('/datenschutz', (req,res) => {
+ res.set('Cache-Control','public, max-age=300');
+ res.sendFile(path.join(__dirname,'..','public','datenschutz.html'));
+});
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 /* Sperre gegen zu viele Anmeldeversuche: 30 in fünf Minuten, und nur

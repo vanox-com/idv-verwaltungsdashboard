@@ -120,3 +120,24 @@ die Google-Kontoauswahl ist daher bewusst erforderlich.
 **Hinweis:** Vor einem ersten Einsatz muss die neue Google-OAuth-App eingerichtet
 und der Prozess mit einem tatsächlich ausgewählten Google-Konto getestet werden.
 Ohne diese Konfiguration bleibt die Erzeugungsfunktion gesperrt.
+
+## Öffentliche Seiten für Google-OAuth-Branding
+
+- **Öffentliche Informationsseite:** `/start` (ohne Anmeldung)
+- **Datenschutzerklärung:** `/datenschutz` (ohne Anmeldung)
+- **Bisheriger Portal-Login:** `/` (unverändert)
+
+Unter **Google Auth Platform → Branding** die Homepage ausdrücklich auf
+`https://DEINE-DOMAIN/start` und die Datenschutzerklärung auf
+`https://DEINE-DOMAIN/datenschutz` setzen. Im OAuth-Client
+die neue Portal-Domain unter „Autorisierte JavaScript-Quellen“ hinzufügen.
+Für die Verifizierung muss die Domain über die Google Search Console
+nachweisbar dem Projektbetreiber gehören. Eine gemeinsame Render-Domain
+ist nicht als dauerhafte, selbst besessene Domain geeignet.
+
+**Vor Google-Verifizierung unbedingt vervollständigen:** Auf der Seite
+`public/datenschutz.html` müssen die für das echte Projekt verantwortliche
+Person/Organisation und eine funktionierende Kontaktadresse, die tatsächlichen
+Rechtsgrundlagen, Löschfristen und Empfänger/Hoster konkretisiert werden.
+Die bereitgestellte Erklärung beschreibt die technischen Datenflüsse nach
+dem aktuellen Code, ist aber kein geprüfter endgültiger Rechtstext.
