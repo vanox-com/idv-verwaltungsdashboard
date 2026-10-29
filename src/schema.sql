@@ -446,3 +446,22 @@ CREATE TABLE IF NOT EXISTS personal_audit (
  aenderungen jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 CREATE INDEX IF NOT EXISTS personal_audit_nr_zeit ON personal_audit(personalnummer,zeit DESC);
+
+/* Gezielte Mitteilungen: Empfänger bei Versand fixieren, keine Datenvermischung. */
+CREATE TABLE IF NOT EXISTS portal_meldungen (
+ id bigserial PRIMARY KEY,
+ titel text NOT NULL,
+ inhalt text NOT NULL,
+ absender_id integer REFERENCES users(id) ON DELETE SET NULL,
+ erstellt timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS portal_meldung_empfaenger (
+ meldung_id bigint NOT NULL REFERENCES portal_meldungen(id) ON DELETE CASCADE,
+ user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ PRIMARY KEY(meldung_id,user_id)
+);
+INSERT INTO role_perms(rolle,modul,stufe) VALUES
+('Administrator','persverlauf',2),('Polizeirat','persverlauf',1),
+('Administrator','mitteilungen',2),('Polizeirat','mitteilungen',2),
+('Leitungsdienst','mitteilungen',1),('Ausbilder','mitteilungen',1),('Mitarbeiter','mitteilungen',1)
+ON CONFLICT(rolle,modul) DO NOTHING;
