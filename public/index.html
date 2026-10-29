@@ -953,6 +953,23 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 .chk-dialog-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px;margin-top:20px}
 #chkEditError{min-height:20px;margin-top:9px}
 
+
+/* IDV-Originalwappen statt generiertem Symbol: dezentes Portal-Wasserzeichen. */
+#app{
+  background-color:#121c29;
+  background-image:
+    linear-gradient(125deg,rgba(12,20,31,.87),rgba(16,26,40,.88)),
+    url('/assets/idv-polizei-logo-transparent.svg'),
+    radial-gradient(ellipse at 80% 15%,#345371 0%,transparent 60%),
+    linear-gradient(135deg,#101923,#1b2d40);
+  background-size:cover,min(62vw,780px) auto,cover,cover;
+  background-position:center,78% 48%,center,center;
+  background-repeat:no-repeat;
+  background-attachment:fixed;
+}
+@media(max-width:700px){
+  #app{background-size:cover,85vw auto,cover,cover;background-position:center,center 33%,center,center}
+}
 </style>
 </head>
 <body>
