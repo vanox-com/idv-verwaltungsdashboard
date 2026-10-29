@@ -3649,9 +3649,10 @@ async function ladeMeldungen(){
  if(!can('meldungen')){el.textContent='Keine Berechtigung zum Erstellen von Mitteilungen.';return;}
  el.innerHTML='<h1>Mitteilungen verwalten</h1><p>Lade Empfänger …</p>';
  try{
-  const users=await api('/mitteilungen/empfaenger');
+  const empfaenger=await api('/mitteilungen/empfaenger');
+  const users=empfaenger.users||[];
   const rollen=[...new Set(users.map(x=>x.rolle))];
-  const gruppen=[...new Set((D.personal||[]).map(x=>x.gruppe).filter(Boolean))];
+  const gruppen=empfaenger.gruppen||[];
   el.innerHTML='<h1>Mitteilung erstellen</h1><p class="mut">Die Nachricht wird nur den ausgewählten Benutzern und Rollen auf deren Dashboard angezeigt.</p>'+
    '<section class="box"><label for="mitTitel">Titel</label><input id="mitTitel" maxlength="140" placeholder="Titel">'+
    '<label for="mitInhalt">Nachricht</label><textarea id="mitInhalt" maxlength="3000" rows="5" style="width:100%;background:var(--panel);color:var(--txt)"></textarea>'+
