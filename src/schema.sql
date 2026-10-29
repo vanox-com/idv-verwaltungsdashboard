@@ -512,3 +512,35 @@ CREATE TABLE IF NOT EXISTS user_favoriten (
 );
 INSERT INTO role_perms(rolle,modul,stufe) VALUES ('Administrator','rechtesimulator',2)
 ON CONFLICT(rolle,modul) DO NOTHING;
+
+/* Dienstgruppen automatisch anhand Personalnummer und Dienstgrad bestimmen.
+   Priorität: Dienstnummer 01–05 vor jeder Rangzuordnung. */
+CREATE OR REPLACE FUNCTION idv_mitarbeitergruppe(nr integer, rang text)
+RETURNS text LANGUAGE sql IMMUTABLE AS $$
+ SELECT CASE
+  WHEN nr BETWEEN 1 AND 5 THEN 'Leitungsdienst'
+  WHEN trim(coalesce(rang,'')) IN ('Polizeirat','Polizeiratanwärter') THEN 'Polizeirat'
+  WHEN trim(coalesce(rang,'')) IN (
+   'Polizeimeisteranwärter','Polizeimeister','Polizeiobermeister',
+   'Polizeihauptmeister','Polizeihauptmeister AZ','Polizeihauptmeister mit Amtszulage'
+  ) THEN 'Mittlerer Dienst'
+  WHEN trim(coalesce(rang,'')) IN (
+   'Polizeikommissaranwärter','Polizeikommissar','Kriminalkommissar',
+   'Polizeioberkommissar','Kriminaloberkommissar','Polizeihauptkommissar',
+   'Kriminalhauptkommissar','Polizeihauptkommissar A12','Erster Polizeihauptkommissar'
+  ) THEN 'Gehobener Dienst'
+  ELSE 'Nicht zugeordnet'
+ END
+$$;
+CREATE OR REPLACE FUNCTION idv_personal_gruppe_setzen()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ NEW.gruppe := idv_mitarbeitergruppe(NEW.personalnummer,NEW.dienstgrad);
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS idv_personal_gruppe_auto ON personal;
+CREATE TRIGGER idv_personal_gruppe_auto
+BEFORE INSERT OR UPDATE OF personalnummer,dienstgrad,gruppe ON personal
+FOR EACH ROW EXECUTE FUNCTION idv_personal_gruppe_setzen();
+UPDATE personal SET gruppe=idv_mitarbeitergruppe(personalnummer,dienstgrad)
+WHERE gruppe IS DISTINCT FROM idv_mitarbeitergruppe(personalnummer,dienstgrad);
