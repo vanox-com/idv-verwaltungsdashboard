@@ -1008,16 +1008,16 @@ const MODS = [
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
-  ['users','Benutzer & Rollen','🔐'],['log','Protokoll','🧾']
+  ['users','Benutzer & Rollen','🔐'],['system','Systemverwaltung','⚙️'],['meldungen','Benachrichtigungen','🔔'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾']
 ];
 /* Sidebar: dieselben Module und Rechte, nur übersichtlich gruppiert.
    Ein aktives Modul hält seine Kategorie immer geöffnet. */
 const NAV_GRUPPEN = [
   {id:'uebersicht',titel:'Übersicht',module:['dash']},
-  {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','rout','geb','jub']},
+  {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','rout','geb','jub','statistik']},
   {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
-  {id:'verwaltung',titel:'Administration',module:['users','log']}
+  {id:'verwaltung',titel:'Administration',module:['users','system','meldungen','log']}
 ];
 const NAV_OFFEN = new Set(['uebersicht','personal']);
 let ME = null, D = null, tab = 'dash';
@@ -1400,8 +1400,12 @@ function zeichne() {
   try {
     const ansichten = { dash: vDash, pers: vPers, bef: vBef, sonder: vSonder, kue: vKue,
       dis: vDis, rout: vRout, chk: vChk, rl: vRl, org: vOrg, users: vUsers };
+    if(tab==='system' && ME.rolle!=='Administrator'){$('#inhalt').innerHTML='<p>Nur Administratoren.</p>';return;}
     const f = ansichten[tab];
     $('#inhalt').innerHTML = f ? f() : '<p>Dieser Bereich ist für deine Rolle nicht freigegeben.</p>';
+    if(tab === 'system') ladeSystemoptionen();
+    if(tab === 'meldungen') ladeMeldungen();
+    if(tab === 'statistik') ladeStatistik();
     if(tab === 'users') ladeBenutzer().catch(err => { if($('#benutzerBereich')) $('#benutzerBereich').textContent = 'Benutzerverwaltung konnte nicht geladen werden: ' + err.message; });
   } catch (err) {
     $('#inhalt').innerHTML = '<h1>Fehler beim Laden</h1><p class="fehler">' + esc(err.message) + '</p>';
@@ -1864,6 +1868,7 @@ function personalAnzeigen(nr) {
         ? personalDokumentLink(k,v,k==='Arbeitsvertrag'?p.arbeitsvertrag_url:p.ernennungsurkunde_url)
         : esc(v == null || v === '' ? '–' : v)) + '</div>'
     ).join('') + '</div>' +
+    '<section class="box"><h3>Personalakten-Verlauf</h3><div id="personalVerlauf">Verlauf wird geladen …</div></section>' +
     (can('dis') ? (() => {
       const akte=disAkte(Number(nr));
       const massnahmen=akte.slots.map((eintrag,i)=>eintrag?.done ?
@@ -1881,6 +1886,7 @@ function personalAnzeigen(nr) {
     '<div class="actions"><button type="button" id="persAbbrechen">Schließen</button>' +
     (can('pers',2) ? '<button type="button" class="p" data-edit-person="' + Number(nr) + '">Bearbeiten</button>' : '') + '</div>';
   dialog.showModal();
+  ladePersonalVerlauf(Number(nr));
   $('#persAbbrechen').addEventListener('click',personalDialogSchliessen);
   if (ME.sensibel) copnetLaden(Number(nr), p).catch(() => {});
 }
@@ -3594,6 +3600,58 @@ async function vLog_() {
   $('#inhalt').innerHTML = `<h1>Protokoll</h1>` + tabelle(['Zeit','Benutzer','Art','Aktion'],
     zeilen.map(z => [new Date(z.zeit).toLocaleString('de-DE'), esc(z.benutzer), esc(z.art), esc(z.aktion)]));
 }
+
+
+/* Selbstverwaltungsbereiche – alle Änderungen werden im Server geprüft. */
+async function ladePersonalVerlauf(nr){
+ const area=$('#personalVerlauf');if(!area)return;
+ try{
+  const data=await api('/personal/'+nr+'/verlauf');
+  if(!area.isConnected||!$('#personalDialog')?.open)return;
+  area.innerHTML=data.length?data.map(e=>'<div class="dashboard-line"><div><strong>'+esc(e.aktion)+'</strong><small style="display:block">'+esc(e.benutzer||'System')+' · '+esc(e.zeit?new Date(e.zeit).toLocaleString('de-DE'):'Ohne Datum')+'</small></div></div>').join(''):'<span class="mut">Noch keine Verlaufsereignisse.</span>';
+ }catch(e){if(area.isConnected)area.textContent='Verlauf konnte nicht geladen werden: '+e.message;}
+}
+async function ladeSystemoptionen(){
+ const el=$('#inhalt');el.innerHTML='<h1>Zentrale Systemverwaltung</h1><p>Lade Einstellungen …</p>';
+ try{
+  const data=await api('/system-optionen');
+  el.innerHTML='<h1>Zentrale Systemverwaltung</h1><p class="mut">Zusätzliche Auswahlwerte hinzufügen. Die Standardwerte bleiben geschützt.</p>'+
+  Object.entries(data).map(([key,values])=>'<section class="box"><h3>'+esc(key==='mitarbeitergruppen'?'Mitarbeitergruppen':'Beschäftigungsarten')+'</h3><textarea rows="7" style="width:100%;background:var(--panel);color:var(--txt)" id="option-'+esc(key)+'">'+esc(values.join('\n'))+'</textarea><button type="button" data-save-options="'+esc(key)+'">Änderungen speichern</button></section>').join('');
+ }catch(e){el.textContent='Einstellungen konnten nicht geladen werden: '+e.message;}
+}
+async function ladeMeldungen(){
+ const el=$('#inhalt');el.innerHTML='<h1>Benachrichtigungen</h1><p>Lade …</p>';
+ try{
+  const data=await api('/benachrichtigungen');
+  el.innerHTML='<h1>Benachrichtigungen</h1><p class="mut">Aktuelle Änderungen aus dem berechtigten Verwaltungsprotokoll.</p>'+
+   (data.length?data.map(x=>'<section class="box"><strong>'+esc(x.aktion)+'</strong><p class="mut">'+esc(new Date(x.zeit).toLocaleString('de-DE'))+'</p>'+
+   (x.gelesen?'<span class="tag">Gelesen</span>':'<button data-meldung-gelesen="'+Number(x.id)+'">Als gelesen markieren</button>')+'</section>').join(''):'<p>Keine neuen Meldungen.</p>');
+ }catch(e){el.textContent='Benachrichtigungen konnten nicht geladen werden: '+e.message;}
+}
+async function ladeStatistik(){
+ const el=$('#inhalt');el.innerHTML='<h1>Personalstatistiken</h1><p>Lade …</p>';
+ try{
+  const data=await api('/personalstatistik');
+  const items=data.gruppen||[],sum=items.reduce((n,x)=>n+Number(x.anzahl),0);
+  el.innerHTML='<h1>Personalstatistiken</h1><div class="kacheln"><div class="kachel"><b>'+sum+'</b><span>Personalakten gesamt</span></div>'+
+  '<div class="kachel"><b>'+items.filter(x=>x.beschaeftigungsart==='Nebenberuf').reduce((n,x)=>n+Number(x.anzahl),0)+'</b><span>Nebenberuflich</span></div></div>'+
+  '<section class="box"><h3>Verteilung nach Dienstgruppen und Beschäftigung</h3>'+tabelle(['Mitarbeitergruppe','Beschäftigungsart','Status','Anzahl'],items.map(x=>[esc(x.gruppe),esc(x.beschaeftigungsart),esc(x.status),Number(x.anzahl)]))+'</section>'+
+  '<section class="box"><h3>Eintritte der letzten 12 Monate</h3>'+tabelle(['Monat','Eintritte'],(data.eintritte||[]).map(x=>[esc(x.monat),Number(x.anzahl)]))+'</section>';
+ }catch(e){el.textContent='Statistik konnte nicht geladen werden: '+e.message;}
+}
+document.addEventListener('click',async e=>{
+ const option=e.target.closest('[data-save-options]');
+ const meldung=e.target.closest('[data-meldung-gelesen]');
+ try{
+  if(option){
+   const key=option.dataset.saveOptions;
+   const werte=$('#option-'+key).value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+   await api('/system-optionen/'+key,{method:'PUT',body:JSON.stringify({werte})});
+   alert('Einstellungen gespeichert.');await ladeSystemoptionen();
+  }
+  if(meldung){await api('/benachrichtigungen/'+Number(meldung.dataset.meldungGelesen)+'/gelesen',{method:'POST'});await ladeMeldungen();}
+ }catch(err){alert('Speichern fehlgeschlagen: '+err.message);}
+});
 
 /* ---------- Start ---------- */
 
