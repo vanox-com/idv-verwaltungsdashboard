@@ -2505,6 +2505,9 @@ function vBef() {
   const heute = new Date().toISOString().slice(0,10);
   const raenge = D.raenge || [];
   const verwalten = can('bef',2);
+  const ausgestellteUrkunden=new Set((D.befoerderungen||[])
+    .filter(x=>x.rang==='Polizeimeisteranwärter'&&x.neu_rang==='Polizeimeister')
+    .map(x=>Number(x.personalnummer)));
   const liste = (D.personal || []).filter(p => p.status !== 'Gekündigt').map(p => {
     const i = raenge.findIndex(r => r.name === p.dienstgrad);
     const akt=raenge[i],anwaerter=p.dienstgrad==='Polizeimeisteranwärter';
@@ -2536,6 +2539,16 @@ function vBef() {
       '<td><span class="tag '+st+'">'+esc(porText(p))+'</span></td>' +
       '<td>'+esc(anwaerter?'Keine Mindestzeit · PM-Prüfung erforderlich':aktBem(p.dienstgrad))+'</td><td>'+action+'</td></tr>';
   }).join('');
+  const urkundenRows=(D.personal||[]).filter(p=>
+    p.dienstgrad==='Polizeimeister'&&ausgestellteUrkunden.has(Number(p.personalnummer)))
+    .map(p=>{
+      const titel=esc([p.vorname,p.nachname].filter(Boolean).join(' '));
+      const link=p.ernennungsurkunde_url;
+      return '<div class="dashboard-line"><div><strong>'+titel+'</strong> · Nr. '+Number(p.personalnummer)+'</div>'+
+        (link?'<a class="l" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">Urkunde öffnen</a>':
+          '<button type="button" data-urkunde-generate="'+Number(p.personalnummer)+'">Ernennungsurkunde erstellen</button>')+
+        '</div>';
+    }).join('');
   const ranks=raenge.map(r=>{
     const pma=r.name==='Polizeimeisteranwärter';
     return '<tr><td>'+rangMitAbzeichen(r.name)+'</td><td>'+esc(r.abk||'')+'</td>'+
@@ -2547,6 +2560,8 @@ function vBef() {
     (wartet ? '<div class="box idv-warnung"><b>'+wartet+'</b> POR-Anträge warten auf eine Entscheidung.</div>' : '') +
     '<div id="rangantraegeBereich" class="box"><h3>Offene Rangänderungsanträge</h3><p class="mut">Lade Anträge …</p></div>'+ 
     ((can('por',1)||can('ranghistorie',1))?'<section class="box" id="ranghistorieBereich"><div class="ranghist-top"><div><h3>Rangänderungs-Historie</h3><p class="mut">Abgeschlossene POR-Entscheidungen – nur für Berechtigte einsehbar.</p></div><button type="button" data-ranghistorie-toggle aria-expanded="false">Historie anzeigen</button></div><div id="ranghistorieListe" hidden></div></section>':'')+ 
+    (verwalten?'<section class="box"><h3>Ernennungsurkunden · Polizeimeister</h3><p class="mut">Für bereits durchgeführte Beförderungen von PMA zu PM. Die PDF-/Dokument-Dateien werden extern in Google Drive gespeichert, in der Personalakte steht nur der Link.</p>'+
+      (urkundenRows||'<p class="mut">Noch keine entsprechenden Beförderungen.</p>')+'</section>':'')+
     '<div class="tw"><table><thead><tr>'+['Person','Aktuell','Nächster Rang','Letzte Bef.','Fällig am','Friststatus','POR-Freigabe','Hinweis','Aktion'].map(t=>'<th>'+t+'</th>').join('') +
     '</tr></thead><tbody>'+(rows||'<tr><td colspan="9">Keine geplanten Beförderungen</td></tr>')+'</tbody></table></div>' +
     '<div class="box"><h3>Beförderungsbedingungen</h3><div class="tw"><table><thead><tr>'+
@@ -2595,7 +2610,23 @@ async function befAusfuehren(nr){
     alert('Befördert. Dienstgrad im Bossmenü/Dienstblatt ebenfalls anpassen.');
   }catch(e){alert('Beförderung nicht möglich: '+e.message)}
 }
-document.addEventListener('click',e=>{
+document.addEventListener('click',async e=>{
+  const urkunde=e.target.closest('[data-urkunde-generate]');
+  if(urkunde){
+    const nr=Number(urkunde.dataset.urkundeGenerate);
+    if(!can('bef',2))return;
+    const eid=prompt('Datum des tatsächlich geleisteten Amtseids (JJJJ-MM-TT):');
+    if(eid===null)return;
+    if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(eid)){alert('Bitte Datum im Format JJJJ-MM-TT eingeben.');return;}
+    urkunde.disabled=true;urkunde.textContent='Urkunde wird erstellt …';
+    try{
+      const result=await api('/urkunden/polizeimeister/'+nr,{method:'POST',body:JSON.stringify({eid_datum:eid})});
+      await starten();
+      alert('Die Urkunde wurde in Google Drive erstellt und in der Personalakte verlinkt.');
+      const a=document.createElement('a');a.href=result.url;a.target='_blank';a.rel='noopener noreferrer';a.click();
+    }catch(err){alert('Urkunde konnte nicht erstellt werden: '+err.message);if(urkunde.isConnected){urkunde.disabled=false;urkunde.textContent='Ernennungsurkunde erstellen';}}
+    return;
+  }
   const por=e.target.closest('[data-por-person]');if(por){porBearbeiten(Number(por.dataset.porPerson));return}
   const befoerdern=e.target.closest('[data-promote-person]');if(befoerdern)befAusfuehren(Number(befoerdern.dataset.promotePerson));
 });

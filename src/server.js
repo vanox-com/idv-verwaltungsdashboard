@@ -1,6 +1,6 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
-import { randomBytes, randomUUID, createCipheriv, createDecipheriv } from 'node:crypto';
+import { randomBytes, randomUUID, createCipheriv, createDecipheriv, createSign } from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1394,6 +1394,123 @@ app.post('/api/befoerdern', requireLogin, requireRight('bef', 2), async (req, re
     if (e.httpStatus) res.status(e.httpStatus).json({ error: e.message });
     else next(e);
   } finally { client.release(); }
+});
+
+/* Externe Ernennungsurkunden: Google Docs stellt nur das Dokument bereit.
+   In PostgreSQL werden ausschließlich Name und Link der Akte aktualisiert.
+   Der Google-Service-Account erhält ausschließlich serverseitig Zugriff.
+   Benötigt Render-Environment:
+   GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON (vollständige JSON-Credentials),
+   GOOGLE_DRIVE_URKUNDEN_ORDNER_ID (geschützter Drive-Ordner),
+   GOOGLE_DOCS_URKUNDE_VORLAGE_ID (freigegebene Google-Docs-Vorlage).
+   Die Ordner-/Vorlage müssen dem Service-Account zur Bearbeitung freigegeben sein. */
+const URKUNDEN_MUSTER_ID='1fod-hK9SVzy13gFWElLprkxOzyMeGjJropM58diXdxs';
+function urkundeGoogleConfig(){
+ const folder=String(process.env.GOOGLE_DRIVE_URKUNDEN_ORDNER_ID||'').trim();
+ const template=String(process.env.GOOGLE_DOCS_URKUNDE_VORLAGE_ID||URKUNDEN_MUSTER_ID).trim();
+ let account=null;
+ try{account=JSON.parse(process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON||'null')}catch{}
+ if(!account?.client_email||!account?.private_key||!folder||
+    !/^[\w-]{12,}$/.test(folder)||!/^[\w-]{12,}$/.test(template))return null;
+ return {folder,template,account};
+}
+function urkundenDatum(d){
+ return typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&
+  new Date(d+'T00:00:00Z').toISOString().slice(0,10)===d;
+}
+function formatUrkundenDatum(d){const [y,m,t]=d.split('-');return t+'.'+m+'.'+y}
+async function urkundenToken(account){
+ const enc=v=>Buffer.from(JSON.stringify(v)).toString('base64url');
+ const now=Math.floor(Date.now()/1000);
+ const header=enc({alg:'RS256',typ:'JWT'});
+ const payload=enc({iss:account.client_email,scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/documents',aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+3500});
+ const unsigned=header+'.'+payload;
+ const signer=createSign('RSA-SHA256');signer.update(unsigned);signer.end();
+ const assertion=unsigned+'.'+signer.sign(account.private_key).toString('base64url');
+ const body=new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion});
+ const response=await fetch('https://oauth2.googleapis.com/token',{
+  method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+  body,signal:AbortSignal.timeout(20000)});
+ const data=await response.json();
+ if(!response.ok||!data.access_token)throw new Error('Google-Drive-Anmeldung fehlgeschlagen. Service-Account-Konfiguration prüfen.');
+ return data.access_token;
+}
+async function urkundenGoogleRequest(token,url,method='GET',body){
+ const response=await fetch(url,{method,
+  headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+  ...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(25000)});
+ if(!response.ok){
+  const raw=(await response.text()).slice(0,400);
+  console.error('Urkunden-Speicherung fehlgeschlagen',response.status,raw);
+  throw new Error('Google Drive konnte das Dokument nicht erstellen oder bearbeiten (HTTP '+response.status+'). Berechtigungen für Vorlagen- und Zielordner prüfen.');
+ }
+ if(response.status===204)return {};
+ return response.json();
+}
+app.get('/api/urkunden/status',requireLogin,requireRight('bef',2),async(req,res)=>{
+ res.json({eingerichtet:!!urkundeGoogleConfig()});
+});
+app.post('/api/urkunden/polizeimeister/:nr',requireLogin,requireRight('bef',2),async(req,res,next)=>{
+ const nr=Number(req.params.nr),eid=String(req.body?.eid_datum||'');
+ if(!Number.isSafeInteger(nr)||nr<1||!urkundenDatum(eid))
+  return res.status(400).json({error:'Gültiges Datum des geleisteten Amtseids erforderlich'});
+ const config=urkundeGoogleConfig();
+ if(!config)return res.status(503).json({error:'Die externe Google-Drive-Ablage ist noch nicht eingerichtet. Bitte Drive-Servicekonto und Urkundenordner in Render konfigurieren.'});
+ let copyId=null,token=null;
+ try{
+  const {rows}=await db.query(`SELECT p.personalnummer,p.vorname,p.nachname,p.geburtsdatum,p.dienstgrad,
+    p.ernennungsurkunde_url,p.status,
+    (SELECT b.am FROM befoerderungen b
+     WHERE b.personalnummer=p.personalnummer AND b.rang='Polizeimeisteranwärter' AND b.neu_rang='Polizeimeister'
+     ORDER BY b.am DESC,b.id DESC LIMIT 1) AS ernennungsdatum
+    FROM personal p WHERE p.personalnummer=$1`,[nr]);
+  const person=rows[0];
+  if(!person)return res.status(404).json({error:'Personalakte nicht vorhanden'});
+  if(person.dienstgrad!=='Polizeimeister'||!person.ernennungsdatum)
+   return res.status(409).json({error:'Nur nach dokumentierter Beförderung von Polizeimeisteranwärter zu Polizeimeister verfügbar'});
+  if(person.status==='Gekündigt')return res.status(409).json({error:'Für ausgeschiedenes Personal nicht verfügbar'});
+  if(person.ernennungsurkunde_url)
+   return res.status(409).json({error:'Für diese Person ist bereits eine Ernennungsurkunde verlinkt. Bitte zuerst den vorhandenen Link prüfen.'});
+  if(!person.geburtsdatum)return res.status(409).json({error:'Geburtsdatum fehlt in der Personalakte'});
+  const date=v=>v instanceof Date?v.toISOString().slice(0,10):String(v).slice(0,10);
+  const ernannt=date(person.ernennungsdatum);
+  if(!urkundenDatum(ernannt)||eid>ernannt)
+   return res.status(400).json({error:'Der geleistete Amtseid muss spätestens am Ernennungsdatum liegen'});
+  const name=[person.vorname,person.nachname].filter(Boolean).join(' ').trim();
+  if(!name||name.length>160)return res.status(409).json({error:'Unvollständiger Personalname'});
+  const titel='Ernennungsurkunde '+name;
+  token=await urkundenToken(config.account);
+  const base='https://www.googleapis.com/drive/v3/files';
+  const copied=await urkundenGoogleRequest(token,base+'/'+encodeURIComponent(config.template)+'/copy?fields=id,name,webViewLink','POST',{
+    name:titel,mimeType:'application/vnd.google-apps.document',parents:[config.folder]
+  });
+  copyId=copied.id;
+  if(!copyId)throw new Error('Google Drive hat keine Dokument-ID zurückgegeben');
+  const edits=[
+   ['{{ANREDE_NAME}}','Herr '+name],
+   ['{{GEBURTSDATUM}}',formatUrkundenDatum(date(person.geburtsdatum))],
+   ['{{ERNENNUNGSDATUM}}',formatUrkundenDatum(ernannt)],
+   ['{{AMTSBEZEICHNUNG}}','Polizeimeister'],
+   ['{{AMTSEID_DATUM}}',formatUrkundenDatum(eid)]
+  ];
+  const requests=edits.map(([text,replacement])=>({replaceAllText:{containsText:{text,matchCase:true},replaceText:replacement}}));
+  await urkundenGoogleRequest(token,'https://docs.googleapis.com/v1/documents/'+encodeURIComponent(copyId)+':batchUpdate','POST',{requests});
+  const url='https://docs.google.com/document/d/'+copyId+'/edit';
+  const saved=await db.query(`UPDATE personal SET ernennungsurkunde=$1,ernennungsurkunde_url=$2
+   WHERE personalnummer=$3 AND COALESCE(ernennungsurkunde_url,'')='' AND dienstgrad='Polizeimeister'
+   RETURNING personalnummer`,[titel,url,nr]);
+  if(!saved.rowCount)throw new Error('Urkunde extern angelegt, aber Personalakte wurde zwischenzeitlich geändert. Bitte erneut prüfen.');
+  await db.query("INSERT INTO log(user_id,aktion,art) VALUES ($1,$2,'add')",
+   [req.user.id,'Ernennungsurkunde extern erstellt für Personalnummer '+nr]).catch(err=>console.error('Urkunden-Log:',err));
+  return res.json({ok:true,url,titel});
+ }catch(e){
+  // Fehlschläge hinterlassen keine unzugeordneten Dokumente in Drive.
+  if(copyId&&token)try{
+   await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(copyId),
+    {method:'DELETE',headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(15000)});
+  }catch(err){console.error('Urkunden-Kopie konnte nicht bereinigt werden:',err)}
+  next(e);
+ }
 });
 
 /* Kündigung anlegen */
