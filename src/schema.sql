@@ -564,3 +564,8 @@ CREATE TABLE IF NOT EXISTS portal_design_personal (
  akzent text NOT NULL, schleier smallint NOT NULL, hintergrund text NOT NULL,
  aktualisiert timestamptz NOT NULL DEFAULT now()
 );
+
+/* Zeitgesteuerte Mitteilungen und persönliche Ausblendung. Bestehende Nachrichten bleiben aktiv. */
+ALTER TABLE portal_meldungen ADD COLUMN IF NOT EXISTS sichtbar_ab timestamptz;
+ALTER TABLE portal_meldungen ADD COLUMN IF NOT EXISTS sichtbar_bis timestamptz;
+ALTER TABLE portal_meldung_empfaenger ADD COLUMN IF NOT EXISTS ausgeblendet_am timestamptz;
