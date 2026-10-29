@@ -1008,16 +1008,16 @@ const MODS = [
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
-  ['users','Benutzer & Rollen','🔐'],['system','Systemverwaltung','⚙️'],['meldungen','Mitteilungen verwalten','📣'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾']
+  ['fristen','Fristenmanagement','⏳'],['dienststellen','Dienststellen','🏢'],['backup','Backup-Übersicht','🗄️'],['users','Benutzer & Rollen','🔐'],['system','Systemverwaltung','⚙️'],['meldungen','Mitteilungen verwalten','📣'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾']
 ];
 /* Sidebar: dieselben Module und Rechte, nur übersichtlich gruppiert.
    Ein aktives Modul hält seine Kategorie immer geöffnet. */
 const NAV_GRUPPEN = [
   {id:'uebersicht',titel:'Übersicht',module:['dash']},
-  {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','rout','geb','jub','statistik']},
+  {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','rout','geb','jub','statistik','fristen','dienststellen']},
   {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
-  {id:'verwaltung',titel:'Administration',module:['users','system','meldungen','log']}
+  {id:'verwaltung',titel:'Administration',module:['users','system','meldungen','backup','log']}
 ];
 const NAV_OFFEN = new Set(['uebersicht','personal']);
 let ME = null, D = null, tab = 'dash';
@@ -1408,6 +1408,9 @@ function zeichne() {
     if(tab === 'system') ladeSystemoptionen();
     if(tab === 'meldungen') ladeMeldungen();
     if(tab === 'statistik') ladeStatistik();
+    if(tab === 'fristen') ladeFristen();
+    if(tab === 'dienststellen') ladeDienststellen();
+    if(tab === 'backup') ladeBackup();
     if(tab === 'users') ladeBenutzer().catch(err => { if($('#benutzerBereich')) $('#benutzerBereich').textContent = 'Benutzerverwaltung konnte nicht geladen werden: ' + err.message; });
   } catch (err) {
     $('#inhalt').innerHTML = '<h1>Fehler beim Laden</h1><p class="fehler">' + esc(err.message) + '</p>';
@@ -3694,6 +3697,67 @@ document.addEventListener('click',async e=>{
   }
   if(meldung){await api('/benachrichtigungen/'+Number(meldung.dataset.meldungGelesen)+'/gelesen',{method:'POST'});await ladeMeldungen();}
  }catch(err){alert('Speichern fehlgeschlagen: '+err.message);}
+});
+
+
+/* Module zur Verwaltung von Dienststellen, Fristen und Datenbankstatus. */
+async function ladeDienststellen(){
+ const el=$('#inhalt');el.innerHTML='<h1>Dienststellenverwaltung</h1><p>Lade …</p>';
+ try{
+  const entries=await api('/dienststellen'),write=can('dienststellen',2);
+  el.innerHTML='<h1>Dienststellenverwaltung</h1><p class="mut">Dienststellen können deaktiviert werden, ohne vorhandene Personalzuordnungen zu löschen.</p>'+
+   (write?'<section class="box"><h3>Neue Dienststelle</h3><label>Name</label><input id="dsName" maxlength="100"><label>Beschreibung</label><input id="dsBeschreibung" maxlength="500"><button type="button" class="p" id="dsAdd">Dienststelle anlegen</button></section>':'')+
+   '<div class="tw"><table><thead><tr><th>Dienststelle</th><th>Beschreibung</th><th>Personal</th><th>Status</th><th>Aktion</th></tr></thead><tbody>'+
+   entries.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.beschreibung)+'</td><td>'+Number(x.personal)+'</td><td>'+(x.aktiv?'Aktiv':'Inaktiv')+'</td><td>'+
+   (write?'<button type="button" data-ds-edit="'+Number(x.id)+'">Bearbeiten</button>':'')+'</td></tr>').join('')+'</tbody></table></div>';
+  el._dienststellen=entries;
+ }catch(e){el.textContent='Dienststellen konnten nicht geladen werden: '+e.message;}
+}
+async function ladeFristen(){
+ const el=$('#inhalt');el.innerHTML='<h1>Fristenmanagement</h1><p>Lade …</p>';
+ try{
+  const entries=await api('/fristen'),write=can('fristen',2);
+  const faellig=entries.filter(x=>!x.erledigt&&Number(x.tage)<=Number(x.vorwarn_tage));
+  el.innerHTML='<h1>Fristenmanagement</h1><p class="mut">Fristen werden anhand des Fälligkeitsdatums und der individuellen Vorwarnzeit ausgewertet.</p>'+
+   '<div class="kacheln"><div class="kachel"><b>'+entries.filter(x=>!x.erledigt).length+'</b><span>Offene Fristen</span></div><div class="kachel"><b>'+faellig.length+'</b><span>Warnungen</span></div></div>'+
+   (write?'<section class="box"><h3>Frist anlegen</h3><label>Bezeichnung</label><input id="fristTitel" maxlength="180"><label>Fällig am</label><input id="fristDatum" type="date"><label>Vorwarnzeit (Tage)</label><input id="fristTage" type="number" min="0" max="365" value="14"><label>Personalnummer (optional)</label><input id="fristNr" type="number" min="1"><button type="button" class="p" id="fristAdd">Frist speichern</button></section>':'')+
+   '<div class="tw"><table><thead><tr><th>Frist</th><th>Personal</th><th>Datum</th><th>Resttage</th><th>Status</th><th>Aktion</th></tr></thead><tbody>'+
+   entries.map(x=>'<tr><td>'+esc(x.titel)+'</td><td>'+esc([x.vorname,x.nachname].filter(Boolean).join(' ')||'Allgemein')+'</td><td>'+fd(x.faellig_am)+'</td><td>'+Number(x.tage)+'</td><td>'+
+    (x.erledigt?'Erledigt':Number(x.tage)<0?'Überfällig':Number(x.tage)<=Number(x.vorwarn_tage)?'Bald fällig':'Offen')+'</td><td>'+
+    (write?'<button type="button" data-frist-toggle="'+Number(x.id)+'" data-done="'+!!x.erledigt+'">'+(x.erledigt?'Wieder öffnen':'Erledigen')+'</button>':'')+'</td></tr>').join('')+'</tbody></table></div>';
+ }catch(e){el.textContent='Fristen konnten nicht geladen werden: '+e.message;}
+}
+async function ladeBackup(){
+ const el=$('#inhalt');el.innerHTML='<h1>Backup-Übersicht</h1><p>Lade Datenbankstatus …</p>';
+ try{
+  const x=await api('/backup-status');
+  el.innerHTML='<h1>Backup-Übersicht</h1><section class="box"><h3>Datenbankstatus</h3>'+
+   '<p><b>Datenbank:</b> '+esc(x.datenbank)+'</p><p><b>Tarif:</b> '+esc(x.plan)+'</p>'+
+   '<p><b>Größe:</b> '+(Number(x.bytes)/1048576).toFixed(2)+' MiB</p>'+
+   '<p><b>Ablaufdatum:</b> '+esc(x.ablauf_am)+'</p><p><b>Automatische Sicherungen:</b> '+esc(x.automatische_sicherungen)+'</p>'+
+   '<p><b>Wiederherstellung:</b> '+esc(x.wiederherstellung)+'</p><p class="fehler">'+esc(x.hinweis)+'</p>'+
+   '<p class="mut">Letzte Datenbankabfrage: '+esc(new Date(x.geprueft_am).toLocaleString('de-DE'))+'</p></section>';
+ }catch(e){el.textContent='Datenbankstatus konnte nicht geladen werden: '+e.message;}
+}
+document.addEventListener('click',async event=>{
+ const addDs=event.target.closest('#dsAdd'),editDs=event.target.closest('[data-ds-edit]');
+ const addFrist=event.target.closest('#fristAdd'),toggleFrist=event.target.closest('[data-frist-toggle]');
+ if(!addDs&&!editDs&&!addFrist&&!toggleFrist)return;
+ try{
+  if(addDs&&can('dienststellen',2)){
+   await api('/dienststellen',{method:'POST',body:JSON.stringify({name:$('#dsName').value,beschreibung:$('#dsBeschreibung').value})});await ladeDienststellen();
+  }else if(editDs&&can('dienststellen',2)){
+   const x=($('#inhalt')._dienststellen||[]).find(z=>Number(z.id)===Number(editDs.dataset.dsEdit));if(!x)return;
+   const name=prompt('Name der Dienststelle',x.name);if(name===null)return;
+   const beschreibung=prompt('Beschreibung',x.beschreibung);if(beschreibung===null)return;
+   const aktiv=confirm('Soll diese Dienststelle aktiv sein? OK = Aktiv, Abbrechen = Inaktiv.');
+   await api('/dienststellen/'+x.id,{method:'PATCH',body:JSON.stringify({name,beschreibung,aktiv})});await ladeDienststellen();
+  }else if(addFrist&&can('fristen',2)){
+   await api('/fristen',{method:'POST',body:JSON.stringify({titel:$('#fristTitel').value,faellig_am:$('#fristDatum').value,vorwarn_tage:Number($('#fristTage').value),personalnummer:$('#fristNr').value||null})});await ladeFristen();
+  }else if(toggleFrist&&can('fristen',2)){
+   await api('/fristen/'+Number(toggleFrist.dataset.fristToggle),{method:'PATCH',body:JSON.stringify({erledigt:toggleFrist.dataset.done!=='true'})});await ladeFristen();
+  }
+ }catch(e){alert('Änderung nicht gespeichert: '+e.message);}
 });
 
 /* ---------- Start ---------- */
