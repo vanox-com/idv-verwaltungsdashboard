@@ -1007,6 +1007,8 @@ html[data-portal-wallpaper="minimal"] #app{background-image:linear-gradient(125d
 #mitteilungenDashboard .idv-mitteilung-eintrag{background:rgba(245,158,11,.13)!important;border:1px solid rgba(255,178,68,.42)!important;border-radius:9px;margin:12px 0;color:#ffebca!important}
 #mitteilungenDashboard .idv-mitteilung-eintrag strong{color:#fff4dc!important}
 #mitteilungenDashboard .idv-mitteilung-eintrag small{color:#ffd39a!important}
+
+.mit-admin-item{display:grid;gap:6px;padding:14px;margin:10px 0;border:1px solid var(--line);border-radius:10px;background:rgba(24,34,48,.45)}.mit-admin-item small{color:var(--mut)}.mit-admin-item .actions{display:flex;gap:8px}
 </style>
 </head>
 <body>
@@ -3723,16 +3725,54 @@ async function ladeMeldungen(){
    '<h3>Empfängerrollen</h3><div>'+rollen.map(r=>'<label><input type="checkbox" style="width:auto" data-mit-rolle="'+esc(r)+'"> '+esc(r)+'</label>').join('')+'</div>'+
    '<h3>Mitarbeitergruppen</h3><div>'+gruppen.map(g=>'<label><input type="checkbox" style="width:auto" data-mit-gruppe="'+esc(g)+'"> '+esc(g)+'</label>').join('')+'</div>'+
    '<h3>Einzelne Personen</h3><div style="max-height:240px;overflow:auto">'+users.map(u=>'<label><input type="checkbox" style="width:auto" data-mit-user="'+Number(u.id)+'"> '+esc(u.anzeigename)+' ('+esc(u.dienstnummer)+')</label>').join('')+'</div>'+
-   '<button type="button" class="p" id="mitSenden">Mitteilung veröffentlichen</button></section>';
+   '<label for="mitAb">Anzeigen ab (optional)</label><input id="mitAb" type="datetime-local">'+
+   '<label for="mitBis">Anzeigen bis (optional)</label><input id="mitBis" type="datetime-local">'+
+   '<button type="button" class="p" id="mitSenden">Mitteilung veröffentlichen</button></section>'+
+   '<section class="box"><h3>Bestehende Mitteilungen verwalten</h3><div id="mitVerwaltung">Lade …</div></section>';
+  await ladeMitteilungsVerwaltung();
  }catch(e){el.textContent='Empfängerauswahl konnte nicht geladen werden: '+e.message;}
 }
+
+const mitDatum=v=>v?new Date(v).toISOString().slice(0,16):'';
+async function ladeMitteilungsVerwaltung(){
+ const area=$('#mitVerwaltung');if(!area)return;
+ try{
+  const list=await api('/mitteilungen/verwaltung');
+  area._mitteilungen=list;
+  area.innerHTML=list.length?list.map(m=>'<div class="mit-admin-item"><div><strong>'+esc(m.titel)+'</strong> <small>'+Number(m.empfaenger)+' Empfänger</small></div>'+
+   '<small>Zeitraum: '+esc(m.sichtbar_ab?new Date(m.sichtbar_ab).toLocaleString('de-DE'):'sofort')+' – '+esc(m.sichtbar_bis?new Date(m.sichtbar_bis).toLocaleString('de-DE'):'unbegrenzt')+'</small>'+
+   '<div class="actions"><button type="button" data-mit-edit="'+Number(m.id)+'">Bearbeiten</button><button type="button" data-mit-delete="'+Number(m.id)+'">Löschen</button></div></div>').join(''):'<p class="mut">Noch keine Mitteilungen vorhanden.</p>';
+ }catch(e){area.textContent='Verwaltung konnte nicht geladen werden: '+e.message;}
+}
+document.addEventListener('click',async ev=>{
+ const dismiss=ev.target.closest('[data-mit-ausblenden]');
+ const del=ev.target.closest('[data-mit-delete]');
+ const edit=ev.target.closest('[data-mit-edit]');
+ try{
+  if(dismiss){await api('/mitteilungen/'+Number(dismiss.dataset.mitAusblenden)+'/ausblenden',{method:'POST'});await ladeDashboardMeldungen();}
+  if(del&&can('meldungen')){
+   if(!confirm('Diese Mitteilung für alle Empfänger dauerhaft löschen?'))return;
+   await api('/mitteilungen/'+Number(del.dataset.mitDelete),{method:'DELETE'});await ladeMitteilungsVerwaltung();
+  }
+  if(edit&&can('meldungen')){
+   const m=($('#mitVerwaltung')._mitteilungen||[]).find(x=>Number(x.id)===Number(edit.dataset.mitEdit));if(!m)return;
+   const titel=prompt('Titel der Mitteilung',m.titel);if(titel===null)return;
+   const inhalt=prompt('Nachrichtentext',m.inhalt);if(inhalt===null)return;
+   const beginn=prompt('Anzeigen ab (JJJJ-MM-TT HH:MM, leer = sofort)',m.sichtbar_ab?mitDatum(m.sichtbar_ab).replace('T',' '):'');if(beginn===null)return;
+   const ende=prompt('Anzeigen bis (JJJJ-MM-TT HH:MM, leer = unbegrenzt)',m.sichtbar_bis?mitDatum(m.sichtbar_bis).replace('T',' '):'');if(ende===null)return;
+   const timestamp=v=>v.trim()?new Date(v.trim().replace(' ','T')).toISOString():null;
+   await api('/mitteilungen/'+Number(m.id),{method:'PATCH',body:JSON.stringify({titel,inhalt,sichtbar_ab:timestamp(beginn),sichtbar_bis:timestamp(ende)})});
+   await ladeMitteilungsVerwaltung();
+  }
+ }catch(err){alert('Aktion fehlgeschlagen: '+err.message);}
+});
 async function ladeDashboardMeldungen(){
  const area=$('#mitteilungenDashboard');if(!area||!can('mitteilungen'))return;
  try{
   const data=await api('/mitteilungen');
   if(!area.isConnected)return;
   area.innerHTML=data.length?'<section class="box idv-mitteilungen-orange"><h3>Dienstliche Mitteilungen</h3>'+data.map(m=>
-   '<div class="dashboard-line idv-mitteilung-eintrag" style="display:block;padding:14px 16px"><strong>'+esc(m.titel)+'</strong><small style="display:block">'+esc(new Date(m.erstellt).toLocaleString('de-DE'))+'</small><p style="white-space:pre-wrap">'+esc(m.inhalt)+'</p></div>').join('')+'</section>':'';
+   '<div class="dashboard-line idv-mitteilung-eintrag" style="display:block;padding:14px 16px"><button type="button" title="Mitteilung für mich ausblenden" aria-label="Mitteilung ausblenden" data-mit-ausblenden="'+Number(m.id)+'" style="float:right;padding:2px 9px">×</button><strong>'+esc(m.titel)+'</strong><small style="display:block">'+esc(new Date(m.erstellt).toLocaleString('de-DE'))+'</small><p style="white-space:pre-wrap">'+esc(m.inhalt)+'</p></div>').join('')+'</section>':'';
  }catch(e){if(area.isConnected)area.textContent='Mitteilungen konnten nicht geladen werden.';}
 }
 async function ladeStatistik(){
