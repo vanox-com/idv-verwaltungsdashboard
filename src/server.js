@@ -725,6 +725,8 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
               status: p.status, dienstgrad: p.dienstgrad,
               letzte_befoerderung: p.letzte_befoerderung,
               naechste_befoerderung: p.naechste_befoerderung, pm_pruefung_bestanden: p.pm_pruefung_bestanden,
+              // Nur Abschlussstatus, keine sensiblen Urkundenlinks bei eingeschränkten Rechten.
+              ernennungsurkunde_erstellt: Boolean(p.ernennungsurkunde_url),
               por_status: p.por_status, por_notiz: p.por_notiz, por_am: p.por_am
             } : {})
           }))
@@ -740,6 +742,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
         ...(berechtigt('bef') ? {
           letzte_befoerderung: p.letzte_befoerderung,
           naechste_befoerderung: p.naechste_befoerderung, pm_pruefung_bestanden: p.pm_pruefung_bestanden,
+          ernennungsurkunde_erstellt: Boolean(p.ernennungsurkunde_url),
           por_status: p.por_status, por_notiz: p.por_notiz, por_am: p.por_am
         } : {})
       }));

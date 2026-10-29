@@ -1288,6 +1288,19 @@ body:has(#login:not(.hide)){
  #login .idv-login-logo{width:145px}
 }
 
+
+/* Ausgestellte Ernennungsurkunden sind automatisch im Archiv.
+   Der bestehende Dokumentlink bleibt die einzige persistente Referenz. */
+.urkunden-archiv{margin-top:18px;border-top:1px solid var(--line);padding-top:13px}
+.urkunden-archiv summary{display:flex;align-items:center;gap:9px;cursor:pointer;
+  color:var(--txt);font-weight:700;padding:9px 2px;list-style:none}
+.urkunden-archiv summary::-webkit-details-marker{display:none}
+.urkunden-archiv summary::before{content:'▸';font-size:15px;color:var(--mut);
+  display:inline-block;transition:transform .15s}
+.urkunden-archiv[open] summary::before{transform:rotate(90deg)}
+.urkunden-archiv summary:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+.urkunden-archiv .dashboard-line{gap:14px;flex-wrap:wrap}
+
 </style>
 </head>
 <body>
@@ -2600,16 +2613,32 @@ function vBef() {
       '<td><span class="tag '+st+'">'+esc(porText(p))+'</span></td>' +
       '<td>'+esc(anwaerter?'Keine Mindestzeit · PM-Prüfung erforderlich':aktBem(p.dienstgrad))+'</td><td>'+action+'</td></tr>';
   }).join('');
-  const urkundenRows=(D.personal||[]).filter(p=>
-    p.dienstgrad==='Polizeimeister'&&ausgestellteUrkunden.has(Number(p.personalnummer)))
-    .map(p=>{
-      const titel=esc([p.vorname,p.nachname].filter(Boolean).join(' '));
-      const link=p.ernennungsurkunde_url;
-      return '<div class="dashboard-line"><div><strong>'+titel+'</strong> · Nr. '+Number(p.personalnummer)+'</div>'+
-        (link?'<a class="l" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">Urkunde öffnen</a>':
-          '<button type="button" data-urkunde-generate="'+Number(p.personalnummer)+'">Ernennungsurkunde erstellen</button>')+
-        '</div>';
-    }).join('');
+  /* Ein vorhandener Urkundenlink ist der dauerhafte Abschlussnachweis.
+     Bei Beförderungsberechtigten ohne sensiblen Aktenzugriff liefert die
+     API stattdessen ausschließlich den Abschlussstatus. */
+  const urkundeErstellt=p=>Boolean(p.ernennungsurkunde_url)||p.ernennungsurkunde_erstellt===true;
+  const urkundenPersonen=(D.personal||[]).filter(p=>
+    ausgestellteUrkunden.has(Number(p.personalnummer)));
+  const offeneUrkunden=urkundenPersonen.filter(p=>
+    p.dienstgrad==='Polizeimeister'&&!urkundeErstellt(p));
+  const archivierteUrkunden=urkundenPersonen.filter(urkundeErstellt);
+  const urkundenRows=offeneUrkunden.map(p=>{
+    const nr=Number(p.personalnummer);
+    const titel=esc([p.vorname,p.nachname].filter(Boolean).join(' '));
+    return '<div class="dashboard-line"><div><strong>'+titel+'</strong> · Nr. '+nr+'</div>'+
+      '<button type="button" data-urkunde-generate="'+nr+'">Ernennungsurkunde erstellen</button></div>';
+  }).join('');
+  const urkundenArchivRows=archivierteUrkunden.map(p=>{
+    const nr=Number(p.personalnummer);
+    const titel=esc([p.vorname,p.nachname].filter(Boolean).join(' '));
+    const link=String(p.ernennungsurkunde_url||'');
+    return '<div class="dashboard-line"><div><strong>'+titel+'</strong> · Nr. '+nr+
+      ' <span class="tag ok">Urkunde erstellt</span></div>'+
+      (link.startsWith('https://')?
+        '<a class="l" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">Urkunde öffnen</a>':
+        '<span class="mut">Dokument in der Personalakte hinterlegt</span>')+
+      '</div>';
+  }).join('');
   const ranks=raenge.map(r=>{
     const pma=r.name==='Polizeimeisteranwärter';
     return '<tr><td>'+rangMitAbzeichen(r.name)+'</td><td>'+esc(r.abk||'')+'</td>'+
@@ -2621,8 +2650,14 @@ function vBef() {
     (wartet ? '<div class="box idv-warnung"><b>'+wartet+'</b> POR-Anträge warten auf eine Entscheidung.</div>' : '') +
     '<div id="rangantraegeBereich" class="box"><h3>Offene Rangänderungsanträge</h3><p class="mut">Lade Anträge …</p></div>'+ 
     ((can('por',1)||can('ranghistorie',1))?'<section class="box" id="ranghistorieBereich"><div class="ranghist-top"><div><h3>Rangänderungs-Historie</h3><p class="mut">Abgeschlossene POR-Entscheidungen – nur für Berechtigte einsehbar.</p></div><button type="button" data-ranghistorie-toggle aria-expanded="false">Historie anzeigen</button></div><div id="ranghistorieListe" hidden></div></section>':'')+ 
-    (verwalten?'<section class="box"><h3>Ernennungsurkunden · Polizeimeister</h3><p class="mut">Für bereits durchgeführte Beförderungen von PMA zu PM. Dokumente werden im Google-Drive-Konto des klickenden Nutzers erstellt. Die Datenbank speichert nur den Link.</p>'+
-      '<p class="mut" id="urkundenGoogleStatus">Prüfe Google-Anmeldung …</p>'+(urkundenRows||'<p class="mut">Noch keine entsprechenden Beförderungen.</p>')+'</section>':'')+
+    (verwalten?'<section class="box"><h3>Ernennungsurkunden · Polizeimeister <span class="tag '+(offeneUrkunden.length?'warn':'ok')+'">'+offeneUrkunden.length+' offen</span></h3>'+
+      '<p class="mut">Nur noch nicht erstellte Urkunden nach einer Beförderung von PMA zu PM. Die Dokumente werden im Google Drive des erstellenden Nutzers gespeichert.</p>'+
+      (offeneUrkunden.length?'<p class="mut" id="urkundenGoogleStatus">Prüfe Google-Anmeldung …</p>':'')+
+      (urkundenRows||'<p class="mut">Alle ausstehenden Ernennungsurkunden sind erstellt oder es liegen keine entsprechenden Beförderungen vor.</p>')+
+      '<details class="urkunden-archiv"><summary>Urkundenarchiv <span class="tag">'+archivierteUrkunden.length+'</span></summary>'+
+      '<p class="mut">Erfolgreich erstellte Ernennungsurkunden bleiben hier dokumentiert und können mit entsprechender Berechtigung geöffnet werden.</p>'+
+      (urkundenArchivRows||'<p class="mut">Noch keine Urkunden archiviert.</p>')+
+      '</details></section>':'')+
     '<div class="tw"><table><thead><tr>'+['Person','Aktuell','Nächster Rang','Letzte Bef.','Fällig am','Friststatus','POR-Freigabe','Hinweis','Aktion'].map(t=>'<th>'+t+'</th>').join('') +
     '</tr></thead><tbody>'+(rows||'<tr><td colspan="9">Keine geplanten Beförderungen</td></tr>')+'</tbody></table></div>' +
     '<div class="box"><h3>Beförderungsbedingungen</h3><div class="tw"><table><thead><tr>'+
