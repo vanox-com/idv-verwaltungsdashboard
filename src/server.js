@@ -760,6 +760,10 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
   const body=req.body&&typeof req.body==='object'&&!Array.isArray(req.body)?req.body:{};
   if(Object.hasOwn(body,'dienstgrad'))
     return res.status(409).json({error:'Dienstgrad ausschließlich über die Beförderungsverwaltung ändern'});
+  const beantragterRang=String(body.beantragter_rang||'').trim();
+  const rangBegruendung=String(body.rang_begruendung||'').trim();
+  if(beantragterRang && (beantragterRang.length>150||rangBegruendung.length>1000))
+    return res.status(400).json({error:'Ungültiger Rangänderungsantrag',feld:'dienstgrad'});
   if(!await darfVertraulichesPersonalBearbeiten(req.user.rolle,body))
     return res.status(403).json({error:'Kein Recht für vertrauliche Personalfelder'});
   const linkFehler=dokumentLinksValidieren(body);
@@ -793,6 +797,12 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
       await client.query('ROLLBACK');
       return res.status(404).json({error:'Personalakte nicht gefunden'});
     }
+    if(beantragterRang && beantragterRang!==vorher[0].dienstgrad){
+      const rangCheck=await client.query('SELECT 1 FROM raenge WHERE name=$1',[beantragterRang]);
+      if(!rangCheck.rowCount){await client.query('ROLLBACK');return res.status(400).json({error:'Gewählter Dienstgrad ist unbekannt',feld:'dienstgrad'});}
+      const open=await client.query("SELECT 1 FROM personal_rangantraege WHERE personalnummer=$1 AND status='beantragt'",[nr]);
+      if(open.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'Für diese Personalakte besteht bereits ein offener Rangantrag',feld:'dienstgrad'});}
+    }
     const wechsel=Object.hasOwn(body,'status')&&body.status==='Gekündigt'&&vorher[0].status!=='Gekündigt';
     if(wechsel){
       /* Das Recht für die Personalakte alleine berechtigt NICHT zur
@@ -817,6 +827,11 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
       'UPDATE personal SET '+felder.join(', ')+' WHERE personalnummer=$'+werte.length+
       ' RETURNING personalnummer,vorname,nachname,dienstgrad,handy,arbeitsvertrag,'+
       'ernennungsurkunde,arbeitsvertrag_url,ernennungsurkunde_url,eintrittsdatum',werte);
+    let rangantragAngelegt=false;
+    if(beantragterRang && beantragterRang!==vorher[0].dienstgrad){
+      await client.query('INSERT INTO personal_rangantraege(personalnummer,alter_rang,beantragter_rang,begruendung,antragsteller_id) VALUES($1,$2,$3,$4,$5)',[nr,vorher[0].dienstgrad||'',beantragterRang,rangBegruendung,req.user.id]);
+      rangantragAngelegt=true;
+    }
     let kuendigungAngelegt=false,kuendigungVorhanden=false;
     if(wechsel){
       const {rows:vorhanden}=await client.query(
@@ -852,7 +867,7 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
     await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
       [req.user.id,'Personal '+nr+' geändert'+(wechsel?' (Status: Gekündigt)':'')]);
     await client.query('COMMIT');
-    res.json({ok:true,kuendigung_angelegt:kuendigungAngelegt,kuendigung_vorhanden:kuendigungVorhanden});
+    res.json({ok:true,rangantrag_angelegt:rangantragAngelegt,kuendigung_angelegt:kuendigungAngelegt,kuendigung_vorhanden:kuendigungVorhanden});
   }catch(e){
     await client.query('ROLLBACK').catch(()=>{});
     next(e);
@@ -1163,7 +1178,7 @@ app.patch('/api/sonderzahlung/:id',requireLogin,requireRight('rout',2),
 
 
 /* Eigene Rangänderungen sind keine reguläre Beförderung und verlangen POR-Entscheidung. */
-app.get('/api/rangantraege',requireLogin,requireRight('bef',1),async(req,res,next)=>{
+app.get('/api/rangantraege',requireLogin,requireRight('pers',1),async(req,res,next)=>{
  try{
   const {rows}=await db.query(`SELECT a.id,a.personalnummer,a.alter_rang,a.beantragter_rang,a.begruendung,a.status,a.erstellt,
    p.vorname,p.nachname FROM personal_rangantraege a JOIN personal p ON p.personalnummer=a.personalnummer
