@@ -36,7 +36,7 @@ function dgLoadGoogle(){
  return dgScript;
 }
 void dgLoadGoogle().catch(()=>{});
-const dgNow=()=>new Date().toLocaleDateString('en-CA');
+const dgNow=()=>new Date().toLocaleDateString('sv-SE');
 function dgField(key,defaults){
  const [label,type]=DG_FIELDS[key];const value=defaults[key]||'';
  const input=type==='textarea'?'<textarea rows="4" id="dg_'+key+'" maxlength="3000">'+dgEsc(value)+'</textarea>':
@@ -60,55 +60,7 @@ async function dgTextbausteine(){
    liste.map((x,i)=>'<option value="'+i+'">'+dgEsc(x.titel)+'</option>').join('');
  window.dgCurrentBlocks=liste;
 }
-async function dgShow(typ,nr=0,kontext=0){
- if(!DG_TYPES[typ])return;
- const right=['abmahnung'].includes(typ)?'dis':['fristgerecht','fristlos'].includes(typ)?'kue':'pers';
- if(!can(right,2))return;
- const person=(D.personal||[]).find(x=>Number(x.personalnummer)===Number(nr));
- const name=person?[person.vorname,person.nachname].join(' '):'Externe Person';
- const defaults={datum:dgNow(),beginn:person?.eintrittsdatum?String(person.eintrittsdatum).slice(0,10):dgNow(),
-  unterzeichner:ME?.name||ME?.anzeigename||'',rang:'',
-  arbeitgeber:person?.nebenjob||''};
- let dlg=document.getElementById('dgDialog');
- if(!dlg){dlg=document.createElement('dialog');dlg.id='dgDialog';document.body.appendChild(dlg);}
- const fields=['datum','unterzeichner','rang',...DG_TYPES[typ][1]];
- const external=!person&&['praktikum','praktikumsbestaetigung'].includes(typ);
- const own=external?'<fieldset><legend>Praktikant (noch keine Personalakte)</legend>'+
-   '<div class="dg-grid">'+
-   '<div><label>Vorname</label><input id="dg_ext_vorname" maxlength="120" required></div>'+
-   '<div><label>Nachname</label><input id="dg_ext_nachname" maxlength="120" required></div>'+
-   '<div><label>Geburtsdatum</label><input type="date" id="dg_ext_geburtsdatum" required></div>'+
-   '</div></fieldset>':'';
- const snippets=['abmahnung','fristlos'].includes(typ)?
-  '<div class="dg-input"><label for="dg_block">Textbaustein einfügen</label><select id="dg_block"></select><p class="mut">Der Text kann anschließend vollständig bearbeitet werden.</p></div>':'';
- dlg.innerHTML='<div class="dg-head"><div><h2>'+DG_TYPES[typ][0]+'</h2><p class="mut">'+dgEsc(name)+
-   (nr?' · Nr. '+Number(nr):'')+'</p></div><button type="button" id="dg_close">✕</button></div>'+
-  '<p class="mut">Die Personaldaten werden automatisch aus der Akte eingesetzt. Freitextfelder kannst du bearbeiten. Die Originalvorlage bleibt unverändert.</p>'+
-  '<form id="dg_form">'+own+'<div class="dg-grid">'+
-   fields.map(k=>dgField(k,defaults)).join('')+'</div>'+snippets+
-  '<div class="dg-bottom"><span class="fehler" id="dg_error" role="alert"></span><button type="submit" class="p" id="dg_submit">Mit Google Drive erstellen</button></div></form>';
- dlg.showModal();document.getElementById('dg_close').onclick=()=>dlg.close();
- if(snippets){
-  void dgTextbausteine();
-  document.getElementById('dg_block').onchange=e=>{
-   const selected=window.dgCurrentBlocks?.[Number(e.target.value)];
-   const target=document.getElementById(typ==='abmahnung'?'dg_sachverhalt':'dg_begruendung');
-   if(selected&&target)target.value+=(target.value?'\n':'')+selected.inhalt;
-  };
- }
- document.getElementById('dg_form').onsubmit=async e=>{
-  e.preventDefault();
-  const data={};
-  for(const key of fields)data[key]=document.getElementById('dg_'+key)?.value?.trim()||'';
-  if(!data.unterzeichner.includes(' ')){document.getElementById('dg_error').textContent='Vor- und Nachname des Unterzeichners angeben.';return;}
-  const extern=external?{
-   vorname:document.getElementById('dg_ext_vorname').value.trim(),
-   nachname:document.getElementById('dg_ext_nachname').value.trim(),
-   geburtsdatum:document.getElementById('dg_ext_geburtsdatum').value
-  }:null;
-  const request={typ,nr:Number(nr)||0,kontext:Number(kontext)||0,felder:data,extern};
-  const btn=document.getElementById('dg_submit');btn.disabled=true;
-  btn.textContent='Google-Anmeldung …';
+async function dgPrepareAuth(){
   try{
    const result=await api('/dokumentgenerator/status');
    if(!result.eingerichtet)throw Error('Google OAuth ist noch nicht eingerichtet.');
@@ -139,9 +91,72 @@ async function dgShow(typ,nr=0,kontext=0){
      }
     });
    }
-   dgPending={payload:request,dialog:dlg,button:btn};
-   dgCodeClient.requestCode();
-  }catch(err){document.getElementById('dg_error').textContent=err.message;btn.disabled=false;btn.textContent='Mit Google Drive erstellen';}
+
+  }catch(err){throw err;}
+}
+async function dgShow(typ,nr=0,kontext=0){
+ if(!DG_TYPES[typ])return;
+ const right=['abmahnung'].includes(typ)?'dis':['fristgerecht','fristlos'].includes(typ)?'kue':'pers';
+ if(!can(right,2))return;
+ const person=(D.personal||[]).find(x=>Number(x.personalnummer)===Number(nr));
+ const name=person?[person.vorname,person.nachname].join(' '):'Externe Person';
+ const defaults={datum:dgNow(),beginn:person?.eintrittsdatum?String(person.eintrittsdatum).slice(0,10):dgNow(),
+  unterzeichner:ME?.name||ME?.anzeigename||'',rang:'',
+  arbeitgeber:person?.nebenjob||''};
+ let dlg=document.getElementById('dgDialog');
+ if(!dlg){dlg=document.createElement('dialog');dlg.id='dgDialog';document.body.appendChild(dlg);}
+ const fields=['datum','unterzeichner','rang',...DG_TYPES[typ][1]];
+ const external=!person&&['praktikum','praktikumsbestaetigung'].includes(typ);
+ const own=external?'<fieldset><legend>Praktikant (noch keine Personalakte)</legend>'+
+   '<div class="dg-grid">'+
+   '<div><label>Vorname</label><input id="dg_ext_vorname" maxlength="120" required></div>'+
+   '<div><label>Nachname</label><input id="dg_ext_nachname" maxlength="120" required></div>'+
+   '<div><label>Geburtsdatum</label><input type="date" id="dg_ext_geburtsdatum" required></div>'+
+   '</div></fieldset>':'';
+ const snippets=['abmahnung','fristlos'].includes(typ)?
+  '<div class="dg-input"><label for="dg_block">Textbaustein einfügen</label><select id="dg_block"></select><p class="mut">Der Text kann anschließend vollständig bearbeitet werden.</p></div>':'';
+ dlg.innerHTML='<div class="dg-head"><div><h2>'+DG_TYPES[typ][0]+'</h2><p class="mut">'+dgEsc(name)+
+   (nr?' · Nr. '+Number(nr):'')+'</p></div><button type="button" id="dg_close">✕</button></div>'+
+  '<p class="mut">Die Personaldaten werden automatisch aus der Akte eingesetzt. Freitextfelder kannst du bearbeiten. Die Originalvorlage bleibt unverändert.</p>'+
+  '<form id="dg_form">'+own+'<div class="dg-grid">'+
+   fields.map(k=>dgField(k,defaults)).join('')+'</div>'+snippets+
+  '<div class="dg-bottom"><span class="fehler" id="dg_error" role="alert"></span><button type="submit" class="p" id="dg_submit">Mit Google Drive erstellen</button></div></form>';
+ dlg.showModal();document.getElementById('dg_close').onclick=()=>dlg.close();
+ const createButton=document.getElementById('dg_submit');
+ createButton.disabled=true;createButton.textContent='Google-Anmeldung wird geladen …';
+ void dgPrepareAuth().then(()=>{
+  if(createButton.isConnected){createButton.disabled=false;createButton.textContent='Mit Google Drive erstellen';}
+ }).catch(err=>{
+  if(createButton.isConnected){document.getElementById('dg_error').textContent=err.message;createButton.textContent='Google nicht verfügbar';}
+ });
+ if(snippets){
+  void dgTextbausteine();
+  document.getElementById('dg_block').onchange=e=>{
+   const selected=window.dgCurrentBlocks?.[Number(e.target.value)];
+   const target=document.getElementById(typ==='abmahnung'?'dg_sachverhalt':'dg_begruendung');
+   if(selected&&target)target.value+=(target.value?'\n':'')+selected.inhalt;
+  };
+ }
+ document.getElementById('dg_form').onsubmit=async e=>{
+  e.preventDefault();
+  const data={};
+  for(const key of fields)data[key]=document.getElementById('dg_'+key)?.value?.trim()||'';
+  if(!data.unterzeichner.includes(' ')){document.getElementById('dg_error').textContent='Vor- und Nachname des Unterzeichners angeben.';return;}
+  const extern=external?{
+   vorname:document.getElementById('dg_ext_vorname').value.trim(),
+   nachname:document.getElementById('dg_ext_nachname').value.trim(),
+   geburtsdatum:document.getElementById('dg_ext_geburtsdatum').value
+  }:null;
+  const request={typ,nr:Number(nr)||0,kontext:Number(kontext)||0,felder:data,extern};
+  const btn=document.getElementById('dg_submit');btn.disabled=true;
+  btn.textContent='Google-Anmeldung …';
+  if(!dgCodeClient){
+   document.getElementById('dg_error').textContent='Google-Anmeldung wird vorbereitet. Bitte erneut versuchen.';
+   btn.disabled=false;btn.textContent='Mit Google Drive erstellen';return;
+  }
+  dgPending={payload:request,dialog:dlg,button:btn};
+  try{dgCodeClient.requestCode();}
+  catch(err){dgPending=null;document.getElementById('dg_error').textContent=err.message;btn.disabled=false;btn.textContent='Mit Google Drive erstellen';}
  };
 }
 window.dgShow=dgShow;
