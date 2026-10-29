@@ -1112,6 +1112,62 @@ html[data-portal-mode="hell"][data-portal-wallpaper="einsatzszene"]:not([data-de
   html[data-portal-wallpaper="einsatzszene"] #app{background-attachment:scroll!important;background-position:40% center!important}
 }
 
+
+/* Login: das Einsatzfoto bleibt erkennbar, stört aber nicht bei der Anmeldung. */
+#login:before{
+  filter:blur(3px) saturate(.82) brightness(.76)!important;
+  transform:scale(1.016);
+  opacity:1;
+}
+#login:after{
+  background:
+    linear-gradient(0deg,rgba(4,10,18,.80) 0%,rgba(4,10,18,.12) 38%,rgba(4,10,18,.55) 100%),
+    linear-gradient(90deg,rgba(5,12,21,.83) 0%,rgba(8,17,27,.66) 50%,rgba(6,12,20,.81) 100%)!important;
+}
+
+/* Die Hintergrundauswahl gilt auch im Hellmodus. Vorher überdeckte dessen
+   generische #app-Regel sämtliche Motivwechsel. */
+html[data-portal-mode="hell"][data-portal-wallpaper="wappen"]:not([data-design-preset="flori"]) #app{
+ background-color:#e8edf5!important;
+ background-image:linear-gradient(125deg,rgba(238,244,251,.91),rgba(224,235,248,.93)),url('/assets/idv-polizei-logo-transparent.svg')!important;
+ background-size:cover,min(62vw,780px) auto!important;
+ background-position:center,78% 48%!important;
+ background-repeat:no-repeat!important;
+}
+html[data-portal-mode="hell"][data-portal-wallpaper="verlauf"]:not([data-design-preset="flori"]) #app{
+ background-color:#edf2f9!important;
+ background-image:linear-gradient(125deg,rgba(231,242,255,.95),rgba(235,229,250,.95)),radial-gradient(circle at 80% 20%,#a4d7f5,transparent 65%)!important;
+ background-size:cover!important;
+}
+html[data-portal-mode="hell"][data-portal-wallpaper="nachtblau"]:not([data-design-preset="flori"]) #app{
+ background-color:#dbe9f6!important;
+ background-image:linear-gradient(125deg,rgba(222,237,250,.94),rgba(186,209,232,.94)),radial-gradient(circle at 75% 20%,#8ab9e0,transparent 60%)!important;
+ background-size:cover!important;
+}
+html[data-portal-mode="hell"][data-portal-wallpaper="stahl"]:not([data-design-preset="flori"]) #app{
+ background-color:#e5e9ed!important;
+ background-image:linear-gradient(120deg,#f0f3f6,#d4dce4 65%,#e7edf3)!important;
+ background-size:cover!important;
+}
+html[data-portal-mode="hell"][data-portal-wallpaper="raster"]:not([data-design-preset="flori"]) #app{
+ background-color:#e5edf7!important;
+ background-image:linear-gradient(rgba(104,140,179,.16) 1px,transparent 1px),linear-gradient(90deg,rgba(104,140,179,.16) 1px,transparent 1px),linear-gradient(135deg,#edf5fc,#dce7f5)!important;
+ background-size:55px 55px,55px 55px,cover!important;
+}
+html[data-portal-mode="hell"][data-portal-wallpaper="licht"]:not([data-design-preset="flori"]) #app{
+ background-color:#e3f0fc!important;
+ background-image:radial-gradient(ellipse at 83% 10%,rgba(var(--portal-rgb,91,134,186),.21),transparent 55%),radial-gradient(ellipse at 6% 95%,#c7e3ff,transparent 60%),linear-gradient(120deg,#f0f7ff,#dceaf8)!important;
+ background-size:cover!important;
+}
+html[data-portal-mode="hell"][data-portal-wallpaper="minimal"]:not([data-design-preset="flori"]) #app{
+ background-color:#edf2f7!important;
+ background-image:linear-gradient(115deg,#f7f9fc,#e4ebf4 50%,#f0f4f9)!important;
+ background-size:cover!important;
+}
+html[data-portal-mode="hell"][data-portal-wallpaper="ohne"]:not([data-design-preset="flori"]) #app{
+ background-color:#e8edf5!important;background-image:none!important;
+}
+
 </style>
 </head>
 <body>
@@ -4061,10 +4117,26 @@ async function ladeDesign(){
    '</select><h3>Farben &amp; Anzeigemodus</h3><label for="designModus">Anzeigemodus</label><select id="designModus"><option value="dunkel"'+((d.extras?.modus||'dunkel')==='dunkel'?' selected':'')+'>Dunkel</option><option value="hell"'+(d.extras?.modus==='hell'?' selected':'')+'>Hell</option></select>'+
    '<div class="design-colors">'+[['flaeche','Karten und Flächen'],['seitenleiste','Seitenleiste'],['rahmen','Rahmen und Trennlinien'],['schrift','Schriftfarbe'],['sekundaer','Sekundärtext'],['highlight','Hervorhebungen']].map(([key,title])=>'<label>'+title+'<input type="color" data-design-color="'+key+'" value="'+esc(d.extras?.[key]||((d.extras?.modus==='hell'?{flaeche:'#ffffff',seitenleiste:'#e9eff7',rahmen:'#c6d1df',schrift:'#15253b',sekundaer:'#52677f',highlight:'#e6f0ff'}:{flaeche:'#182333',seitenleiste:'#0b111a',rahmen:'#26354b',schrift:'#e6edf6',sekundaer:'#8ea0b8',highlight:'#203958'})[key]))+'"></label>').join('')+'</div>'+
    '<div class="actions"><button type="button" id="designPreview">Vorschau</button><button type="button" class="p" id="designPersonalSave">Mein Design speichern</button><button type="button" id="designReset">Admin-Standard übernehmen</button>'+(ME.rolle==='Administrator'?'<button type="button" id="designSave">Standard für alle speichern</button>':'')+'</div>'+
-   '<p class="mut">Das Originalwappen bleibt unverändert. Die Vorschau verändert nur deinen Browser bis zum erneuten Laden.</p></section>';
+   '<p class="mut">Änderungen an Motiv, Farben und Schleier werden sofort als Vorschau angezeigt. Erst „Mein Design speichern“ übernimmt sie dauerhaft für dein Konto.</p></section>';
  }catch(err){area.textContent='Design konnte nicht geladen werden: '+err.message;}
 }
 let ausgewaehltesDesignPreset='';
+/* Designänderungen unmittelbar anzeigen. Bei manueller Motiv- oder Moduswahl
+   verlässt das Benutzerkonto das reine Florimodus-Preset, damit dessen
+   Kuhflecken den ausgewählten Hintergrund nicht überdecken. */
+function designEingabeVorschau(ev){
+ const el=ev.target;
+ if(!el||!el.matches||!el.matches('#designMotiv,#designModus,#designAkzent,#designSchleier,[data-design-color]'))return;
+ if(!document.querySelector('#designMotiv')||!document.querySelector('#designModus'))return;
+ if(el.matches('#designMotiv,#designModus'))ausgewaehltesDesignPreset='';
+ applyPortalDesign(aktuelleDesignWerte());
+ if(el.id==='designSchleier'){
+  const lbl=document.querySelector('label[for="designSchleier"]');
+  if(lbl)lbl.textContent='Dunkler Schleier ('+Number(el.value)+' %)';
+ }
+}
+document.addEventListener('input',designEingabeVorschau);
+document.addEventListener('change',designEingabeVorschau);
 function aktuelleDesignWerte(){
  return {akzent:$('#designAkzent').value,schleier:Number($('#designSchleier').value),hintergrund:$('#designMotiv').value,extras:{...(ausgewaehltesDesignPreset==='flori'?{preset:'flori'}:{}),modus:$('#designModus').value,...Object.fromEntries([...document.querySelectorAll('[data-design-color]')].map(x=>[x.dataset.designColor,x.value]))}};
 }
