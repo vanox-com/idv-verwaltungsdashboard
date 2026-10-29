@@ -1113,16 +1113,16 @@ html[data-portal-mode="hell"][data-portal-wallpaper="einsatzszene"]:not([data-de
 }
 
 
-/* Login: das Einsatzfoto bleibt erkennbar, stört aber nicht bei der Anmeldung. */
+/* Login: ausgewogener Schleier zwischen der ursprünglichen und der dunkleren Ansicht. */
 #login:before{
-  filter:blur(3px) saturate(.82) brightness(.76)!important;
-  transform:scale(1.016);
+  filter:blur(1.5px) saturate(.93) brightness(.85)!important;
+  transform:scale(1.01);
   opacity:1;
 }
 #login:after{
   background:
-    linear-gradient(0deg,rgba(4,10,18,.80) 0%,rgba(4,10,18,.12) 38%,rgba(4,10,18,.55) 100%),
-    linear-gradient(90deg,rgba(5,12,21,.83) 0%,rgba(8,17,27,.66) 50%,rgba(6,12,20,.81) 100%)!important;
+    linear-gradient(0deg,rgba(4,10,18,.78) 0%,rgba(4,10,18,.06) 38%,rgba(4,10,18,.52) 100%),
+    linear-gradient(90deg,rgba(5,12,21,.75) 0%,rgba(8,17,27,.45) 50%,rgba(6,12,20,.73) 100%)!important;
 }
 
 /* Die Hintergrundauswahl gilt auch im Hellmodus. Vorher überdeckte dessen
