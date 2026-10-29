@@ -1056,6 +1056,26 @@ html[data-design-preset="flori"] button:hover{transform:rotate(-1.3deg)}
 html[data-design-preset="flori"] #inhalt h2::after{content:' 🐮'}
 html[data-design-preset="flori"] .p{border:2px solid #6a431d!important}
 html[data-design-preset="flori"] .design-preset-grid [data-design-preset="flori"]{outline:3px dashed #976737}
+
+/* Kündigungsdokumente: schmale Linkliste; Formular nur im eigenen Dialog. */
+.kue-doc-links{display:flex;flex-direction:column;gap:6px;align-items:flex-start;max-width:100%;min-width:0}
+.kue-document-link,.kue-document-missing{display:inline-flex;gap:5px;align-items:center;font-size:11px;line-height:1.35;text-align:left;max-width:100%;overflow-wrap:anywhere}
+.kue-document-link{color:#8dc6ff;text-decoration:underline;text-underline-offset:2px}
+.kue-document-link:hover{color:#c5e5ff}
+.kue-document-missing{color:var(--mut);opacity:.8}
+.kue-document-missing small{font-size:10px;opacity:.8}
+.kue-docs-open{margin-top:10px;width:100%;font-size:11px;padding:6px 5px;background:var(--panel);border:1px solid var(--line);white-space:normal}
+#kueDocsDialog{width:min(750px,calc(100vw - 28px));max-height:min(92vh,950px);overflow:auto;padding:24px;background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:16px;box-shadow:0 22px 80px rgba(0,0,0,.45)}
+#kueDocsDialog::backdrop{background:rgba(4,12,25,.75);backdrop-filter:blur(3px)}
+#kueDocsDialog .kue-dialog-head{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+#kueDocsDialog h2{margin:0 0 5px}
+#kueDocsDialog .kue-dialog-head button{flex-shrink:0;padding:5px 10px}
+#kueDocsDialog fieldset{min-width:0;border:1px solid var(--line);border-radius:12px;padding:10px 15px 15px;margin:14px 0}
+#kueDocsDialog legend{font-weight:700;padding:0 7px}
+#kueDocsDialog label{margin:8px 0 4px}
+#kueDocsDialog input{padding:9px 11px;width:100%;box-sizing:border-box}
+#kueDocsDialog .actions{justify-content:flex-end;position:sticky;bottom:-24px;background:var(--panel);padding:14px 0 4px;border-top:1px solid var(--line)}
+
 </style>
 </head>
 <body>
@@ -2473,33 +2493,54 @@ const KUE_STATUS = [
   ['anzeige','Anzeige']
 ];
 function kueWert(k,feld) { return String(k[feld] || (feld === 'anzeige' ? 'Nein' : 'Offen')); }
-function kueDokument(raw) {
-  if (!raw) return '–';
-  let t=String(raw),url='';
-  try {
-    const d=JSON.parse(t);
-    if(d && typeof d==='object') {t=String(d.t || 'Dokument');url=String(d.u || '');}
-  }catch(e){}
-  if(!url && /^https:\/\/[^\s]+$/i.test(t)) url=t;
-  return /^https:\/\/[^\s]+$/i.test(url)
-    ? '<a class="l" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(t)+'</a>'
-    : esc(t);
+function kueDokInfo(raw){
+ let name=String(raw||'').trim(),url='';
+ if(name.startsWith('{'))try{
+  const o=JSON.parse(name);if(o&&typeof o==='object'&&!Array.isArray(o)){name=String(o.t||'').trim();url=String(o.u||'').trim();}
+ }catch(e){}
+ if(!url&&/^https:\/\/[^\s]+$/i.test(name)){url=name;name='';}
+ try{const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password)url='';}
+ catch(e){url='';}
+ return {name,url};
 }
-document.addEventListener('click',async e=>{
- const btn=e.target.closest('[data-kue-doc-id]');if(!btn||!can('kue',2))return;
- const id=Number(btn.dataset.kueDocId),feld=btn.dataset.kueDocFeld;
- const k=(D.kuendigungen||[]).find(x=>Number(x.id)===id);
- if(!k||!['vertrag','urkunde','zeugnis','kuendigung'].includes(feld))return;
- let name='',url='';
- try{const val=JSON.parse(k[feld]||'');if(val&&typeof val==='object'){name=val.t||'';url=val.u||'';}}
- catch{name=String(k[feld]||'');if(/^https:\/\//.test(name)){url=name;name='';}}
- const neuerName=prompt('Dokumentenname ('+feld+'):',name);if(neuerName===null)return;
- const neuerLink=prompt('Dokumentenlink (HTTPS, leer = kein Link):',url);if(neuerLink===null)return;
- try{
-  await api('/kuendigung/'+id+'/dokument',{method:'PATCH',body:JSON.stringify({feld,name:neuerName,url:neuerLink})});
-  await starten();
- }catch(err){alert('Dokument konnte nicht gespeichert werden: '+err.message);}
-});
+function kueDokument(raw,feld){
+ const d=kueDokInfo(raw),labels={vertrag:'Arbeitsvertrag',urkunde:'Ernennungsurkunde',zeugnis:'Arbeitszeugnis',kuendigung:'Kündigung'};
+ const title=d.name&&d.name!=='////'?d.name:labels[feld];
+ return d.url?'<a class="kue-document-link" href="'+esc(d.url)+'" target="_blank" rel="noopener noreferrer" title="'+esc(title)+'">'+esc(labels[feld])+' <span aria-hidden="true">↗</span></a>':
+  '<span class="kue-document-missing" title="'+esc(d.name||'Kein Dokumentlink')+'">'+esc(labels[feld])+' <small>ohne Link</small></span>';
+}
+function kueDocsDialog(id){
+ if(!can('kue',2))return;
+ const k=(D.kuendigungen||[]).find(x=>Number(x.id)===Number(id));if(!k)return;
+ const felder=[['vertrag','Arbeitsvertrag'],['urkunde','Ernennungsurkunde'],['zeugnis','Arbeitszeugnis'],['kuendigung','Kündigung']];
+ let d=document.getElementById('kueDocsDialog');
+ if(!d){d=document.createElement('dialog');d.id='kueDocsDialog';document.body.appendChild(d);}
+ d.innerHTML='<div class="kue-dialog-head"><div><h2>Dokumente bearbeiten</h2><p class="mut">'+esc([k.vorname,k.nachname].filter(Boolean).join(' '))+' · Personalnummer '+Number(k.personalnummer||0)+'</p></div><button type="button" id="kueDocsClose" aria-label="Schließen">✕</button></div>'+
+ '<p class="mut">Namen und Dokumentlinks gehören nur zu diesem Kündigungsvorgang. Vorhandene Links lassen sich direkt aus der Übersicht öffnen.</p>'+
+ '<form id="kueDocsForm">'+felder.map(([f,label])=>{const info=kueDokInfo(k[f]);return '<fieldset class="kue-doc-fieldset"><legend>'+label+'</legend>'+
+ '<label for="kueDocName_'+f+'">Dokumentenname</label><input id="kueDocName_'+f+'" maxlength="250" value="'+esc(info.name)+'">'+
+ '<label for="kueDocUrl_'+f+'">Dokumentlink (HTTPS)</label><input id="kueDocUrl_'+f+'" type="url" placeholder="https://docs.google.com/..." maxlength="2048" value="'+esc(info.url)+'">'+
+ (info.url?'<a class="l" href="'+esc(info.url)+'" target="_blank" rel="noopener noreferrer">Aktuelles Dokument öffnen ↗</a>':'')+'</fieldset>'}).join('')+
+ '<p id="kueDocsFehler" class="fehler" role="alert"></p><div class="actions"><button type="button" id="kueDocsCancel">Abbrechen</button><button type="submit" class="p" id="kueDocsSave">Dokumente speichern</button></div></form>';
+ d.showModal();
+ const close=()=>d.close();
+ d.querySelector('#kueDocsClose').onclick=close;
+ d.querySelector('#kueDocsCancel').onclick=close;
+ d.querySelector('#kueDocsForm').onsubmit=async event=>{
+  event.preventDefault();const btn=d.querySelector('#kueDocsSave'),err=d.querySelector('#kueDocsFehler');
+  const dokumente=Object.fromEntries(felder.map(([f])=>[f,{name:d.querySelector('#kueDocName_'+f).value.trim(),url:d.querySelector('#kueDocUrl_'+f).value.trim()}]));
+  btn.disabled=true;err.textContent='';
+  try{
+   const result=await api('/kuendigung/'+id+'/dokumente',{method:'PATCH',body:JSON.stringify({dokumente})});
+   for(const [f] of felder)k[f]=result.dokumente[f];
+   close();if(tab==='kue')zeichne();
+  }catch(error){
+   err.textContent='Speichern fehlgeschlagen: '+error.message;
+   const feld=error.feld;if(feld&&d.querySelector('#kueDocUrl_'+feld))d.querySelector('#kueDocUrl_'+feld).focus();
+  }finally{btn.disabled=false;}
+ };
+}
+document.addEventListener('click',e=>{const btn=e.target.closest('[data-kue-docs-edit]');if(btn)kueDocsDialog(Number(btn.dataset.kueDocsEdit));});
 function vKue() {
   const schreiben=can('kue',2),eintraege=D.kuendigungen || [];
   const rows=eintraege.map(k=>{
@@ -2510,7 +2551,7 @@ function vKue() {
       return schreiben ? '<button type="button" class="tag kue-status '+cls+'" title="Status umschalten" data-kue-id="'+Number(k.id)+'" data-kue-field="'+feld+'">'+text+'</button>'
         : '<span class="tag '+cls+'">'+text+'</span>';
     }).join(' ');
-    const docs=['vertrag','urkunde','zeugnis','kuendigung'].map(x=>'<div class="kue-doc-row">'+kueDokument(k[x])+(schreiben?' <button type="button" class="kue-doc-edit" data-kue-doc-id="'+Number(k.id)+'" data-kue-doc-feld="'+x+'">Link bearbeiten</button>':'')+'</div>').join('');
+    const docs='<div class="kue-doc-links">'+['vertrag','urkunde','zeugnis','kuendigung'].map(x=>kueDokument(k[x],x)).join('')+'</div>'+(schreiben?'<button type="button" class="kue-docs-open" data-kue-docs-edit="'+Number(k.id)+'">Dokumente bearbeiten</button>':'');
     return '<tr><td>'+esc(k.personalnummer)+'</td><td><strong>'+esc([k.vorname,k.nachname].filter(Boolean).join(' '))+'</strong> '+
       '<span class="tag '+(offen?'warn':'ok')+'">'+(offen?offen+' offen':'erledigt')+'</span></td>'+
       '<td>'+esc(k.rang||'–')+'</td><td>'+esc(k.grund||'–')+'</td><td>'+fd(k.eintritt)+'</td>'+
