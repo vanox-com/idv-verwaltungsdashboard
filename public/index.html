@@ -990,6 +990,8 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
  linear-gradient(135deg,#101923,#1b2d40)!important}
 html[data-portal-wallpaper="verlauf"] #app{background-image:linear-gradient(125deg,rgba(12,20,31,var(--veil)),rgba(16,26,40,var(--veil))),radial-gradient(ellipse at 80% 15%,rgba(var(--portal-rgb,91,134,186),.3),transparent 60%),linear-gradient(135deg,#101923,#1b2d40)!important;background-size:cover!important}
 html[data-portal-wallpaper="ohne"] #app{background-image:none!important;background-color:#151d28!important}
+
+.favoriten-links{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}.favoriten-links button{display:flex;align-items:center;gap:8px}.fav-check{display:inline-flex;gap:9px;align-items:center;margin:10px 18px 10px 0}.fav-check input{width:auto}.stat-dev-row{display:grid;grid-template-columns:80px minmax(100px,1fr) 35px;align-items:center;gap:13px;margin:13px 0}.stat-dev-track{height:12px;border-radius:12px;background:rgba(145,167,190,.16);overflow:hidden}.stat-dev-track i{display:block;height:100%;border-radius:12px;background:var(--acc)}
 </style>
 </head>
 <body>
@@ -1045,16 +1047,16 @@ const MODS = [
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
-  ['design','Designverwaltung','🎨'],['backup','Backup-Übersicht','🗄️'],['users','Benutzer & Rollen','🔐'],['system','Systemverwaltung','⚙️'],['meldungen','Mitteilungen verwalten','📣'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾']
+  ['favoriten','Favoriten','⭐'],['entwicklung','Personalentwicklung','📉'],['rechtesimulator','Berechtigungs-Simulator','🛡️'],['design','Designverwaltung','🎨'],['backup','Backup-Übersicht','🗄️'],['users','Benutzer & Rollen','🔐'],['system','Systemverwaltung','⚙️'],['meldungen','Mitteilungen verwalten','📣'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾']
 ];
 /* Sidebar: dieselben Module und Rechte, nur übersichtlich gruppiert.
    Ein aktives Modul hält seine Kategorie immer geöffnet. */
 const NAV_GRUPPEN = [
-  {id:'uebersicht',titel:'Übersicht',module:['dash']},
-  {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','rout','geb','jub' ,'statistik']},
+  {id:'uebersicht',titel:'Übersicht',module:['dash','favoriten']},
+  {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','rout','geb','jub' ,'statistik','entwicklung']},
   {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
-  {id:'verwaltung',titel:'Administration',module:['users','system','meldungen','design','backup','log']}
+  {id:'verwaltung',titel:'Administration',module:['users','system','meldungen','rechtesimulator','design','backup','log']}
 ];
 const NAV_OFFEN = new Set(['uebersicht','personal']);
 let ME = null, D = null, tab = 'dash';
@@ -1063,7 +1065,7 @@ let copnetGeladen = null, copnetNummer = null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fd = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('.') : '';
-const can = (m, l = 1) => ME && (m === 'system' ? ME.rolle === 'Administrator' : m === 'meldungen' ? (ME.rechte.mitteilungen || 0) >= 2 : m === 'statistik' ? (ME.rechte.pers || 0) >= l : (ME.rechte[m] || 0) >= l);
+const can = (m, l = 1) => ME && (m === 'favoriten' ? true : m === 'entwicklung' ? (ME.rechte.pers || 0) >= l : m === 'system' ? ME.rolle === 'Administrator' : m === 'meldungen' ? (ME.rechte.mitteilungen || 0) >= 2 : m === 'statistik' ? (ME.rechte.pers || 0) >= l : (ME.rechte[m] || 0) >= l);
 
 /* Dienstgradabzeichen: dunkles texturiertes Schulterstück, farbige Rangsterne.
    Die drei RP-Führungsränge zeigen stilisiertes hessisches Gold-Eichenlaub
@@ -1374,6 +1376,9 @@ function navIcon(id) {
     meldungen: '<path d="M3 11v3l4 1 2 5h3l-2-5 9 3V7l-9 3H5a2 2 0 0 0-2 1zM21 10v5"/>',
     design: '<path d="M12 3a9 9 0 1 0 0 18h2a2 2 0 0 0 1-4 2 2 0 0 1 1-4h2a3 3 0 0 0 3-3 9 9 0 0 0-9-7z"/><circle cx="7.5" cy="10" r="1"/><circle cx="12" cy="7" r="1"/><circle cx="17" cy="10" r="1"/>',
     backup: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 2 16 2 16 0V5M4 12v7c0 2 16 2 16 0v-7"/><path d="M9 17h6"/>',
+    favoriten: '<path d="m12 3 2.8 5.9 6.5 1-4.7 4.5 1.1 6.6-5.7-3-5.7 3 1.1-6.6-4.7-4.5 6.5-1z"/>',
+    entwicklung: '<path d="M3 20h18M4 16l5-5 4 3 7-9"/><path d="M16 5h4v4"/>',
+    rechtesimulator: '<path d="M12 2 20 6v6c0 5-4 8-8 10-4-2-8-5-8-10V6z"/><path d="m8 12 3 3 5-6"/>',
     statistik: '<path d="M3 21h18M5 17V9h4v8M11 17V4h4v13M17 17v-6h4v6"/><path d="M3 21V3"/>',
     users: '<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M18 6v6M15 9h6"/>',
     log: '<path d="M7 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 8h8M9 12h8M9 16h5"/>'
@@ -1452,6 +1457,9 @@ function zeichne() {
     if(tab === 'meldungen') ladeMeldungen();
     if(tab === 'statistik') ladeStatistik();
     if(tab === 'backup') ladeBackup();
+    if(tab === 'favoriten') ladeFavoriten();
+    if(tab === 'entwicklung') ladeEntwicklung();
+    if(tab === 'rechtesimulator') ladeRechteSimulator();
     if(tab === 'design') ladeDesign();
     if(tab === 'users') ladeBenutzer().catch(err => { if($('#benutzerBereich')) $('#benutzerBereich').textContent = 'Benutzerverwaltung konnte nicht geladen werden: ' + err.message; });
   } catch (err) {
@@ -3806,6 +3814,61 @@ document.addEventListener('click',async ev=>{
  }
 });
 
+
+/* Personalisierung und Rechteansicht – bestehende Module werden nur verlinkt. */
+const FAVORITEN_ERLAUBT=new Set(['dash','pers','bef','sonder','kue','dis','rout','chk','texte','rl','org','sperr','geb','jub','bl','users','log','system','meldungen','statistik','entwicklung','design','backup','rechtesimulator','favoriten']);
+async function ladeFavoriten(){
+ const el=$('#inhalt');el.innerHTML='<h1>Favoriten & Schnellzugriffe</h1><p>Lade …</p>';
+ try{
+  const fav=await api('/favoriten');
+  const erlaubt=MODS.filter(m=>m[0]!=='favoriten'&&can(m[0]));
+  el.innerHTML='<h1>Favoriten & Schnellzugriffe</h1><p class="mut">Speichere deine häufig genutzten Bereiche. Die Favoriten gelten nur für dein Konto.</p>'+
+   '<section class="box"><h3>Meine Schnellzugriffe</h3><div class="favoriten-links">'+
+   (fav.length?fav.map(id=>{const m=MODS.find(x=>x[0]===id);return m&&can(id)?'<button type="button" data-fav-open="'+esc(id)+'">'+navIcon(id)+' '+esc(m[1])+'</button>':'';}).join(''):'<p class="mut">Noch keine Favoriten.</p>')+'</div></section>'+
+   '<section class="box"><h3>Bereiche auswählen</h3>'+erlaubt.map(m=>'<label class="fav-check"><input type="checkbox" data-fav-id="'+esc(m[0])+'" '+(fav.includes(m[0])?'checked':'')+'> '+esc(m[1])+'</label>').join('')+
+   '<div class="actions"><button type="button" class="p" id="favSave">Favoriten speichern</button></div></section>';
+ }catch(e){el.textContent='Favoriten konnten nicht geladen werden: '+e.message;}
+}
+async function ladeEntwicklung(){
+ const el=$('#inhalt');el.innerHTML='<h1>Personalentwicklung</h1><p>Lade …</p>';
+ try{
+  const data=await api('/personalentwicklung');
+  const list=data.eintritte||[],max=Math.max(1,...list.map(x=>Number(x.anzahl)));
+  el.innerHTML='<h1>Personalentwicklung</h1><p class="mut">'+esc(data.hinweis)+'</p>'+
+   '<section class="box"><h3>Dokumentierte Eintritte nach Monat</h3>'+
+   (list.length?list.map(x=>'<div class="stat-dev-row"><span>'+esc(x.monat)+'</span><div class="stat-dev-track"><i style="width:'+Math.round(100*Number(x.anzahl)/max)+'%"></i></div><strong>'+Number(x.anzahl)+'</strong></div>').join(''):'<p class="mut">Keine datierten Eintritte vorhanden.</p>')+'</section>'+
+   '<section class="box"><h3>Explizit protokollierte Austritte</h3>'+
+   tabelle(['Monat','Einträge'],(data.austritteProtokoll||[]).map(x=>[esc(x.monat),Number(x.anzahl)]))+'</section>';
+ }catch(e){el.textContent='Personalentwicklung konnte nicht geladen werden: '+e.message;}
+}
+async function ladeRechteSimulator(){
+ const el=$('#inhalt');el.innerHTML='<h1>Berechtigungs-Simulator</h1><p>Lade …</p>';
+ if(!can('rechtesimulator'))return;
+ try{
+  const users=await api('/rechtesimulator');
+  el.innerHTML='<h1>Berechtigungs-Simulator</h1><p class="mut">Nur lesen: Die Ansicht ändert keine Berechtigungen.</p>'+
+   '<section class="box"><label for="simPerson">Benutzerkonto</label><select id="simPerson">'+
+   users.map(u=>'<option value="'+Number(u.id)+'">'+esc(u.anzeigename+' · '+u.dienstnummer+' · '+u.rolle)+'</option>').join('')+
+   '</select><button type="button" id="simAnzeigen">Effektive Rechte prüfen</button><div id="simErgebnis"></div></section>';
+ }catch(e){el.textContent='Berechtigungen konnten nicht geladen werden: '+e.message;}
+}
+document.addEventListener('click',async ev=>{
+ const open=ev.target.closest('[data-fav-open]');
+ if(open){if(FAVORITEN_ERLAUBT.has(open.dataset.favOpen)&&can(open.dataset.favOpen))wechsleZuModul(open.dataset.favOpen);return;}
+ if(ev.target.closest('#favSave')){
+  const module=[...document.querySelectorAll('[data-fav-id]:checked')].map(x=>x.dataset.favId);
+  try{await api('/favoriten',{method:'PUT',body:JSON.stringify({module})});await ladeFavoriten();}catch(e){alert('Favoriten konnten nicht gespeichert werden: '+e.message);}
+ }
+ if(ev.target.closest('#simAnzeigen')&&can('rechtesimulator')){
+  const out=$('#simErgebnis');if(!out)return;
+  try{
+   const r=await api('/rechtesimulator/'+Number($('#simPerson').value));
+   const rows=Object.entries(r.rechte||{}).sort(([a],[b])=>a.localeCompare(b,'de'));
+   out.innerHTML='<h3>'+esc(r.user.anzeigename)+'</h3>'+(r.user.gesperrt?'<p class="fehler">Benutzerkonto ist gesperrt.</p>':'')+
+    tabelle(['Modul','Zugriff'],rows.map(([m,v])=>[esc(MODS.find(x=>x[0]===m)?.[1]||m),v===2?'Bearbeiten':v===1?'Lesen':'Kein Zugriff']));
+  }catch(e){out.textContent='Rechte konnten nicht geladen werden: '+e.message;}
+ }
+});
 /* ---------- Start ---------- */
 
 (async () => {
