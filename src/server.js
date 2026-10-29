@@ -229,7 +229,7 @@ app.post('/api/passwort', async (req, res, next) => {
 });
 
 /* Globale Startseiten-Kacheln: ausschließlich feste IDs ohne freies HTML. */
-const DASHBOARD_WIDGET_IDS=new Set(["kpi-personal","kpi-kuendigungen","kpi-rueckgaben","kpi-disziplin","kpi-aktiv","kpi-neu30","kpi-urlaub","kpi-bef","panel-bef","panel-gruppen","panel-inaktiv","panel-geb","panel-jub","panel-dienstblatt","panel-links","panel-vorlagen","panel-info","panel-status","panel-neue"]);
+const DASHBOARD_WIDGET_IDS=new Set(["kpi-personal","kpi-kuendigungen","kpi-rueckgaben","kpi-disziplin","kpi-aktiv","kpi-neu30","kpi-urlaub","kpi-bef","panel-bef","panel-gruppen","panel-inaktiv","panel-geb","panel-jub","panel-dienstblatt","panel-links","panel-vorlagen","panel-info","panel-status","panel-neue","panel-bekanntmachungen"]);
 
 
 /* Globale Dashboard-Anordnung darf nur ein Administrator verändern.
@@ -260,6 +260,38 @@ app.put('/api/dashboard-layout',requireLogin,async(req,res,next)=>{
   }catch(err){next(err)}
 });
 
+/* Dienstliche Bekanntmachungen: nur Administratoren können Inhalte verändern. */
+app.post('/api/bekanntmachungen',requireLogin,async(req,res,next)=>{
+  try {
+    if(req.user.rolle!=='Administrator')return res.status(403).json({error:'Nur Administratoren'});
+    const titel=String(req.body?.titel||'').trim(),inhalt=String(req.body?.inhalt||'').trim();
+    if(!titel||!inhalt||titel.length>140||inhalt.length>3000)
+      return res.status(400).json({error:'Titel (max. 140) und Inhalt (max. 3000) erforderlich'});
+    const {rows}=await db.query('INSERT INTO bekanntmachungen(titel,inhalt) VALUES($1,$2) RETURNING id',[titel,inhalt]);
+    res.json(rows[0]);
+  }catch(e){next(e)}
+});
+app.put('/api/bekanntmachungen/:id',requireLogin,async(req,res,next)=>{
+  try {
+    if(req.user.rolle!=='Administrator')return res.status(403).json({error:'Nur Administratoren'});
+    const id=Number(req.params.id),titel=String(req.body?.titel||'').trim(),inhalt=String(req.body?.inhalt||'').trim();
+    if(!Number.isSafeInteger(id)||id<1||!titel||!inhalt||titel.length>140||inhalt.length>3000)
+      return res.status(400).json({error:'Ungültige Bekanntmachung'});
+    const {rowCount}=await db.query('UPDATE bekanntmachungen SET titel=$1,inhalt=$2 WHERE id=$3',[titel,inhalt,id]);
+    if(!rowCount)return res.status(404).json({error:'Nicht gefunden'});
+    res.json({ok:true});
+  }catch(e){next(e)}
+});
+app.delete('/api/bekanntmachungen/:id',requireLogin,async(req,res,next)=>{
+  try {
+    if(req.user.rolle!=='Administrator')return res.status(403).json({error:'Nur Administratoren'});
+    const id=Number(req.params.id);
+    if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:'Ungültige ID'});
+    await db.query('DELETE FROM bekanntmachungen WHERE id=$1',[id]);
+    res.json({ok:true});
+  }catch(e){next(e)}
+});
+
 /* ---------- Lesen ---------- */
 
 app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
@@ -268,7 +300,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
   try {
     const [personal, raenge, funktionen, funktionsspalten, kuendigungen, disziplin,
       disziplinSpalten, richtlinie, checklisten, checklistenStatus, dashboard, routine, sonderzahlungen,
-      organigramm, befoerderungen, dashboardLayout] = await Promise.all([
+      organigramm, befoerderungen, dashboardLayout, bekanntmachungen] = await Promise.all([
       db.query(`SELECT * FROM personal ORDER BY personalnummer`),
       db.query(`SELECT * FROM raenge ORDER BY sortierung, name`),
       db.query(`SELECT * FROM sonderfunktionen`),
@@ -284,7 +316,8 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       db.query(`SELECT * FROM sonderzahlungen ORDER BY nachname`),
       db.query(`SELECT * FROM organigramm ORDER BY sortierung`),
       db.query(`SELECT * FROM befoerderungen ORDER BY nachname`),
-      db.query(`SELECT items,version FROM dashboard_layout WHERE id=1`)
+      db.query(`SELECT items,version FROM dashboard_layout WHERE id=1`),
+      db.query(`SELECT id,titel,inhalt,erstellt FROM bekanntmachungen ORDER BY erstellt DESC,id DESC LIMIT 30`)
     ]);
 
     const rolle = req.user.rolle;
@@ -303,6 +336,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       checklistenStatus: checklistenStatus.rows,
       dashboard: {
         layout: dashboardLayout.rows[0]||{items:[],version:0},
+        bekanntmachungen: bekanntmachungen.rows,
         personal: dashboard.rows.filter(r => r.art === 'personal').map(r => ({ label: r.text, anzahl: r.anzahl })),
         vorlagen: dashboard.rows.filter(r => r.art === 'vorlage').map(r => ({ text: r.text, url: r.url })),
         info: dashboard.rows.filter(r => r.art === 'info').map(r => ({ text: r.text, url: r.url })),
