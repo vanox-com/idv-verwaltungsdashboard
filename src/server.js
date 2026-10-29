@@ -364,7 +364,9 @@ app.post('/api/mitteilungen',requireLogin,requireRight('mitteilungen',2),async(r
  const client=await db.connect().catch(next);if(!client)return;
  try{
   await client.query('BEGIN');
-  const recipients=await client.query(`SELECT DISTINCT u.id FROM users u LEFT JOIN personal p ON p.personalnummer=CASE WHEN u.dienstnummer ~ '^[0-9]{1,9}
+  const recipients=await client.query(
+    "SELECT DISTINCT u.id FROM users u LEFT JOIN personal p ON p.personalnummer = CASE WHEN u.dienstnummer ~ '^[0-9]{1,9}$' THEN u.dienstnummer::int ELSE NULL END WHERE u.gesperrt=false AND (u.id=ANY($1::int[]) OR u.rolle=ANY($2::text[]) OR p.gruppe=ANY($3::text[]))",
+    [ids,rollen,gruppen]);
   if(!recipients.rows.length){await client.query('ROLLBACK');return res.status(400).json({error:'Keine gültigen Empfänger'});}
   const {rows}=await client.query('INSERT INTO portal_meldungen(titel,inhalt,absender_id) VALUES($1,$2,$3) RETURNING id',[titel,inhalt,req.user.id]);
   for(const r of recipients.rows)await client.query('INSERT INTO portal_meldung_empfaenger(meldung_id,user_id) VALUES($1,$2)',[rows[0].id,r.id]);
