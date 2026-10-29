@@ -1301,6 +1301,20 @@ body:has(#login:not(.hide)){
 .urkunden-archiv summary:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
 .urkunden-archiv .dashboard-line{gap:14px;flex-wrap:wrap}
 
+
+/* Gemeinsamer Dokumentgenerator und Formularfenster */
+#dgDialog{width:min(780px,96vw);max-height:92dvh;overflow-y:auto;padding:25px;
+ background:var(--panel,#1e2937);color:var(--txt,#eef2f7);border:1px solid var(--line,#455267);border-radius:16px}
+#dgDialog::backdrop{background:rgba(4,9,16,.78)}
+.dg-head,.dg-bottom{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.dg-head h2{margin:0 0 5px}.dg-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.dg-input{min-width:0}.dg-input label,#dgDialog fieldset label{display:block;margin:4px 0;font-size:12px}
+.dg-input input,.dg-input textarea,.dg-input select,#dgDialog fieldset input{width:100%;padding:10px;border-radius:7px;
+ background:var(--bg,#101927);color:inherit;border:1px solid var(--line,#46536a)}
+.dg-input textarea{min-height:112px;resize:vertical}
+.dg-bottom{margin-top:20px}.dg-bottom .fehler{flex:1}
+#dgDialog fieldset{border:1px solid var(--line);padding:14px;margin-bottom:13px}
+@media(max-width:630px){.dg-grid{grid-template-columns:1fr}#dgDialog{padding:16px}}
 </style>
 </head>
 <body>
@@ -1354,7 +1368,7 @@ body:has(#login:not(.hide)){
 <script>
 const MODS = [
   ['dash','Dashboard','📊'],['pers','Personal','👥'],['bef','Beförderungen','⭐'],
-  ['sonder','Sonderfunktionen','🎖️'],['kue','Kündigungen','📤'],
+  ['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
@@ -1364,7 +1378,7 @@ const MODS = [
    Ein aktives Modul hält seine Kategorie immer geöffnet. */
 const NAV_GRUPPEN = [
   {id:'uebersicht',titel:'Übersicht',module:['dash']},
-  {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','rout','geb','jub' ,'statistik']},
+  {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','praktika','rout','geb','jub' ,'statistik']},
   {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
   {id:'verwaltung',titel:'Administration',module:['users','system','meldungen','rechtesimulator','design','backup','log']}
@@ -1376,7 +1390,7 @@ let copnetGeladen = null, copnetNummer = null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fd = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('.') : '';
-const can = (m, l = 1) => ME && (m === 'design' ? true : m === 'favoriten' ? true : m === 'entwicklung' ? (ME.rechte.pers || 0) >= l : m === 'system' ? ME.rolle === 'Administrator' : m === 'meldungen' ? (ME.rechte.mitteilungen || 0) >= 2 : m === 'statistik' ? (ME.rechte.pers || 0) >= l : (ME.rechte[m] || 0) >= l);
+const can = (m, l = 1) => ME && (m === 'design' ? true : m === 'favoriten' ? true : m === 'entwicklung' || m === 'praktika' ? (ME.rechte.pers || 0) >= l : m === 'system' ? ME.rolle === 'Administrator' : m === 'meldungen' ? (ME.rechte.mitteilungen || 0) >= 2 : m === 'statistik' ? (ME.rechte.pers || 0) >= l : (ME.rechte[m] || 0) >= l);
 
 /* Dienstgradabzeichen: dunkles texturiertes Schulterstück, farbige Rangsterne.
    Die drei RP-Führungsränge zeigen stilisiertes hessisches Gold-Eichenlaub
@@ -1764,7 +1778,7 @@ function zeichne() {
   }
   try {
     const ansichten = { dash: vDash, pers: vPers, bef: vBef, sonder: vSonder, kue: vKue,
-      dis: vDis, rout: vRout, chk: vChk, rl: vRl, org: vOrg, users: vUsers };
+      dis: vDis, praktika: dgPraktika, rout: vRout, chk: vChk, rl: vRl, org: vOrg, users: vUsers };
     if(tab==='system' && ME.rolle!=='Administrator'){$('#inhalt').innerHTML='<p>Nur Administratoren.</p>';return;}
     const f = ansichten[tab];
     $('#inhalt').innerHTML = f ? f() : '<p>Dieser Bereich ist für deine Rolle nicht freigegeben.</p>';
@@ -1777,6 +1791,7 @@ function zeichne() {
     if(tab === 'design') ladeDesign();
     if(tab === 'bef') { ladeRangantraege(); void urkundenAuthVorbereiten(); }
     if(tab === 'pers') ladePersonalRangantraege();
+    if(tab === 'praktika') void dgArchivLaden(0,'dgPraktikaArchiv');
     if(tab === 'users') ladeBenutzer().catch(err => { if($('#benutzerBereich')) $('#benutzerBereich').textContent = 'Benutzerverwaltung konnte nicht geladen werden: ' + err.message; });
   } catch (err) {
     $('#inhalt').innerHTML = '<h1>Fehler beim Laden</h1><p class="fehler">' + esc(err.message) + '</p>';
@@ -2126,13 +2141,16 @@ function vPers() {
     const name = esc([p.vorname, p.nachname].filter(Boolean).join(' '));
     const status = '<span class="tag ' + (p.status === 'Aktiv' ? 'ok' : 'warn') + '">' + esc(p.status || '–') + '</span>';
     const handy = ME.sensibel ? esc(p.handy || '–') : '<span class="tag">geschützt</span>';
+    const vertragArt = p.dienstgrad==='Polizeimeisteranwärter'?'pmavertrag':p.beschaeftigungsart==='Nebenberuf'?'nebenvertrag':'hauptvertrag';
+    const generator = schreiben ? ' <button type="button" class="pers-link" data-dg-type="'+vertragArt+'" data-dg-nr="'+nummer+'">Arbeitsvertrag</button> '+
+      '<button type="button" class="pers-link" data-dg-type="nebenjob" data-dg-nr="'+nummer+'">Nebenjobfreigabe</button>' : '';
     const bearbeitung = schreiben ? ' <button type="button" class="pers-link" data-edit-person="' + nummer + '">Bearbeiten</button>' : '';
     return '<tr class="pers-row" data-name="' + esc([p.personalnummer,p.vorname,p.nachname,p.dienstgrad,p.nebenjob].join(' ').toLowerCase()) + '" data-group="' + esc(p.gruppe || '') + '" data-status="' + esc(p.status || '') + '" data-art="' + esc(p.beschaeftigungsart || 'Hauptberuf') + '">' +
       '<td>' + nummer + '</td>' +
       '<td><button class="pers-link" type="button" data-show-person="' + nummer + '">' + name + '</button></td>' +
       '<td>' + rangMitAbzeichen(p.dienstgrad) + '</td><td>' + esc(p.gruppe || '–') + '</td><td>' + esc(p.beschaeftigungsart || (p.gruppe === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf')) + '</td>' +
       '<td>' + fd(p.eintrittsdatum) + '</td><td>' + handy + '</td>' +
-      '<td>' + status + '</td><td>' + bearbeitung + '</td></tr>';
+      '<td>' + status + '</td><td>' + bearbeitung + generator + '</td></tr>';
   }).join('');
   const auswahl = (werte) => '<option value="">Alle</option>' + werte.map(v => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
   return '<h1>Personalverwaltung</h1>' + '<section id="personalRangantraege" class="box"><h3>Offene Rangänderungen – POR-Freigabe</h3><p class="mut">Lade …</p></section>' +
@@ -2239,6 +2257,10 @@ function personalAnzeigen(nr) {
         ? personalDokumentLink(k,v,k==='Arbeitsvertrag'?p.arbeitsvertrag_url:p.ernennungsurkunde_url)
         : esc(v == null || v === '' ? '–' : v)) + '</div>'
     ).join('') + '</div>' +
+    (can('pers',2)?'<section class="box"><h3>Dokumente & Generator</h3>'+
+      '<button type="button" data-dg-type="'+(p.dienstgrad==='Polizeimeisteranwärter'?'pmavertrag':p.beschaeftigungsart==='Nebenberuf'?'nebenvertrag':'hauptvertrag')+'" data-dg-nr="'+Number(nr)+'">Arbeitsvertrag erstellen</button> '+
+      '<button type="button" data-dg-type="nebenjob" data-dg-nr="'+Number(nr)+'">Nebenjobfreigabe erstellen</button>'+
+      '<div id="dgAkteArchiv">Lade Dokumente …</div></section>':'') +
     (can('persverlauf') ? '<section class="box"><button type="button" data-open-verlauf="'+Number(nr)+'">Personalakten-Verlauf öffnen</button><div id="personalVerlauf" hidden></div></section>' : '') +
     (can('dis') ? (() => {
       const akte=disAkte(Number(nr));
@@ -2257,6 +2279,7 @@ function personalAnzeigen(nr) {
     '<div class="actions"><button type="button" id="persAbbrechen">Schließen</button>' +
     (can('pers',2) ? '<button type="button" class="p" data-edit-person="' + Number(nr) + '">Bearbeiten</button>' : '') + '</div>';
   dialog.showModal();
+  if(can('pers',2))void dgArchivLaden(nr,'dgAkteArchiv');
   $('#persAbbrechen').addEventListener('click',personalDialogSchliessen);
   if (ME.sensibel) copnetLaden(Number(nr), p).catch(() => {});
 }
@@ -2918,7 +2941,9 @@ function vKue() {
       return schreiben ? '<button type="button" class="tag kue-status '+cls+'" title="Status umschalten" data-kue-id="'+Number(k.id)+'" data-kue-field="'+feld+'">'+text+'</button>'
         : '<span class="tag '+cls+'">'+text+'</span>';
     }).join(' ');
-    const docs='<div class="kue-doc-links">'+['vertrag','urkunde','zeugnis','kuendigung'].map(x=>kueDokument(k[x],x)).join('')+'</div>'+(schreiben?'<button type="button" class="kue-docs-open" data-kue-docs-edit="'+Number(k.id)+'">Dokumente bearbeiten</button>':'');
+    const docs='<div class="kue-doc-links">'+['vertrag','urkunde','zeugnis','kuendigung'].map(x=>kueDokument(k[x],x)).join('')+'</div>'+(schreiben?'<button type="button" class="kue-docs-open" data-kue-docs-edit="'+Number(k.id)+'">Dokumente bearbeiten</button> '+
+      '<button type="button" data-dg-type="fristgerecht" data-dg-nr="'+Number(k.personalnummer)+'" data-dg-context="'+Number(k.id)+'">Fristgerecht</button> '+
+      '<button type="button" data-dg-type="fristlos" data-dg-nr="'+Number(k.personalnummer)+'" data-dg-context="'+Number(k.id)+'">Fristlos</button>':'');
     return '<tr><td>'+esc(k.personalnummer)+'</td><td><strong>'+esc([k.vorname,k.nachname].filter(Boolean).join(' '))+'</strong> '+
       '<span class="tag '+(offen?'warn':'ok')+'">'+(offen?offen+' offen':'erledigt')+'</span></td>'+
       '<td>'+esc(k.rang||'–')+'</td><td>'+esc(k.grund||'–')+'</td><td>'+fd(k.eintritt)+'</td>'+
@@ -3050,7 +3075,8 @@ function vDis(){
     return '<tr class="dis-row" data-dis-name="'+esc((nr+' '+name+' '+(p.dienstgrad||'')).toLowerCase())+'">'+
       '<td>'+nr+'</td><td>'+esc(name)+'</td><td>'+rangMitAbzeichen(p.dienstgrad)+'</td>'+
       '<td>'+(ms||'<span class="mut">Keine</span>')+'</td><td>'+esc(akte.bemerkung||'')+'</td>'+
-      '<td>'+(schreiben?'<button type="button" data-dis-person="'+nr+'">Eintragen / Bearbeiten</button>':'')+'</td></tr>';
+      '<td>'+(schreiben?'<button type="button" data-dis-person="'+nr+'">Eintragen / Bearbeiten</button> '+
+      '<button type="button" data-dg-type="abmahnung" data-dg-nr="'+nr+'">Abmahnung erstellen</button>':'')+'</td></tr>';
   }).join('');
   return '<h1>Disziplinarmanagement</h1>'+
     '<p class="mut">Nach jeder Maßnahme den Polizeioberrat informieren. Eine Anhörung ist verpflichtend.</p>'+
@@ -4721,5 +4747,6 @@ document.addEventListener('click',async e=>{
 });
 
 </script>
+<script src="/dokumentUI.js"></script>
 </body>
 </html>
