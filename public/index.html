@@ -999,6 +999,7 @@ html[data-portal-wallpaper="stahl"] #app{background-image:linear-gradient(125deg
 html[data-portal-wallpaper="raster"] #app{background-image:linear-gradient(125deg,rgba(8,18,32,var(--veil)),rgba(12,28,47,var(--veil))),linear-gradient(rgba(160,191,219,.13) 1px,transparent 1px),linear-gradient(90deg,rgba(160,191,219,.13) 1px,transparent 1px),linear-gradient(140deg,#102136,#1b3954)!important;background-size:cover,55px 55px,55px 55px,cover!important}
 html[data-portal-wallpaper="licht"] #app{background-image:linear-gradient(125deg,rgba(7,17,31,var(--veil)),rgba(11,25,43,var(--veil))),radial-gradient(ellipse at 85% 8%,rgba(var(--portal-rgb,91,134,186),.85),transparent 55%),radial-gradient(ellipse at 5% 90%,#23486a,transparent 55%),linear-gradient(125deg,#0b1728,#172c43)!important;background-size:cover!important}
 html[data-portal-wallpaper="minimal"] #app{background-image:linear-gradient(125deg,rgba(15,23,34,var(--veil)),rgba(22,33,47,var(--veil))),linear-gradient(115deg,#192635 0%,#273749 50%,#14202c 100%)!important;background-size:cover!important}
+.idv-warnung{background:rgba(245,158,11,.17)!important;border:1px solid rgba(245,158,11,.75)!important;border-radius:9px;color:#ffda9b!important;box-shadow:inset 3px 0 #f59e0b}.idv-warnung strong,.idv-warnung b{color:#ffc46b!important}
 </style>
 </head>
 <body>
@@ -1072,7 +1073,7 @@ let copnetGeladen = null, copnetNummer = null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fd = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('.') : '';
-const can = (m, l = 1) => ME && (m === 'favoriten' ? true : m === 'entwicklung' ? (ME.rechte.pers || 0) >= l : m === 'system' ? ME.rolle === 'Administrator' : m === 'meldungen' ? (ME.rechte.mitteilungen || 0) >= 2 : m === 'statistik' ? (ME.rechte.pers || 0) >= l : (ME.rechte[m] || 0) >= l);
+const can = (m, l = 1) => ME && (m === 'design' ? true : m === 'favoriten' ? true : m === 'entwicklung' ? (ME.rechte.pers || 0) >= l : m === 'system' ? ME.rolle === 'Administrator' : m === 'meldungen' ? (ME.rechte.mitteilungen || 0) >= 2 : m === 'statistik' ? (ME.rechte.pers || 0) >= l : (ME.rechte[m] || 0) >= l);
 
 /* Dienstgradabzeichen: dunkles texturiertes Schulterstück, farbige Rangsterne.
    Die drei RP-Führungsränge zeigen stilisiertes hessisches Gold-Eichenlaub
@@ -1706,7 +1707,7 @@ function vDash(){
     'panel-gruppen':progress('Personal nach Gruppe',d.gruppen||[]),
     'panel-bekanntmachungen':'<section class="box"><h3>Dienstliche Bekanntmachungen</h3>'+
       (ME.rolle==='Administrator'?'<button type="button" data-bek-neu>+ Bekanntmachung erstellen</button>':'')+
-      (d.bekanntmachungen||[]).map(b=>'<div class="dashboard-line" style="display:block;padding:12px 0"><strong>'+esc(b.titel)+'</strong>'+
+      (d.bekanntmachungen||[]).map(b=>'<div class="dashboard-line idv-warnung" style="display:block;padding:12px"><strong>'+esc(b.titel)+'</strong>'+
         '<p style="white-space:pre-wrap;margin:7px 0">'+esc(b.inhalt)+'</p>'+
         (ME.rolle==='Administrator'?'<button type="button" data-bek-edit="'+Number(b.id)+'">Bearbeiten</button> <button type="button" data-bek-delete="'+Number(b.id)+'">Löschen</button>':'')+
         '</div>').join('')+
@@ -2068,7 +2069,7 @@ function personalBearbeiten(nr) {
     personalSelect('Status','p_status',status,p.status || 'Aktiv'),
     personalFeld('Vorname','p_vorname',p.vorname,'text','required maxlength="120"'),
     personalFeld('Nachname','p_nachname',p.nachname,'text','required maxlength="120"'),
-    personalFeld('Mitarbeitergruppe (automatisch)','p_gruppe',p.gruppe || 'Nicht zugeordnet','text','readonly'),
+    personalSelect('Mitarbeitergruppe (automatischer Vorschlag, manuell änderbar)','p_gruppe',gruppen,p.gruppe || 'Nicht zugeordnet'),
     personalSelect('Beschäftigungsart','p_beschaeftigungsart',D.systemOptionen?.beschaeftigungsarten||['Hauptberuf','Nebenberuf'],p.beschaeftigungsart || (p.gruppe === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf')),
     (neu ? personalSelect('Dienstgrad (Einstufung bei Eintritt)','p_dienstgrad',raenge.length?raenge:[''],p.dienstgrad || '') :
       personalFeld('Dienstgrad (nur über Beförderungen änderbar)','p_dienstgrad',p.dienstgrad,'text','readonly')),
@@ -2251,7 +2252,7 @@ function vBef() {
   const ranks = raenge.map(r => '<tr><td>'+rangMitAbzeichen(r.name)+'</td><td>'+esc(r.abk||'')+'</td>' +
     '<td>'+(r.tage ? r.tage+' Tage':'–')+'</td><td>'+esc(r.bemerkung||'')+'</td><td>'+esc(r.grund||'')+'</td></tr>').join('');
   return '<h1>Beförderungen</h1><p class="mut">Fristen nach Beförderungsbedingungen. Keine Beförderung ohne POR-Freigabe.</p>' +
-    (wartet ? '<div class="box"><b>'+wartet+'</b> POR-Anträge warten auf eine Entscheidung.</div>' : '') +
+    (wartet ? '<div class="box idv-warnung"><b>'+wartet+'</b> POR-Anträge warten auf eine Entscheidung.</div>' : '') +
     '<div class="tw"><table><thead><tr>'+['Person','Aktuell','Nächster Rang','Letzte Bef.','Fällig am','Friststatus','POR-Freigabe','Hinweis','Aktion'].map(t=>'<th>'+t+'</th>').join('') +
     '</tr></thead><tbody>'+(rows||'<tr><td colspan="9">Keine geplanten Beförderungen</td></tr>')+'</tbody></table></div>' +
     '<div class="box"><h3>Beförderungsbedingungen</h3><div class="tw"><table><thead><tr>'+
@@ -3795,10 +3796,9 @@ function applyPortalDesign(d){
 async function ladeDesign(){
  const area=$('#inhalt');
  area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p>Lade Gestaltung …</p>';
- if(!can('design',2)){area.textContent='Keine Berechtigung.';return;}
  try{
   const d=await api('/portal-design');
-  area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p class="mut">Die Einstellungen gelten für alle Benutzer. Das Layout der Kacheln bleibt erhalten.</p>'+
+  area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p class="mut">Du kannst dein eigenes Design speichern. Administratoren können zusätzlich den Standard für alle vorgeben.</p>'+
    '<section class="box"><h3>Portal-Design</h3>'+
    '<label for="designAkzent">Akzentfarbe</label><input id="designAkzent" type="color" value="'+esc(d.akzent)+'" style="width:110px;height:48px;padding:5px">'+
    '<label for="designSchleier">Dunkler Schleier ('+Number(d.schleier)+' %)</label><input id="designSchleier" type="range" min="65" max="97" value="'+Number(d.schleier)+'">'+
@@ -3812,7 +3812,9 @@ function aktuelleDesignWerte(){
  return {akzent:$('#designAkzent').value,schleier:Number($('#designSchleier').value),hintergrund:$('#designMotiv').value};
 }
 document.addEventListener('click',async ev=>{
- if(ev.target.closest('#designPreview')&&can('design',2))applyPortalDesign(aktuelleDesignWerte());
+ if(ev.target.closest('#designPreview'))applyPortalDesign(aktuelleDesignWerte());
+ if(ev.target.closest('#designPersonalSave')){try{const d=aktuelleDesignWerte();await api('/portal-design/personal',{method:'PUT',body:JSON.stringify(d)});applyPortalDesign(d);alert('Persönliches Design gespeichert.');}catch(err){alert(err.message);}}
+ if(ev.target.closest('#designReset')){try{await api('/portal-design/personal',{method:'DELETE'});const d=await api('/portal-design');applyPortalDesign(d);await ladeDesign();}catch(err){alert(err.message);}}
  if(ev.target.closest('#designSave')&&can('design',2)){
   try{const d=aktuelleDesignWerte();await api('/portal-design',{method:'PUT',body:JSON.stringify(d)});applyPortalDesign(d);alert('Portaldesign gespeichert.');}
   catch(err){alert('Speichern fehlgeschlagen: '+err.message);}
