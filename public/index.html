@@ -1229,6 +1229,65 @@ html[data-portal-mode="hell"]:is(
 .ranghist-entry .actions{flex-shrink:0}
 #ranghistorieListe[hidden]{display:none!important}
 
+
+/* Login-Screen: kein vertikales Scrollen der Gesamtseite.
+   Das Portal nach der Anmeldung behält seine normale Scrollfunktion. */
+html:has(#login:not(.hide)),
+body:has(#login:not(.hide)){
+ height:100%;
+ overflow:hidden;
+ overscroll-behavior:none;
+}
+#login:not(.hide){
+ height:100vh;
+ height:100dvh;
+ min-height:0;
+ overflow:hidden;
+ padding-block:clamp(12px,2.5vh,24px);
+}
+#login .login-top,#login .login-bottom{flex:0 0 auto}
+#login .login-center{
+ flex:1 1 auto;
+ min-height:0;
+ width:min(468px,100%);
+ margin:0 auto;
+ justify-content:safe center;
+ overflow-x:hidden;
+ overflow-y:auto;
+ overscroll-behavior:contain;
+ scrollbar-width:thin;
+ scrollbar-color:rgba(185,206,234,.35) transparent;
+}
+#login .login-brand,#login .karte{flex:0 0 auto}
+#login .login-brand{margin-bottom:clamp(8px,1.6vh,15px)}
+#login .idv-login-logo{width:clamp(190px,31vh,290px);max-width:90%}
+#login .karte{padding:clamp(17px,2.7vh,27px) clamp(20px,3vw,32px)}
+@media(max-height:780px){
+ #login:not(.hide){padding-block:11px}
+ #login .login-top,#login .login-bottom{font-size:9px}
+ #login .login-brand{margin-bottom:5px}
+ #login .idv-login-logo{width:clamp(155px,22vh,210px)}
+ #login .karte{padding:15px 23px}
+ #login .karte h2{font-size:21px}
+ #login .karte p.hinweis{margin-bottom:8px}
+ #login .karte label{margin:8px 0 3px}
+ #login .karte input{min-height:39px;padding-block:7px}
+ #login .karte button.p{min-height:40px;margin-top:8px!important}
+ #login .karte #pruefen{margin-top:2px!important}
+ #login .klein{margin-top:7px;padding-top:8px;font-size:10px}
+ #login .fehler{min-height:10px;margin-top:4px}
+}
+@media(max-width:820px){
+ #login:not(.hide){padding-block:12px}
+ #login .login-center{margin:0 auto}
+}
+@media(max-height:590px){
+ #login .login-top,#login .login-bottom{display:none}
+ #login .login-center{flex-basis:100%;justify-content:safe center}
+ #login .login-brand{margin-bottom:4px}
+ #login .idv-login-logo{width:145px}
+}
+
 </style>
 </head>
 <body>
