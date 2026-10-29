@@ -349,7 +349,8 @@ app.get('/api/mitteilungen',requireLogin,requireRight('mitteilungen',1),async(re
 app.get('/api/mitteilungen/empfaenger',requireLogin,requireRight('mitteilungen',2),async(req,res,next)=>{
  try{
   const {rows}=await db.query('SELECT id,anzeigename,rolle,dienstnummer FROM users WHERE gesperrt=false ORDER BY anzeigename');
-  res.json(rows);
+  const groups=await db.query("SELECT DISTINCT gruppe FROM personal WHERE gruppe IS NOT NULL AND gruppe <> '' ORDER BY gruppe");
+  res.json({users:rows,gruppen:groups.rows.map(x=>x.gruppe)});
  }catch(e){next(e)}
 });
 app.post('/api/mitteilungen',requireLogin,requireRight('mitteilungen',2),async(req,res,next)=>{
