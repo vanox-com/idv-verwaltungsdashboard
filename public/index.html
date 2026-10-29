@@ -1008,7 +1008,7 @@ const MODS = [
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
-  ['users','Benutzer & Rollen','🔐'],['system','Systemverwaltung','⚙️'],['meldungen','Benachrichtigungen','🔔'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾']
+  ['users','Benutzer & Rollen','🔐'],['system','Systemverwaltung','⚙️'],['meldungen','Mitteilungen verwalten','📣'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾']
 ];
 /* Sidebar: dieselben Module und Rechte, nur übersichtlich gruppiert.
    Ein aktives Modul hält seine Kategorie immer geöffnet. */
@@ -1026,7 +1026,7 @@ let copnetGeladen = null, copnetNummer = null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fd = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('.') : '';
-const can = (m, l = 1) => ME && (m === 'system' ? ME.rolle === 'Administrator' : m === 'meldungen' ? (ME.rechte.log || 0) >= l : m === 'statistik' ? (ME.rechte.pers || 0) >= l : (ME.rechte[m] || 0) >= l);
+const can = (m, l = 1) => ME && (m === 'system' ? ME.rolle === 'Administrator' : m === 'meldungen' ? (ME.rechte.mitteilungen || 0) >= 2 : m === 'statistik' ? (ME.rechte.pers || 0) >= l : (ME.rechte[m] || 0) >= l);
 
 /* Dienstgradabzeichen: dunkles texturiertes Schulterstück, farbige Rangsterne.
    Die drei RP-Führungsränge zeigen stilisiertes hessisches Gold-Eichenlaub
@@ -1606,6 +1606,7 @@ document.addEventListener('dragend',()=>{
 
 function vDash(){
   const d=D.dashboard||{},summary=d.summary||{},bearbeiten=!!DASH_EDITOR&&dashboardEditierbar();
+  if(can('mitteilungen'))queueMicrotask(()=>ladeDashboardMeldungen());
   const bezeichnung={personal:'pers',kuendigungen:'kue',rueckgaben:'rout',disziplin:'dis',aktiv:'pers',neu30:'pers',urlaub:'pers',bef:'bef'};
   const kpi=(titel,value,icon,tone,hinweis='IM SYSTEM ERFASST')=>
     '<div class="kachel '+tone+'"><div class="kachel-head"><span>'+esc(titel)+
@@ -1742,7 +1743,7 @@ function vDash(){
   return willkommen+(dashboardEditierbar()&&!bearbeiten?
     '<div class="dash-toolbar"><span class="mut">Deine Dienstübersicht</span>'+
     '<button type="button" id="dashEdit">Dashboard anpassen</button></div>':'')+
-    editorListe+'<div class="dash-layout-grid">'+cells+'</div>';
+    editorListe+'<div id="mitteilungenDashboard"></div><div class="dash-layout-grid">'+cells+'</div>';
 }
 
 function vPers() {
@@ -1869,7 +1870,7 @@ function personalAnzeigen(nr) {
         ? personalDokumentLink(k,v,k==='Arbeitsvertrag'?p.arbeitsvertrag_url:p.ernennungsurkunde_url)
         : esc(v == null || v === '' ? '–' : v)) + '</div>'
     ).join('') + '</div>' +
-    '<section class="box"><h3>Personalakten-Verlauf</h3><div id="personalVerlauf">Verlauf wird geladen …</div></section>' +
+    (can('persverlauf') ? '<section class="box"><button type="button" data-open-verlauf="'+Number(nr)+'">Personalakten-Verlauf öffnen</button><div id="personalVerlauf" hidden></div></section>' : '') +
     (can('dis') ? (() => {
       const akte=disAkte(Number(nr));
       const massnahmen=akte.slots.map((eintrag,i)=>eintrag?.done ?
@@ -1887,7 +1888,6 @@ function personalAnzeigen(nr) {
     '<div class="actions"><button type="button" id="persAbbrechen">Schließen</button>' +
     (can('pers',2) ? '<button type="button" class="p" data-edit-person="' + Number(nr) + '">Bearbeiten</button>' : '') + '</div>';
   dialog.showModal();
-  ladePersonalVerlauf(Number(nr));
   $('#persAbbrechen').addEventListener('click',personalDialogSchliessen);
   if (ME.sensibel) copnetLaden(Number(nr), p).catch(() => {});
 }
@@ -3609,6 +3609,23 @@ async function vLog_() {
 
 
 /* Selbstverwaltungsbereiche – alle Änderungen werden im Server geprüft. */
+document.addEventListener('click',async e=>{
+ const btn=e.target.closest('[data-open-verlauf]');
+ if(btn&&can('persverlauf')){
+  const area=$('#personalVerlauf');if(!area)return;
+  area.hidden=false;area.textContent='Verlauf wird geladen …';
+  await ladePersonalVerlauf(Number(btn.dataset.openVerlauf));
+ }
+ const send=e.target.closest('#mitSenden');if(send&&can('meldungen')){
+  const titel=$('#mitTitel').value.trim(),inhalt=$('#mitInhalt').value.trim();
+  const userIds=[...document.querySelectorAll('[data-mit-user]:checked')].map(x=>Number(x.dataset.mitUser));
+  const rollen=[...document.querySelectorAll('[data-mit-rolle]:checked')].map(x=>x.dataset.mitRolle);
+  if(!titel||!inhalt||(!userIds.length&&!rollen.length)){alert('Titel, Inhalt und Empfänger sind erforderlich.');return;}
+  try{send.disabled=true;const result=await api('/mitteilungen',{method:'POST',body:JSON.stringify({titel,inhalt,userIds,rollen})});
+   alert('Mitteilung an '+result.anzahl+' Konten veröffentlicht.');await ladeMeldungen();
+  }catch(err){alert('Mitteilung fehlgeschlagen: '+err.message);}finally{send.disabled=false;}
+ }
+});
 async function ladePersonalVerlauf(nr){
  const area=$('#personalVerlauf');if(!area)return;
  try{
@@ -3625,14 +3642,30 @@ async function ladeSystemoptionen(){
   Object.entries(data).map(([key,values])=>'<section class="box"><h3>'+esc(key==='mitarbeitergruppen'?'Mitarbeitergruppen':'Beschäftigungsarten')+'</h3><textarea rows="7" style="width:100%;background:var(--panel);color:var(--txt)" id="option-'+esc(key)+'">'+esc(values.join('\n'))+'</textarea><button type="button" data-save-options="'+esc(key)+'">Änderungen speichern</button></section>').join('');
  }catch(e){el.textContent='Einstellungen konnten nicht geladen werden: '+e.message;}
 }
+
 async function ladeMeldungen(){
- const el=$('#inhalt');el.innerHTML='<h1>Benachrichtigungen</h1><p>Lade …</p>';
+ const el=$('#inhalt');
+ if(!can('meldungen')){el.textContent='Keine Berechtigung zum Erstellen von Mitteilungen.';return;}
+ el.innerHTML='<h1>Mitteilungen verwalten</h1><p>Lade Empfänger …</p>';
  try{
-  const data=await api('/benachrichtigungen');
-  el.innerHTML='<h1>Benachrichtigungen</h1><p class="mut">Aktuelle Änderungen aus dem berechtigten Verwaltungsprotokoll.</p>'+
-   (data.length?data.map(x=>'<section class="box"><strong>'+esc(x.aktion)+'</strong><p class="mut">'+esc(new Date(x.zeit).toLocaleString('de-DE'))+'</p>'+
-   (x.gelesen?'<span class="tag">Gelesen</span>':'<button data-meldung-gelesen="'+Number(x.id)+'">Als gelesen markieren</button>')+'</section>').join(''):'<p>Keine neuen Meldungen.</p>');
- }catch(e){el.textContent='Benachrichtigungen konnten nicht geladen werden: '+e.message;}
+  const users=await api('/mitteilungen/empfaenger');
+  const rollen=[...new Set(users.map(x=>x.rolle))];
+  el.innerHTML='<h1>Mitteilung erstellen</h1><p class="mut">Die Nachricht wird nur den ausgewählten Benutzern und Rollen auf deren Dashboard angezeigt.</p>'+
+   '<section class="box"><label for="mitTitel">Titel</label><input id="mitTitel" maxlength="140" placeholder="Titel">'+
+   '<label for="mitInhalt">Nachricht</label><textarea id="mitInhalt" maxlength="3000" rows="5" style="width:100%;background:var(--panel);color:var(--txt)"></textarea>'+
+   '<h3>Empfängerrollen</h3><div>'+rollen.map(r=>'<label><input type="checkbox" style="width:auto" data-mit-rolle="'+esc(r)+'"> '+esc(r)+'</label>').join('')+'</div>'+
+   '<h3>Einzelne Personen</h3><div style="max-height:240px;overflow:auto">'+users.map(u=>'<label><input type="checkbox" style="width:auto" data-mit-user="'+Number(u.id)+'"> '+esc(u.anzeigename)+' ('+esc(u.dienstnummer)+')</label>').join('')+'</div>'+
+   '<button type="button" class="p" id="mitSenden">Mitteilung veröffentlichen</button></section>';
+ }catch(e){el.textContent='Empfängerauswahl konnte nicht geladen werden: '+e.message;}
+}
+async function ladeDashboardMeldungen(){
+ const area=$('#mitteilungenDashboard');if(!area||!can('mitteilungen'))return;
+ try{
+  const data=await api('/mitteilungen');
+  if(!area.isConnected)return;
+  area.innerHTML=data.length?'<section class="box"><h3>Dienstliche Mitteilungen</h3>'+data.map(m=>
+   '<div class="dashboard-line" style="display:block;padding:12px 0"><strong>'+esc(m.titel)+'</strong><small style="display:block">'+esc(new Date(m.erstellt).toLocaleString('de-DE'))+'</small><p style="white-space:pre-wrap">'+esc(m.inhalt)+'</p></div>').join('')+'</section>':'';
+ }catch(e){if(area.isConnected)area.textContent='Mitteilungen konnten nicht geladen werden.';}
 }
 async function ladeStatistik(){
  const el=$('#inhalt');el.innerHTML='<h1>Personalstatistiken</h1><p>Lade …</p>';
