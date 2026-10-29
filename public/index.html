@@ -1957,14 +1957,6 @@ function personalAnzeigen(nr) {
     '<div class="actions"><button type="button" id="persAbbrechen">Schließen</button>' +
     (can('pers',2) ? '<button type="button" class="p" data-edit-person="' + Number(nr) + '">Bearbeiten</button>' : '') + '</div>';
   dialog.showModal();
-  if(!neu)$('#persRangantrag').addEventListener('click',async()=>{
-    const neuerRang=$('#p_dienstgrad').value;
-    if(neuerRang===(p.dienstgrad||'')){alert('Bitte zuerst einen anderen Dienstgrad auswählen.');return;}
-    const grund=prompt('Begründung für die POR-Freigabe der Rangänderung:')||'';
-    if(!grund.trim())return;
-    try{await api('/rangantraege',{method:'POST',body:JSON.stringify({personalnummer:Number(nr),beantragter_rang:neuerRang,begruendung:grund})});alert('Rangänderung beim POR beantragt. Die Personalakte behält bis zur Genehmigung den bisherigen Dienstgrad.');}
-    catch(e){alert('Antrag fehlgeschlagen: '+e.message);}
-  });
   $('#persAbbrechen').addEventListener('click',personalDialogSchliessen);
   if (ME.sensibel) copnetLaden(Number(nr), p).catch(() => {});
 }
@@ -2093,6 +2085,7 @@ function personalBearbeiten(nr) {
     personalSelect('Beschäftigungsart','p_beschaeftigungsart',D.systemOptionen?.beschaeftigungsarten||['Hauptberuf','Nebenberuf'],p.beschaeftigungsart || (p.gruppe === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf')),
     (neu ? personalSelect('Dienstgrad (Einstufung bei Eintritt)','p_dienstgrad',raenge.length?raenge:[''],p.dienstgrad || '') :
       personalSelect('Dienstgrad (Änderung nur nach POR-Freigabe)','p_dienstgrad',raenge,p.dienstgrad||'')),
+    (!neu?personalFeld('Maßgebliches Beförderungsdatum (POR-Freigabe)','p_rang_datum',datum(p.letzte_befoerderung),'date'):'') ,
     (!neu?personalFeld('Begründung der Rangänderung (optional)','p_rang_begruendung','','text','maxlength="1000" placeholder="Für die POR-Freigabe"'):'') ,
     personalFeld('Eintrittsdatum','p_eintrittsdatum',datum(p.eintrittsdatum),'date'),
     personalFeld('Nebenjob','p_nebenjob',p.nebenjob)
@@ -2212,7 +2205,8 @@ async function personalSpeichern(event, neu, nr) {
   if(!neu){
     const aktuell=(D.personal||[]).find(p=>Number(p.personalnummer)===Number(nr));
     const gewuenscht=wert('p_dienstgrad');
-    if(aktuell&&gewuenscht!==aktuell.dienstgrad){body.beantragter_rang=gewuenscht;body.rang_begruendung=$('#p_rang_begruendung')?.value.trim()||'';}
+    const datumswechsel=($('#p_rang_datum')?.value||'')!==(aktuell?.letzte_befoerderung?String(aktuell.letzte_befoerderung).slice(0,10):'');
+    if(aktuell&&(gewuenscht!==aktuell.dienstgrad||datumswechsel)){body.beantragter_rang=gewuenscht;body.rang_datum=$('#p_rang_datum')?.value||null;body.rang_begruendung=$('#p_rang_begruendung')?.value.trim()||'';}
   }
   if (ME.sensibel) {
     for (const f of ['handy','geburtsdatum','arbeitsvertrag','ernennungsurkunde','arbeitsvertrag_url','ernennungsurkunde_url','urlaub_von','urlaub_bis','bemerkung','rsa'])
@@ -3998,7 +3992,7 @@ async function ladePersonalRangantraege(){
   const list=(await api('/rangantraege')).filter(x=>x.status==='beantragt');
   area.innerHTML='<h3>Offene Rangänderungen – POR-Freigabe</h3>'+
     (list.length?list.map(a=>'<div class="dashboard-line" style="padding:12px 6px;align-items:center"><div><b>'+esc(a.vorname+' '+a.nachname)+'</b> · Nr. '+Number(a.personalnummer)+
-    '<p>'+esc(a.alter_rang)+' → <strong>'+esc(a.beantragter_rang)+'</strong></p><small>'+esc(a.begruendung||'Keine Begründung')+'</small></div>'+
+    '<p>'+esc(a.alter_rang)+' → <strong>'+esc(a.beantragter_rang)+'</strong></p><small>Maßgebliches Beförderungsdatum: '+esc(a.korrigiertes_befoerderungsdatum?fd(a.korrigiertes_befoerderungsdatum):'unverändert')+'</small><small>'+esc(a.begruendung||'Keine Begründung')+'</small></div>'+
     (can('por',2)?'<div class="actions"><button type="button" data-rang-genehmigen="'+Number(a.id)+'">Freigeben</button><button type="button" data-rang-ablehnen="'+Number(a.id)+'">Ablehnen</button></div>':'<span class="tag warn">Wartet auf POR</span>')+'</div>').join(''):'<p class="mut">Keine offenen Ranganträge.</p>');
  }catch(err){area.textContent='Ranganträge konnten nicht geladen werden: '+err.message;}
 }
