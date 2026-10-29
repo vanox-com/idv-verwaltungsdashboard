@@ -437,3 +437,12 @@ CREATE TABLE IF NOT EXISTS benachrichtigungen_gelesen (
   gelesen_am timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY(user_id,meldung_id)
 );
+
+CREATE TABLE IF NOT EXISTS personal_audit (
+ id bigserial PRIMARY KEY,
+ personalnummer integer NOT NULL,
+ user_id integer REFERENCES users(id) ON DELETE SET NULL,
+ zeit timestamptz NOT NULL DEFAULT now(),
+ aenderungen jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS personal_audit_nr_zeit ON personal_audit(personalnummer,zeit DESC);
