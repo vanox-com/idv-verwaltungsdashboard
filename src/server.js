@@ -1411,27 +1411,59 @@ function zertDatum(d){
   &&new Date(d+'T00:00:00Z').toISOString().slice(0,10)===d;
 }
 function zertDD(d){return d.slice(8,10)+'.'+d.slice(5,7)+'.'+d.slice(0,4);}
-function zertEsc(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function zertHtml(p,ernannt,eid){
- const name=zertEsc([p.vorname,p.nachname].filter(Boolean).join(' ').trim());
- return '<html lang="de"><head><meta charset="utf-8"></head><body style="font-family:Arial,sans-serif;text-align:center;color:#1e2730">'+
- '<p style="font-size:29pt;color:#326c99;font-weight:bold">Polizei Hessen</p>'+
- '<p style="font-size:10pt;color:#64748b">IDENTITY VALLEY · ROLEPLAY</p>'+
- '<p style="font-size:16pt;font-weight:bold;margin-top:60px">Im Namen des Landes Hessen</p>'+
- '<p style="font-size:14pt;margin-top:40px">ernenne ich</p>'+
- '<p style="font-size:17pt;font-weight:bold;margin-top:35px">'+name+'<br>Geboren am '+zertDD(p.geburtsdatum)+'</p>'+
- '<p style="font-size:14pt">unter Berufung in das<br><b>Beamtenverhältnis auf Lebenszeit</b><br>zum</p>'+
- '<p style="font-size:18pt;font-weight:bold;margin-top:40px">Polizeimeister</p>'+
- '<p style="font-size:11pt;margin-top:50px">Die oben genannte Person hat am '+zertDD(eid)+
- ' ihren Amtseid entsprechend geleistet.</p>'+
- '<p style="font-size:11pt;margin-top:22px">Frankfurt a. M., den '+zertDD(ernannt)+'</p>'+
- '<table style="width:100%;text-align:center;margin-top:65px"><tr>'+
- '<td style="width:50%;font-size:16pt;font-style:italic;color:#3982b7">Jonas Schulz</td>'+
- '<td style="width:50%;font-size:16pt;font-style:italic">Florian Mayer</td></tr>'+
- '<tr><td style="font-size:10pt">Polizeipräsident<br>Jonas Schulz</td>'+
- '<td style="font-size:10pt">Polizeivizepräsident<br>Florian Mayer</td></tr></table>'+
- '<p style="font-size:8pt;color:#888;margin-top:45px">Fiktive Urkunde für den Rollenspielserver Identity Valley.de.</p>'+
- '</body></html>';
+/* Immer die echte IDV-Blankourkunde verwenden: Layout, Logo,
+   Originalunterschriften und fiktiver Hinweis bleiben unverändert.
+   Dokumente gehören dem beim Klick autorisierten Google-Konto. */
+const ZERT_VORLAGE='10aZ55_hWkzXLbrVDu8fZIAcRFD1qPIyMjaMqEgiyDxE';
+async function zertAusOriginalvorlage(token,titel,p,eid){
+ let id=null;
+ try{
+  try{
+   const copy=await zertGoogle(token,
+    'https://www.googleapis.com/drive/v3/files/'+ZERT_VORLAGE+'/copy?fields=id,mimeType',
+    'POST',{name:titel});
+   id=copy.id;
+  }catch(copyError){
+   // Ein fremdes Google-Dokument ist über drive.file nicht immer direkt
+   // kopierbar. Die öffentlich lesbare Originalvorlage als DOCX importieren.
+   const url='https://docs.google.com/document/d/'+ZERT_VORLAGE+'/export?format=docx';
+   const source=await fetch(url,{redirect:'follow',signal:AbortSignal.timeout(25000)});
+   if(!source.ok)throw new Error('Originalvorlage ist nicht öffentlich lesbar. Bitte Google-Docs-Freigabe prüfen.');
+   const docx=Buffer.from(await source.arrayBuffer());
+   if(docx.length<1000||docx.length>4000000||docx[0]!==80||docx[1]!==75)
+    throw new Error('Originalvorlage konnte nicht als gültige Word-Datei geladen werden');
+   const boundary='idv_'+randomBytes(12).toString('hex');
+   const metadata=JSON.stringify({name:titel,mimeType:'application/vnd.google-apps.document'});
+   const header=Buffer.from('--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+metadata+
+    '\r\n--'+boundary+'\r\nContent-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\n\r\n');
+   const body=Buffer.concat([header,docx,Buffer.from('\r\n--'+boundary+'--\r\n')]);
+   const uploaded=await zertGoogle(token,
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,mimeType',
+    'POST',body,'multipart/related; boundary='+boundary);
+   id=uploaded.id;
+  }
+  if(!id)throw new Error('Google Drive hat keine Dokument-ID geliefert');
+  const entries=[
+   ['<Vorname>',String(p.vorname||'').trim()],
+   ['<Name>',String(p.nachname||'').trim()],
+   ['<Geburtsdatum>',zertDD(p.geburtsdatum)],
+   ['<Datum>',zertDD(eid)]
+  ];
+  if(entries.some(x=>!x[1]))throw new Error('Name oder Geburtsdatum für die Urkunde fehlt');
+  const requests=entries.map(([text,replaceText])=>({
+   replaceAllText:{containsText:{text,matchCase:true},replaceText}
+  }));
+  const result=await zertGoogle(token,
+   'https://docs.googleapis.com/v1/documents/'+id+':batchUpdate',
+   'POST',{requests});
+  if(result.replies?.length!==requests.length||
+     result.replies.some((r,i)=>Number(r.replaceAllText?.occurrencesChanged||0)!==(i===3?2:1)))
+   throw new Error('Die Platzhalter der Originalvorlage stimmen nicht mehr überein');
+  return id;
+ }catch(error){
+  if(id)error.createdId=id;
+  throw error;
+ }
 }
 async function zertGoogle(token,url,method='GET',data,type='application/json'){
  const res=await fetch(url,{method,
@@ -1494,17 +1526,7 @@ app.post('/api/urkunden/polizeimeister/:nr',requireLogin,requireRight('bef',2),a
    return res.status(401).json({error:'Google-Kontoanmeldung fehlgeschlagen. Bitte erneut anmelden.'});
   token=auth.access_token;
   const title='Ernennungsurkunde '+name;
-  const boundary='idv_'+randomBytes(12).toString('hex');
-  const meta=JSON.stringify({name:title,mimeType:'application/vnd.google-apps.document'});
-  const multipart=Buffer.from('--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+
-   meta+'\r\n--'+boundary+'\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n'+
-   zertHtml(person,ernannt,eid)+'\r\n--'+boundary+'--\r\n','utf8');
-  const created=await zertGoogle(token,
-   'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,mimeType',
-   'POST',multipart,'multipart/related; boundary='+boundary);
-  createdId=created.id;
-  if(!createdId||created.mimeType!=='application/vnd.google-apps.document')
-   throw new Error('Google Drive konnte die Vorlage nicht in ein Google-Dokument umwandeln');
+  createdId=await zertAusOriginalvorlage(token,title,person,eid);
   const url='https://docs.google.com/document/d/'+createdId+'/edit';
   const inserted=await db.query(
    "UPDATE personal SET ernennungsurkunde=$1,ernennungsurkunde_url=$2 "+
@@ -1517,6 +1539,7 @@ app.post('/api/urkunden/polizeimeister/:nr',requireLogin,requireRight('bef',2),a
    .catch(e=>console.error('[Urkunden] Log:',e.message));
   return res.json({ok:true,url,titel:title});
  }catch(e){
+  if(!createdId&&e.createdId)createdId=e.createdId;
   if(createdId&&token&&!saved)try{
    await zertGoogle(token,'https://www.googleapis.com/drive/v3/files/'+createdId,'DELETE');
   }catch(err){console.error('[Urkunden] Bereinigung fehlgeschlagen:',err.message);}
