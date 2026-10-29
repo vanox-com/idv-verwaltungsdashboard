@@ -569,3 +569,19 @@ CREATE TABLE IF NOT EXISTS portal_design_personal (
 ALTER TABLE portal_meldungen ADD COLUMN IF NOT EXISTS sichtbar_ab timestamptz;
 ALTER TABLE portal_meldungen ADD COLUMN IF NOT EXISTS sichtbar_bis timestamptz;
 ALTER TABLE portal_meldung_empfaenger ADD COLUMN IF NOT EXISTS ausgeblendet_am timestamptz;
+
+/* Gesonderter Antrag auf Dienstgradänderung – wirksam erst nach POR-Freigabe. */
+CREATE TABLE IF NOT EXISTS personal_rangantraege (
+ id bigserial PRIMARY KEY,
+ personalnummer integer NOT NULL REFERENCES personal(personalnummer) ON DELETE CASCADE,
+ alter_rang text NOT NULL,
+ beantragter_rang text NOT NULL,
+ begruendung text NOT NULL DEFAULT '',
+ status text NOT NULL DEFAULT 'beantragt' CHECK(status IN ('beantragt','genehmigt','abgelehnt')),
+ antragsteller_id integer REFERENCES users(id) ON DELETE SET NULL,
+ entscheider_id integer REFERENCES users(id) ON DELETE SET NULL,
+ erstellt timestamptz NOT NULL DEFAULT now(),
+ entschieden_am timestamptz
+);
+CREATE UNIQUE INDEX IF NOT EXISTS personal_rangantraege_ein_offener_idx
+ ON personal_rangantraege(personalnummer) WHERE status='beantragt';
