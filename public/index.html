@@ -1076,6 +1076,7 @@ html[data-design-preset="flori"] .design-preset-grid [data-design-preset="flori"
 #kueDocsDialog input{padding:9px 11px;width:100%;box-sizing:border-box}
 #kueDocsDialog .actions{justify-content:flex-end;position:sticky;bottom:-24px;background:var(--panel);padding:14px 0 4px;border-top:1px solid var(--line)}
 
+.flori-audio-test{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:15px}.flori-audio-test button{background:#8f5c2d;color:#fff7e5;border:2px dashed #e8bf73;font-weight:700}.flori-audio-test small{color:var(--mut);font-size:11px;line-height:1.5;max-width:520px}.flori-audio-test a{color:var(--acc);text-decoration:underline}
 </style>
 </head>
 <body>
@@ -4014,7 +4015,9 @@ async function ladeDesign(){
   ausgewaehltesDesignPreset=d.extras?.preset==='flori'?'flori':'';
   area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p class="mut">Du kannst dein eigenes Design speichern. Administratoren können zusätzlich den Standard für alle vorgeben.</p>'+
    '<section class="box"><h3>Farb-Presets</h3><p class="mut">Ein Preset übernimmt passende Farben. Über Vorschau testen und anschließend persönlich speichern.</p>'+
-   '<div class="design-preset-grid">'+Object.entries(PORTAL_PRESETS).map(([id,p])=>'<button type="button" data-design-preset="'+id+'" title="'+esc(p.name)+'"><span class="design-preset-swatch" style="background:linear-gradient(125deg,'+p.extras.seitenleiste+','+p.extras.flaeche+')"><i style="background:'+p.akzent+'"></i></span><strong>'+esc(p.name)+'</strong></button>').join('')+'</div></section>'+
+   '<div class="design-preset-grid">'+Object.entries(PORTAL_PRESETS).map(([id,p])=>'<button type="button" data-design-preset="'+id+'" title="'+esc(p.name)+'"><span class="design-preset-swatch" style="background:linear-gradient(125deg,'+p.extras.seitenleiste+','+p.extras.flaeche+')"><i style="background:'+p.akzent+'"></i></span><strong>'+esc(p.name)+'</strong></button>').join('')+'</div>'+ 
+   '<div class="flori-audio-test"><button type="button" id="floriMuhTest">🐮 Kräftiges MUUUH testen 🔊</button>'+
+   '<small>Echte Kuhaufnahme: <a href="https://commons.wikimedia.org/wiki/File:Mudchute_cow_1.ogg" target="_blank" rel="noopener noreferrer">Secretlondon / Wikimedia Commons</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 3.0</a>. Im Florimodus muhende Klicks.</small></div></section>'+
    '<section class="box"><h3>Portal-Design</h3>'+
    '<label for="designAkzent">Akzentfarbe</label><input id="designAkzent" type="color" value="'+esc(d.akzent)+'" style="width:110px;height:48px;padding:5px">'+
    '<label for="designSchleier">Dunkler Schleier ('+Number(d.schleier)+' %)</label><input id="designSchleier" type="range" min="65" max="97" value="'+Number(d.schleier)+'">'+
@@ -4050,27 +4053,78 @@ document.addEventListener('click',async ev=>{
 
 
 
-/* Florimodus: eigene synthetische 'Muh'-Klänge, nur nach direktem Klick. */
-let floriAudioContext=null,floriLetztesMuh=0;
-function florimodusMuh(){
- if(document.documentElement.dataset.designPreset!=='flori')return;
- const jetzt=Date.now();if(jetzt-floriLetztesMuh<250)return;floriLetztesMuh=jetzt;
+/* Florimodus: echtes, langes Kuh-Muh (Secretlondon, Wikimedia Commons,
+   CC BY-SA 3.0). Nur nach direkter Nutzeraktion; alle anderen Designs stumm.
+   Offline/bei Ladeproblemen gibt es einen deutlich kräftigeren WebAudio-Ersatz. */
+const FLORI_MUH_DATEI='https://upload.wikimedia.org/wikipedia/commons/4/48/Mudchute_cow_1.ogg';
+let floriKuhAudio=null,floriKuhFehler=false,floriAudioContext=null,floriLetztesMuh=0;
+function florimodusSynth(){
  try{
-  const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
-  const ctx=floriAudioContext||(floriAudioContext=new C());
+  const AudioKontext=window.AudioContext||window.webkitAudioContext;
+  if(!AudioKontext)return;
+  const ctx=floriAudioContext||(floriAudioContext=new AudioKontext());
   if(ctx.state==='suspended')ctx.resume().catch(()=>{});
-  const t=ctx.currentTime,osc=ctx.createOscillator(),mod=ctx.createOscillator(),gain=ctx.createGain(),mg=ctx.createGain(),filter=ctx.createBiquadFilter();
-  osc.type='sawtooth';mod.type='sine';mod.frequency.value=7;mg.gain.value=11;
-  mod.connect(mg);mg.connect(osc.frequency);
-  osc.frequency.setValueAtTime(155,t);osc.frequency.exponentialRampToValueAtTime(105,t+.6);
-  filter.type='lowpass';filter.frequency.value=480;
-  gain.gain.setValueAtTime(.0001,t);gain.gain.exponentialRampToValueAtTime(.12,t+.09);
-  gain.gain.exponentialRampToValueAtTime(.0001,t+.7);
-  osc.connect(filter);filter.connect(gain);gain.connect(ctx.destination);
-  mod.start(t);osc.start(t);mod.stop(t+.72);osc.stop(t+.72);
- }catch(e){}
+  const start=ctx.currentTime,laenge=2.15;
+  const master=ctx.createGain(),kompressor=ctx.createDynamicsCompressor();
+  kompressor.threshold.value=-19;kompressor.knee.value=12;
+  kompressor.ratio.value=4;kompressor.attack.value=.004;kompressor.release.value=.25;
+  master.gain.setValueAtTime(.0001,start);
+  master.gain.exponentialRampToValueAtTime(.85,start+.17);
+  master.gain.setValueAtTime(.85,start+1.35);
+  master.gain.exponentialRampToValueAtTime(.0001,start+laenge);
+  master.connect(kompressor);kompressor.connect(ctx.destination);
+  const lfo=ctx.createOscillator(),lfoTiefe=ctx.createGain();
+  lfo.frequency.value=5.1;lfoTiefe.gain.value=4.5;lfo.connect(lfoTiefe);
+  const stimmen=[
+   {freq:105,type:'sawtooth',gain:.21},
+   {freq:106.4,type:'triangle',gain:.33},
+   {freq:53,type:'sawtooth',gain:.13}
+  ];
+  for(const stimme of stimmen){
+   const osc=ctx.createOscillator(),laut=ctx.createGain(),filter=ctx.createBiquadFilter();
+   osc.type=stimme.type;
+   osc.frequency.setValueAtTime(stimme.freq*1.16,start);
+   osc.frequency.exponentialRampToValueAtTime(stimme.freq*.83,start+laenge);
+   lfoTiefe.connect(osc.frequency);
+   filter.type='lowpass';filter.frequency.value=650;filter.Q.value=.75;
+   laut.gain.value=stimme.gain;
+   osc.connect(filter);filter.connect(laut);laut.connect(master);
+   osc.start(start);osc.stop(start+laenge+.03);
+  }
+  lfo.start(start);lfo.stop(start+laenge+.03);
+ }catch(e){/* Sound ist optional, das Portal bleibt bedienbar. */}
 }
-document.addEventListener('click',e=>{if(e.target.closest('button,a,[role="button"]'))florimodusMuh();});
+function florimodusMuh(test=false){
+ if(!test&&document.documentElement.dataset.designPreset!=='flori')return;
+ const jetzt=Date.now();
+ if(jetzt-floriLetztesMuh<1400)return;
+ floriLetztesMuh=jetzt;
+ if(floriKuhFehler){florimodusSynth();return;}
+ try{
+  if(!floriKuhAudio){
+   floriKuhAudio=new Audio(FLORI_MUH_DATEI);
+   floriKuhAudio.preload='auto';
+   floriKuhAudio.volume=1;
+   floriKuhAudio.playbackRate=.86; // Ein tiefes, langgezogenes MUUUH!
+   floriKuhAudio.addEventListener('error',()=>{
+    if(!floriKuhFehler){floriKuhFehler=true;florimodusSynth();}
+   },{once:true});
+  }
+  if(!floriKuhAudio.paused)floriKuhAudio.pause();
+  try{floriKuhAudio.currentTime=0;}catch(e){}
+  const play=floriKuhAudio.play();
+  if(play&&typeof play.catch==='function')play.catch(err=>{
+   if(err?.name!=='NotAllowedError'&&!floriKuhFehler){
+    floriKuhFehler=true;florimodusSynth();
+   }
+  });
+ }catch(e){floriKuhFehler=true;florimodusSynth();}
+}
+document.addEventListener('click',e=>{
+ if(e.target.closest('#floriMuhTest')){florimodusMuh(true);return;}
+ if(e.target.closest('button,a,[role="button"],summary,select,input[type="checkbox"],input[type="radio"]'))
+  florimodusMuh();
+});
 
 /* Personalisierung und Rechteansicht – bestehende Module werden nur verlinkt. */
 async function ladeStatistikEntwicklung(){
