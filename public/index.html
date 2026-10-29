@@ -1025,6 +1025,7 @@ html[data-portal-mode="hell"] .dashboard-line{color:var(--txt)}
 html[data-portal-mode="hell"] aside a{color:var(--txt)}
 html[data-portal-mode="hell"] aside a:hover,html[data-portal-mode="hell"] aside a.aktiv{background:var(--portal-highlight)}
 .design-preset-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin-top:16px}.design-preset-grid button{display:flex;flex-direction:column;align-items:stretch;gap:9px;text-align:left}.design-preset-swatch{height:66px;display:flex;align-items:end;padding:12px;border-radius:9px;border:1px solid rgba(140,160,185,.25)}.design-preset-swatch i{width:42%;height:15px;border-radius:6px}
+.kue-doc-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:4px 0}.kue-doc-edit{font-size:11px;padding:3px 7px;white-space:nowrap}.kue-doc-row a{overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -2454,6 +2455,21 @@ function kueDokument(raw) {
     ? '<a class="l" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(t)+'</a>'
     : esc(t);
 }
+document.addEventListener('click',async e=>{
+ const btn=e.target.closest('[data-kue-doc-id]');if(!btn||!can('kue',2))return;
+ const id=Number(btn.dataset.kueDocId),feld=btn.dataset.kueDocFeld;
+ const k=(D.kuendigungen||[]).find(x=>Number(x.id)===id);
+ if(!k||!['vertrag','urkunde','zeugnis','kuendigung'].includes(feld))return;
+ let name='',url='';
+ try{const val=JSON.parse(k[feld]||'');if(val&&typeof val==='object'){name=val.t||'';url=val.u||'';}}
+ catch{name=String(k[feld]||'');if(/^https:\/\//.test(name)){url=name;name='';}}
+ const neuerName=prompt('Dokumentenname ('+feld+'):',name);if(neuerName===null)return;
+ const neuerLink=prompt('Dokumentenlink (HTTPS, leer = kein Link):',url);if(neuerLink===null)return;
+ try{
+  await api('/kuendigung/'+id+'/dokument',{method:'PATCH',body:JSON.stringify({feld,name:neuerName,url:neuerLink})});
+  await starten();
+ }catch(err){alert('Dokument konnte nicht gespeichert werden: '+err.message);}
+});
 function vKue() {
   const schreiben=can('kue',2),eintraege=D.kuendigungen || [];
   const rows=eintraege.map(k=>{
@@ -2464,7 +2480,7 @@ function vKue() {
       return schreiben ? '<button type="button" class="tag kue-status '+cls+'" title="Status umschalten" data-kue-id="'+Number(k.id)+'" data-kue-field="'+feld+'">'+text+'</button>'
         : '<span class="tag '+cls+'">'+text+'</span>';
     }).join(' ');
-    const docs=['vertrag','urkunde','zeugnis','kuendigung'].map(x=>kueDokument(k[x])).filter(x=>x!=='–').join('<div class="kue-docsep"></div>')||'–';
+    const docs=['vertrag','urkunde','zeugnis','kuendigung'].map(x=>'<div class="kue-doc-row">'+kueDokument(k[x])+(schreiben?' <button type="button" class="kue-doc-edit" data-kue-doc-id="'+Number(k.id)+'" data-kue-doc-feld="'+x+'">Link bearbeiten</button>':'')+'</div>').join('');
     return '<tr><td>'+esc(k.personalnummer)+'</td><td><strong>'+esc([k.vorname,k.nachname].filter(Boolean).join(' '))+'</strong> '+
       '<span class="tag '+(offen?'warn':'ok')+'">'+(offen?offen+' offen':'erledigt')+'</span></td>'+
       '<td>'+esc(k.rang||'–')+'</td><td>'+esc(k.grund||'–')+'</td><td>'+fd(k.eintritt)+'</td>'+
@@ -2523,7 +2539,7 @@ function kueNeuDialog() {
     if(!p)return;
     for(const [f,val] of [['nr',p.personalnummer],['vorname',p.vorname],['nachname',p.nachname],
       ['rang',p.dienstgrad],['eintritt',p.eintrittsdatum?String(p.eintrittsdatum).slice(0,10):''],
-      ['handy',p.handy||''],['vertrag',p.arbeitsvertrag||''],['urkunde',p.ernennungsurkunde||'']])
+      ['handy',p.handy||''],['vertrag',p.arbeitsvertrag_url?JSON.stringify({t:p.arbeitsvertrag||'Arbeitsvertrag',u:p.arbeitsvertrag_url}):p.arbeitsvertrag||''],['urkunde',p.ernennungsurkunde_url?JSON.stringify({t:p.ernennungsurkunde||'Ernennungsurkunde',u:p.ernennungsurkunde_url}):p.ernennungsurkunde||'']])
       $('#k_'+f).value=val||'';
   };
   $('#kueForm').onsubmit=async e=>{
