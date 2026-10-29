@@ -1168,6 +1168,56 @@ html[data-portal-mode="hell"][data-portal-wallpaper="ohne"]:not([data-design-pre
  background-color:#e8edf5!important;background-image:none!important;
 }
 
+
+/* Zusätzliche auswählbare IDV-Polizeimotive: 3 Nutzeraufnahmen.
+   Ein vorhandenes Einsatzfoto bleibt bis zum Upload neuer Dateien als sichere
+   Fallback-Ebene sichtbar. Login-Motiv und Bestandsdesign bleiben unverändert. */
+html[data-portal-wallpaper="streife-nacht"]{
+ --idv-photo:url('/assets/idv-streife-nacht.webp');
+ --idv-photo-position:42% center;
+}
+html[data-portal-wallpaper="streife-einsatz"]{
+ --idv-photo:url('/assets/idv-streife-einsatz.webp');
+ --idv-photo-position:60% center;
+}
+html[data-portal-wallpaper="polizeiweste"]{
+ --idv-photo:url('/assets/idv-polizeiweste.webp');
+ --idv-photo-position:75% center;
+}
+html:is(
+ [data-portal-wallpaper="streife-nacht"],
+ [data-portal-wallpaper="streife-einsatz"],
+ [data-portal-wallpaper="polizeiweste"]
+):not([data-design-preset="flori"]) #app{
+ background-color:#111c2b!important;
+ background-image:
+   linear-gradient(115deg,rgba(6,13,24,var(--portal-veil,.88)),rgba(10,18,29,var(--portal-veil,.88))),
+   var(--idv-photo),
+   url('/assets/idv-polizei-einsatzszene.webp')!important;
+ background-size:cover,cover,cover!important;
+ background-position:center,var(--idv-photo-position),center!important;
+ background-attachment:fixed!important;
+ background-repeat:no-repeat!important;
+}
+html[data-portal-mode="hell"]:is(
+ [data-portal-wallpaper="streife-nacht"],
+ [data-portal-wallpaper="streife-einsatz"],
+ [data-portal-wallpaper="polizeiweste"]
+):not([data-design-preset="flori"]) #app{
+ background-color:#e8edf5!important;
+ background-image:
+   linear-gradient(115deg,rgba(237,243,250,var(--portal-veil,.88)),rgba(226,235,245,var(--portal-veil,.88))),
+   var(--idv-photo),
+   url('/assets/idv-polizei-einsatzszene.webp')!important;
+}
+@media(max-width:767px){
+ html:is(
+  [data-portal-wallpaper="streife-nacht"],
+  [data-portal-wallpaper="streife-einsatz"],
+  [data-portal-wallpaper="polizeiweste"]
+ ):not([data-design-preset="flori"]) #app{background-attachment:scroll!important}
+}
+
 </style>
 </head>
 <body>
@@ -4094,7 +4144,7 @@ function applyPortalDesign(d){
 
  document.documentElement.style.setProperty('--portal-veil',String(Math.min(.97,Math.max(.65,Number(d.schleier)/100))));
  document.documentElement.style.setProperty('--portal-rgb',r+','+g+','+b);
- document.documentElement.dataset.portalWallpaper=['wappen','verlauf','ohne','nachtblau','stahl','raster','licht','minimal','einsatzszene'].includes(d.hintergrund)?d.hintergrund:'wappen';
+ document.documentElement.dataset.portalWallpaper=['wappen','verlauf','ohne','nachtblau','stahl','raster','licht','minimal','einsatzszene','streife-nacht','streife-einsatz','polizeiweste'].includes(d.hintergrund)?d.hintergrund:'wappen';
 }
 const PORTAL_PRESETS={
  klassisch:{name:'Polizei-Klassik',akzent:'#508ac9',hintergrund:'wappen',extras:{modus:'dunkel',flaeche:'#182333',seitenleiste:'#0b111a',rahmen:'#26354b',schrift:'#e6edf6',sekundaer:'#8ea0b8',highlight:'#203958'}},
@@ -4120,7 +4170,7 @@ async function ladeDesign(){
    '<label for="designAkzent">Akzentfarbe</label><input id="designAkzent" type="color" value="'+esc(d.akzent)+'" style="width:110px;height:48px;padding:5px">'+
    '<label for="designSchleier">Dunkler Schleier ('+Number(d.schleier)+' %)</label><input id="designSchleier" type="range" min="65" max="97" value="'+Number(d.schleier)+'">'+
    '<label for="designMotiv">Hintergrundmotiv</label><select id="designMotiv">'+
-   [['wappen','Original-Polizeiwappen'],['verlauf','Dezenter Farbverlauf'],['nachtblau','Nachtblau'],['stahl','Stahlgrau'],['raster','Digitales Raster'],['licht','Blaue Lichtakzente'],['minimal','Minimalistischer Verlauf'],['einsatzszene','Polizei-Einsatzszene (Foto)'],['ohne','Einfarbig dunkel']].map(([v,t])=>'<option value="'+v+'"'+(d.hintergrund===v?' selected':'')+'>'+t+'</option>').join('')+
+   [['wappen','Original-Polizeiwappen'],['verlauf','Dezenter Farbverlauf'],['nachtblau','Nachtblau'],['stahl','Stahlgrau'],['raster','Digitales Raster'],['licht','Blaue Lichtakzente'],['minimal','Minimalistischer Verlauf'],['einsatzszene','Polizei-Einsatzszene (Foto)'],['streife-nacht','Streifenwagen bei Nacht & Regen'],['streife-einsatz','Streifenwagen an der Einsatzstelle'],['polizeiweste','Polizeiweste (Nahaufnahme)'],['ohne','Einfarbig dunkel']].map(([v,t])=>'<option value="'+v+'"'+(d.hintergrund===v?' selected':'')+'>'+t+'</option>').join('')+
    '</select><p class="mut" id="designSpeicherStatus" role="status" aria-live="polite">Motivwahl wird automatisch für dein Konto gespeichert.</p><h3>Farben &amp; Anzeigemodus</h3><label for="designModus">Anzeigemodus</label><select id="designModus"><option value="dunkel"'+((d.extras?.modus||'dunkel')==='dunkel'?' selected':'')+'>Dunkel</option><option value="hell"'+(d.extras?.modus==='hell'?' selected':'')+'>Hell</option></select>'+
    '<div class="design-colors">'+[['flaeche','Karten und Flächen'],['seitenleiste','Seitenleiste'],['rahmen','Rahmen und Trennlinien'],['schrift','Schriftfarbe'],['sekundaer','Sekundärtext'],['highlight','Hervorhebungen']].map(([key,title])=>'<label>'+title+'<input type="color" data-design-color="'+key+'" value="'+esc(d.extras?.[key]||((d.extras?.modus==='hell'?{flaeche:'#ffffff',seitenleiste:'#e9eff7',rahmen:'#c6d1df',schrift:'#15253b',sekundaer:'#52677f',highlight:'#e6f0ff'}:{flaeche:'#182333',seitenleiste:'#0b111a',rahmen:'#26354b',schrift:'#e6edf6',sekundaer:'#8ea0b8',highlight:'#203958'})[key]))+'"></label>').join('')+'</div>'+
    '<div class="actions"><button type="button" id="designPreview">Vorschau</button><button type="button" class="p" id="designPersonalSave">Mein Design speichern</button><button type="button" id="designReset">Admin-Standard übernehmen</button>'+(ME.rolle==='Administrator'?'<button type="button" id="designSave">Standard für alle speichern</button>':'')+'</div>'+
