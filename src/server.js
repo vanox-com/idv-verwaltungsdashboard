@@ -407,34 +407,6 @@ app.put('/api/portal-design',requireLogin,requireRight('design',2),async(req,res
 });
 /* Der Generator liefert nur Akten, die der Nutzer ohnehin lesen darf. */
 
-/* Favoriten: nur eigene Einträge, Rechteprüfung bei jeder Änderung. */
-const FAVORITEN_MODULE=new Set(['dash','pers','bef','sonder','kue','dis','rout','chk','texte','rl','org','sperr','geb','jub','bl','users','log','system','meldungen','statistik','entwicklung','favoriten','design','backup','rechtesimulator']);
-app.get('/api/favoriten',requireLogin,async(req,res,next)=>{
- try{
-  const rights=await effektiveRechte(req.user);
-  const {rows}=await db.query('SELECT modul FROM user_favoriten WHERE user_id=$1 ORDER BY sortierung,modul',[req.user.id]);
-  res.json(rows.map(x=>x.modul).filter(m=>FAVORITEN_MODULE.has(m)&&(
-   m==='system'?req.user.rolle==='Administrator':
-   m==='statistik'||m==='entwicklung'?rights.pers>=1:m==='favoriten'?true:
-   m==='meldungen'?rights.mitteilungen>=2:
-   (rights[m]||0)>=1)));
- }catch(e){next(e)}
-});
-app.put('/api/favoriten',requireLogin,async(req,res,next)=>{
- const items=req.body?.module;
- if(!Array.isArray(items)||items.length>16||new Set(items).size!==items.length||items.some(x=>typeof x!=='string'||!FAVORITEN_MODULE.has(x)))
-  return res.status(400).json({error:'Ungültige Favoriten'});
- const rights=await effektiveRechte(req.user);
- if(items.some(m=>!(m==='system'?req.user.rolle==='Administrator':m==='statistik'||m==='entwicklung'?rights.pers>=1:m==='favoriten'?true:m==='meldungen'?rights.mitteilungen>=2:(rights[m]||0)>=1)))
-  return res.status(403).json({error:'Keine Berechtigung für mindestens einen Favoriten'});
- const client=await db.connect().catch(next);if(!client)return;
- try{
-  await client.query('BEGIN');
-  await client.query('DELETE FROM user_favoriten WHERE user_id=$1',[req.user.id]);
-  for(let i=0;i<items.length;i++)await client.query('INSERT INTO user_favoriten(user_id,modul,sortierung) VALUES($1,$2,$3)',[req.user.id,items[i],i]);
-  await client.query('COMMIT');res.json({ok:true});
- }catch(e){await client.query('ROLLBACK').catch(()=>{});next(e)}finally{client.release()}
-});
 /* Rechte-Simulator zeigt nur effektive Rechte an; verändert keine Konten. */
 app.get('/api/rechtesimulator',requireLogin,requireRight('rechtesimulator',1),async(req,res,next)=>{
  try{
