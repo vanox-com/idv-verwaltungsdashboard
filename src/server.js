@@ -406,20 +406,6 @@ app.put('/api/portal-design',requireLogin,requireRight('design',2),async(req,res
  }catch(e){next(e)}
 });
 /* Der Generator liefert nur Akten, die der Nutzer ohnehin lesen darf. */
-app.get('/api/urkunden/personen',requireLogin,requireRight('urkunden',1),requireRight('pers',1),async(req,res,next)=>{
- try{const {rows}=await db.query('SELECT personalnummer,vorname,nachname,dienstgrad,gruppe,eintrittsdatum FROM personal ORDER BY nachname,vorname');res.json(rows);}catch(e){next(e)}
-});
-app.post('/api/urkunden/protokoll',requireLogin,requireRight('urkunden',2),async(req,res,next)=>{
- try{
-  const nr=Number(req.body?.personalnummer),typ=String(req.body?.typ||'');
-  if(!Number.isSafeInteger(nr)||nr<1||!['ernennung','befoerderung','belobigung','bescheinigung'].includes(typ))
-   return res.status(400).json({error:'Ungültige Urkunde'});
-  const {rowCount}=await db.query('SELECT personalnummer FROM personal WHERE personalnummer=$1',[nr]);
-  if(!rowCount)return res.status(404).json({error:'Personalakte nicht gefunden'});
-  await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",[req.user.id,'Urkunde '+typ+' für Personal '+nr+' zum Druck vorbereitet']);
-  res.json({ok:true});
- }catch(e){next(e)}
-});
 /* ---------- Lesen ---------- */
 
 app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
