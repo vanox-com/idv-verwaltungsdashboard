@@ -1,7 +1,7 @@
 /* Gemeinsamer Generator für RP-Verwaltungsdokumente.
    Berechtigungen, Aktenzuordnung und Speicherung werden serverseitig geprüft. */
 const DG_FIELDS={
- datum:['Ausstellungsdatum','date'],unterzeichner:['Unterzeichner (Vorname Nachname)','text'],
+ datum:['Ausstellungsdatum','date'],unterzeichner:['Polizeilicher Unterzeichner (angemeldetes Konto)','text'],
  rang:['Dienstgrad des Unterzeichners','text'],anrede:['Anrede','select'],
  strasse:['Straße','text'],hausnummer:['Hausnummer','text'],
  wohnort:['Wohnort','text'],beginn:['Beginn des Arbeitsverhältnisses','date'],
@@ -64,6 +64,14 @@ async function dgPrepareAuth(){
   try{
    const result=await api('/dokumentgenerator/status');
    if(!result.eingerichtet)throw Error('Google OAuth ist noch nicht eingerichtet.');
+   const nameInput=document.getElementById('dg_unterzeichner');
+   if(nameInput){
+    nameInput.value=result.ersteller||'';
+    nameInput.readOnly=true;
+    nameInput.title='Wird automatisch aus dem angemeldeten Benutzerkonto übernommen';
+   }
+   if(!result.erstellerVollstaendig)
+    throw Error('Dein Benutzerkonto benötigt einen vollständigen Vor- und Nachnamen für die polizeiliche Unterschrift.');
    await dgLoadGoogle();
    if(!dgCodeClient||dgClientId!==result.clientId){
     dgClientId=result.clientId;
@@ -101,7 +109,7 @@ async function dgShow(typ,nr=0,kontext=0){
  const person=(D.personal||[]).find(x=>Number(x.personalnummer)===Number(nr));
  const name=person?[person.vorname,person.nachname].join(' '):'Externe Person';
  const defaults={datum:dgNow(),beginn:person?.eintrittsdatum?String(person.eintrittsdatum).slice(0,10):dgNow(),
-  unterzeichner:ME?.name||ME?.anzeigename||'',rang:'',
+  unterzeichner:ME?.anzeigename||'',rang:'',
   arbeitgeber:person?.nebenjob||''};
  let dlg=document.getElementById('dgDialog');
  if(!dlg){dlg=document.createElement('dialog');dlg.id='dgDialog';document.body.appendChild(dlg);}
@@ -122,6 +130,12 @@ async function dgShow(typ,nr=0,kontext=0){
    fields.map(k=>dgField(k,defaults)).join('')+'</div>'+snippets+
   '<div class="dg-bottom"><span class="fehler" id="dg_error" role="alert"></span><button type="submit" class="p" id="dg_submit">Mit Google Drive erstellen</button></div></form>';
  dlg.showModal();document.getElementById('dg_close').onclick=()=>dlg.close();
+ // Name ist ausschließlich aus der Benutzeridentität zu übernehmen.
+ const creatorInput=document.getElementById('dg_unterzeichner');
+ if(creatorInput){
+  creatorInput.readOnly=true;
+  creatorInput.title='Der Name wird aus deiner aktuellen Anmeldung übernommen';
+ }
  const createButton=document.getElementById('dg_submit');
  createButton.disabled=true;createButton.textContent='Google-Anmeldung wird geladen …';
  void dgPrepareAuth().then(()=>{
