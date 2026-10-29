@@ -98,8 +98,9 @@ Einmalige technische Konfiguration:
    Beim Status **Testing** berechtigte Testnutzer eintragen.
 3. OAuth-Client **Web application** anlegen und unter **Authorized JavaScript origins**
    die genutzten Portal-Origin(s) hinterlegen, insbesondere
-   `https://idv-ppverwaltung.de` und bei weiterhin benötigtem
-   Testzugriff zusätzlich `https://idv-verwaltungsdashboard-1.onrender.com`.
+   `https://idv-ppverwaltung.de`. Die Render-Origin sollte nach dem
+   Domainwechsel für die öffentliche Google-Verifizierung entfernt werden,
+   weil `onrender.com` keine selbst verifizierbare eigene Domain ist.
    Keine Pfade oder abschließenden Schrägstriche.
 4. Die beiden Werte in Render unter **Environment** hinterlegen:
    `GOOGLE_OAUTH_CLIENT_ID` (nicht geheim, für Google-Anmeldung)
@@ -172,8 +173,8 @@ aktuellen Google-OAuth-Brandingangaben oder als primäre Domain stehen.
    * Datenschutz: `https://idv-ppverwaltung.de/datenschutz`
    * Autorisierte Domain: `idv-ppverwaltung.de`
    * OAuth-Webclient → Autorisierte JavaScript-Quellen:
-     `https://idv-ppverwaltung.de` (gegebenenfalls die Render-Adresse
-     weiterhin als zusätzliche Test-Origin)
+     `https://idv-ppverwaltung.de` (vor Google-Verifizierung zuvor
+     eingetragene gemeinsame Render-Origins entfernen)
    * Google Search Console → Domain-Eigentum per IONOS-TXT-Eintrag
      verifizieren. Alte Branding-Angaben zur ungenutzten Domain prüfen
      und entfernen.
