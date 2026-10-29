@@ -1351,6 +1351,37 @@ app.post('/api/kuendigung', requireLogin, requireRight('kue', 2), async (req, re
 
 /* Statuswechsel in der Kündigungsliste. Werte serverseitig prüfen. */
 /* Dokumentadressen gezielt pro historischem Kündigungsvorgang pflegen. */
+/* Ein Dialog speichert die vier Kündigungsdokumente atomar, ohne die Personaldaten zu ändern. */
+app.patch('/api/kuendigung/:id/dokumente',requireLogin,requireRight('kue',2),async(req,res,next)=>{
+ try{
+  const id=Number(req.params.id),felder=['vertrag','urkunde','zeugnis','kuendigung'];
+  const daten=req.body?.dokumente;
+  if(!Number.isSafeInteger(id)||id<1||!daten||typeof daten!=='object'||Array.isArray(daten)||
+     Object.keys(daten).some(k=>!felder.includes(k))||!felder.every(k=>Object.hasOwn(daten,k)))
+   return res.status(400).json({error:'Ungültige Dokumentangaben'});
+  const werte=[];
+  for(const feld of felder){
+   const d=daten[feld];
+   if(!d||typeof d!=='object'||Array.isArray(d)||typeof d.name!=='string'||typeof d.url!=='string')
+    return res.status(400).json({error:'Dokumentname und Link müssen Text sein',feld});
+   const name=d.name.trim(),url=d.url.trim();
+   if(name.length>250||url.length>2048)return res.status(400).json({error:'Dokumentenname oder URL zu lang',feld});
+   if(url){
+    try{const u=new URL(url);
+     if(u.protocol!=='https:'||u.username||u.password||!u.hostname.includes('.'))throw Error('Link');
+    }catch{return res.status(400).json({error:'Bitte eine gültige HTTPS-URL eingeben',feld});}
+   }
+   werte.push(name||url?JSON.stringify({t:name||({vertrag:'Arbeitsvertrag',urkunde:'Ernennungsurkunde',zeugnis:'Arbeitszeugnis',kuendigung:'Kündigung'})[feld],u:url}):'');
+  }
+  const {rows}=await db.query(
+   'UPDATE kuendigungen SET vertrag=$1,urkunde=$2,zeugnis=$3,kuendigung=$4 WHERE id=$5 RETURNING id,vertrag,urkunde,zeugnis,kuendigung',
+   [...werte,id]);
+  if(!rows.length)return res.status(404).json({error:'Kündigung nicht gefunden'});
+  await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
+    [req.user.id,'Dokumente in Kündigungsvorgang '+id+' bearbeitet']);
+  res.json({ok:true,dokumente:rows[0]});
+ }catch(err){next(err)}
+});
 app.patch('/api/kuendigung/:id/dokument',requireLogin,requireRight('kue',2),async(req,res,next)=>{
  try{
   const id=Number(req.params.id),feld=req.body?.feld;
