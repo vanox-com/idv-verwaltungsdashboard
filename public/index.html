@@ -981,6 +981,15 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 .personalstat-grid .dashboard-group-head strong{flex-shrink:0;font-variant-numeric:tabular-nums}
 .personalstat-grid .dashboard-progress{height:9px;border-radius:9px}
 @media(max-width:620px){.personalstat-grid{grid-template-columns:minmax(0,1fr)}.personalstat-grid>.box{padding:18px}}
+
+/* Konfigurierbares Portaldesign: Originalgestaltung und Wasserzeichen bewahren. */
+#app{--veil:var(--portal-veil,.88);background-color:#121c29!important;background-image:
+ linear-gradient(125deg,rgba(12,20,31,var(--veil)),rgba(16,26,40,var(--veil))),
+ url('/assets/idv-polizei-logo-transparent.svg'),
+ radial-gradient(ellipse at 80% 15%,rgba(var(--portal-rgb,91,134,186),.20),transparent 60%),
+ linear-gradient(135deg,#101923,#1b2d40)!important}
+html[data-portal-wallpaper="verlauf"] #app{background-image:linear-gradient(125deg,rgba(12,20,31,var(--veil)),rgba(16,26,40,var(--veil))),radial-gradient(ellipse at 80% 15%,rgba(var(--portal-rgb,91,134,186),.3),transparent 60%),linear-gradient(135deg,#101923,#1b2d40)!important;background-size:cover!important}
+html[data-portal-wallpaper="ohne"] #app{background-image:none!important;background-color:#151d28!important}
 </style>
 </head>
 <body>
@@ -1036,16 +1045,16 @@ const MODS = [
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
-  ['backup','Backup-Übersicht','🗄️'],['users','Benutzer & Rollen','🔐'],['system','Systemverwaltung','⚙️'],['meldungen','Mitteilungen verwalten','📣'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾']
+  ['urkunden','Urkundengenerator','📜'],['design','Designverwaltung','🎨'],['backup','Backup-Übersicht','🗄️'],['users','Benutzer & Rollen','🔐'],['system','Systemverwaltung','⚙️'],['meldungen','Mitteilungen verwalten','📣'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾']
 ];
 /* Sidebar: dieselben Module und Rechte, nur übersichtlich gruppiert.
    Ein aktives Modul hält seine Kategorie immer geöffnet. */
 const NAV_GRUPPEN = [
   {id:'uebersicht',titel:'Übersicht',module:['dash']},
   {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','rout','geb','jub' ,'statistik']},
-  {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
+  {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte','urkunden']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
-  {id:'verwaltung',titel:'Administration',module:['users','system','meldungen','backup','log']}
+  {id:'verwaltung',titel:'Administration',module:['users','system','meldungen','design','backup','log']}
 ];
 const NAV_OFFEN = new Set(['uebersicht','personal']);
 let ME = null, D = null, tab = 'dash';
@@ -1295,6 +1304,7 @@ async function starten() {
     }
     ME = antwort.user;
     D = antwort.daten;
+    api('/portal-design').then(applyPortalDesign).catch(()=>{});
     api('/system-optionen').then(o=>{if(D)D.systemOptionen=o;}).catch(()=>{});
     $('#meName').textContent = ME.anzeigename || 'Dienstkonto';
     $('#meRolle').textContent = ME.rolle + (ME.sensibel ? ' · Personaldaten' : '');
@@ -1362,6 +1372,8 @@ function navIcon(id) {
     bl: '<circle cx="12" cy="12" r="9"/><path d="M5.5 5.5 18.5 18.5"/>',
     system: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="4"/>',
     meldungen: '<path d="M3 11v3l4 1 2 5h3l-2-5 9 3V7l-9 3H5a2 2 0 0 0-2 1zM21 10v5"/>',
+    urkunden: '<path d="M7 3h10l4 4v14H7zM17 3v5h4M10 12h8M10 16h8"/><path d="M3 7v14h4"/>',
+    design: '<path d="M12 3a9 9 0 1 0 0 18h2a2 2 0 0 0 1-4 2 2 0 0 1 1-4h2a3 3 0 0 0 3-3 9 9 0 0 0-9-7z"/><circle cx="7.5" cy="10" r="1"/><circle cx="12" cy="7" r="1"/><circle cx="17" cy="10" r="1"/>',
     backup: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 2 16 2 16 0V5M4 12v7c0 2 16 2 16 0v-7"/><path d="M9 17h6"/>',
     statistik: '<path d="M3 21h18M5 17V9h4v8M11 17V4h4v13M17 17v-6h4v6"/><path d="M3 21V3"/>',
     users: '<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M18 6v6M15 9h6"/>',
@@ -1441,6 +1453,8 @@ function zeichne() {
     if(tab === 'meldungen') ladeMeldungen();
     if(tab === 'statistik') ladeStatistik();
     if(tab === 'backup') ladeBackup();
+    if(tab === 'design') ladeDesign();
+    if(tab === 'urkunden') ladeUrkunden();
     if(tab === 'users') ladeBenutzer().catch(err => { if($('#benutzerBereich')) $('#benutzerBereich').textContent = 'Benutzerverwaltung konnte nicht geladen werden: ' + err.message; });
   } catch (err) {
     $('#inhalt').innerHTML = '<h1>Fehler beim Laden</h1><p class="fehler">' + esc(err.message) + '</p>';
@@ -3756,6 +3770,89 @@ async function ladeBackup(){
    '<p class="mut">Letzte Datenbankabfrage: '+esc(new Date(x.geprueft_am).toLocaleString('de-DE'))+'</p></section>';
  }catch(e){el.textContent='Datenbankstatus konnte nicht geladen werden: '+e.message;}
 }
+
+/* Persistente Gestaltung, ausschließlich vordefinierte Hintergrundmotive. */
+function applyPortalDesign(d){
+ if(!d||!/^#[0-9a-f]{6}$/i.test(d.akzent))return;
+ const a=d.akzent;
+ const r=parseInt(a.slice(1,3),16),g=parseInt(a.slice(3,5),16),b=parseInt(a.slice(5,7),16);
+ document.documentElement.style.setProperty('--acc',a);
+ document.documentElement.style.setProperty('--portal-veil',String(Math.min(.97,Math.max(.65,Number(d.schleier)/100))));
+ document.documentElement.style.setProperty('--portal-rgb',r+','+g+','+b);
+ document.documentElement.dataset.portalWallpaper=['wappen','verlauf','ohne'].includes(d.hintergrund)?d.hintergrund:'wappen';
+}
+async function ladeDesign(){
+ const area=$('#inhalt');
+ area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p>Lade Gestaltung …</p>';
+ if(!can('design',2)){area.textContent='Keine Berechtigung.';return;}
+ try{
+  const d=await api('/portal-design');
+  area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p class="mut">Die Einstellungen gelten für alle Benutzer. Das Layout der Kacheln bleibt erhalten.</p>'+
+   '<section class="box"><h3>Portal-Design</h3>'+
+   '<label for="designAkzent">Akzentfarbe</label><input id="designAkzent" type="color" value="'+esc(d.akzent)+'" style="width:110px;height:48px;padding:5px">'+
+   '<label for="designSchleier">Dunkler Schleier ('+Number(d.schleier)+' %)</label><input id="designSchleier" type="range" min="65" max="97" value="'+Number(d.schleier)+'">'+
+   '<label for="designMotiv">Hintergrundmotiv</label><select id="designMotiv">'+
+   [['wappen','Original-Polizeiwappen'],['verlauf','Dezenter Farbverlauf'],['ohne','Einfarbig dunkel']].map(([v,t])=>'<option value="'+v+'"'+(d.hintergrund===v?' selected':'')+'>'+t+'</option>').join('')+
+   '</select><div class="actions"><button type="button" id="designPreview">Vorschau</button><button type="button" class="p" id="designSave">Für alle speichern</button></div>'+
+   '<p class="mut">Das Originalwappen bleibt unverändert. Die Vorschau verändert nur deinen Browser bis zum erneuten Laden.</p></section>';
+ }catch(err){area.textContent='Design konnte nicht geladen werden: '+err.message;}
+}
+function aktuelleDesignWerte(){
+ return {akzent:$('#designAkzent').value,schleier:Number($('#designSchleier').value),hintergrund:$('#designMotiv').value};
+}
+async function ladeUrkunden(){
+ const area=$('#inhalt');area.innerHTML='<h1>Urkundengenerator</h1><p>Lade Personalakten …</p>';
+ if(!can('urkunden')||!can('pers')){area.textContent='Keine Berechtigung.';return;}
+ try{
+  const people=await api('/urkunden/personen');
+  area._urkundenPersonen=people;
+  area.innerHTML='<h1>Urkundengenerator</h1><p class="mut">Druckvorlagen für den fiktiven IdentityValley-Polizeidienst. Als PDF speichern über Drucken → Als PDF speichern.</p>'+
+   '<section class="box"><label for="urkPerson">Personalakte</label><select id="urkPerson">'+people.map(p=>'<option value="'+Number(p.personalnummer)+'">'+esc(p.personalnummer+' · '+[p.vorname,p.nachname].filter(Boolean).join(' '))+'</option>').join('')+'</select>'+
+   '<label for="urkTyp">Urkundenart</label><select id="urkTyp">'+[['ernennung','Ernennungsurkunde'],['befoerderung','Beförderungsurkunde'],['belobigung','Belobigungsurkunde'],['bescheinigung','Dienstbescheinigung']].map(([v,t])=>'<option value="'+v+'">'+t+'</option>').join('')+'</select>'+
+   '<label for="urkDatum">Ausstellungsdatum</label><input id="urkDatum" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+   '<label for="urkText">Individuelle Begründung / Text</label><textarea id="urkText" rows="5" maxlength="2000" placeholder="Optionaler Urkundentext" style="width:100%;background:var(--panel);color:var(--txt)"></textarea>'+
+   '<label for="urkAussteller">Ausstellende Stelle / Unterschrift</label><input id="urkAussteller" maxlength="120" value="Polizeiverwaltung IdentityValley">'+
+   '<div class="actions"><button type="button" class="p" id="urkErstellen">Druckansicht öffnen / PDF erstellen</button></div></section>';
+ }catch(err){area.textContent='Personalakten konnten nicht geladen werden: '+err.message;}
+}
+function urkundenDruckansicht(){
+ const p=($('#inhalt')._urkundenPersonen||[]).find(x=>Number(x.personalnummer)===Number($('#urkPerson').value));
+ if(!p)return alert('Bitte Personalakte wählen.');
+ const typ=$('#urkTyp').value;
+ const namen={ernennung:'Ernennungsurkunde',befoerderung:'Beförderungsurkunde',belobigung:'Belobigungsurkunde',bescheinigung:'Dienstbescheinigung'};
+ const titel=namen[typ];if(!titel)return;
+ const datum=$('#urkDatum').value,grund=$('#urkText').value.trim(),aussteller=$('#urkAussteller').value.trim();
+ if(!datum||!aussteller)return alert('Datum und ausstellende Stelle angeben.');
+ const win=window.open('','_blank');
+ if(!win)return alert('Bitte Pop-ups für die Druckansicht erlauben.');
+ const name=[p.vorname,p.nachname].filter(Boolean).join(' ');
+ const standard=typ==='ernennung'?'wird hiermit für den Dienst in der fiktiven Polizei IdentityValley ernannt.':
+ typ==='befoerderung'?'wird hiermit für die erbrachten Leistungen und die dienstliche Entwicklung gewürdigt.':
+ typ==='belobigung'?'erhält diese Belobigung für besonderes Engagement im Dienst.':
+ 'steht als Angehörige/r der fiktiven Polizei IdentityValley im Dienst.';
+ const html='<!doctype html><html lang="de"><head><meta charset="utf-8"><title>'+esc(titel)+'</title><style>'+
+ '@page{size:A4;margin:18mm}body{font:16px Georgia,serif;color:#17263a;margin:0}.sheet{border:6px double #9caac0;min-height:235mm;padding:18mm;text-align:center;box-sizing:border-box}'+
+ 'header{letter-spacing:4px;color:#435a78;font:700 13px Arial;margin-bottom:38px}h1{font-size:37px;margin:20px 0 42px}h2{font-size:29px;margin:8px 0 20px}'+
+ 'p{line-height:1.8}.note{font:13px Arial;color:#5f6b77}.sign{border-top:1px solid #506077;margin:65px auto 0;width:280px;padding-top:12px}'+
+ '@media print{button{display:none}}button{padding:10px 20px;margin:20px}</style></head><body><div class="sheet">'+
+ '<header>POLIZEI HESSEN · IDENTITYVALLEY ROLEPLAY</header><h1>'+esc(titel)+'</h1><p>Diese Urkunde wird verliehen an</p>'+
+ '<h2>'+esc(name)+'</h2><p class="note">Personalnummer '+Number(p.personalnummer)+' · '+esc(p.dienstgrad||'–')+'</p>'+
+ '<p>'+esc(grund||standard).replace(/\n/g,'<br>')+'</p>'+
+ '<p style="margin-top:65px">'+esc(fd(datum))+'</p><div class="sign">'+esc(aussteller)+'</div>'+
+ '<p class="note" style="margin-top:50px">Fiktives Dokument für GTA-Roleplay · Keine amtliche Urkunde</p></div>'+
+ '<button onclick="window.print()">Drucken / als PDF speichern</button></body></html>';
+ win.document.open();win.document.write(html);win.document.close();
+ if(can('urkunden',2))api('/urkunden/protokoll',{method:'POST',body:JSON.stringify({personalnummer:Number(p.personalnummer),typ})}).catch(()=>{});
+}
+document.addEventListener('click',async ev=>{
+ if(ev.target.closest('#designPreview')&&can('design',2))applyPortalDesign(aktuelleDesignWerte());
+ if(ev.target.closest('#designSave')&&can('design',2)){
+  try{const d=aktuelleDesignWerte();await api('/portal-design',{method:'PUT',body:JSON.stringify(d)});applyPortalDesign(d);alert('Portaldesign gespeichert.');}
+  catch(err){alert('Speichern fehlgeschlagen: '+err.message);}
+ }
+ if(ev.target.closest('#urkErstellen')&&can('urkunden')&&can('pers'))urkundenDruckansicht();
+});
+
 /* ---------- Start ---------- */
 
 (async () => {
