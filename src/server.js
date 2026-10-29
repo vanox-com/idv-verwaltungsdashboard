@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db, initDb } from './db.js';
 import { fillCertificateDocx } from './urkundenDocx.js';
+import { dokumentRoutes } from './dokumentApi.js';
 import { hashPassword, verifyPassword, newSessionToken, SESSION_HOURS } from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -2233,6 +2234,9 @@ app.get('/api/log', requireLogin, requireRight('log', 1), async (req, res, next)
 });
 
 /* ---------- Fehler ---------- */
+
+/* Neue Dokumentgeneratoren, mit bestehenden Benutzerrechten. */
+dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAuth);
 
 app.use((err, req, res, next) => {
   console.error(err);
