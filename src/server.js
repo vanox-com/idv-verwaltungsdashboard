@@ -799,7 +799,7 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
       await client.query('ROLLBACK');
       return res.status(404).json({error:'Personalakte nicht gefunden'});
     }
-    if(beantragterRang && beantragterRang!==vorher[0].dienstgrad){
+    if(beantragterRang){
       const rangCheck=await client.query('SELECT 1 FROM raenge WHERE name=$1',[beantragterRang]);
       if(!rangCheck.rowCount){await client.query('ROLLBACK');return res.status(400).json({error:'Gewählter Dienstgrad ist unbekannt',feld:'dienstgrad'});}
       const open=await client.query("SELECT 1 FROM personal_rangantraege WHERE personalnummer=$1 AND status='beantragt'",[nr]);
@@ -830,7 +830,7 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
       ' RETURNING personalnummer,vorname,nachname,dienstgrad,handy,arbeitsvertrag,'+
       'ernennungsurkunde,arbeitsvertrag_url,ernennungsurkunde_url,eintrittsdatum',werte);
     let rangantragAngelegt=false;
-    if(beantragterRang && beantragterRang!==vorher[0].dienstgrad){
+    if(beantragterRang){
       await client.query('INSERT INTO personal_rangantraege(personalnummer,alter_rang,beantragter_rang,begruendung,antragsteller_id,korrigiertes_befoerderungsdatum) VALUES($1,$2,$3,$4,$5,$6)',[nr,vorher[0].dienstgrad||'',beantragterRang,rangBegruendung,req.user.id,rangDatum]);
       rangantragAngelegt=true;
     }
@@ -1200,7 +1200,7 @@ app.post('/api/rangantraege',requireLogin,requireRight('pers',2),async(req,res,n
   SELECT personalnummer,COALESCE(dienstgrad,''),$2,$3,$4 FROM personal
   WHERE personalnummer=$1 AND COALESCE(dienstgrad,'')<>$2
   RETURNING id`,[nr,rang,grund,req.user.id]);
-  if(!rows.length)return res.status(409).json({error:'Personalakte fehlt oder Rang ist unverändert'});
+  if(!rows.length)return res.status(409).json({error:'Personalakte fehlt oder Antrag unverändert'});
   res.json({ok:true,id:rows[0].id});
  }catch(e){if(e.code==='23505')return res.status(409).json({error:'Für diese Person besteht bereits ein offener Rangantrag'});next(e)}
 });
