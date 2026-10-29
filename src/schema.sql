@@ -502,3 +502,13 @@ INSERT INTO portal_design(id) VALUES(1) ON CONFLICT(id) DO NOTHING;
 INSERT INTO role_perms(rolle,modul,stufe) VALUES
  ('Administrator','design',2),('Administrator','urkunden',2),('Polizeirat','urkunden',2),('Leitungsdienst','urkunden',1)
 ON CONFLICT(rolle,modul) DO NOTHING;
+
+/* Persönliche Favoriten ohne Änderungen an bestehenden Modulen. */
+CREATE TABLE IF NOT EXISTS user_favoriten (
+ user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ modul text NOT NULL,
+ sortierung integer NOT NULL DEFAULT 0,
+ PRIMARY KEY(user_id,modul)
+);
+INSERT INTO role_perms(rolle,modul,stufe) VALUES ('Administrator','rechtesimulator',2)
+ON CONFLICT(rolle,modul) DO NOTHING;
