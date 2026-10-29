@@ -489,3 +489,16 @@ INSERT INTO role_perms(rolle,modul,stufe) VALUES
 ('Administrator','fristen',2),('Polizeirat','fristen',2),('Leitungsdienst','fristen',1),
 ('Administrator','backup',1)
 ON CONFLICT(rolle,modul) DO NOTHING;
+
+/* Portaldesign: genau eine zentrale, persistente Konfiguration. */
+CREATE TABLE IF NOT EXISTS portal_design (
+ id smallint PRIMARY KEY CHECK(id=1),
+ akzent text NOT NULL DEFAULT '#5b86ba',
+ schleier smallint NOT NULL DEFAULT 88 CHECK(schleier BETWEEN 65 AND 97),
+ hintergrund text NOT NULL DEFAULT 'wappen',
+ aktualisiert timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO portal_design(id) VALUES(1) ON CONFLICT(id) DO NOTHING;
+INSERT INTO role_perms(rolle,modul,stufe) VALUES
+ ('Administrator','design',2),('Administrator','urkunden',2),('Polizeirat','urkunden',2),('Leitungsdienst','urkunden',1)
+ON CONFLICT(rolle,modul) DO NOTHING;
