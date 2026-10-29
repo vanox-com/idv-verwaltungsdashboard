@@ -97,9 +97,9 @@ Einmalige technische Konfiguration:
 2. Unter **Google Auth Platform** eine OAuth-Zustimmungsseite konfigurieren.
    Beim Status **Testing** berechtigte Testnutzer eintragen.
 3. OAuth-Client **Web application** anlegen und unter **Authorized JavaScript origins**
-   die genutzten Portal-Origin(s) hinterlegen, etwa
-   `https://idv-verwaltungsdashboard-1.onrender.com` und nach erfolgreicher
-   Domainanbindung auch `https://idv-polizeiverwaltung.de`.
+   die genutzten Portal-Origin(s) hinterlegen, insbesondere
+   `https://idv-ppverwaltung.de` und bei weiterhin benötigtem
+   Testzugriff zusätzlich `https://idv-verwaltungsdashboard-1.onrender.com`.
    Keine Pfade oder abschließenden Schrägstriche.
 4. Die beiden Werte in Render unter **Environment** hinterlegen:
    `GOOGLE_OAUTH_CLIENT_ID` (nicht geheim, für Google-Anmeldung)
@@ -141,3 +141,50 @@ Person/Organisation und eine funktionierende Kontaktadresse, die tatsächlichen
 Rechtsgrundlagen, Löschfristen und Empfänger/Hoster konkretisiert werden.
 Die bereitgestellte Erklärung beschreibt die technischen Datenflüsse nach
 dem aktuellen Code, ist aber kein geprüfter endgültiger Rechtstext.
+
+
+## Aktuelle Hauptdomain: idv-ppverwaltung.de (IONOS → Render)
+
+Die **neue Hauptdomain** lautet **https://idv-ppverwaltung.de**. Die
+bestehende Render-Adresse `https://idv-verwaltungsdashboard-1.onrender.com`
+bleibt bis zur bestätigten DNS-Verbindung als Rückfalladresse bestehen.
+Die zuvor vorgesehene Domain `idv-polizeiverwaltung.de` darf in Google
+OAuth, Branding, Datenschutzerklärung oder aktuellen Verlinkungen nicht mehr
+als primäre Domain verwendet werden.
+
+**IONOS und Render müssen einmalig extern konfiguriert werden:**
+
+1. Render → Webservice `idv-verwaltungsdashboard-1` → Settings →
+   Custom Domains → `idv-ppverwaltung.de` hinzufügen. Render legt in
+   der Regel auch `www.idv-ppverwaltung.de` als Weiterleitung an.
+2. IONOS → Domains & SSL → `idv-ppverwaltung.de` → DNS:
+   * für den Stamm `@` ein A-Record auf Render-Load-Balancer
+     `216.24.57.1`, sofern das Render-Dashboard keinen anderen Wert
+     verlangt;
+   * für `www` ein CNAME auf
+     `idv-verwaltungsdashboard-1.onrender.com`;
+   * konkurrierende alte A-/AAAA-/CNAME-/Weiterleitungs-Records
+     für genau diese Hosts entfernen, aber MX-, SPF-, DKIM-
+     und andere nicht betroffene Einträge erhalten.
+3. In Render auf **Verify** klicken und auf das automatisch verwaltete
+   HTTPS-Zertifikat warten. Domain und HTTPS vor Produktivfreigabe testen.
+4. Google Cloud Console → Google Auth Platform:
+   * Branding-Startseite: `https://idv-ppverwaltung.de/start`
+   * Datenschutz: `https://idv-ppverwaltung.de/datenschutz`
+   * Autorisierte Domain: `idv-ppverwaltung.de`
+   * OAuth-Webclient → Autorisierte JavaScript-Quellen:
+     `https://idv-ppverwaltung.de` (gegebenenfalls die Render-Adresse
+     weiterhin als zusätzliche Test-Origin)
+   * Google Search Console → Domain-Eigentum per IONOS-TXT-Eintrag
+     verifizieren. Alte Branding-Angaben zur ungenutzten Domain prüfen
+     und entfernen.
+5. Die Datenschutzerklärung muss vor Google-Prüfung durch den
+   Betreiber um Verantwortliche, Kontakt, Rechtsgrundlagen und
+   Aufbewahrungsfristen vervollständigt werden.
+
+Der Node-/Express-Server erkennt die Browser-Origin der aufgerufenen
+Domain automatisch. **Keine** hartcodierte Render-Adresse ist für die
+Google-Code-Weiterleitung erforderlich; die passende Origin muss jedoch
+im Google-OAuth-Client freigegeben sein. Benutzer, Rollen, Datenbank,
+Ernennungsurkunden und bisherige Dokumentenlinks bleiben beim
+Domainwechsel auf demselben Render-Service erhalten.
