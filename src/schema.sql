@@ -612,3 +612,20 @@ CREATE INDEX IF NOT EXISTS personal_rangantraege_historie_idx
 
 /* PMA-Beförderungen hängen allein von der bestandenen PM-Prüfung ab. */
 UPDATE raenge SET tage=NULL WHERE name='Polizeimeisteranwärter' AND tage IS NOT NULL;
+
+/* Dokumentgenerator: nur Google-Drive-Links und Vorgangszuordnung, keine Dateiinhalte. */
+CREATE TABLE IF NOT EXISTS generierte_dokumente (
+ id bigserial PRIMARY KEY,
+ personalnummer integer REFERENCES personal(personalnummer) ON DELETE SET NULL,
+ person_name text NOT NULL,
+ typ text NOT NULL,
+ titel text NOT NULL,
+ url text NOT NULL CHECK (url LIKE 'https://docs.google.com/document/d/%'),
+ kontext_id integer,
+ erstellt_von integer REFERENCES users(id) ON DELETE SET NULL,
+ erstellt timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS generierte_dokumente_person_idx
+ ON generierte_dokumente(personalnummer,erstellt DESC);
+CREATE INDEX IF NOT EXISTS generierte_dokumente_kontext_idx
+ ON generierte_dokumente(kontext_id,typ);
