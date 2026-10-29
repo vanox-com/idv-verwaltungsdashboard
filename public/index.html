@@ -970,6 +970,17 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 @media(max-width:700px){
   #app{background-size:cover,85vw auto,cover,cover;background-position:center,center 33%,center,center}
 }
+
+/* Statistikseiten: eigenständiges, breites Raster statt schmaler Dashboard-Widgets. */
+.personalstat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,350px),1fr));gap:18px;margin:22px 0 26px;align-items:stretch}
+.personalstat-grid>.box{margin:0;min-width:0;padding:22px 24px;overflow:hidden}
+.personalstat-grid>.box h3{font-size:17px;line-height:1.35;white-space:normal;overflow-wrap:anywhere;margin:0 0 22px}
+.personalstat-grid .dashboard-group{margin:0 0 19px;min-width:0}
+.personalstat-grid .dashboard-group-head{display:flex;justify-content:space-between;align-items:start;gap:16px;flex-wrap:nowrap;margin-bottom:8px}
+.personalstat-grid .dashboard-group-head span{flex:1;min-width:0;white-space:normal;overflow-wrap:break-word;line-height:1.45}
+.personalstat-grid .dashboard-group-head strong{flex-shrink:0;font-variant-numeric:tabular-nums}
+.personalstat-grid .dashboard-progress{height:9px;border-radius:9px}
+@media(max-width:620px){.personalstat-grid{grid-template-columns:minmax(0,1fr)}.personalstat-grid>.box{padding:18px}}
 </style>
 </head>
 <body>
@@ -1349,6 +1360,9 @@ function navIcon(id) {
     geb: '<path d="M3 21h18M5 21V11h14v10M9 11V7h6v4M12 3v4M5 16h14"/>',
     jub: '<circle cx="12" cy="8" r="6"/><path d="M8 13 6 22l6-3 6 3-2-9"/>',
     bl: '<circle cx="12" cy="12" r="9"/><path d="M5.5 5.5 18.5 18.5"/>',
+    system: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="4"/>',
+    meldungen: '<path d="M3 11v3l4 1 2 5h3l-2-5 9 3V7l-9 3H5a2 2 0 0 0-2 1zM21 10v5"/>',
+    backup: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 2 16 2 16 0V5M4 12v7c0 2 16 2 16 0v-7"/><path d="M9 17h6"/>',
     statistik: '<path d="M3 21h18M5 17V9h4v8M11 17V4h4v13M17 17v-6h4v6"/><path d="M3 21V3"/>',
     users: '<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M18 6v6M15 9h6"/>',
     log: '<path d="M7 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 8h8M9 12h8M9 16h5"/>'
@@ -3706,7 +3720,7 @@ async function ladeStatistik(){
     '<div class="kacheln">'+kpi('Personalakten insgesamt',total)+kpi('Hauptberuf',sum(x=>x.beschaeftigungsart!=='Nebenberuf'))+
     kpi('Nebenberuf',sum(x=>x.beschaeftigungsart==='Nebenberuf'))+kpi('Aktiv',sum(x=>x.status==='Aktiv'))+
     kpi('Nicht aktiv',sum(x=>x.status!=='Aktiv'))+'</div>'+
-    '<div class="dash-layout-grid">'+chart('Mitarbeitergruppen',gruppen.map(g=>[g,sum(x=>x.gruppe===g)]))+
+    '<div class="personalstat-grid">'+chart('Mitarbeitergruppen',gruppen.map(g=>[g,sum(x=>x.gruppe===g)]))+
     chart('Beschäftigungsarten',[['Hauptberuf',sum(x=>x.beschaeftigungsart!=='Nebenberuf')],['Nebenberuf',sum(x=>x.beschaeftigungsart==='Nebenberuf')]])+
     chart('Personalstatus',status.map(st=>[st,sum(x=>x.status===st)]))+'</div>'+
     '<section class="box"><h3>Verteilung nach Mitarbeitergruppe und Beschäftigung</h3>'+
