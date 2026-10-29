@@ -435,9 +435,10 @@ const HEX=/^#[0-9a-fA-F]{6}$/;
 function valideDesign(d){
  return d&&typeof d.akzent==='string'&&HEX.test(d.akzent)&&Number.isInteger(d.schleier)&&d.schleier>=65&&d.schleier<=97&&DESIGN_MOTIVE.includes(d.hintergrund)&&
  (d.extras===undefined||(d.extras&&typeof d.extras==='object'&&!Array.isArray(d.extras)&&
- Object.keys(d.extras).every(k=>[...DESIGN_KEYS,'modus'].includes(k))&&
+ Object.keys(d.extras).every(k=>[...DESIGN_KEYS,'modus','preset'].includes(k))&&
  DESIGN_KEYS.every(k=>d.extras[k]===undefined||HEX.test(d.extras[k]))&&
- (d.extras.modus===undefined||['dunkel','hell'].includes(d.extras.modus))));
+ (d.extras.modus===undefined||['dunkel','hell'].includes(d.extras.modus))&&
+ (d.extras.preset===undefined||['flori'].includes(d.extras.preset))));
 }
 const THEME_DEFAULT={akzent:'#5b86ba',schleier:88,hintergrund:'wappen',extras:{}};
 app.get('/api/portal-design',requireLogin,async(req,res,next)=>{
