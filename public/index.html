@@ -2638,7 +2638,7 @@ async function urkundenAuthVorbereiten(){
     const pending=urkundenPending;urkundenPending=null;
     if(!pending)return;
     try{
-     if(!response.code)throw Error('Google-Kontoauswahl abgebrochen');
+     if(response.error||!response.code)throw Error('Google-Kontoauswahl abgebrochen');
      const result=await api('/urkunden/polizeimeister/'+pending.nr,{
       method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
       body:JSON.stringify({eid_datum:pending.eid,google_code:response.code})
@@ -2650,6 +2650,14 @@ async function urkundenAuthVorbereiten(){
     finally{if(pending.button.isConnected){
       pending.button.disabled=false;pending.button.textContent='Ernennungsurkunde erstellen';
     }}
+   },
+   error_callback:err=>{
+    if(urkundenPending){
+     urkundenPending.button.disabled=false;
+     urkundenPending.button.textContent='Ernennungsurkunde erstellen';
+     urkundenPending=null;
+    }
+    if(err.type==='popup_failed_to_open')alert('Google-Popup wurde blockiert. Bitte Popups für die Portal-Domain zulassen.');
    }
   });
   if(status)status.textContent='Beim Erstellen das eigene Google-Konto auswählen. Die Urkunde gehört diesem Google-Drive-Konto.';

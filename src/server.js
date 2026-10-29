@@ -1453,8 +1453,12 @@ app.post('/api/urkunden/polizeimeister/:nr',requireLogin,requireRight('bef',2),a
  if(!Number.isSafeInteger(nr)||nr<1||!zertDatum(eid))
   return res.status(400).json({error:'Datum des Amtseids erforderlich (JJJJ-MM-TT)'});
  if(!c)return res.status(503).json({error:'Google-OAuth-Webclient ist noch nicht in Render konfiguriert.'});
- if(!origin||!host||req.get('X-Requested-With')!=='XMLHttpRequest'||
-   !origin.startsWith('https://')||new URL(origin).host!==host)
+ let originValid=false;
+ try{
+  const uri=new URL(origin);
+  originValid=uri.protocol==='https:'&&uri.host===host&&uri.origin===origin;
+ }catch{}
+ if(!originValid||req.get('X-Requested-With')!=='XMLHttpRequest')
   return res.status(403).json({error:'Ungültiger Anmeldeursprung'});
  if(typeof code!=='string'||code.length<15||code.length>2048)
   return res.status(400).json({error:'Die persönliche Google-Anmeldung fehlt'});
