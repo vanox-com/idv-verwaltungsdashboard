@@ -609,3 +609,6 @@ ON CONFLICT(rolle,modul) DO NOTHING;
 CREATE INDEX IF NOT EXISTS personal_rangantraege_historie_idx
  ON personal_rangantraege(entschieden_am DESC,id DESC)
  WHERE status IN ('genehmigt','abgelehnt');
+
+/* PMA-Beförderungen hängen allein von der bestandenen PM-Prüfung ab. */
+UPDATE raenge SET tage=NULL WHERE name='Polizeimeisteranwärter' AND tage IS NOT NULL;

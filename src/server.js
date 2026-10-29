@@ -571,6 +571,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
 
     /* Berechtigungen auch bei API-Ausgabe erzwingen, nicht nur Menüpunkte verstecken. */
     const berechtigt = m => (rechte[m] || 0) >= 1;
+    const pmBestanden=new Set(funktionen.rows.filter(f=>f.werte?.PM===true).map(f=>Number(f.personalnummer)));
 
     /* Die Original-Startseite zeigt aktuelle Ereignisse.
        Ereignisdaten verlassen den Server nur bei entsprechendem Modulrecht. */
@@ -637,7 +638,14 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       const alleFaelligen=personal.rows.filter(p=>p.status!=='Gekündigt').flatMap(p=>{
         const i=raengeListe.findIndex(r=>r.name===p.dienstgrad);
         const current=raengeListe[i],next=raengeListe[i+1];
-        if (!current||!next||!Number(current.tage)) return [];
+        if (!current||!next) return [];
+        if(p.dienstgrad==='Polizeimeisteranwärter'){
+          if(next.name!=='Polizeimeister'||!pmBestanden.has(Number(p.personalnummer)))return [];
+          return [{nummer:p.personalnummer,name:personenName(p),dienstgrad:p.dienstgrad,
+            naechsterRang:next.name,faellig:heute.toISOString().slice(0,10),
+            pruefungsbasiert:true,porStatus:p.por_status||'offen'}];
+        }
+        if(!Number(current.tage))return [];
         let faellig=isoDatum(p.naechste_befoerderung);
         if (!faellig && p.letzte_befoerderung) {
           const letzte=isoDatum(p.letzte_befoerderung);
@@ -673,6 +681,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       }).sort((a,b)=>a.tage-b.tage||a.name.localeCompare(b.name,'de'));
     daten.dashboard.geburtstage=berechtigt('geb')?vorschau('geburtsdatum',0):[];
     daten.dashboard.jubilaeen=berechtigt('jub')?vorschau('eintrittsdatum',1):[];
+    if(berechtigt('bef'))daten.personal=daten.personal.map(p=>({...p,pm_pruefung_bestanden:pmBestanden.has(Number(p.personalnummer))}));
     if (!berechtigt('bef')) {
       daten.befoerderungen = [];
       daten.raenge = [];
@@ -704,7 +713,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
             ...(berechtigt('bef') ? {
               status: p.status, dienstgrad: p.dienstgrad,
               letzte_befoerderung: p.letzte_befoerderung,
-              naechste_befoerderung: p.naechste_befoerderung,
+              naechste_befoerderung: p.naechste_befoerderung, pm_pruefung_bestanden: p.pm_pruefung_bestanden,
               por_status: p.por_status, por_notiz: p.por_notiz, por_am: p.por_am
             } : {})
           }))
@@ -719,7 +728,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
         waffenschein: p.waffenschein, spind: p.spind,
         ...(berechtigt('bef') ? {
           letzte_befoerderung: p.letzte_befoerderung,
-          naechste_befoerderung: p.naechste_befoerderung,
+          naechste_befoerderung: p.naechste_befoerderung, pm_pruefung_bestanden: p.pm_pruefung_bestanden,
           por_status: p.por_status, por_notiz: p.por_notiz, por_am: p.por_am
         } : {})
       }));
@@ -1266,6 +1275,15 @@ app.post('/api/rangantraege/:id/entscheidung',requireLogin,requireRight('por',2)
   const {rows}=await client.query('SELECT * FROM personal_rangantraege WHERE id=$1 FOR UPDATE',[id]);
   const a=rows[0];if(!a||a.status!=='beantragt'){await client.query('ROLLBACK');return res.status(409).json({error:'Antrag nicht mehr offen'});}
   if(genehmigt){
+   if(a.alter_rang==='Polizeimeisteranwärter'&&a.beantragter_rang==='Polizeimeister'){
+    const exam=await client.query(
+      "SELECT 1 FROM sonderfunktionen WHERE personalnummer=$1 AND werte->>'PM'='true' FOR SHARE",
+      [a.personalnummer]);
+    if(!exam.rowCount){
+      await client.query('ROLLBACK');
+      return res.status(409).json({error:'Die PM-Prüfung muss vor der Rangänderung als bestanden dokumentiert sein'});
+    }
+   }
    const result=await client.query("UPDATE personal SET dienstgrad=$1,letzte_befoerderung=COALESCE($4::date,letzte_befoerderung),naechste_befoerderung=CASE WHEN $4::date IS NOT NULL THEN NULL ELSE naechste_befoerderung END WHERE personalnummer=$2 AND COALESCE(dienstgrad,'')=$3",
     [a.beantragter_rang,a.personalnummer,a.alter_rang,a.korrigiertes_befoerderungsdatum]);
    if(!result.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'Dienstgrad hat sich inzwischen geändert; Antrag bitte neu stellen'});}
@@ -1337,19 +1355,28 @@ app.post('/api/befoerdern', requireLogin, requireRight('bef', 2), async (req, re
     if (p.por_status !== 'genehmigt') throw fail(403, 'Beförderung nur mit gültiger POR-Freigabe möglich');
     const raenge = (await client.query('SELECT name, tage FROM raenge ORDER BY sortierung, name')).rows;
     const i = raenge.findIndex(r => r.name === p.dienstgrad);
-    if (i < 0 || !raenge[i].tage || !raenge[i + 1])
+    if (i < 0 || !raenge[i + 1] || (p.dienstgrad!=='Polizeimeisteranwärter' && !Number(raenge[i].tage)))
       throw fail(409, 'Für diesen Dienstgrad ist keine weitere Beförderung vorgesehen');
     const naechsterRang = raenge[i + 1].name;
     if (req.body.neuer_rang && req.body.neuer_rang !== naechsterRang)
       throw fail(409, 'Der nächste Dienstgrad stimmt nicht mit der Dienstgradfolge überein');
-    const pruefung = await client.query(
-      'SELECT COALESCE($1::date, $2::date + $3::integer) AS faellig',
-      [p.naechste_befoerderung, p.letzte_befoerderung, Number(raenge[i].tage)]);
-    const faellig = pruefung.rows[0].faellig;
-    if (!faellig) throw fail(409, 'Es fehlt ein gültiges Datum für die Beförderungsfrist');
-    if (Date.parse(String(faellig)) > Date.now())
-      throw fail(409, 'Beförderungsfrist ist noch nicht abgelaufen');
-    const grund = String(req.body.grund || 'Beförderung nach Dienstzeit').trim();
+    const pma=p.dienstgrad==='Polizeimeisteranwärter';
+    if(pma){
+      if(naechsterRang!=='Polizeimeister')
+        throw fail(409,'PMA können nur zum Polizeimeister befördert werden');
+      const exam=await client.query(
+        "SELECT 1 FROM sonderfunktionen WHERE personalnummer=$1 AND werte->>'PM'='true' FOR SHARE",[nr]);
+      if(!exam.rowCount)
+        throw fail(409,'Die PM-Prüfung ist nicht als bestanden erfasst. Bitte unter Sonderfunktionen → Prüfungen → PM markieren.');
+    }else{
+      const pruefung=await client.query('SELECT COALESCE($1::date, $2::date + $3::integer) AS faellig',
+        [p.naechste_befoerderung,p.letzte_befoerderung,Number(raenge[i].tage)]);
+      const faellig=pruefung.rows[0].faellig;
+      if(!faellig)throw fail(409,'Es fehlt ein gültiges Datum für die Beförderungsfrist');
+      if(Date.parse(String(faellig))>Date.now())
+        throw fail(409,'Beförderungsfrist ist noch nicht abgelaufen');
+    }
+    const grund = String(req.body.grund || (pma?'PM-Prüfung bestanden':'Beförderung nach Dienstzeit')).trim();
     if (grund.length > 1000) throw fail(400, 'Beförderungsgrund zu lang');
     await client.query(
       "UPDATE personal SET dienstgrad=$1, letzte_befoerderung=CURRENT_DATE, naechste_befoerderung=NULL, por_status='offen', por_notiz='', por_am=NULL WHERE personalnummer=$2",

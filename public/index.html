@@ -1941,7 +1941,7 @@ function vDash(){
     'kpi-bef':kpi('Fällige Beförderungen',summary.faelligeBef,'bef','tone-rose'),
     'panel-bef':'<section class="box"><h3>Fällige Beförderungen</h3>'+
       (due.length?due.map(p=>personZeile(p.name,p.dienstgrad+' → '+p.naechsterRang,
-        'Fällig: '+fd(p.faellig),'bad')).join(''):'<span class="mut">Keine fälligen Beförderungen</span>')+'</section>',
+        p.pruefungsbasiert?'PM-Prüfung bestanden':'Fällig: '+fd(p.faellig),p.pruefungsbasiert?'ok':'bad')).join(''):'<span class="mut">Keine fälligen Beförderungen</span>')+'</section>',
     'panel-gruppen':progress('Personal nach Gruppe',d.gruppen||[]),
     'panel-bekanntmachungen':'<section class="box"><h3>Dienstliche Bekanntmachungen</h3>'+
       (ME.rolle==='Administrator'?'<button type="button" data-bek-neu>+ Bekanntmachung erstellen</button>':'')+
@@ -2493,6 +2493,7 @@ document.addEventListener('click', event => {
 const POR_STATUS = [['offen','Offen'],['beantragt','Beantragt'],['genehmigt','POR genehmigt'],['abgelehnt','Abgelehnt']];
 const porText = p => (POR_STATUS.find(x => x[0] === p.por_status) || POR_STATUS[0])[1];
 function befTermin(p, rang) {
+  if(p.dienstgrad==='Polizeimeisteranwärter')return null;
   if (p.naechste_befoerderung) return String(p.naechste_befoerderung).slice(0,10);
   if (!p.letzte_befoerderung || !rang || !rang.tage) return null;
   const d = new Date(String(p.letzte_befoerderung).slice(0,10)+'T00:00:00Z');
@@ -2506,31 +2507,43 @@ function vBef() {
   const verwalten = can('bef',2);
   const liste = (D.personal || []).filter(p => p.status !== 'Gekündigt').map(p => {
     const i = raenge.findIndex(r => r.name === p.dienstgrad);
-    const akt = raenge[i], next = akt && Number(akt.tage)>0 ? raenge[i+1] : null;
-    const termin = next ? befTermin(p,akt) : null;
-    return {p,next,termin};
-  }).filter(x => x.termin).sort((a,b) => a.termin.localeCompare(b.termin));
+    const akt=raenge[i],anwaerter=p.dienstgrad==='Polizeimeisteranwärter';
+    const next=akt&&(anwaerter||Number(akt.tage)>0)?raenge[i+1]:null;
+    const termin=next&&!anwaerter?befTermin(p,akt):null;
+    const pruefung=anwaerter&&p.pm_pruefung_bestanden===true;
+    return {p,next,termin,anwaerter,pruefung};
+  }).filter(x=>x.next&&(x.anwaerter||x.termin))
+    .sort((a,b)=>{
+      const key=x=>x.anwaerter?(x.pruefung?'0000-01-01':'9999-12-31'):x.termin;
+      return key(a).localeCompare(key(b));
+    });
   const wartet = (D.personal || []).filter(p => p.por_status === 'beantragt' && p.status !== 'Gekündigt').length;
-  const rows = liste.map(({p,next,termin}) => {
-    const nr = Number(p.personalnummer), days = Math.round((Date.parse(termin+'T00:00:00Z')-Date.parse(heute+'T00:00:00Z'))/86400000);
-    const status = days<=0 ? 'fällig seit '+(-days)+' Tagen' : 'in '+days+' Tagen';
+  const rows = liste.map(({p,next,termin,anwaerter,pruefung}) => {
+    const nr = Number(p.personalnummer), days=anwaerter?null:Math.round((Date.parse(termin+'T00:00:00Z')-Date.parse(heute+'T00:00:00Z'))/86400000);
+    const status=anwaerter?(pruefung?'PM-Prüfung bestanden':'PM-Prüfung ausstehend'):days<=0?'fällig seit '+(-days)+' Tagen':'in '+days+' Tagen';
+    const zeitKlasse=anwaerter?(pruefung?'ok':'warn'):(days<=0?'bad':days<=14?'warn':'ok');
     const st = (p.por_status === 'genehmigt'?'ok':p.por_status === 'beantragt'?'warn':p.por_status === 'abgelehnt'?'bad':'');
     const antragAendern=can('por',2) ||
       (verwalten && !['genehmigt','abgelehnt'].includes(p.por_status));
     const action =
       (antragAendern ? '<button type="button" data-por-person="'+nr+'">'+
         (can('por',2)?'POR-Freigabe':'POR beantragen')+'</button> ' : '') +
-      (verwalten && days<=0 && p.por_status === 'genehmigt' ?
+      (verwalten && (anwaerter?pruefung:days<=0) && p.por_status === 'genehmigt' ?
         '<button type="button" class="p" data-promote-person="'+nr+'">Befördern</button>' : '');
     return '<tr><td>'+esc(p.vorname+' '+p.nachname)+'</td><td>'+rangMitAbzeichen(p.dienstgrad)+'</td>' +
-      '<td>'+rangMitAbzeichen(next.name)+'</td><td>'+fd(p.letzte_befoerderung)+'</td><td>'+fd(termin)+'</td>' +
-      '<td><span class="tag '+(days<=0?'bad':days<=14?'warn':'ok')+'">'+status+'</span></td>' +
+      '<td>'+rangMitAbzeichen(next.name)+'</td><td>'+fd(p.letzte_befoerderung)+'</td><td>'+(anwaerter?'Keine Frist':fd(termin))+'</td>' +
+      '<td><span class="tag '+zeitKlasse+'">'+status+'</span></td>' +
       '<td><span class="tag '+st+'">'+esc(porText(p))+'</span></td>' +
-      '<td>'+esc(aktBem(p.dienstgrad))+'</td><td>'+action+'</td></tr>';
+      '<td>'+esc(anwaerter?'Keine Mindestzeit · PM-Prüfung erforderlich':aktBem(p.dienstgrad))+'</td><td>'+action+'</td></tr>';
   }).join('');
-  const ranks = raenge.map(r => '<tr><td>'+rangMitAbzeichen(r.name)+'</td><td>'+esc(r.abk||'')+'</td>' +
-    '<td>'+(r.tage ? r.tage+' Tage':'–')+'</td><td>'+esc(r.bemerkung||'')+'</td><td>'+esc(r.grund||'')+'</td></tr>').join('');
-  return '<h1>Beförderungen</h1><p class="mut">Fristen nach Beförderungsbedingungen. Keine Beförderung ohne POR-Freigabe.</p>' +
+  const ranks=raenge.map(r=>{
+    const pma=r.name==='Polizeimeisteranwärter';
+    return '<tr><td>'+rangMitAbzeichen(r.name)+'</td><td>'+esc(r.abk||'')+'</td>'+
+      '<td>'+(pma?'Keine Mindestzeit':r.tage?r.tage+' Tage':'–')+'</td>'+
+      '<td>'+esc(pma?'Nach bestandener PM-Prüfung':r.bemerkung||'')+'</td>'+
+      '<td>'+esc(pma?'PM-Prüfung bestanden':r.grund||'')+'</td></tr>';
+  }).join('');
+  return '<h1>Beförderungen</h1><p class="mut">Polizeimeisteranwärter haben keine Mindestzeit: Nach bestandener PM-Prüfung kann die Beförderung mit POR-Freigabe sofort erfolgen. Für andere Dienstgrade gelten die festgelegten Fristen.</p>' +
     (wartet ? '<div class="box idv-warnung"><b>'+wartet+'</b> POR-Anträge warten auf eine Entscheidung.</div>' : '') +
     '<div id="rangantraegeBereich" class="box"><h3>Offene Rangänderungsanträge</h3><p class="mut">Lade Anträge …</p></div>'+ 
     ((can('por',1)||can('ranghistorie',1))?'<section class="box" id="ranghistorieBereich"><div class="ranghist-top"><div><h3>Rangänderungs-Historie</h3><p class="mut">Abgeschlossene POR-Entscheidungen – nur für Berechtigte einsehbar.</p></div><button type="button" data-ranghistorie-toggle aria-expanded="false">Historie anzeigen</button></div><div id="ranghistorieListe" hidden></div></section>':'')+ 
@@ -2573,6 +2586,9 @@ async function befAusfuehren(nr){
   const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nr);if(!p||p.por_status!=='genehmigt')return;
   const raenge=D.raenge||[],i=raenge.findIndex(r=>r.name===p.dienstgrad),next=raenge[i+1];
   if(!next)return;
+  if(p.dienstgrad==='Polizeimeisteranwärter'&&p.pm_pruefung_bestanden!==true){
+    alert('PM-Prüfung nicht als bestanden erfasst. Bitte Sonderfunktionen → Prüfungen → PM markieren.');return;
+  }
   if(!confirm('Beförderung bestätigen?\n'+p.vorname+' '+p.nachname+'\n'+p.dienstgrad+' → '+next.name))return;
   try{await api('/befoerdern',{method:'POST',body:JSON.stringify({nr,neuer_rang:next.name})});
     await starten();
