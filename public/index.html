@@ -1026,7 +1026,7 @@ let copnetGeladen = null, copnetNummer = null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fd = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('.') : '';
-const can = (m, l = 1) => ME && (ME.rechte[m] || 0) >= l;
+const can = (m, l = 1) => ME && (m === 'system' ? ME.rolle === 'Administrator' : m === 'meldungen' ? (ME.rechte.log || 0) >= l : m === 'statistik' ? (ME.rechte.pers || 0) >= l : (ME.rechte[m] || 0) >= l);
 
 /* Dienstgradabzeichen: dunkles texturiertes Schulterstück, farbige Rangsterne.
    Die drei RP-Führungsränge zeigen stilisiertes hessisches Gold-Eichenlaub
@@ -1267,6 +1267,7 @@ async function starten() {
     }
     ME = antwort.user;
     D = antwort.daten;
+    api('/system-optionen').then(o=>{if(D)D.systemOptionen=o;}).catch(()=>{});
     $('#meName').textContent = ME.anzeigename || 'Dienstkonto';
     $('#meRolle').textContent = ME.rolle + (ME.sensibel ? ' · Personaldaten' : '');
     $('#login').classList.add('hide');
@@ -2002,7 +2003,7 @@ function personalBearbeiten(nr) {
   const used = (D.personal || []).map(x => Number(x.personalnummer));
   const vorschlag = Math.max(0,...used) + 1;
   const raenge = (D.raenge || []).map(r => r.name).filter(Boolean);
-  const gruppen = ['Mittlerer Dienst','Gehobener Dienst','Polizeirat','Leitungsdienst','Nicht zugeordnet'];
+  const gruppen = [...new Set([...(D.systemOptionen?.mitarbeitergruppen||['Mittlerer Dienst','Gehobener Dienst','Polizeirat','Leitungsdienst','Nicht zugeordnet']),...(D.personal||[]).map(x=>x.gruppe).filter(Boolean)])];
   const statusAlle = ['Aktiv','Abgemeldet','Inaktiv','Suspendiert','Gekündigt','freihalten',...(D.personal || []).map(x => x.status).filter(Boolean)];
   const status = neu ? statusAlle.filter(x => x !== 'Gekündigt') : statusAlle;
   const datum = x => x ? String(x).slice(0,10) : '';
@@ -2012,7 +2013,7 @@ function personalBearbeiten(nr) {
     personalFeld('Vorname','p_vorname',p.vorname,'text','required maxlength="120"'),
     personalFeld('Nachname','p_nachname',p.nachname,'text','required maxlength="120"'),
     personalSelect('Mitarbeitergruppe','p_gruppe',gruppen,p.gruppe || 'Nicht zugeordnet'),
-    personalSelect('Beschäftigungsart','p_beschaeftigungsart',['Hauptberuf','Nebenberuf'],p.beschaeftigungsart || (p.gruppe === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf')),
+    personalSelect('Beschäftigungsart','p_beschaeftigungsart',D.systemOptionen?.beschaeftigungsarten||['Hauptberuf','Nebenberuf'],p.beschaeftigungsart || (p.gruppe === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf')),
     (neu ? personalSelect('Dienstgrad (Einstufung bei Eintritt)','p_dienstgrad',raenge.length?raenge:[''],p.dienstgrad || '') :
       personalFeld('Dienstgrad (nur über Beförderungen änderbar)','p_dienstgrad',p.dienstgrad,'text','readonly')),
     personalFeld('Eintrittsdatum','p_eintrittsdatum',datum(p.eintrittsdatum),'date'),
