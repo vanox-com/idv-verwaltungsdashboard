@@ -1009,6 +1009,7 @@ html[data-portal-wallpaper="minimal"] #app{background-image:linear-gradient(125d
 #mitteilungenDashboard .idv-mitteilung-eintrag small{color:#ffd39a!important}
 
 .mit-admin-item{display:grid;gap:6px;padding:14px;margin:10px 0;border:1px solid var(--line);border-radius:10px;background:rgba(24,34,48,.45)}.mit-admin-item small{color:var(--mut)}.mit-admin-item .actions{display:flex;gap:8px}
+.personal-invalid{border:2px solid #ff6565!important;outline:2px solid rgba(239,68,68,.18)!important;background-color:rgba(125,23,23,.13)!important}.personal-field-error{display:block;margin:5px 0 2px;color:#ff9999;font-size:12px;font-weight:600}#persFormFehler:not(:empty){padding:10px 12px;border-left:3px solid #ff6565;background:rgba(239,68,68,.10);border-radius:6px}
 </style>
 </head>
 <body>
@@ -2149,9 +2150,38 @@ function personalBearbeiten(nr) {
   $('#personalForm').addEventListener('submit',event => personalSpeichern(event, neu, nr));
 }
 
+
+/* Feldbezogene Validierung der Personalakte, auch für DB-Rückmeldungen. */
+function personalFehlerZuruecksetzen(){
+ document.querySelectorAll('#personalForm .personal-field-error').forEach(x=>x.remove());
+ document.querySelectorAll('#personalForm .personal-invalid').forEach(x=>{x.classList.remove('personal-invalid');x.removeAttribute('aria-invalid');x.removeAttribute('aria-describedby');});
+}
+function personalFeldFehler(id,hinweis){
+ const feld=document.getElementById(id);if(!feld)return false;
+ feld.classList.add('personal-invalid');feld.setAttribute('aria-invalid','true');
+ const msg=document.createElement('small');msg.className='personal-field-error';msg.id=id+'-fehler';msg.textContent=hinweis;
+ feld.setAttribute('aria-describedby',msg.id);feld.insertAdjacentElement('afterend',msg);
+ return true;
+}
+function personalFormFehler(fehler){
+ personalFehlerZuruecksetzen();
+ const text=String(fehler||'Bitte Eingaben prüfen');
+ const mapping=[
+  [/ernennungsurkunde_url|Ernennungsurkunde.*link/i,'p_ernennungsurkunde_url'],
+  [/arbeitsvertrag_url|Arbeitsvertrag.*link/i,'p_arbeitsvertrag_url'],
+  [/nachname/i,'p_nachname'],[/vorname/i,'p_vorname'],[/geburtsdatum/i,'p_geburtsdatum'],
+  [/eintrittsdatum/i,'p_eintrittsdatum'],[/urlaub_von/i,'p_urlaub_von'],[/urlaub_bis/i,'p_urlaub_bis'],
+  [/personalnummer/i,'p_nr'],[/dienstgrad/i,'p_dienstgrad'],[/gruppe/i,'p_gruppe']
+ ];
+ const treffer=mapping.find(([re])=>re.test(text));
+ if(treffer){personalFeldFehler(treffer[1],text);document.getElementById(treffer[1])?.focus();}
+ $('#persFormFehler').textContent=treffer?'Bitte das rot markierte Feld überprüfen.':'Speichern fehlgeschlagen: '+text;
+}
+
 async function personalSpeichern(event, neu, nr) {
   event.preventDefault();
   if (!can('pers',2)) return;
+  personalFehlerZuruecksetzen();
   const wert = id => $('#' + id).value.trim();
   const body = {
     vorname: wert('p_vorname'), nachname: wert('p_nachname'),
@@ -2160,18 +2190,20 @@ async function personalSpeichern(event, neu, nr) {
     nebenjob: wert('p_nebenjob')
   };
   if (!body.vorname || !body.nachname) {
-    $('#persFormFehler').textContent = 'Vor- und Nachname sind erforderlich.';
+    if(!body.vorname)personalFeldFehler('p_vorname','Vorname ist erforderlich.');
+    if(!body.nachname)personalFeldFehler('p_nachname','Nachname ist erforderlich.');
+    $('#persFormFehler').textContent = 'Bitte die rot markierten Pflichtfelder ausfüllen.';
     return;
   }
   if (neu) {
     body.dienstgrad = wert('p_dienstgrad');
     body.personalnummer = Number(wert('p_nr'));
     if (!Number.isSafeInteger(body.personalnummer) || body.personalnummer < 1) {
-      $('#persFormFehler').textContent = 'Bitte eine gültige Personalnummer eingeben.';
+      personalFormFehler('Ungültige Personalnummer');
       return;
     }
     if ((D.personal || []).some(p => Number(p.personalnummer) === body.personalnummer)) {
-      $('#persFormFehler').textContent = 'Diese Personalnummer ist bereits vergeben.';
+      personalFormFehler('Diese Personalnummer ist bereits vergeben.');
       return;
     }
   }
@@ -2212,7 +2244,7 @@ async function personalSpeichern(event, neu, nr) {
     else if(antwort?.kuendigung_vorhanden)
       alert('Status auf „Gekündigt“ gesetzt. Es ist bereits ein Kündigungsvorgang vorhanden; es wurde kein zweiter angelegt.');
   } catch (err) {
-    $('#persFormFehler').textContent = 'Speichern fehlgeschlagen: ' + err.message;
+    personalFormFehler(err.message);
   } finally {
     button.disabled = false;
     button.textContent = 'Speichern';
