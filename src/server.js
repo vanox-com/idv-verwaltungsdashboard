@@ -170,8 +170,10 @@ app.get('/api/changes',requireLogin,(req,res)=>{
   res.write('retry: 3000\n: verbunden\n\n');
   liveClients.add(res);
   const heartbeat=setInterval(()=>{
-    try{res.write(': ping\n\n');}
-    catch{clearInterval(heartbeat);liveClients.delete(res);}
+    void currentUser(req).then(user=>{
+      if(!user){clearInterval(heartbeat);liveClients.delete(res);res.end();return;}
+      res.write(': ping\n\n');
+    }).catch(()=>{clearInterval(heartbeat);liveClients.delete(res);res.end();});
   },25000);
   res.on('close',()=>{clearInterval(heartbeat);liveClients.delete(res);});
 });
@@ -573,13 +575,13 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       organigramm, befoerderungen, dashboardLayout, bekanntmachungen] = await Promise.all([
       db.query(`SELECT *, xmin::text AS _revision FROM personal ORDER BY personalnummer`),
       db.query(`SELECT * FROM raenge ORDER BY sortierung, name`),
-      db.query(`SELECT * FROM sonderfunktionen`),
+      db.query(`SELECT *, xmin::text AS _revision FROM sonderfunktionen`),
       db.query(`SELECT * FROM sonderfunktionsspalten ORDER BY sortierung`),
       db.query(`SELECT *, xmin::text AS _revision FROM kuendigungen ORDER BY nachname`),
       db.query(`SELECT *, xmin::text AS _revision FROM disziplin ORDER BY personalnummer`),
       db.query(`SELECT * FROM disziplinspalten ORDER BY sortierung`),
       db.query(`SELECT * FROM richtlinie ORDER BY sortierung`),
-      db.query(`SELECT * FROM checklisten ORDER BY sortierung`),
+      db.query(`SELECT *, xmin::text AS _revision FROM checklisten ORDER BY sortierung`),
       db.query(`SELECT name,punkt,erledigt FROM checklisten_status`),
       db.query(`SELECT * FROM dashboard ORDER BY sortierung`),
       db.query(`SELECT * FROM routine ORDER BY sortierung`),
@@ -597,12 +599,12 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
     const daten = {
       personal: personal.rows, raenge: raenge.rows,
       funktionsspalten: funktionsspalten.rows.map(r => r.name),
-      funktionen: funktionen.rows.map(r => ({ nr: r.personalnummer, leitung: r.leitung, sonstige: r.sonstige, werte: r.werte })),
+      funktionen: funktionen.rows.map(r => ({ nr: r.personalnummer, leitung: r.leitung, sonstige: r.sonstige, werte: r.werte, _revision: r._revision })),
       kuendigungen: kuendigungen.rows,
       disziplinSpalten: disziplinSpalten.rows.map(r => r.name),
       disziplin: disziplin.rows.map(r => ({ nr: r.personalnummer, massnahmen: r.massnahmen, slots: r.slots, bemerkung: r.bemerkung, _revision:r._revision })),
       richtlinie: { stand: richtlinie.rows[0]?.stand || '', zeilen: richtlinie.rows },
-      checklisten: checklisten.rows.map(r => ({ name: r.name, aufgaben: r.aufgaben })),
+      checklisten: checklisten.rows.map(r => ({ name: r.name, aufgaben: r.aufgaben, _revision: r._revision })),
       checklistenStatus: checklistenStatus.rows,
       dashboard: {
         layout: dashboardLayout.rows[0]||{items:[],version:0},
@@ -1074,40 +1076,46 @@ app.put('/api/copnet/:nr',requireLogin,requireRight('pers',2),requireSensitivePe
 app.post('/api/funktion', requireLogin, requireRight('sonder', 2), async (req, res, next) => {
   try {
     const { nr, funktion, wert } = req.body;
+    const revision=aktenRevision(req,res);if(revision===null)return;
     const { rows } = await db.query(
       `UPDATE sonderfunktionen SET werte = jsonb_set(werte, ARRAY[$2], $3::jsonb), aktualisiert = now()
-        WHERE personalnummer = $1 RETURNING werte`, [nr, funktion, JSON.stringify(!!wert)]);
-    if (!rows.length) return res.status(404).json({ error: 'Person nicht gefunden' });
+        WHERE personalnummer = $1 AND xmin::text=$4 RETURNING werte,xmin::text AS _revision`, [nr, funktion, JSON.stringify(!!wert),revision]);
+    if (!rows.length) return aktenKonflikt(res);
     await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'add')`,
       [req.user.id, `${wert ? 'Zugewiesen' : 'Entzogen'}: ${funktion} bei ${nr}`]);
-    res.json({ ok: true, werte: rows[0].werte });
+    res.json({ ok: true, werte: rows[0].werte, _revision:rows[0]._revision });
   } catch (e) { next(e); }
 });
 
 /* Sonderfunktionen und Fortbildungen gemeinsam speichern. */
 app.patch('/api/sonder/:nr', requireLogin, requireRight('sonder', 2), async (req, res, next) => {
   try {
-    const nr = Number(req.params.nr);
-    if (!Number.isSafeInteger(nr) || nr < 1) return res.status(400).json({ error: 'Ungültige Personalnummer' });
-    const werte = req.body.werte;
-    if (!werte || typeof werte !== 'object' || Array.isArray(werte)) return res.status(400).json({ error: 'Ungültige Zuordnung' });
-    const { rows: spalten } = await db.query('SELECT name FROM sonderfunktionsspalten');
-    const erlaubte = new Set(spalten.map(x => x.name));
-    if (Object.keys(werte).some(x => !erlaubte.has(x) || typeof werte[x] !== 'boolean')) return res.status(400).json({ error: 'Ungültige Fortbildung' });
-    const leitung = String(req.body.leitung || '').trim();
-    const sonstige = String(req.body.sonstige || '').trim();
-    if (leitung.length > 500 || sonstige.length > 500) return res.status(400).json({ error: 'Text zu lang' });
-    const { rows } = await db.query(
-      `INSERT INTO sonderfunktionen (personalnummer, leitung, sonstige, werte)
-       VALUES ($1, $2, $3, $4::jsonb)
-       ON CONFLICT (personalnummer) DO UPDATE SET
-         leitung = EXCLUDED.leitung, sonstige = EXCLUDED.sonstige,
-         werte = EXCLUDED.werte, aktualisiert = now()
-       RETURNING personalnummer`, [nr, leitung, sonstige, JSON.stringify(werte)]);
-    await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'edit')`,
-      [req.user.id, `Fortbildungen/Funktionen von ${nr} geändert`]);
-    res.json({ ok: true, personalnummer: rows[0].personalnummer });
-  } catch (e) { next(e); }
+    const nr=Number(req.params.nr);
+    if(!Number.isSafeInteger(nr)||nr<1)return res.status(400).json({error:'Ungültige Personalnummer'});
+    const revision=aktenRevision(req,res);if(revision===null)return;
+    const werte=req.body?.werte;
+    if(!werte||typeof werte!=='object'||Array.isArray(werte))return res.status(400).json({error:'Ungültige Zuordnung'});
+    const {rows:spalten}=await db.query('SELECT name FROM sonderfunktionsspalten');
+    const erlaubte=new Set(spalten.map(x=>x.name));
+    if(Object.keys(werte).some(x=>!erlaubte.has(x)||typeof werte[x]!=='boolean'))
+      return res.status(400).json({error:'Ungültige Fortbildung'});
+    const leitung=String(req.body.leitung||'').trim(),sonstige=String(req.body.sonstige||'').trim();
+    if(leitung.length>500||sonstige.length>500)return res.status(400).json({error:'Text zu lang'});
+    const existing=(await db.query('SELECT xmin::text AS _revision FROM sonderfunktionen WHERE personalnummer=$1',[nr])).rows[0];
+    if((existing?existing._revision:'0')!==revision)return aktenKonflikt(res);
+    const {rows}=await db.query(
+      'INSERT INTO sonderfunktionen (personalnummer,leitung,sonstige,werte) '+
+      'SELECT personalnummer,$2,$3,$4::jsonb FROM personal WHERE personalnummer=$1 '+
+      'ON CONFLICT (personalnummer) DO UPDATE SET leitung=EXCLUDED.leitung,sonstige=EXCLUDED.sonstige, '+
+      'werte=EXCLUDED.werte,aktualisiert=now() WHERE sonderfunktionen.xmin::text=$5 '+
+      'RETURNING personalnummer,xmin::text AS _revision',
+      [nr,leitung,sonstige,JSON.stringify(werte),revision]
+    );
+    if(!rows.length)return aktenKonflikt(res);
+    await db.query("INSERT INTO log (user_id,aktion,art) VALUES ($1,$2,'edit')",
+      [req.user.id,'Fortbildungen/Funktionen von '+nr+' geändert']);
+    res.json({ok:true,personalnummer:rows[0].personalnummer,_revision:rows[0]._revision});
+  }catch(e){next(e)}
 });
 
 
@@ -1767,6 +1775,7 @@ app.post('/api/checklisten',requireLogin,requireRight('chk',2),async(req,res,nex
   }finally{client.release()}
 });
 app.put('/api/checklisten/:name',requireLogin,requireRight('chk',2),async(req,res,next)=>{
+  const revision=aktenRevision(req,res);if(revision===null)return;
   const alt=String(req.params.name||'');
   if(!alt||alt.length>250)return res.status(400).json({error:'Ungültiger Checklistenname'});
   let valid;
@@ -1781,11 +1790,12 @@ app.put('/api/checklisten/:name',requireLogin,requireRight('chk',2),async(req,re
   try{
     await client.query('BEGIN');
     const {rows:old}=await client.query(
-      'SELECT name,aufgaben,sortierung FROM checklisten WHERE name=$1 FOR UPDATE',[alt]);
+      'SELECT name,aufgaben,sortierung,xmin::text AS _revision FROM checklisten WHERE name=$1 FOR UPDATE',[alt]);
     if(!old.length){
       await client.query('ROLLBACK');
       return res.status(404).json({error:'Checkliste nicht gefunden'});
     }
+    if(old[0]._revision!==revision){await client.query('ROLLBACK');return aktenKonflikt(res);}
     const bestand=Array.isArray(old[0].aufgaben)?old[0].aufgaben:[];
     if(zuordnung.some(i=>i!==null&&i>=bestand.length)){
       await client.query('ROLLBACK');
@@ -1825,16 +1835,17 @@ app.put('/api/checklisten/:name',requireLogin,requireRight('chk',2),async(req,re
   }finally{client.release()}
 });
 app.delete('/api/checklisten/:name',requireLogin,requireRight('chk',2),async(req,res,next)=>{
+  const revision=aktenRevision(req,res);if(revision===null)return;
   const name=String(req.params.name||'');
   if(!name||name.length>250)return res.status(400).json({error:'Ungültiger Checklistenname'});
   const client=await db.connect().catch(next);
   if(!client)return;
   try{
     await client.query('BEGIN');
-    const {rowCount}=await client.query('DELETE FROM checklisten WHERE name=$1',[name]);
+    const {rowCount}=await client.query('DELETE FROM checklisten WHERE name=$1 AND xmin::text=$2',[name,revision]);
     if(!rowCount){
       await client.query('ROLLBACK');
-      return res.status(404).json({error:'Checkliste nicht gefunden'});
+      return aktenKonflikt(res);
     }
     await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'del')",
       [req.user.id,'Checkliste entfernt: '+name]);
@@ -1845,27 +1856,38 @@ app.delete('/api/checklisten/:name',requireLogin,requireRight('chk',2),async(req
 });
 
 /* ---------- Checklisten: serverseitig berechtigtes Abhaken ---------- */
-app.patch('/api/checklisten/:name/punkte/:index', requireLogin, requireRight('chk',2),
-  async (req,res,next)=>{
-    try{
-      const name=String(req.params.name||'');
-      const index=Number(req.params.index), erledigt=req.body?.erledigt;
-      if(!name||name.length>250||!Number.isSafeInteger(index)||index<0||
-         typeof erledigt!=='boolean')
-        return res.status(400).json({error:'Ungültiger Checklistenpunkt'});
-      const {rows}=await db.query('SELECT aufgaben FROM checklisten WHERE name=$1',[name]);
-      if(!rows.length)return res.status(404).json({error:'Checkliste nicht gefunden'});
-      const items=rows[0].aufgaben;
-      if(!Array.isArray(items)||index>=items.length)
-        return res.status(400).json({error:'Checklistenpunkt nicht vorhanden'});
-      await db.query(
-        "INSERT INTO checklisten_status (name,punkt,erledigt) VALUES ($1,$2,$3) ON CONFLICT(name,punkt) DO UPDATE SET erledigt=EXCLUDED.erledigt,aktualisiert=now()",
-        [name,index,erledigt]);
-      await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
-        [req.user.id,'Checkliste '+name+' / Punkt '+(index+1)+': '+(erledigt?'erledigt':'offen')]);
-      res.json({ok:true,erledigt});
-    }catch(err){next(err);}
-  });
+app.patch('/api/checklisten/:name/punkte/:index',requireLogin,requireRight('chk',2),async(req,res,next)=>{
+  const name=String(req.params.name||''),index=Number(req.params.index);
+  const erledigt=req.body?.erledigt,erwartet=req.body?.erwartet;
+  if(!name||name.length>250||!Number.isSafeInteger(index)||index<0||
+     typeof erledigt!=='boolean'||typeof erwartet!=='boolean')
+    return res.status(400).json({error:'Ungültiger Checklistenpunkt'});
+  const revision=aktenRevision(req,res);if(revision===null)return;
+  const client=await db.connect().catch(next);
+  if(!client)return;
+  try{
+    await client.query('BEGIN');
+    const {rows}=await client.query('SELECT aufgaben,xmin::text AS _revision FROM checklisten WHERE name=$1 FOR SHARE',[name]);
+    if(!rows.length||rows[0]._revision!==revision){await client.query('ROLLBACK');return aktenKonflikt(res);}
+    const tasks=rows[0].aufgaben;
+    if(!Array.isArray(tasks)||index>=tasks.length){
+      await client.query('ROLLBACK');return res.status(400).json({error:'Checklistenpunkt nicht vorhanden'});
+    }
+    const {rows:old}=await client.query('SELECT erledigt FROM checklisten_status WHERE name=$1 AND punkt=$2 FOR UPDATE',[name,index]);
+    if((old[0]?.erledigt===true)!==erwartet){await client.query('ROLLBACK');return aktenKonflikt(res);}
+    const {rowCount}=await client.query(
+      'INSERT INTO checklisten_status(name,punkt,erledigt) VALUES($1,$2,$3) '+
+      'ON CONFLICT(name,punkt) DO UPDATE SET erledigt=EXCLUDED.erledigt,aktualisiert=now() '+
+      'WHERE checklisten_status.erledigt=$4 RETURNING punkt',
+      [name,index,erledigt,erwartet]);
+    if(!rowCount){await client.query('ROLLBACK');return aktenKonflikt(res);}
+    await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
+      [req.user.id,'Checkliste '+name+' / Punkt '+(index+1)+': '+(erledigt?'erledigt':'offen')]);
+    await client.query('COMMIT');
+    res.json({ok:true,erledigt});
+  }catch(err){await client.query('ROLLBACK').catch(()=>{});next(err);}
+  finally{client.release();}
+});
 app.post('/api/checklisten/reset',requireLogin,requireRight('chk',2),async(req,res,next)=>{
   try{
     const result=await db.query('DELETE FROM checklisten_status');

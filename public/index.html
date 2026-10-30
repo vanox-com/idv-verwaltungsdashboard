@@ -1591,7 +1591,12 @@ async function api(pfad, optionen) {
       headers: { 'Content-Type': 'application/json' }
     }, optionen, controller ? { signal: controller.signal } : {}));
     const daten = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(daten.error || 'Serverfehler (HTTP ' + r.status + ')');
+    if (!r.ok) {
+      const fehler=new Error(daten.error || 'Serverfehler (HTTP '+r.status+')');
+      fehler.status=r.status;fehler.feld=daten.feld;
+      if(r.status===409||r.status===428)window.IDVLive?.conflict?.();
+      throw fehler;
+    }
     return daten;
   } catch (err) {
     if (controller && controller.signal.aborted) {
@@ -2993,6 +2998,7 @@ function sfDialog(nr) {
     '<p id="sfError" class="fehler"></p><div class="sf-commands"><button type="button" id="sfCancel">Abbrechen</button>' +
     '<button type="button" id="sfSave" class="p">Speichern</button></div>';
   d.dataset.person = nr;
+  d.dataset.revision=String(f._revision||'0');
   d.showModal();
   $('#sfCancel').onclick = () => d.close();
   $('#sfSave').onclick = sfSpeichern;
@@ -3008,7 +3014,7 @@ async function sfSpeichern() {
   try {
     await api('/sonder/'+nr,{method:'PATCH',body:JSON.stringify({
       werte:w,leitung:$('#sfLeitung').value,sonstige:$('#sfSonstige').value
-    })});
+    }),headers:{'Content-Type':'application/json','If-Match':d.dataset.revision}});
     d.close(); await starten();
   } catch(e) { $('#sfError').textContent = 'Speichern fehlgeschlagen: '+e.message; }
   finally { btn.disabled=false;btn.textContent='Speichern'; }
@@ -3582,6 +3588,7 @@ function chkBearbeiten(name=null){
   if(name!==null&&!c)return;
   CHK_EDIT={
     original:name,
+    revision:c?._revision||'',
     items:(c?.aufgaben||[]).map((x,i)=>({
       t:typeof x==='string'?x:String(x?.t||''),
       u:typeof x==='string'?String(CHECKLIST_LINKS[name]?.[i]||''):String(x?.u||''),
@@ -3643,7 +3650,8 @@ function chkBearbeiten(name=null){
       const alt=CHK_EDIT.original;
       await api(alt===null?'/checklisten':'/checklisten/'+encodeURIComponent(alt),{
         method:alt===null?'POST':'PUT',
-        body:JSON.stringify({name,aufgaben:items,zuordnung})
+        body:JSON.stringify({name,aufgaben:items,zuordnung}),
+        ...(alt!==null?{headers:{'Content-Type':'application/json','If-Match':CHK_EDIT.revision}}:{})
       });
       dlg.close();CHK_EDIT=null;
       await starten();
@@ -3655,8 +3663,10 @@ function chkBearbeiten(name=null){
 async function chkLoeschen(name){
   if(!can('chk',2))return;
   if(!confirm('Checkliste „'+name+'“ samt aller Aufgaben und Häkchen endgültig entfernen?'))return;
+  const item=(D.checklisten||[]).find(c=>c.name===name);
+  if(!item)return;
   try{
-    await api('/checklisten/'+encodeURIComponent(name),{method:'DELETE'});
+    await api('/checklisten/'+encodeURIComponent(name),{method:'DELETE',headers:{'If-Match':String(item._revision||'')}});
     await starten();
   }catch(err){const out=$('#checkInfo');if(out)out.textContent='Entfernen fehlgeschlagen: '+err.message}
 }
@@ -3700,8 +3710,10 @@ async function chkSetzen(input){
   const name=input.dataset.checkName,index=Number(input.dataset.checkIndex);
   const fertig=input.checked;input.disabled=true;
   try{
+    const checklist=(D.checklisten||[]).find(c=>c.name===name);
     await api('/checklisten/'+encodeURIComponent(name)+'/punkte/'+index,
-      {method:'PATCH',body:JSON.stringify({erledigt:fertig})});
+      {method:'PATCH',body:JSON.stringify({erledigt:fertig,erwartet:!fertig}),
+      headers:{'Content-Type':'application/json','If-Match':String(checklist?._revision||'')}});
     const old=(D.checklistenStatus||[]).find(x=>x.name===name&&Number(x.punkt)===index);
     if(old)old.erledigt=fertig;
     else (D.checklistenStatus ||= []).push({name,punkt:index,erledigt:fertig});
