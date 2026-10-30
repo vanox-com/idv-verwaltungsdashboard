@@ -1,4 +1,5 @@
-/* PM-Prüfungsstatus und geschützte Bearbeitung der Beförderungsrichtlinien. */
+import {ANWAERTER_PRUEFUNGEN} from './befPruefungMap.js';
+/* Prüfungsstatus aller drei Anwärterlaufbahnen und geschützte Richtlinien. */
 const bad=(code,msg)=>Object.assign(new Error(msg),{httpStatus:code});
 export function registerBefRichtRoutes(app,db,requireLogin,requireRight){
  app.patch('/api/bef/pruefung/:nr',requireLogin,requireRight('bef',2),async(req,res,next)=>{
@@ -8,15 +9,16 @@ export function registerBefRichtRoutes(app,db,requireLogin,requireRight){
     throw bad(400,'Ungültiger Prüfungsstatus');
    const p=(await db.query('SELECT dienstgrad FROM personal WHERE personalnummer=$1',[nr])).rows[0];
    if(!p)throw bad(404,'Personalakte nicht gefunden');
-   if(p.dienstgrad!=='Polizeimeisteranwärter')
-    throw bad(409,'Die PM-Prüfung kann nur bei Polizeimeisteranwärtern geändert werden');
+   const pruefung=ANWAERTER_PRUEFUNGEN[p.dienstgrad];
+   if(!pruefung)
+    throw bad(409,'Prüfungsstatus nur für PM-, PK- und KK-Anwärter änderbar');
    await db.query(
-    "INSERT INTO sonderfunktionen(personalnummer,leitung,sonstige,werte) VALUES($1,'','',jsonb_build_object('PM',$2::boolean))"+
-    " ON CONFLICT(personalnummer) DO UPDATE SET werte=COALESCE(sonderfunktionen.werte,'{}'::jsonb)||jsonb_build_object('PM',$2::boolean),aktualisiert=now()",
-    [nr,bestanden]);
+    "INSERT INTO sonderfunktionen(personalnummer,leitung,sonstige,werte) VALUES($1,'','',jsonb_build_object($3::text,$2::boolean))"+
+    " ON CONFLICT(personalnummer) DO UPDATE SET werte=COALESCE(sonderfunktionen.werte,'{}'::jsonb)||jsonb_build_object($3::text,$2::boolean),aktualisiert=now()",
+    [nr,bestanden,pruefung.code]);
    await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
-    [req.user.id,'PM-Prüfung bei Nr. '+nr+': '+(bestanden?'bestanden':'notwendig')]);
-   res.json({ok:true,personalnummer:nr,bestanden});
+    [req.user.id,pruefung.code+'-Prüfung bei Nr. '+nr+': '+(bestanden?'bestanden':'notwendig')]);
+   res.json({ok:true,personalnummer:nr,bestanden,pruefung:pruefung.code});
   }catch(err){if(err.httpStatus)return res.status(err.httpStatus).json({error:err.message});next(err)}
  });
  app.get('/api/befricht',requireLogin,requireRight('befricht',1),async(req,res,next)=>{
@@ -36,8 +38,8 @@ export function registerBefRichtRoutes(app,db,requireLogin,requireRight){
     throw bad(400,'Ungültige Bemerkung oder Begründung');
    const entries=await db.query('SELECT name,naechster_rang FROM raenge WHERE name=$1',[name]);
    const entry=entries.rows[0];if(!entry)throw bad(404,'Dienstgrad nicht gefunden');
-   if(name==='Polizeimeisteranwärter'&&days!==null)
-    throw bad(400,'Polizeimeisteranwärter haben keine Mindestzeit');
+   if(ANWAERTER_PRUEFUNGEN[name]&&days!==null)
+    throw bad(400,'PM-, PK- und KK-Anwärter haben keine Mindestwartezeit; entscheidend ist die bestandene Prüfung');
    if(!entry.naechster_rang&&days!==null)
     throw bad(400,'Ein Enddienstgrad ohne Folgerang kann keine Beförderungsfrist haben');
    const result=await db.query(
