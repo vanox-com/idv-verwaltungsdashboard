@@ -670,3 +670,23 @@ FROM (VALUES
  ('Polizeivizepräsident','Polizeipräsident')
 ) AS v(name,ziel)
 WHERE r.name=v.name AND EXISTS(SELECT 1 FROM neu);
+
+
+/* PK- und KK-Anwärter wie PMA: keine Mindestwartezeit, sondern bestandene
+   Prüfung. Den fehlenden Kriminalkommissaranwärter einmalig hinzufügen.
+   Spätere manuelle Änderungen der restlichen Rangfristen bleiben erhalten. */
+WITH neu AS (
+ INSERT INTO migrationen(name) VALUES('bef-kommissaranwaerter-20261030')
+ ON CONFLICT DO NOTHING RETURNING name
+)
+UPDATE raenge SET sortierung=sortierung+1
+WHERE sortierung>=7 AND EXISTS(SELECT 1 FROM neu);
+INSERT INTO raenge(name,abk,tage,bemerkung,grund,sortierung,naechster_rang)
+VALUES ('Kriminalkommissaranwärter','KKA',NULL,'KK-Prüfung notwendig','',7,'Kriminalkommissar')
+ON CONFLICT(name) DO NOTHING;
+/* Die Prüfungsfristen sind bei allen drei Anwärterdienstgraden fest gesperrt. */
+UPDATE raenge SET tage=NULL
+WHERE name IN ('Polizeimeisteranwärter','Polizeikommissaranwärter','Kriminalkommissaranwärter')
+  AND tage IS NOT NULL;
+INSERT INTO sonderfunktionsspalten(name,sortierung) VALUES('KK',17)
+ON CONFLICT(name) DO NOTHING;
