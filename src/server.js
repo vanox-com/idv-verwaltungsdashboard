@@ -10,6 +10,7 @@ import { dokumentRoutes } from './dokumentApi.js';
 import { registerBefRichtRoutes } from './befRichtApi.js';
 import { ANWAERTER_PRUEFUNGEN } from './befPruefungMap.js';
 import { registerRoutineArchive } from './routineArchiv.js';
+import { registerAktenFeatures } from './aktenFeatures.js';
 import { hashPassword, verifyPassword, newSessionToken, SESSION_HOURS } from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -900,6 +901,7 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
       return res.status(404).json({error:'Personalakte nicht gefunden'});
     }
     if(vorher[0]._revision!==revision){await client.query('ROLLBACK');return aktenKonflikt(res);}
+    await client.query("SELECT set_config('idv.benutzer',$1,true)",[String(req.user.id)]);
     if(beantragterRang){
       const rangCheck=await client.query('SELECT 1 FROM raenge WHERE name=$1',[beantragterRang]);
       if(!rangCheck.rowCount){await client.query('ROLLBACK');return res.status(400).json({error:'Gewählter Dienstgrad ist unbekannt',feld:'dienstgrad'});}
@@ -1716,16 +1718,25 @@ app.patch('/api/kuendigung/:id', requireLogin, requireRight('kue', 2), async (re
 });
 
 /* Entfernen ausschließlich nach Bestätigung im Frontend und Berechtigung auf dem Server. */
-app.delete('/api/kuendigung/:id', requireLogin, requireRight('kue', 2), async (req, res, next) => {
-  try {
-    const revision=aktenRevision(req,res);if(revision===null)return;
-    const { rows } = await db.query(
-      'DELETE FROM kuendigungen WHERE id = $1 AND xmin::text=$2 RETURNING id, vorname, nachname', [req.params.id,revision]);
-    if (!rows.length) return aktenKonflikt(res);
-    await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'del')`,
-      [req.user.id, `Kündigung gelöscht: ${rows[0].vorname || ''} ${rows[0].nachname || ''} (ID ${rows[0].id})`]);
-    res.json({ ok: true });
-  } catch (e) { next(e); }
+app.delete('/api/kuendigung/:id',requireLogin,requireRight('kue',2),async(req,res,next)=>{
+ const revision=aktenRevision(req,res);if(revision===null)return;
+ const id=Number(req.params.id);
+ if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:'Ungültiger Vorgang'});
+ const client=await db.connect().catch(next);if(!client)return;
+ try{
+  await client.query('BEGIN');
+  const {rows}=await client.query('SELECT *,xmin::text AS _revision FROM kuendigungen WHERE id=$1 FOR UPDATE',[id]);
+  if(!rows.length||rows[0]._revision!==revision){await client.query('ROLLBACK');return aktenKonflikt(res);}
+  await client.query("SELECT set_config('idv.benutzer',$1,true)",[String(req.user.id)]);
+  const {_revision,...original}=rows[0];
+  await client.query("INSERT INTO idv_papierkorb(bereich,schluessel,titel,datensatz,geloescht_von) VALUES('kuendigungen',$1,$2,$3::jsonb,$4)",
+   [String(id),[original.vorname,original.nachname].filter(Boolean).join(' ')||'Kündigung '+id,JSON.stringify(original),req.user.id]);
+  await client.query('DELETE FROM kuendigungen WHERE id=$1',[id]);
+  await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'del')",[req.user.id,'Kündigung in Papierkorb verschoben: '+id]);
+  await client.query('COMMIT');
+  res.json({ok:true,im_papierkorb:true});
+ }catch(err){await client.query('ROLLBACK').catch(()=>{});next(err);}
+ finally{client.release();}
 });
 
 
@@ -1839,24 +1850,25 @@ app.put('/api/checklisten/:name',requireLogin,requireRight('chk',2),async(req,re
   }finally{client.release()}
 });
 app.delete('/api/checklisten/:name',requireLogin,requireRight('chk',2),async(req,res,next)=>{
-  const revision=aktenRevision(req,res);if(revision===null)return;
-  const name=String(req.params.name||'');
-  if(!name||name.length>250)return res.status(400).json({error:'Ungültiger Checklistenname'});
-  const client=await db.connect().catch(next);
-  if(!client)return;
-  try{
-    await client.query('BEGIN');
-    const {rowCount}=await client.query('DELETE FROM checklisten WHERE name=$1 AND xmin::text=$2',[name,revision]);
-    if(!rowCount){
-      await client.query('ROLLBACK');
-      return aktenKonflikt(res);
-    }
-    await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'del')",
-      [req.user.id,'Checkliste entfernt: '+name]);
-    await client.query('COMMIT');
-    res.json({ok:true});
-  }catch(e){await client.query('ROLLBACK').catch(()=>{});next(e)}
-  finally{client.release()}
+ const revision=aktenRevision(req,res);if(revision===null)return;
+ const name=String(req.params.name||'');
+ if(!name||name.length>250)return res.status(400).json({error:'Ungültiger Checklistenname'});
+ const client=await db.connect().catch(next);if(!client)return;
+ try{
+  await client.query('BEGIN');
+  const {rows}=await client.query('SELECT *,xmin::text AS _revision FROM checklisten WHERE name=$1 FOR UPDATE',[name]);
+  if(!rows.length||rows[0]._revision!==revision){await client.query('ROLLBACK');return aktenKonflikt(res);}
+  await client.query("SELECT set_config('idv.benutzer',$1,true)",[String(req.user.id)]);
+  const {_revision,...original}=rows[0];
+  const status=await client.query("SELECT COALESCE(jsonb_agg(to_jsonb(s)),'[]'::jsonb) AS daten FROM checklisten_status s WHERE name=$1",[name]);
+  await client.query("INSERT INTO idv_papierkorb(bereich,schluessel,titel,datensatz,zusatz,geloescht_von) VALUES('checklisten',$1,$1,$2::jsonb,$3::jsonb,$4)",
+   [name,JSON.stringify(original),JSON.stringify(status.rows[0].daten),req.user.id]);
+  await client.query('DELETE FROM checklisten WHERE name=$1',[name]);
+  await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'del')",[req.user.id,'Checkliste in Papierkorb verschoben: '+name]);
+  await client.query('COMMIT');
+  res.json({ok:true,im_papierkorb:true});
+ }catch(err){await client.query('ROLLBACK').catch(()=>{});next(err);}
+ finally{client.release();}
 });
 
 /* ---------- Checklisten: serverseitig berechtigtes Abhaken ---------- */
@@ -2129,7 +2141,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
   try {
     const rolle = req.params.rolle, modul = req.params.modul;
     const stufe = req.body?.stufe;
-    const erlaubteModule = new Set(['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen']);
+    const erlaubteModule = new Set(['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen','papierkorb']);
     if (rolle === 'Administrator')
       return res.status(403).json({ error: 'Administratorrechte sind fest' });
     if (!erlaubteModule.has(modul) || ![0, 1, 2].includes(stufe))
@@ -2151,7 +2163,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
 app.patch('/api/users/:id/recht/:modul',requireLogin,nurAdmin,async(req,res,next)=>{
   try{
     const userId=Number(req.params.id),modul=req.params.modul,stufe=req.body?.stufe;
-    const erlaubte=new Set(['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen']);
+    const erlaubte=new Set(['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen','papierkorb']);
     if(!Number.isSafeInteger(userId)||userId<1||!erlaubte.has(modul)||
        ![null,0,1,2].includes(stufe))
       return res.status(400).json({error:'Ungültige Berechtigung'});
@@ -2306,20 +2318,24 @@ app.patch('/api/textbausteine/:schluessel',requireLogin,requireRight('texte',2),
   }catch(e){next(e)}
 });
 app.delete('/api/textbausteine/:schluessel',requireLogin,requireRight('texte',2),async(req,res,next)=>{
-  try{
-    const schluessel=textbausteinSchluessel(req.params.schluessel);
-    if(!schluessel)return res.status(400).json({error:'Ungültiger Textbaustein-Schlüssel'});
-    const revision=aktenRevision(req,res);if(revision===null)return;
-    /* Soft-Delete: importierte Vorlagen dürfen bei Neustarts nicht zurückkommen. */
-    const {rows}=await db.query(
-      'UPDATE textbausteine SET geloescht=true '+
-      'WHERE schluessel=$1 AND geloescht=false AND xmin::text=$2 RETURNING titel',
-      [schluessel,revision]);
-    if(!rows.length)return aktenKonflikt(res);
-    await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'del')",
-      [req.user.id,'Textbaustein entfernt: '+rows[0].titel]);
-    res.json({ok:true});
-  }catch(e){next(e)}
+ const schluessel=textbausteinSchluessel(req.params.schluessel);
+ if(!schluessel)return res.status(400).json({error:'Ungültiger Textbaustein-Schlüssel'});
+ const revision=aktenRevision(req,res);if(revision===null)return;
+ const client=await db.connect().catch(next);if(!client)return;
+ try{
+  await client.query('BEGIN');
+  const {rows}=await client.query('SELECT *,xmin::text AS _revision FROM textbausteine WHERE schluessel=$1 AND geloescht=false FOR UPDATE',[schluessel]);
+  if(!rows.length||rows[0]._revision!==revision){await client.query('ROLLBACK');return aktenKonflikt(res);}
+  await client.query("SELECT set_config('idv.benutzer',$1,true)",[String(req.user.id)]);
+  const {_revision,...original}=rows[0];
+  await client.query("INSERT INTO idv_papierkorb(bereich,schluessel,titel,datensatz,geloescht_von) VALUES('textbausteine',$1,$2,$3::jsonb,$4)",
+   [schluessel,original.titel,JSON.stringify(original),req.user.id]);
+  await client.query('UPDATE textbausteine SET geloescht=true WHERE schluessel=$1',[schluessel]);
+  await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'del')",[req.user.id,'Textbaustein in Papierkorb verschoben: '+original.titel]);
+  await client.query('COMMIT');
+  res.json({ok:true,im_papierkorb:true});
+ }catch(err){await client.query('ROLLBACK').catch(()=>{});next(err);}
+ finally{client.release();}
 });
 
 app.get('/api/personal-audit',requireLogin,requireRight('log',1),async(req,res,next)=>{
@@ -2343,6 +2359,7 @@ app.get('/api/log', requireLogin, requireRight('log', 1), async (req, res, next)
 /* Neue Dokumentgeneratoren, mit bestehenden Benutzerrechten. */
 dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAuth,nameFuerDienstnummer);
 registerBefRichtRoutes(app,db,requireLogin,requireRight);
+registerAktenFeatures(app,db,requireLogin,requireRight,effektiveRechte);
 
 app.use((err, req, res, next) => {
   console.error(err);

@@ -1458,7 +1458,7 @@ const MODS = [
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
-  ['rechtesimulator','Berechtigungs-Simulator','🛡️'],['design','Designverwaltung','🎨'],['backup','Backup-Übersicht','🗄️'],['users','Benutzer & Rollen','🔐'],['befricht','Beförderungsrichtlinien','📋'],['system','Systemverwaltung','⚙️'],['meldungen','Mitteilungen verwalten','📣'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾']
+  ['rechtesimulator','Berechtigungs-Simulator','🛡️'],['design','Designverwaltung','🎨'],['backup','Backup-Übersicht','🗄️'],['users','Benutzer & Rollen','🔐'],['befricht','Beförderungsrichtlinien','📋'],['system','Systemverwaltung','⚙️'],['meldungen','Mitteilungen verwalten','📣'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾'],['papierkorb','Papierkorb','🗑️']
 ];
 /* Sidebar: dieselben Module und Rechte, nur übersichtlich gruppiert.
    Ein aktives Modul hält seine Kategorie immer geöffnet. */
@@ -1467,7 +1467,7 @@ const NAV_GRUPPEN = [
   {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','praktika','rout','geb','jub' ,'statistik']},
   {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
-  {id:'verwaltung',titel:'Administration',module:['users','befricht','system','meldungen','rechtesimulator','design','backup','log']}
+  {id:'verwaltung',titel:'Administration',module:['users','befricht','system','meldungen','rechtesimulator','design','backup','log','papierkorb']}
 ];
 const NAV_OFFEN = new Set(['uebersicht','personal']);
 let ME = null, D = null, tab = 'dash';
@@ -1868,6 +1868,7 @@ function zeichneMenue() {
 }
 
 function zeichne() {
+  if (tab==='papierkorb') { window.IDVAkten?.papierkorb(); return; }
   if (tab==='org') { ladeOrganigramm(); return; }
   if (tab==='texte') { ladeTextbausteine(); return; }
   if (['sperr','geb','jub','bl'].includes(tab)) { ladeExtra(tab); return; }
@@ -2373,7 +2374,7 @@ function personalAnzeigen(nr) {
       '<span class="pers-document-arrow" aria-hidden="true">›</span></button></div>'+
       '<div class="pers-documents-archive"><h4>Bereits hinterlegte Dokumente</h4>'+
       '<div id="dgAkteArchiv" aria-live="polite">Lade Dokumente …</div></div></section>':'') +
-    (can('persverlauf') ? '<section class="box"><button type="button" data-open-verlauf="'+Number(nr)+'">Personalakten-Verlauf öffnen</button><div id="personalVerlauf" hidden></div></section>' : '') +
+    (can('persverlauf') ? '<section class="box"><button type="button" data-open-verlauf="'+Number(nr)+'">Digitale Personallaufbahn öffnen</button><div id="personalVerlauf" hidden></div></section>' : '') +
     (can('dis') ? (() => {
       const akte=disAkte(Number(nr));
       const massnahmen=akte.slots.map((eintrag,i)=>eintrag?.done ?
@@ -3669,7 +3670,7 @@ function chkBearbeiten(name=null){
 }
 async function chkLoeschen(name){
   if(!can('chk',2))return;
-  if(!confirm('Checkliste „'+name+'“ samt aller Aufgaben und Häkchen endgültig entfernen?'))return;
+  if(!confirm('Checkliste „'+name+'“ samt aller Aufgaben und Häkchen in den Papierkorb verschieben?'))return;
   const item=(D.checklisten||[]).find(c=>c.name===name);
   if(!item)return;
   try{
@@ -4246,7 +4247,7 @@ async function textbausteinEntfernen(schluessel){
   if(!can('texte',2))return;
   const x=(TEXTBAUSTEINE_CACHE||[]).find(v=>v.schluessel===schluessel);
   if(!x)return;
-  if(!confirm('Textbaustein „'+x.titel+'“ wirklich entfernen?'))return;
+  if(!confirm('Textbaustein „'+x.titel+'“ in den Papierkorb verschieben?'))return;
   try{
     await api('/textbausteine/'+encodeURIComponent(x.schluessel),{method:'DELETE',headers:{'If-Match':String(x._revision||'')}});
     await ladeTextbausteine();
@@ -4448,14 +4449,16 @@ document.addEventListener('click',e=>{
 });
 
 async function vLog_() {
-  const [zeilen,audit] = await Promise.all([api('/log'),api('/personal-audit')]);
-  $('#inhalt').innerHTML = '<h1>Änderungsprotokoll</h1><h3>Systemereignisse</h3>' + tabelle(['Zeit','Benutzer','Art','Aktion'],
-    zeilen.map(z => [new Date(z.zeit).toLocaleString('de-DE'), esc(z.benutzer), esc(z.art), esc(z.aktion)])) +
-    '<h3>Personaländerungen (vorher / nachher)</h3>' +
-    tabelle(['Zeit','Personalnr.','Bearbeiter','Änderungen'],audit.map(a=>[
-      new Date(a.zeit).toLocaleString('de-DE'),Number(a.personalnummer),esc(a.benutzer),
-      Object.entries(a.aenderungen||{}).map(([feld,v])=>esc(feld+': '+String(v.alt??'–')+' → '+String(v.neu??'–'))).join('<div class="kue-docsep"></div>')
-    ]));
+ const [zeilen,audit]=await Promise.all([api('/log'),api('/personal-audit')]);
+ if(tab!=='log')return;
+ $('#inhalt').innerHTML='<h1>Änderungsprotokoll</h1><h3>Systemereignisse</h3>'+
+  tabelle(['Zeit','Benutzer','Art','Aktion'],zeilen.map(z=>[new Date(z.zeit).toLocaleString('de-DE'),esc(z.benutzer),esc(z.art),esc(z.aktion)]))+
+  '<h3>Historische Personaländerungen (vorher / nachher)</h3>'+
+  tabelle(['Zeit','Personalnr.','Bearbeiter','Änderungen'],audit.map(a=>[
+    new Date(a.zeit).toLocaleString('de-DE'),Number(a.personalnummer),esc(a.benutzer),
+    Object.entries(a.aenderungen||{}).map(([feld,v])=>esc(feld+': '+String(v.alt??'–')+' → '+String(v.neu??'–'))).join('<div class="kue-docsep"></div>')
+  ]))+'<section class="box" id="idvVergleich"><h3>Feldänderungen werden geladen …</h3></section>';
+ window.IDVAkten?.vergleich();
 }
 
 
@@ -4481,11 +4484,8 @@ document.addEventListener('click',async e=>{
 });
 async function ladePersonalVerlauf(nr){
  const area=$('#personalVerlauf');if(!area)return;
- try{
-  const data=await api('/personal/'+nr+'/verlauf');
-  if(!area.isConnected||!$('#personalDialog')?.open)return;
-  area.innerHTML=data.length?data.map(e=>'<div class="dashboard-line"><div><strong>'+esc(e.aktion)+'</strong><small style="display:block">'+esc(e.benutzer||'System')+' · '+esc(e.zeit?new Date(e.zeit).toLocaleString('de-DE'):'Ohne Datum')+'</small></div></div>').join(''):'<span class="mut">Noch keine Verlaufsereignisse.</span>';
- }catch(e){if(area.isConnected)area.textContent='Verlauf konnte nicht geladen werden: '+e.message;}
+ if(window.IDVAkten?.laufbahn)await window.IDVAkten.laufbahn(nr,area);
+ else area.textContent='Personallaufbahn konnte nicht initialisiert werden. Bitte die Seite neu laden.';
 }
 async function ladeSystemoptionen(){
  const el=$('#inhalt');el.innerHTML='<h1>Zentrale Systemverwaltung</h1><p>Lade Einstellungen …</p>';
@@ -4995,5 +4995,6 @@ document.addEventListener('click',async e=>{
 <script src="/dokumentUI.js"></script>
 <script src="/befRichtUI.js"></script>
 <script src="/liveUpdates.js"></script>
+<script src="/aktenFeatures.js"></script>
 </body>
 </html>
