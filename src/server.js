@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { db, initDb } from './db.js';
 import { fillCertificateDocx } from './urkundenDocx.js';
 import { dokumentRoutes } from './dokumentApi.js';
+import { registerBefRichtRoutes } from './befRichtApi.js';
 import { hashPassword, verifyPassword, newSessionToken, SESSION_HOURS } from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -649,7 +650,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       const raengeListe=raenge.rows;
       const alleFaelligen=personal.rows.filter(p=>p.status!=='Gekündigt').flatMap(p=>{
         const i=raengeListe.findIndex(r=>r.name===p.dienstgrad);
-        const current=raengeListe[i],next=raengeListe[i+1];
+        const current=raengeListe[i],next=current?.naechster_rang?raengeListe.find(r=>r.name===current.naechster_rang):null;
         if (!current||!next) return [];
         if(p.dienstgrad==='Polizeimeisteranwärter'){
           if(next.name!=='Polizeimeister'||!pmBestanden.has(Number(p.personalnummer)))return [];
@@ -1368,11 +1369,12 @@ app.post('/api/befoerdern', requireLogin, requireRight('bef', 2), async (req, re
     const p = pResult.rows[0];
     if (p.status === 'Gekündigt') throw fail(409, 'Gekündigtes Personal kann nicht befördert werden');
     if (p.por_status !== 'genehmigt') throw fail(403, 'Beförderung nur mit gültiger POR-Freigabe möglich');
-    const raenge = (await client.query('SELECT name, tage FROM raenge ORDER BY sortierung, name')).rows;
-    const i = raenge.findIndex(r => r.name === p.dienstgrad);
-    if (i < 0 || !raenge[i + 1] || (p.dienstgrad!=='Polizeimeisteranwärter' && !Number(raenge[i].tage)))
+    const raenge = (await client.query('SELECT name, tage, naechster_rang FROM raenge ORDER BY sortierung, name')).rows;
+    const aktuell = raenge.find(r => r.name === p.dienstgrad);
+    const nachfolger = aktuell?.naechster_rang ? raenge.find(r => r.name === aktuell.naechster_rang) : null;
+    if (!aktuell || !nachfolger || (p.dienstgrad!=='Polizeimeisteranwärter' && !Number(aktuell.tage)))
       throw fail(409, 'Für diesen Dienstgrad ist keine weitere Beförderung vorgesehen');
-    const naechsterRang = raenge[i + 1].name;
+    const naechsterRang = nachfolger.name;
     if (req.body.neuer_rang && req.body.neuer_rang !== naechsterRang)
       throw fail(409, 'Der nächste Dienstgrad stimmt nicht mit der Dienstgradfolge überein');
     const pma=p.dienstgrad==='Polizeimeisteranwärter';
@@ -1385,7 +1387,7 @@ app.post('/api/befoerdern', requireLogin, requireRight('bef', 2), async (req, re
         throw fail(409,'Die PM-Prüfung ist nicht als bestanden erfasst. Bitte unter Sonderfunktionen → Prüfungen → PM markieren.');
     }else{
       const pruefung=await client.query('SELECT COALESCE($1::date, $2::date + $3::integer) AS faellig',
-        [p.naechste_befoerderung,p.letzte_befoerderung,Number(raenge[i].tage)]);
+        [p.naechste_befoerderung,p.letzte_befoerderung,Number(aktuell.tage)]);
       const faellig=pruefung.rows[0].faellig;
       if(!faellig)throw fail(409,'Es fehlt ein gültiges Datum für die Beförderungsfrist');
       if(Date.parse(String(faellig))>Date.now())
@@ -2026,7 +2028,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
   try {
     const rolle = req.params.rolle, modul = req.params.modul;
     const stufe = req.body?.stufe;
-    const erlaubteModule = new Set(['dash','pers','bef','rout','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','texte','rechtesimulator','design','backup','mitteilungen']);
+    const erlaubteModule = new Set(['dash','pers','bef','rout','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen']);
     if (rolle === 'Administrator')
       return res.status(403).json({ error: 'Administratorrechte sind fest' });
     if (!erlaubteModule.has(modul) || ![0, 1, 2].includes(stufe))
@@ -2048,7 +2050,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
 app.patch('/api/users/:id/recht/:modul',requireLogin,nurAdmin,async(req,res,next)=>{
   try{
     const userId=Number(req.params.id),modul=req.params.modul,stufe=req.body?.stufe;
-    const erlaubte=new Set(['dash','pers','bef','rout','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','texte','rechtesimulator','design','backup','mitteilungen']);
+    const erlaubte=new Set(['dash','pers','bef','rout','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen']);
     if(!Number.isSafeInteger(userId)||userId<1||!erlaubte.has(modul)||
        ![null,0,1,2].includes(stufe))
       return res.status(400).json({error:'Ungültige Berechtigung'});
@@ -2237,6 +2239,7 @@ app.get('/api/log', requireLogin, requireRight('log', 1), async (req, res, next)
 
 /* Neue Dokumentgeneratoren, mit bestehenden Benutzerrechten. */
 dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAuth,nameFuerDienstnummer);
+registerBefRichtRoutes(app,db,requireLogin,requireRight);
 
 app.use((err, req, res, next) => {
   console.error(err);
