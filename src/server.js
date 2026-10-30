@@ -584,8 +584,8 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       db.query(`SELECT *, xmin::text AS _revision FROM checklisten ORDER BY sortierung`),
       db.query(`SELECT name,punkt,erledigt FROM checklisten_status`),
       db.query(`SELECT * FROM dashboard ORDER BY sortierung`),
-      db.query(`SELECT * FROM routine ORDER BY sortierung`),
-      db.query(`SELECT * FROM sonderzahlungen ORDER BY nachname`),
+      db.query(`SELECT *, xmin::text AS _revision FROM routine ORDER BY sortierung`),
+      db.query(`SELECT *, xmin::text AS _revision FROM sonderzahlungen ORDER BY nachname`),
       db.query(`SELECT * FROM organigramm ORDER BY sortierung`),
       db.query(`SELECT * FROM befoerderungen ORDER BY nachname`),
       db.query(`SELECT items,version FROM dashboard_layout WHERE id=1`),
@@ -1176,23 +1176,26 @@ async function routineAendern(req, res, next, bearbeiten) {
   const id = Number(req.params.id);
   if(!Number.isSafeInteger(id) || id < 1)
     return res.status(400).json({error:'Ungültige Routine'});
+  const revision=aktenRevision(req,res);if(revision===null)return;
   let client;
   try {
     client = await db.connect();
     await client.query('BEGIN');
     const result=await client.query(
-      'SELECT id,tage,personen FROM routine WHERE id=$1 FOR UPDATE', [id]);
+      'SELECT id,tage,personen,xmin::text AS _revision FROM routine WHERE id=$1 FOR UPDATE', [id]);
     if(!result.rows.length) throw routineFehler(404,'Routine nicht gefunden');
     const r=result.rows[0],tage=r.tage,personen=r.personen;
+    if(r._revision!==revision)throw routineFehler(409,'Speicherkonflikt: Der Routineplan wurde inzwischen geändert. Bitte den aktuellen Stand laden.');
     if(!Array.isArray(tage)||!Array.isArray(personen))
       throw routineFehler(409,'Routine-Daten sind nicht vollständig');
     const text=await bearbeiten({tage,personen,client});
-    await client.query('UPDATE routine SET tage=$1::jsonb, personen=$2::jsonb WHERE id=$3',
+    const {rows:updated}=await client.query(
+      'UPDATE routine SET tage=$1::jsonb, personen=$2::jsonb WHERE id=$3 RETURNING xmin::text AS _revision',
       [JSON.stringify(tage),JSON.stringify(personen),id]);
     await client.query("INSERT INTO log (user_id,aktion,art) VALUES ($1,$2,'edit')",
       [req.user.id,text]);
     await client.query('COMMIT');
-    return res.json({ok:true});
+    return res.json({ok:true,_revision:updated[0]._revision});
   }catch(e){
     if(client)await client.query('ROLLBACK').catch(()=>{});
     if(e.httpStatus) return res.status(e.httpStatus).json({error:e.message});
@@ -1279,6 +1282,7 @@ app.patch('/api/sonderzahlung/:id',requireLogin,requireRight('rout',2),
   async(req,res,next)=>{
     try {
       const id=Number(req.params.id), b=req.body||{};
+      const revision=aktenRevision(req,res);if(revision===null)return;
       if(!Number.isSafeInteger(id)||id<1||
          typeof b.erhalten!=='boolean'||typeof b.betrag!=='string'||
          typeof b.grund!=='string'||typeof b.datum!=='string')
@@ -1287,12 +1291,12 @@ app.patch('/api/sonderzahlung/:id',requireLogin,requireRight('rout',2),
          (b.datum&&!routineDatum(b.datum)))
         return res.status(400).json({error:'Ungültiger Betrag, Grund oder Datum'});
       const {rows}=await db.query(
-        'UPDATE sonderzahlungen SET erhalten=$1,datum=$2,betrag=$3,grund=$4 WHERE id=$5 RETURNING id',
-        [b.erhalten,b.datum||null,b.betrag.trim(),b.grund.trim(),id]);
-      if(!rows.length)return res.status(404).json({error:'Sonderzahlung nicht gefunden'});
+        'UPDATE sonderzahlungen SET erhalten=$1,datum=$2,betrag=$3,grund=$4 WHERE id=$5 AND xmin::text=$6 RETURNING id,xmin::text AS _revision',
+        [b.erhalten,b.datum||null,b.betrag.trim(),b.grund.trim(),id,revision]);
+      if(!rows.length)return aktenKonflikt(res);
       await db.query("INSERT INTO log (user_id,aktion,art) VALUES ($1,$2,'edit')",
         [req.user.id,'Sonderzahlung '+id+' aktualisiert']);
-      res.json({ok:true});
+      res.json({ok:true,_revision:rows[0]._revision});
     }catch(e){next(e);}
   });
 
@@ -2264,7 +2268,7 @@ function textbausteinSchluessel(param){
 app.get('/api/textbausteine',requireLogin,requireRight('texte',1),async(req,res,next)=>{
   try{
     const {rows}=await db.query(
-      'SELECT schluessel,kategorie,titel,inhalt FROM textbausteine WHERE geloescht=false ORDER BY sortierung,schluessel');
+      'SELECT schluessel,kategorie,titel,inhalt,xmin::text AS _revision FROM textbausteine WHERE geloescht=false ORDER BY sortierung,schluessel');
     res.json(rows);
   }catch(e){next(e)}
 });
@@ -2276,7 +2280,7 @@ app.post('/api/textbausteine',requireLogin,requireRight('texte',2),async(req,res
     const {rows}=await db.query(
       'INSERT INTO textbausteine(schluessel,kategorie,titel,inhalt,sortierung) '+
       'VALUES($1,$2,$3,$4,(SELECT COALESCE(MAX(sortierung),0)+10 FROM textbausteine)) '+
-      'RETURNING schluessel,kategorie,titel,inhalt',
+      'RETURNING schluessel,kategorie,titel,inhalt,xmin::text AS _revision',
       [schluessel,werte.kategorie,werte.titel,werte.inhalt]);
     await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",
       [req.user.id,'Textbaustein hinzugefügt: '+werte.titel]);
@@ -2287,14 +2291,15 @@ app.patch('/api/textbausteine/:schluessel',requireLogin,requireRight('texte',2),
   try{
     const schluessel=textbausteinSchluessel(req.params.schluessel);
     if(!schluessel)return res.status(400).json({error:'Ungültiger Textbaustein-Schlüssel'});
+    const revision=aktenRevision(req,res);if(revision===null)return;
     const {werte,error}=textbausteinEingabe(req.body);
     if(error)return res.status(400).json({error});
     const {rows}=await db.query(
       'UPDATE textbausteine SET kategorie=$2,titel=$3,inhalt=$4 '+
-      'WHERE schluessel=$1 AND geloescht=false '+
-      'RETURNING schluessel,kategorie,titel,inhalt',
-      [schluessel,werte.kategorie,werte.titel,werte.inhalt]);
-    if(!rows.length)return res.status(404).json({error:'Textbaustein nicht gefunden'});
+      'WHERE schluessel=$1 AND geloescht=false AND xmin::text=$5 '+
+      'RETURNING schluessel,kategorie,titel,inhalt,xmin::text AS _revision',
+      [schluessel,werte.kategorie,werte.titel,werte.inhalt,revision]);
+    if(!rows.length)return aktenKonflikt(res);
     await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
       [req.user.id,'Textbaustein bearbeitet: '+werte.titel]);
     res.json(rows[0]);
@@ -2304,12 +2309,13 @@ app.delete('/api/textbausteine/:schluessel',requireLogin,requireRight('texte',2)
   try{
     const schluessel=textbausteinSchluessel(req.params.schluessel);
     if(!schluessel)return res.status(400).json({error:'Ungültiger Textbaustein-Schlüssel'});
+    const revision=aktenRevision(req,res);if(revision===null)return;
     /* Soft-Delete: importierte Vorlagen dürfen bei Neustarts nicht zurückkommen. */
     const {rows}=await db.query(
       'UPDATE textbausteine SET geloescht=true '+
-      'WHERE schluessel=$1 AND geloescht=false RETURNING titel',
-      [schluessel]);
-    if(!rows.length)return res.status(404).json({error:'Textbaustein nicht gefunden'});
+      'WHERE schluessel=$1 AND geloescht=false AND xmin::text=$2 RETURNING titel',
+      [schluessel,revision]);
+    if(!rows.length)return aktenKonflikt(res);
     await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'del')",
       [req.user.id,'Textbaustein entfernt: '+rows[0].titel]);
     res.json({ok:true});

@@ -3290,6 +3290,10 @@ document.addEventListener('click',e=>{
 /* Routine: Anwesenheit, Termine und Sonderzahlungen aus gemeinsamem Datenbestand. */
 let routineBereich='anwesenheit';
 function routinePlan(){return (D.routine||[])[0]||null;}
+/* Jede Routine-Änderung sendet den Stand, den der Nutzer tatsächlich gesehen hat. */
+function routineSchreibOptionen(plan,method,body){
+  return {method,headers:{'Content-Type':'application/json','If-Match':String(plan._revision||'')},body:JSON.stringify(body)};
+}
 function routineDatumAnzeigen(t){return /^\d{4}-\d{2}-\d{2}$/.test(String(t))?fd(t):String(t||'');}
 function routineTagIso(t){
  const str=String(t||'');
@@ -3430,8 +3434,9 @@ async function routineKlick(btn){
   if(!p||!Array.isArray(p.anwesend)||i<0||i>=r.tage.length)return;
   const neu=!p.anwesend[i];btn.disabled=true;
   try{
-    await api('/routine/'+r.id+'/anwesenheit',{method:'POST',
-      body:JSON.stringify({nr,tagIndex:i,anwesend:neu})});
+    const response=await api('/routine/'+r.id+'/anwesenheit',
+      routineSchreibOptionen(r,'POST',{nr,tagIndex:i,anwesend:neu}));
+    r._revision=response._revision;
     p.anwesend[i]=neu;
     btn.classList.toggle('is-here',neu);
     btn.textContent=neu?'✓':'–';
@@ -3449,8 +3454,9 @@ async function routineStatus(btn){
   const p=(r.personen||[]).find(x=>Number(x.nr)===nr);if(!p)return;
   const abgemeldet=!p.abgemeldet;btn.disabled=true;
   try{
-    await api('/routine/'+r.id+'/teilnehmer/'+nr,{method:'PATCH',
-      body:JSON.stringify({abgemeldet})});
+    const response=await api('/routine/'+r.id+'/teilnehmer/'+nr,
+      routineSchreibOptionen(r,'PATCH',{abgemeldet}));
+    r._revision=response._revision;
     p.abgemeldet=abgemeldet;btn.textContent=abgemeldet?'Abgemeldet':'Aktiv';
     btn.classList.toggle('off',abgemeldet);btn.setAttribute('aria-pressed',String(abgemeldet));
     routineNachricht('Teilnehmerstatus gespeichert.');
@@ -3462,7 +3468,7 @@ async function routineDatumHinzufuegen(event){
   const datum=$('#routineNewDate')?.value,btn=event.target.querySelector('button[type="submit"]');
   if(!datum)return;btn.disabled=true;routineNachricht('Termin wird gespeichert …');
   try{
-    await api('/routine/'+r.id+'/termin',{method:'POST',body:JSON.stringify({datum})});
+    await api('/routine/'+r.id+'/termin',routineSchreibOptionen(r,'POST',{datum}));
     await starten();
     routineNachricht('Termin '+fd(datum)+' wurde ergänzt.');
   }catch(e){routineNachricht('Termin konnte nicht angelegt werden: '+e.message,true);}
@@ -3473,7 +3479,7 @@ async function routinePersonHinzufuegen(event){
   const nr=Number($('#routineNewPerson')?.value),btn=event.target.querySelector('button[type="submit"]');
   if(!nr)return;btn.disabled=true;routineNachricht('Teilnehmer wird gespeichert …');
   try{
-    await api('/routine/'+r.id+'/teilnehmer',{method:'POST',body:JSON.stringify({nr})});
+    await api('/routine/'+r.id+'/teilnehmer',routineSchreibOptionen(r,'POST',{nr}));
     await starten();routineNachricht('Teilnehmer wurde ergänzt.');
   }catch(e){routineNachricht('Teilnehmer konnte nicht ergänzt werden: '+e.message,true);}
   finally{btn.disabled=false;}
@@ -3507,6 +3513,7 @@ function sonderzahlungDialog(id){
     '<p id="zahlungFehler" class="fehler" role="alert"></p>'+
     '<div class="zahlung-actions"><button type="button" id="zahlungAbbrechen">Abbrechen</button>'+
     '<button class="p" type="submit" id="zahlungSpeichern">Speichern</button></div></form>';
+  dlg.dataset.revision=String(z._revision||'');
   dlg.showModal();$('#zahlungGrund').value=z.grund||'';
   $('#zahlungAbbrechen').onclick=()=>dlg.close();
   $('#zahlungForm').onsubmit=async e=>{
@@ -3515,7 +3522,7 @@ function sonderzahlungDialog(id){
       await api('/sonderzahlung/'+id,{method:'PATCH',body:JSON.stringify({
         erhalten:$('#zahlungErhalten').checked,betrag:$('#zahlungBetrag').value,
         datum:$('#zahlungDatum').value,grund:$('#zahlungGrund').value
-      })});
+      }),headers:{'Content-Type':'application/json','If-Match':dlg.dataset.revision}});
       dlg.close();await starten();
     }catch(err){$('#zahlungFehler').textContent='Speichern fehlgeschlagen: '+err.message;}
     finally{if($('#zahlungSpeichern'))$('#zahlungSpeichern').disabled=false;}
@@ -4209,6 +4216,7 @@ function textbausteinEditor(schluessel=null){
       '<button type="button" id="textEditorAbbrechen">Abbrechen</button>'+
       '<button type="submit" class="p" id="textEditorSpeichern">Speichern</button>'+
     '</div></form>';
+  dlg.dataset.revision=String(aktuell?._revision||'');
   dlg.showModal();
   $('#textEditorAbbrechen').onclick=()=>dlg.close();
   $('#textEditorForm').onsubmit=async e=>{
@@ -4224,7 +4232,8 @@ function textbausteinEditor(schluessel=null){
     $('#textEditorFehler').textContent='';
     try{
       await api(aktuell?'/textbausteine/'+encodeURIComponent(aktuell.schluessel):'/textbausteine',
-        {method:aktuell?'PATCH':'POST',body:JSON.stringify(body)});
+        {method:aktuell?'PATCH':'POST',body:JSON.stringify(body),
+        ...(aktuell?{headers:{'Content-Type':'application/json','If-Match':dlg.dataset.revision}}:{})});
       dlg.close();
       await ladeTextbausteine();
       const msg=$('#textbausteinMeldung');
@@ -4239,7 +4248,7 @@ async function textbausteinEntfernen(schluessel){
   if(!x)return;
   if(!confirm('Textbaustein „'+x.titel+'“ wirklich entfernen?'))return;
   try{
-    await api('/textbausteine/'+encodeURIComponent(x.schluessel),{method:'DELETE'});
+    await api('/textbausteine/'+encodeURIComponent(x.schluessel),{method:'DELETE',headers:{'If-Match':String(x._revision||'')}});
     await ladeTextbausteine();
     const status=$('#textbausteinMeldung');
     if(status)status.textContent='Textbaustein entfernt.';
