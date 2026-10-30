@@ -930,3 +930,18 @@ UPDATE kuendigungen SET personal_snapshot=jsonb_build_object(
  'personal',NULL,
  'generierte_dokumente','[]'::jsonb)
  WHERE personal_snapshot IS NULL;
+
+
+/* Administrative Personalbereinigung: reversibles Entfernen aus allen
+   aktiven Personalübersichten. Die Personalnummer, Dokumentverweise und
+   referenzierenden Vorgänge bleiben in der Datenbank erhalten. */
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS administrativ_geloescht_am timestamptz;
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS administrativ_geloescht_von integer REFERENCES users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idv_personal_aktiv_idx
+ ON personal(personalnummer) WHERE administrativ_geloescht_am IS NULL;
+
+/* Persönliche Papierkorb-Einträge nur für den Administrator; keine
+   personenbezogenen Inhalte in der allgemeinen Papierkorb-Liste. */
+ALTER TABLE idv_papierkorb DROP CONSTRAINT IF EXISTS idv_papierkorb_bereich_check;
+ALTER TABLE idv_papierkorb ADD CONSTRAINT idv_papierkorb_bereich_check
+ CHECK (bereich IN ('kuendigungen','checklisten','textbausteine','personal'));
