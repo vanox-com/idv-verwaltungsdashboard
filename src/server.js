@@ -856,6 +856,59 @@ function dokumentLinksValidieren(body) {
   }
   return null;
 }
+/* Bereits gekündigte Personalakten können nachträglich in das Kündigungsmodul
+   übernommen werden. Bestehende Vorgänge (auch historische Mehrfacheinträge)
+   bleiben unverändert; die Personalakte selbst wird nicht gelöscht. */
+app.post('/api/personal/:nr/kuendigung',requireLogin,requireRight('pers',1),requireRight('kue',2),async(req,res,next)=>{
+  const nr=Number(req.params.nr);
+  const grund=typeof req.body?.grund==='string'?req.body.grund.trim():'';
+  if(!Number.isSafeInteger(nr)||nr<1)return res.status(400).json({error:'Ungültige Personalnummer'});
+  if(grund.length>1000)return res.status(400).json({error:'Kündigungsgrund darf maximal 1000 Zeichen lang sein'});
+  const client=await db.connect().catch(next);
+  if(!client)return;
+  try{
+    await client.query('BEGIN');
+    /* Derselbe Personalzeilen-Lock wird bei der Statusänderung verwendet.
+       Zwei gleichzeitige Klicks dürfen keinen Doppelvorgang erzeugen. */
+    const {rows:personen}=await client.query(
+      'SELECT personalnummer,status,vorname,nachname,dienstgrad,handy,arbeitsvertrag,'+
+      'arbeitsvertrag_url,ernennungsurkunde,ernennungsurkunde_url,eintrittsdatum '+
+      'FROM personal WHERE personalnummer=$1 FOR UPDATE',[nr]);
+    if(!personen.length){
+      await client.query('ROLLBACK');
+      return res.status(404).json({error:'Personalakte nicht gefunden'});
+    }
+    const p=personen[0];
+    if(p.status!=='Gekündigt'){
+      await client.query('ROLLBACK');
+      return res.status(409).json({error:'Die Person muss zuerst den Status „Gekündigt“ erhalten'});
+    }
+    const existing=await client.query('SELECT id FROM kuendigungen WHERE personalnummer=$1 ORDER BY id DESC',[nr]);
+    if(existing.rows.length){
+      await client.query('COMMIT');
+      return res.json({ok:true,angelegt:false,id:existing.rows[0].id,anzahl:existing.rows.length});
+    }
+    if(!grund){
+      await client.query('ROLLBACK');
+      return res.status(400).json({error:'Bitte einen Kündigungsgrund eingeben'});
+    }
+    const dokument=(titel,url)=>url?
+      JSON.stringify({t:String(titel||'Dokument'),u:String(url)}):String(titel||'');
+    await client.query("SELECT set_config('idv.benutzer',$1,true)",[String(req.user.id)]);
+    const {rows:neu}=await client.query(
+      'INSERT INTO kuendigungen (personalnummer,vorname,nachname,rang,grund,handy,vertrag,eintritt,urkunde) '+
+      'VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
+      [nr,p.vorname,p.nachname,p.dienstgrad,grund,p.handy,
+       dokument(p.arbeitsvertrag,p.arbeitsvertrag_url),p.eintrittsdatum,
+       dokument(p.ernennungsurkunde,p.ernennungsurkunde_url)]);
+    await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",
+      [req.user.id,'Gekündigte Personalakte '+nr+' in Kündigungen übernommen']);
+    await client.query('COMMIT');
+    res.status(201).json({ok:true,angelegt:true,id:neu[0].id,anzahl:1});
+  }catch(err){await client.query('ROLLBACK').catch(()=>{});next(err);}
+  finally{client.release();}
+});
+
 /* Kündigt jemand über die Personalakte, wird der Kündigungsvorgang
    mit denselben Daten in EINER Datenbanktransaktion angelegt. Die
    Personalsperre verhindert parallele automatische Doppelvorgänge.

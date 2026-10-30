@@ -1366,7 +1366,21 @@ body:has(#login:not(.hide)){
 .routine-archive-restore{margin-top:10px}
 
 /* Personalübersicht: eine klare Aktion statt drei Dokumentlinks pro Zeile. */
-.pers-action-cell{min-width:132px;white-space:nowrap}
+.pers-action-cell{min-width:132px;white-space:normal}
+.pers-kue-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:7px 9px;margin:4px 0 0 5px;border:1px solid #6688ad;border-radius:6px;
+  color:#dceafa;background:rgba(55,101,147,.2);font-size:11px;font-weight:650;white-space:nowrap}
+.pers-kue-btn:hover{border-color:#9cc1e9;background:rgba(60,116,173,.3)}
+.pers-kue-filter{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:10px 14px;
+  margin:12px 0;border:1px solid #547398;border-radius:8px;background:#1a2c40}
+#personalKuendigungDialog{width:min(500px,calc(100vw - 28px));max-height:90vh;overflow-y:auto;
+  border:1px solid #506986;border-radius:12px;padding:24px;background:#192638;color:#e7eef7;
+  box-shadow:0 22px 55px #0009}
+#personalKuendigungDialog::backdrop{background:#030914b8}
+#personalKuendigungDialog textarea{width:100%;resize:vertical;min-height:110px;
+  padding:11px;border:1px solid #4c6682;border-radius:6px;background:#101b2b;color:#eef4fc}
+#personalKuendigungDialog .actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;flex-wrap:wrap}
+#personalKuendigungDialog .fehler{min-height:20px}
 .pers-edit-btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;
   padding:9px 14px;min-height:37px;border-radius:10px;border:1px solid rgba(156,181,244,.42);
   background:linear-gradient(135deg,rgba(107,147,233,.27),rgba(150,116,213,.22));
@@ -1823,8 +1837,9 @@ function navIcon(id) {
   return '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
 }
 
-function wechsleZuModul(id){
+function wechsleZuModul(id,optionen={}){
   if(!MODS.some(m=>m[0]===id)||!can(id))return false;
+  if(id==='kue'&&!optionen.fokus)KUE_FOKUS_NR=null;
   tab=id;
   const gruppe=NAV_GRUPPEN.find(g=>g.module.includes(id));
   if(gruppe)NAV_OFFEN.add(gruppe.id);
@@ -2246,6 +2261,19 @@ function vDash(){
     editorListe+'<div id="mitteilungenDashboard"></div><div class="dash-layout-grid">'+cells+'</div>';
 }
 
+/* Kündigungsbutton nur bei ausgeschiedenen Personen und entsprechendem Modulrecht. */
+function personalKuendigungButton(p){
+  if(!p||p.status!=='Gekündigt'||!can('kue'))return '';
+  const nr=Number(p.personalnummer);
+  if(!Number.isSafeInteger(nr)||nr<1)return '';
+  const anzahl=(D.kuendigungen||[]).filter(k=>Number(k.personalnummer)===nr).length;
+  if(!anzahl&&!can('kue',2))return '';
+  const label=anzahl?'Zu Kündigungen'+(anzahl>1?' ('+anzahl+')':''):'In Kündigungen übernehmen';
+  return '<button type="button" class="pers-kue-btn" data-person-kuendigungen="'+nr+
+    '" title="'+(anzahl?'Vorhandene Kündigungsvorgänge öffnen':'Kündigungsvorgang aus der Personalakte anlegen')+
+    '">↗ '+label+'</button>';
+}
+
 function vPers() {
   const personen = D.personal || [];
   const gruppen = [...new Set(personen.map(p => p.gruppe).filter(Boolean))];
@@ -2265,7 +2293,7 @@ function vPers() {
       '<td><button class="pers-link" type="button" data-show-person="' + nummer + '">' + name + '</button></td>' +
       '<td>' + rangMitAbzeichen(p.dienstgrad) + '</td><td>' + esc(p.gruppe || '–') + '</td><td>' + esc(p.beschaeftigungsart || (p.gruppe === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf')) + '</td>' +
       '<td>' + fd(p.eintrittsdatum) + '</td><td>' + handy + '</td>' +
-      '<td>' + status + '</td><td class="pers-action-cell">' + bearbeitung + '</td></tr>';
+      '<td>' + status + '</td><td class="pers-action-cell">' + bearbeitung + personalKuendigungButton(p) + '</td></tr>';
   }).join('');
   const auswahl = (werte) => '<option value="">Alle</option>' + werte.map(v => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
   return '<h1>Personalverwaltung</h1>' + '<section id="personalRangantraege" class="box"><h3>Offene Rangänderungen – POR-Freigabe</h3><p class="mut">Lade …</p></section>' +
@@ -2401,6 +2429,7 @@ function personalAnzeigen(nr) {
     })() : '') +
     (ME.sensibel ? '<section class="copnet-box"><h3>CopNet-Zugangsdaten</h3><div id="copnetArea" aria-live="polite">Zugangsdaten werden geschützt geladen …</div></section>' : '') +
     '<div class="actions"><button type="button" id="persAbbrechen">Schließen</button>' +
+    personalKuendigungButton(p) +
     (can('pers',2) ? '<button type="button" class="pers-edit-btn" data-edit-person="' + Number(nr) + '">'+
       '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16 5 3 3M4 20l4.5-1 10.8-10.8a2.12 2.12 0 0 0-3-3L5.5 16 4 20z"/><path d="M4 20h16"/></svg>'+
       '<span>Bearbeiten</span></button>' : '') + '</div>';
@@ -2576,6 +2605,7 @@ function personalBearbeiten(nr) {
     '<form id="personalForm"><div class="pers-form">' + felder.join('') + '</div>' +
     '<div class="error" id="persFormFehler" role="alert"></div><div class="actions">' +
     (!neu ? '<button id="persRangantrag" type="button">Rangänderung beim POR beantragen</button>' : '') +
+    (!neu ? personalKuendigungButton(p) : '') +
     '<button id="persAbbrechen" type="button">Abbrechen</button>' +
     '<button id="persSpeichern" class="p" type="submit">Speichern</button></div></form>';
   dialog.dataset.revision=neu?'':String(p._revision||'');
@@ -2703,6 +2733,64 @@ async function personalSpeichern(event, neu, nr) {
     button.textContent = 'Speichern';
   }
 }
+
+
+/* Vom gekündigten Personal zu seinen vorhandenen Kündigungsvorgängen.
+   Nur bei einem fehlenden Vorgang ist überhaupt ein Schreibzugriff nötig. */
+let KUE_FOKUS_NR=null;
+function personalKuendigungZiel(nr){
+  const person=(D.personal||[]).find(p=>Number(p.personalnummer)===nr);
+  if(!person||person.status!=='Gekündigt'||!can('kue'))return;
+  personalDialogSchliessen();
+  KUE_FOKUS_NR=nr;
+  wechsleZuModul('kue',{fokus:true});
+}
+function personalKuendigungUebernehmen(nr){
+  if(!can('kue',2)||!can('pers'))return;
+  const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nr);
+  if(!p||p.status!=='Gekündigt')return;
+  const d=document.getElementById('personalKuendigungDialog')||document.createElement('dialog');
+  if(!d.id){d.id='personalKuendigungDialog';document.body.append(d);}
+  d.innerHTML='<h2>Kündigungsvorgang übernehmen</h2>'+
+    '<p class="mut">'+esc([p.vorname,p.nachname].filter(Boolean).join(' '))+
+    ' · Personalnummer '+nr+'</p>'+
+    '<p class="mut">Der Status „Gekündigt“ bleibt in der Personalverwaltung bestehen. Der neue Vorgang übernimmt den Dienstgrad, die vorhandenen Dokumente und weitere Personaldaten.</p>'+
+    '<form id="persKueForm"><label for="persKueGrund">Kündigungsgrund</label>'+
+    '<textarea id="persKueGrund" maxlength="1000" required placeholder="Grund der Kündigung eintragen"></textarea>'+
+    '<p id="persKueFehler" class="fehler" role="alert"></p>'+
+    '<div class="actions"><button type="button" id="persKueAbbrechen">Abbrechen</button>'+
+    '<button type="submit" class="p" id="persKueUebernehmen">In Kündigungen übernehmen</button></div></form>';
+  d.showModal();
+  d.querySelector('#persKueAbbrechen').onclick=()=>d.close();
+  d.querySelector('#persKueForm').onsubmit=async event=>{
+    event.preventDefault();
+    const grund=d.querySelector('#persKueGrund').value.trim();
+    if(!grund){d.querySelector('#persKueFehler').textContent='Bitte einen Kündigungsgrund eintragen.';return;}
+    const save=d.querySelector('#persKueUebernehmen');
+    save.disabled=true;
+    d.querySelector('#persKueFehler').textContent='';
+    try{
+      await api('/personal/'+nr+'/kuendigung',{method:'POST',body:JSON.stringify({grund})});
+      d.close();
+      personalDialogSchliessen();
+      await starten();
+      personalKuendigungZiel(nr);
+    }catch(err){
+      d.querySelector('#persKueFehler').textContent='Übernahme fehlgeschlagen: '+err.message;
+    }finally{save.disabled=false;}
+  };
+}
+document.addEventListener('click',event=>{
+  const btn=event.target.closest('[data-person-kuendigungen]');
+  if(!btn)return;
+  const nr=Number(btn.dataset.personKuendigungen);
+  if(!Number.isSafeInteger(nr)||nr<1)return;
+  const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nr);
+  if(!p||p.status!=='Gekündigt'||!can('kue'))return;
+  const anzahl=(D.kuendigungen||[]).filter(k=>Number(k.personalnummer)===nr).length;
+  if(anzahl){personalKuendigungZiel(nr);return;}
+  personalKuendigungUebernehmen(nr);
+});
 
 /* Klicks werden nach dem Zeichnen an dynamische Personaltabellen gebunden. */
 document.addEventListener('click', event => {
@@ -3096,7 +3184,14 @@ function kueDocsDialog(id){
 }
 document.addEventListener('click',e=>{const btn=e.target.closest('[data-kue-docs-edit]');if(btn)kueDocsDialog(Number(btn.dataset.kueDocsEdit));});
 function vKue() {
-  const schreiben=can('kue',2),eintraege=D.kuendigungen || [];
+  const schreiben=can('kue',2),alle=D.kuendigungen||[];
+  const eintraege=KUE_FOKUS_NR?alle.filter(k=>Number(k.personalnummer)===KUE_FOKUS_NR):alle;
+  const fokusPerson=(D.personal||[]).find(p=>Number(p.personalnummer)===KUE_FOKUS_NR);
+  const fokusInfo=KUE_FOKUS_NR?'<div class="pers-kue-filter" role="status">'+
+    '<strong>Kündigungen für '+esc([fokusPerson?.vorname,fokusPerson?.nachname].filter(Boolean).join(' ')||'Personalnummer '+KUE_FOKUS_NR)+'</strong>'+
+    '<span class="mut">'+eintraege.length+' vorhandene'+(eintraege.length===1?'r Vorgang':' Vorgänge')+'</span>'+
+    '<button type="button" data-kue-alle>Alle Kündigungen anzeigen</button></div>':'';
+
   const rows=eintraege.map(k=>{
     const offen=KUE_STATUS.filter(x=>x[0]!=='anzeige' && /^(offen)?$/i.test(kueWert(k,x[0]))).length;
     const badges=KUE_STATUS.map(([feld,label])=>{
@@ -3116,7 +3211,7 @@ function vKue() {
   }).join('');
   return '<h1>Kündigungen</h1><div class="pers-bar"><span class="mut">Rückgaben und Sperrungen pro Vorgang verwalten.</span>'+
     '<span class="spacer"></span>'+(schreiben?'<button type="button" class="p" id="kueNeu">+ Neue Kündigung</button>':'')+
-    '</div><div class="tw kue-table-wrap"><table class="kue-table"><thead><tr>'+
+    '</div>'+fokusInfo+'<div class="tw kue-table-wrap"><table class="kue-table"><thead><tr>'+
     ['Nr.','Name','Dienstgrad','Grund','Eintritt','Dokumente','Rückgaben & Zugangssperren','Aktion'].map(x=>'<th>'+x+'</th>').join('')+
     '</tr></thead><tbody>'+(rows||'<tr><td colspan="8">Keine Kündigungen vorhanden</td></tr>')+'</tbody></table></div>';
 }
@@ -3206,6 +3301,7 @@ async function kueLoeschen(id) {
   catch(err){alert('Löschen fehlgeschlagen: '+err.message);}
 }
 document.addEventListener('click',event=>{
+  if(event.target.closest('[data-kue-alle]')){KUE_FOKUS_NR=null;zeichne();return;}
   if(event.target.closest('#kueNeu')){kueNeuDialog();return;}
   const state=event.target.closest('[data-kue-field]');
   if(state){kueStatusAendern(Number(state.dataset.kueId),state.dataset.kueField,state);return;}
