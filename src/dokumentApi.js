@@ -4,7 +4,7 @@ import {validDate,originOk,googleCodeToken,googleDocsUpload,deleteGoogleDoc} fro
 
 const fail=(code,msg)=>Object.assign(new Error(msg),{httpStatus:code});
 const iso=x=>x instanceof Date?x.toISOString().slice(0,10):String(x||'').slice(0,10);
-const allowed=(rights,type)=>Number(rights[VORLAGEN[type]?.recht]||0)>=2;
+const allowed=(rights,type,level=2)=>Number(rights[VORLAGEN[type]?.recht]||0)>=level;
 
 function fieldsFor(type,input){
  if(!input||typeof input!=='object'||Array.isArray(input))throw fail(400,'Dokumentangaben fehlen');
@@ -53,7 +53,7 @@ export function dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAu
    if(!Number.isSafeInteger(nr)||nr<0)throw fail(400,'Ungültige Personalnummer');
    const {rows}=await db.query(
     'SELECT id,personalnummer,person_name,typ,titel,url,kontext_id,erstellt FROM generierte_dokumente WHERE ($1::integer=0 OR personalnummer=$1) ORDER BY erstellt DESC,id DESC LIMIT 400',[nr]);
-   res.json(rows.filter(r=>allowed(rights,r.typ)));
+   res.json(rows.filter(r=>allowed(rights,r.typ,1)));
   }catch(e){next(e);}
  });
  app.post('/api/dokumentgenerator/erstellen',requireLogin,async(req,res,next)=>{
