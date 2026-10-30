@@ -853,3 +853,80 @@ INSERT INTO role_perms(rolle,modul,stufe) VALUES
  ('Ausbilder','papierkorb',0),
  ('Mitarbeiter','papierkorb',0)
 ON CONFLICT(rolle,modul) DO NOTHING;
+
+
+/* Kündigungsarchiv und dauerhafte Momentaufnahmen.
+   Bisherige Altdaten behalten ausdrücklich ein unbekanntes Kündigungs-/Erfassungsdatum.
+   Das Default greift nur für NEUE Datensätze, nicht rückwirkend. */
+ALTER TABLE kuendigungen ADD COLUMN IF NOT EXISTS erfasst_am timestamptz;
+ALTER TABLE kuendigungen ALTER COLUMN erfasst_am SET DEFAULT now();
+ALTER TABLE kuendigungen ADD COLUMN IF NOT EXISTS personal_snapshot jsonb;
+
+CREATE INDEX IF NOT EXISTS idv_kuendigungen_zeit_idx
+ ON kuendigungen(kuendigungsdatum DESC,erfasst_am DESC,id DESC);
+CREATE INDEX IF NOT EXISTS idv_kuendigungen_person_idx
+ ON kuendigungen(personalnummer,id DESC);
+
+/* Die Originaldaten bleiben in kuendigungen bestehen und werden nur durch
+   eine berechtigte Archivansicht getrennt. Keine irreversible Verschiebung. */
+INSERT INTO role_perms(rolle,modul,stufe) VALUES
+ ('Administrator','kuearchiv',2),
+ ('Polizeirat','kuearchiv',0),
+ ('Leitungsdienst','kuearchiv',0),
+ ('Ausbilder','kuearchiv',0),
+ ('Mitarbeiter','kuearchiv',0)
+ON CONFLICT(rolle,modul) DO NOTHING;
+
+/* Bei jeder neuen Kündigung wird die damalige Personalakte samt
+   Originaldokumentverweisen und erzeugten Dokumentlinks unveränderlich gesichert.
+   Es werden KEINE Logins oder CopNet-Passwörter übernommen. */
+CREATE OR REPLACE FUNCTION idv_kuendigung_snapshot_erstellen() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+ p personal%ROWTYPE;
+ links jsonb;
+BEGIN
+ IF NEW.personal_snapshot IS NOT NULL THEN RETURN NEW; END IF;
+ SELECT * INTO p FROM personal WHERE personalnummer=NEW.personalnummer;
+ SELECT COALESCE(jsonb_agg(jsonb_build_object(
+   'typ',d.typ,'titel',d.titel,'url',d.url,'erstellt',d.erstellt)
+   ORDER BY d.erstellt DESC),'[]'::jsonb) INTO links
+ FROM generierte_dokumente d WHERE d.personalnummer=NEW.personalnummer;
+ NEW.personal_snapshot=jsonb_build_object(
+   'quelle',CASE WHEN p.personalnummer IS NOT NULL THEN 'bei_erstellung' ELSE 'ohne_personalakte' END,
+   'gesichert_am',now(),
+   'personal',CASE WHEN p.personalnummer IS NOT NULL THEN to_jsonb(p) ELSE NULL END,
+   'generierte_dokumente',COALESCE(links,'[]'::jsonb)
+ );
+ RETURN NEW;
+END;
+$$;
+DO $
+BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='idv_kuendigung_snapshot_insert'
+   AND tgrelid='kuendigungen'::regclass) THEN
+  CREATE TRIGGER idv_kuendigung_snapshot_insert
+   BEFORE INSERT ON kuendigungen FOR EACH ROW
+   EXECUTE FUNCTION idv_kuendigung_snapshot_erstellen();
+ END IF;
+END;
+$;
+
+/* Für alte Kündigungsvorgänge ist es ausdrücklich eine nachträgliche Sicherung
+   des JETZIGEN Personalstands – niemals eine behauptete historische Momentaufnahme. */
+UPDATE kuendigungen k SET personal_snapshot=jsonb_build_object(
+ 'quelle','nachtraeglich_aus_aktuellem_personal',
+ 'gesichert_am',now(),
+ 'personal',to_jsonb(p),
+ 'generierte_dokumente',COALESCE((
+    SELECT jsonb_agg(jsonb_build_object('typ',d.typ,'titel',d.titel,'url',d.url,'erstellt',d.erstellt)
+     ORDER BY d.erstellt DESC) FROM generierte_dokumente d
+    WHERE d.personalnummer=p.personalnummer),'[]'::jsonb))
+ FROM personal p
+ WHERE k.personalnummer=p.personalnummer AND k.personal_snapshot IS NULL;
+UPDATE kuendigungen SET personal_snapshot=jsonb_build_object(
+ 'quelle','altbestand_ohne_personalakte',
+ 'gesichert_am',now(),
+ 'personal',NULL,
+ 'generierte_dokumente','[]'::jsonb)
+ WHERE personal_snapshot IS NULL;
