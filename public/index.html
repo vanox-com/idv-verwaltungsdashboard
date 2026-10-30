@@ -2651,7 +2651,7 @@ function vBef() {
   const liste = (D.personal || []).filter(p => p.status !== 'Gekündigt').map(p => {
     const i = raenge.findIndex(r => r.name === p.dienstgrad);
     const akt=raenge[i],anwaerter=p.dienstgrad==='Polizeimeisteranwärter';
-    const next=akt&&(anwaerter||Number(akt.tage)>0)?raenge[i+1]:null;
+    const next=akt&&(anwaerter||Number(akt.tage)>0)&&akt.naechster_rang?raenge.find(r=>r.name===akt.naechster_rang):null;
     const termin=next&&!anwaerter?befTermin(p,akt):null;
     const pruefung=anwaerter&&p.pm_pruefung_bestanden===true;
     return {p,next,termin,anwaerter,pruefung};
@@ -2663,8 +2663,14 @@ function vBef() {
   const wartet = (D.personal || []).filter(p => p.por_status === 'beantragt' && p.status !== 'Gekündigt').length;
   const rows = liste.map(({p,next,termin,anwaerter,pruefung}) => {
     const nr = Number(p.personalnummer), days=anwaerter?null:Math.round((Date.parse(termin+'T00:00:00Z')-Date.parse(heute+'T00:00:00Z'))/86400000);
-    const status=anwaerter?(pruefung?'PM-Prüfung bestanden':'PM-Prüfung ausstehend'):days<=0?'fällig seit '+(-days)+' Tagen':'in '+days+' Tagen';
+    const status=anwaerter?(pruefung?'PM-Prüfung bestanden':'PM-Prüfung notwendig'):days<=0?'fällig seit '+(-days)+' Tagen':'in '+days+' Tagen';
     const zeitKlasse=anwaerter?(pruefung?'ok':'warn'):(days<=0?'bad':days<=14?'warn':'ok');
+    const pruefungsChip=anwaerter?(verwalten?
+      '<button type="button" class="pm-exam-chip '+(pruefung?'ok':'warn')+
+      '" data-pm-exam="'+nr+'" aria-pressed="'+pruefung+
+      '" title="PM-Prüfungsstatus umschalten">'+esc(status)+'</button>':
+      '<span class="tag '+(pruefung?'ok':'warn')+'">'+esc(status)+'</span>'):
+      '<span class="tag '+zeitKlasse+'">'+esc(status)+'</span>';
     const st = (p.por_status === 'genehmigt'?'ok':p.por_status === 'beantragt'?'warn':p.por_status === 'abgelehnt'?'bad':'');
     const antragAendern=can('por',2) ||
       (verwalten && !['genehmigt','abgelehnt'].includes(p.por_status));
@@ -2675,7 +2681,7 @@ function vBef() {
         '<button type="button" class="p" data-promote-person="'+nr+'">Befördern</button>' : '');
     return '<tr><td>'+esc(p.vorname+' '+p.nachname)+'</td><td>'+rangMitAbzeichen(p.dienstgrad)+'</td>' +
       '<td>'+rangMitAbzeichen(next.name)+'</td><td>'+fd(p.letzte_befoerderung)+'</td><td>'+(anwaerter?'Keine Frist':fd(termin))+'</td>' +
-      '<td><span class="tag '+zeitKlasse+'">'+status+'</span></td>' +
+      '<td>'+pruefungsChip+'</td>' +
       '<td><span class="tag '+st+'">'+esc(porText(p))+'</span></td>' +
       '<td>'+esc(anwaerter?'Keine Mindestzeit · PM-Prüfung erforderlich':aktBem(p.dienstgrad))+'</td><td>'+action+'</td></tr>';
   }).join('');
@@ -2708,6 +2714,7 @@ function vBef() {
   const ranks=raenge.map(r=>{
     const pma=r.name==='Polizeimeisteranwärter';
     return '<tr><td>'+rangMitAbzeichen(r.name)+'</td><td>'+esc(r.abk||'')+'</td>'+
+      '<td>'+esc(r.naechster_rang||'–')+'</td>'+
       '<td>'+(pma?'Keine Mindestzeit':r.tage?r.tage+' Tage':'–')+'</td>'+
       '<td>'+esc(pma?'Nach bestandener PM-Prüfung':r.bemerkung||'')+'</td>'+
       '<td>'+esc(pma?'PM-Prüfung bestanden':r.grund||'')+'</td></tr>';
@@ -2726,8 +2733,10 @@ function vBef() {
       '</details></section>':'')+
     '<div class="tw"><table><thead><tr>'+['Person','Aktuell','Nächster Rang','Letzte Bef.','Fällig am','Friststatus','POR-Freigabe','Hinweis','Aktion'].map(t=>'<th>'+t+'</th>').join('') +
     '</tr></thead><tbody>'+(rows||'<tr><td colspan="9">Keine geplanten Beförderungen</td></tr>')+'</tbody></table></div>' +
-    '<div class="box"><h3>Beförderungsbedingungen</h3><div class="tw"><table><thead><tr>'+
-    ['Dienstgrad','Abk.','Wartezeit','Bemerkung','Grund'].map(t=>'<th>'+t+'</th>').join('')+
+    '<div class="box"><h3>Beförderungsbedingungen</h3><p class="mut">Polizeikommissar und Kriminalkommissar sind gleichgestellt. Polizei-Kommissarlaufbahn: PK → POK → PHK. Kriminal-Kommissarlaufbahn: KK → KOK → KHK.</p>'+
+      (can('befricht',2)?'<button type="button" data-befricht-open>Richtlinien verwalten</button>':'')+
+      '<div class="tw"><table><thead><tr>'+
+    ['Dienstgrad','Abk.','Nächster Rang','Wartezeit','Bemerkung','Grund'].map(t=>'<th>'+t+'</th>').join('')+
     '</tr></thead><tbody>'+ranks+'</tbody></table></div></div>';
 }
 function aktBem(name) { const r = (D.raenge||[]).find(x=>x.name===name); return r ? r.bemerkung||'' : ''; }
@@ -2758,13 +2767,27 @@ async function porSpeichern() {
   } catch(e){$('#porError').textContent='Freigabe konnte nicht gespeichert werden: '+e.message}
   finally{btn.disabled=false}
 }
+async function pmPruefungWechsel(nr,button){
+  if(!can('bef',2)||!Number.isSafeInteger(nr)||nr<1)return;
+  const person=(D.personal||[]).find(p=>Number(p.personalnummer)===nr);
+  if(!person||person.dienstgrad!=='Polizeimeisteranwärter')return;
+  const next=!person.pm_pruefung_bestanden;
+  button.disabled=true;
+  try{
+    await api('/bef/pruefung/'+nr,{method:'PATCH',body:JSON.stringify({bestanden:next})});
+    await starten();
+  }catch(err){
+    button.disabled=false;
+    alert('Prüfungsstatus konnte nicht geändert werden: '+err.message);
+  }
+}
 async function befAusfuehren(nr){
   if(!can('bef',2))return;
   const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nr);if(!p||p.por_status!=='genehmigt')return;
-  const raenge=D.raenge||[],i=raenge.findIndex(r=>r.name===p.dienstgrad),next=raenge[i+1];
+  const raenge=D.raenge||[],current=raenge.find(r=>r.name===p.dienstgrad),next=current?.naechster_rang?raenge.find(r=>r.name===current.naechster_rang):null;
   if(!next)return;
   if(p.dienstgrad==='Polizeimeisteranwärter'&&p.pm_pruefung_bestanden!==true){
-    alert('PM-Prüfung nicht als bestanden erfasst. Bitte Sonderfunktionen → Prüfungen → PM markieren.');return;
+    alert('PM-Prüfung nicht bestanden. Den Prüfungsstatus kannst du direkt über den Chip in der Beförderungstabelle ändern.');return;
   }
   if(!confirm('Beförderung bestätigen?\n'+p.vorname+' '+p.nachname+'\n'+p.dienstgrad+' → '+next.name))return;
   try{await api('/befoerdern',{method:'POST',body:JSON.stringify({nr,neuer_rang:next.name})});
@@ -2852,6 +2875,10 @@ document.addEventListener('click',e=>{
     catch(err){urkundenPending=null;urkunde.disabled=false;urkunde.textContent='Ernennungsurkunde erstellen';alert(err.message);}
     return;
   }
+  const exam=e.target.closest('[data-pm-exam]');
+  if(exam){void pmPruefungWechsel(Number(exam.dataset.pmExam),exam);return;}
+  const guideline=e.target.closest('[data-befricht-open]');
+  if(guideline){wechsleZuModul('befricht');return;}
   const por=e.target.closest('[data-por-person]');if(por){porBearbeiten(Number(por.dataset.porPerson));return}
   const befoerdern=e.target.closest('[data-promote-person]');if(befoerdern)befAusfuehren(Number(befoerdern.dataset.promotePerson));
 });
