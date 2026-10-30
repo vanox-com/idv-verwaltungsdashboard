@@ -119,8 +119,11 @@ export function dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAu
     if(Number(k.personalnummer)!==nr)throw fail(409,'Kündigung gehört zu anderer Personalakte');
    }
    const title=tpl.titel+' – '+person.vorname+' '+person.nachname;
-   const docx=await befuellen(type,person,f);
+   // Die Google-Vorlage ist nicht öffentlich. Zuerst den persönlichen
+   // OAuth-Code einlösen; denselben kurzlebigen Token anschließend sowohl
+   // zum LESEN der Vorlage als auch zum Speichern der Kopie verwenden.
    token=await googleCodeToken(code,req.get('origin'),oauth);
+   const docx=await befuellen(type,person,f,token);
    fileId=await googleDocsUpload(token,title,docx);
    const link='https://docs.google.com/document/d/'+fileId+'/edit';
    const client=await db.connect();

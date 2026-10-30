@@ -104,11 +104,27 @@ function fill(xml,typ,person,f){
  }
  return xml;
 }
-export async function befuellen(typ,person,f){
+export async function befuellen(typ,person,f,googleToken){
  const config=VORLAGEN[typ];if(!config)throw new Error('Vorlage nicht gefunden');
- const url='https://docs.google.com/document/d/'+config.id+'/export?format=docx';
- const response=await fetch(url,{redirect:'follow',signal:AbortSignal.timeout(30000)});
- if(!response.ok)throw new Error('Originalvorlage nicht abrufbar (HTTP '+response.status+')');
+ if(typeof googleToken!=='string'||!googleToken)
+  throw new Error('Google-Anmeldung für den Vorlagenabruf fehlt');
+ // Die private Originalvorlage über die offizielle, authentifizierte
+ // Google-Drive-Export-API laden. Niemals ein öffentliches Freigabelink
+ // oder einen ungesicherten docs.google.com-Export voraussetzen.
+ const url='https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(config.id)+
+  '/export?mimeType='+encodeURIComponent('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+ const response=await fetch(url,{
+  method:'GET',headers:{Authorization:'Bearer '+googleToken},
+  signal:AbortSignal.timeout(30000)
+ });
+ if(response.status===401)
+  throw new Error('Originalvorlage: Google-Anmeldung abgelaufen oder ungültig (HTTP 401). Bitte das Google-Konto erneut auswählen.');
+ if(response.status===403)
+  throw new Error('Originalvorlage: Keine Leseberechtigung im ausgewählten Google-Konto (HTTP 403). Bitte die Vorlage für dieses Konto freigeben und erneut anmelden.');
+ if(response.status===404)
+  throw new Error('Originalvorlage: Im ausgewählten Google-Konto nicht gefunden (HTTP 404). Bitte Zugriffsrechte und Vorlagenlink prüfen.');
+ if(!response.ok)
+  throw new Error('Originalvorlage konnte über Google Drive nicht geladen werden (HTTP '+response.status+').');
  const bytes=Buffer.from(await response.arrayBuffer());
  if(bytes.length<1000||bytes.length>6000000||bytes[0]!==80||bytes[1]!==75)
   throw new Error('Vorlage ist keine gültige Word-Datei');
