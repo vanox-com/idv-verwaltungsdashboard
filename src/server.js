@@ -62,6 +62,24 @@ app.get('/datenschutz', (req,res) => {
 });
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+
+/* Signalisiert Änderungen. Der Stream enthält keine Personal- oder Akteninhalte. */
+const liveClients=new Set();
+let liveSequence=0;
+app.use((req,res,next)=>{
+  if(req.path.startsWith('/api/')&&['POST','PUT','PATCH','DELETE'].includes(req.method)
+    &&!['/api/login','/api/logout','/api/passwort'].includes(req.path)){
+    res.once('finish',()=>{
+      if(!req.user||res.statusCode<200||res.statusCode>=300)return;
+      const message='event: aktualisierung\ndata: '+
+        JSON.stringify({seq:++liveSequence,bereich:req.path.split('/')[2]||'portal'})+'\n\n';
+      for(const listener of liveClients){
+        try{listener.write(message);}catch{liveClients.delete(listener);}
+      }
+    });
+  }
+  next();
+});
 /* Sperre gegen zu viele Anmeldeversuche: 30 in fünf Minuten, und nur
    fehlgeschlagene Versuche zählen. Beim Tippen passiert nichts. */
 const loginLimiter = rateLimit({
@@ -140,6 +158,34 @@ function requireRight(modul, stufe = 1) {
   };
 }
 
+
+app.get('/api/changes',requireLogin,(req,res)=>{
+  res.status(200).set({
+    'Content-Type':'text/event-stream; charset=utf-8',
+    'Cache-Control':'no-cache, no-transform',
+    'Connection':'keep-alive',
+    'X-Accel-Buffering':'no'
+  });
+  res.flushHeaders();
+  res.write('retry: 3000\n: verbunden\n\n');
+  liveClients.add(res);
+  const heartbeat=setInterval(()=>{
+    try{res.write(': ping\n\n');}
+    catch{clearInterval(heartbeat);liveClients.delete(res);}
+  },25000);
+  res.on('close',()=>{clearInterval(heartbeat);liveClients.delete(res);});
+});
+function aktenRevision(req,res){
+  const rev=req.get('if-match');
+  if(!rev||!/^\d{1,10}$/.test(rev)){
+    res.status(428).json({error:'Versionsstand fehlt. Bitte die Akte neu öffnen.'});
+    return null;
+  }
+  return rev;
+}
+function aktenKonflikt(res){
+  return res.status(409).json({error:'Speicherkonflikt: Dieser Datensatz wurde inzwischen geändert oder gelöscht. Deine Eingaben wurden nicht überschrieben. Bitte aktuellen Stand laden und die Änderungen erneut prüfen.'});
+}
 /* Das Display im RP-Dashboard erhält seinen Namen aus der Personalakte:
    Dienstnummer "01" entspricht Personalnummer 1. Ein frei angelegter
    Admin-/Testzugang behält seinen eigenen Anzeigenamen. */
@@ -525,12 +571,12 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
     const [personal, raenge, funktionen, funktionsspalten, kuendigungen, disziplin,
       disziplinSpalten, richtlinie, checklisten, checklistenStatus, dashboard, routine, sonderzahlungen,
       organigramm, befoerderungen, dashboardLayout, bekanntmachungen] = await Promise.all([
-      db.query(`SELECT * FROM personal ORDER BY personalnummer`),
+      db.query(`SELECT *, xmin::text AS _revision FROM personal ORDER BY personalnummer`),
       db.query(`SELECT * FROM raenge ORDER BY sortierung, name`),
       db.query(`SELECT * FROM sonderfunktionen`),
       db.query(`SELECT * FROM sonderfunktionsspalten ORDER BY sortierung`),
-      db.query(`SELECT * FROM kuendigungen ORDER BY nachname`),
-      db.query(`SELECT * FROM disziplin ORDER BY personalnummer`),
+      db.query(`SELECT *, xmin::text AS _revision FROM kuendigungen ORDER BY nachname`),
+      db.query(`SELECT *, xmin::text AS _revision FROM disziplin ORDER BY personalnummer`),
       db.query(`SELECT * FROM disziplinspalten ORDER BY sortierung`),
       db.query(`SELECT * FROM richtlinie ORDER BY sortierung`),
       db.query(`SELECT * FROM checklisten ORDER BY sortierung`),
@@ -554,7 +600,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       funktionen: funktionen.rows.map(r => ({ nr: r.personalnummer, leitung: r.leitung, sonstige: r.sonstige, werte: r.werte })),
       kuendigungen: kuendigungen.rows,
       disziplinSpalten: disziplinSpalten.rows.map(r => r.name),
-      disziplin: disziplin.rows.map(r => ({ nr: r.personalnummer, massnahmen: r.massnahmen, slots: r.slots, bemerkung: r.bemerkung })),
+      disziplin: disziplin.rows.map(r => ({ nr: r.personalnummer, massnahmen: r.massnahmen, slots: r.slots, bemerkung: r.bemerkung, _revision:r._revision })),
       richtlinie: { stand: richtlinie.rows[0]?.stand || '', zeilen: richtlinie.rows },
       checklisten: checklisten.rows.map(r => ({ name: r.name, aufgaben: r.aufgaben })),
       checklistenStatus: checklistenStatus.rows,
@@ -746,7 +792,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       /* Aus einer geschützten Vollakte dürfen keine vertraulichen Dokumente,
          Notizen, Geburtstage oder Urlaubsdaten im Netzwerk ankommen. */
       daten.personal = daten.personal.map(p => ({
-        personalnummer: p.personalnummer, vorname: p.vorname, nachname: p.nachname,
+        personalnummer: p.personalnummer, vorname: p.vorname, nachname: p.nachname,_revision:p._revision,
         gruppe: p.gruppe, beschaeftigungsart: p.beschaeftigungsart, status: p.status, dienstgrad: p.dienstgrad,
         nebenjob: p.nebenjob, eintrittsdatum: p.eintrittsdatum,
         waffenschein: p.waffenschein, spind: p.spind,
@@ -808,6 +854,7 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
   const nr=Number(req.params.nr);
   if(!Number.isSafeInteger(nr)||nr<1)
     return res.status(400).json({error:'Ungültige Personalnummer'});
+  const revision=aktenRevision(req,res);if(revision===null)return;
   const body=req.body&&typeof req.body==='object'&&!Array.isArray(req.body)?req.body:{};
   if(Object.hasOwn(body,'dienstgrad'))
     return res.status(409).json({error:'Dienstgrad ausschließlich über die Beförderungsverwaltung ändern'});
@@ -844,12 +891,13 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
     await client.query('BEGIN');
     const {rows:vorher}=await client.query(
       'SELECT personalnummer,status,vorname,nachname,dienstgrad,handy,gruppe,beschaeftigungsart,nebenjob,'+
-      'arbeitsvertrag,ernennungsurkunde,arbeitsvertrag_url,ernennungsurkunde_url,eintrittsdatum '+
+      'arbeitsvertrag,ernennungsurkunde,arbeitsvertrag_url,ernennungsurkunde_url,eintrittsdatum,xmin::text AS _revision '+
       'FROM personal WHERE personalnummer=$1 FOR UPDATE',[nr]);
     if(!vorher.length){
       await client.query('ROLLBACK');
       return res.status(404).json({error:'Personalakte nicht gefunden'});
     }
+    if(vorher[0]._revision!==revision){await client.query('ROLLBACK');return aktenKonflikt(res);}
     if(beantragterRang){
       const rangCheck=await client.query('SELECT 1 FROM raenge WHERE name=$1',[beantragterRang]);
       if(!rangCheck.rowCount){await client.query('ROLLBACK');return res.status(400).json({error:'Gewählter Dienstgrad ist unbekannt',feld:'dienstgrad'});}
@@ -1068,6 +1116,7 @@ app.patch('/api/disziplin/:nr', requireLogin, requireRight('dis', 2), async(req,
   try {
     const nr=Number(req.params.nr), slots=req.body?.slots, bemerkung=req.body?.bemerkung;
     if(!Number.isSafeInteger(nr)||nr<1)return res.status(400).json({error:'Ungültige Personalnummer'});
+    const revision=aktenRevision(req,res);if(revision===null)return;
     if(!Array.isArray(slots)||slots.length!==6)return res.status(400).json({error:'Genau sechs Maßnahmenslots erforderlich'});
     if(typeof bemerkung!=='string'||bemerkung.length>4000)
       return res.status(400).json({error:'Bemerkung zu lang'});
@@ -1089,14 +1138,16 @@ app.patch('/api/disziplin/:nr', requireLogin, requireRight('dis', 2), async(req,
         return res.status(400).json({error:'Ungültiges Maßnahmendatum'});
       clean.push({done:x.done,t:x.t,u:x.u,d:x.d});
     }
+    const vorher=(await db.query('SELECT xmin::text AS _revision FROM disziplin WHERE personalnummer=$1',[nr])).rows[0];
+    if((vorher?vorher._revision:'0')!==revision)return aktenKonflikt(res);
     const {rows}=await db.query(
-      "INSERT INTO disziplin (personalnummer,slots,bemerkung) SELECT personalnummer,$2::jsonb,$3 FROM personal WHERE personalnummer=$1 ON CONFLICT (personalnummer) DO UPDATE SET slots=EXCLUDED.slots,bemerkung=EXCLUDED.bemerkung,aktualisiert=now() RETURNING personalnummer",
-      [nr,JSON.stringify(clean),bemerkung]
+      "INSERT INTO disziplin (personalnummer,slots,bemerkung) SELECT personalnummer,$2::jsonb,$3 FROM personal WHERE personalnummer=$1 ON CONFLICT (personalnummer) DO UPDATE SET slots=EXCLUDED.slots,bemerkung=EXCLUDED.bemerkung,aktualisiert=now() WHERE disziplin.xmin::text=$4 RETURNING personalnummer,xmin::text AS _revision",
+      [nr,JSON.stringify(clean),bemerkung,revision]
     );
-    if(!rows.length)return res.status(404).json({error:'Personalnummer nicht gefunden'});
+    if(!rows.length)return aktenKonflikt(res);
     await db.query("INSERT INTO log (user_id,aktion,art) VALUES ($1,$2,'edit')",
       [req.user.id,'Disziplinarakte bei Personalnummer '+nr+' geändert']);
-    res.json({ok:true});
+    res.json({ok:true,_revision:rows[0]._revision});
   }catch(err){next(err);}
 });
 
@@ -1578,6 +1629,7 @@ app.post('/api/kuendigung', requireLogin, requireRight('kue', 2), async (req, re
 app.patch('/api/kuendigung/:id/dokumente',requireLogin,requireRight('kue',2),async(req,res,next)=>{
  try{
   const id=Number(req.params.id),felder=['vertrag','urkunde','zeugnis','kuendigung'];
+  const revision=aktenRevision(req,res);if(revision===null)return;
   const daten=req.body?.dokumente;
   if(!Number.isSafeInteger(id)||id<1||!daten||typeof daten!=='object'||Array.isArray(daten)||
      Object.keys(daten).some(k=>!felder.includes(k))||!felder.every(k=>Object.hasOwn(daten,k)))
@@ -1597,17 +1649,18 @@ app.patch('/api/kuendigung/:id/dokumente',requireLogin,requireRight('kue',2),asy
    werte.push(name||url?JSON.stringify({t:name||({vertrag:'Arbeitsvertrag',urkunde:'Ernennungsurkunde',zeugnis:'Arbeitszeugnis',kuendigung:'Kündigung'})[feld],u:url}):'');
   }
   const {rows}=await db.query(
-   'UPDATE kuendigungen SET vertrag=$1,urkunde=$2,zeugnis=$3,kuendigung=$4 WHERE id=$5 RETURNING id,vertrag,urkunde,zeugnis,kuendigung',
-   [...werte,id]);
-  if(!rows.length)return res.status(404).json({error:'Kündigung nicht gefunden'});
+   'UPDATE kuendigungen SET vertrag=$1,urkunde=$2,zeugnis=$3,kuendigung=$4 WHERE id=$5 AND xmin::text=$6 RETURNING id,vertrag,urkunde,zeugnis,kuendigung,xmin::text AS _revision',
+   [...werte,id,revision]);
+  if(!rows.length)return aktenKonflikt(res);
   await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
     [req.user.id,'Dokumente in Kündigungsvorgang '+id+' bearbeitet']);
-  res.json({ok:true,dokumente:rows[0]});
+  res.json({ok:true,dokumente:rows[0],_revision:rows[0]._revision});
  }catch(err){next(err)}
 });
 app.patch('/api/kuendigung/:id/dokument',requireLogin,requireRight('kue',2),async(req,res,next)=>{
  try{
   const id=Number(req.params.id),feld=req.body?.feld;
+  const revision=aktenRevision(req,res);if(revision===null)return;
   const erlaubte=['vertrag','urkunde','zeugnis','kuendigung'];
   const name=String(req.body?.name||'').trim(),url=String(req.body?.url||'').trim();
   if(!Number.isSafeInteger(id)||id<1||!erlaubte.includes(feld)||name.length>250||url.length>2048)
@@ -1615,14 +1668,15 @@ app.patch('/api/kuendigung/:id/dokument',requireLogin,requireRight('kue',2),asyn
   if(url){try{const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||!u.hostname.includes('.'))throw Error('bad');}
    catch{return res.status(400).json({error:'Bitte einen gültigen HTTPS-Link eingeben'});}}
   const value=name||url?JSON.stringify({t:name||'Dokument',u:url}):'';
-  const r=await db.query('UPDATE kuendigungen SET '+feld+'=$1 WHERE id=$2',[value,id]);
-  if(!r.rowCount)return res.status(404).json({error:'Kündigung nicht gefunden'});
+  const r=await db.query('UPDATE kuendigungen SET '+feld+'=$1 WHERE id=$2 AND xmin::text=$3',[value,id,revision]);
+  if(!r.rowCount)return aktenKonflikt(res);
   await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",[req.user.id,'Kündigungsdokument '+feld+' im Vorgang '+id+' geändert']);
   res.json({ok:true});
  }catch(e){next(e)}
 });
 app.patch('/api/kuendigung/:id', requireLogin, requireRight('kue', 2), async (req, res, next) => {
   try {
+    const revision=aktenRevision(req,res);if(revision===null)return;
     const erlaubte = {
       waffe: ['Offen', 'Informiert'],
       copnet: ['Offen', 'Entfernt'],
@@ -1639,22 +1693,23 @@ app.patch('/api/kuendigung/:id', requireLogin, requireRight('kue', 2), async (re
     if (!erlaubte[feld].includes(status))
       return res.status(400).json({ error: 'Ungültiger Status' });
     const { rows } = await db.query(
-      `UPDATE kuendigungen SET ${feld} = $1 WHERE id = $2 RETURNING id`,
-      [status, req.params.id]
+      `UPDATE kuendigungen SET ${feld} = $1 WHERE id = $2 AND xmin::text=$3 RETURNING id,xmin::text AS _revision`,
+      [status, req.params.id,revision]
     );
-    if (!rows.length) return res.status(404).json({ error: 'Kündigung nicht gefunden' });
+    if (!rows.length) return aktenKonflikt(res);
     await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'edit')`,
       [req.user.id, `Kündigung ${req.params.id}: ${feld} → ${status}`]);
-    res.json({ ok: true });
+    res.json({ ok: true,_revision:rows[0]._revision });
   } catch (e) { next(e); }
 });
 
 /* Entfernen ausschließlich nach Bestätigung im Frontend und Berechtigung auf dem Server. */
 app.delete('/api/kuendigung/:id', requireLogin, requireRight('kue', 2), async (req, res, next) => {
   try {
+    const revision=aktenRevision(req,res);if(revision===null)return;
     const { rows } = await db.query(
-      'DELETE FROM kuendigungen WHERE id = $1 RETURNING id, vorname, nachname', [req.params.id]);
-    if (!rows.length) return res.status(404).json({ error: 'Kündigung nicht gefunden' });
+      'DELETE FROM kuendigungen WHERE id = $1 AND xmin::text=$2 RETURNING id, vorname, nachname', [req.params.id,revision]);
+    if (!rows.length) return aktenKonflikt(res);
     await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'del')`,
       [req.user.id, `Kündigung gelöscht: ${rows[0].vorname || ''} ${rows[0].nachname || ''} (ID ${rows[0].id})`]);
     res.json({ ok: true });

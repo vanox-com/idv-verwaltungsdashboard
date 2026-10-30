@@ -1733,6 +1733,8 @@ async function starten() {
     $('#app').classList.remove('hide');
     zeichneMenue();
     zeichne();
+    window.IDVLive?.synced();
+    window.IDVLive?.connect();
     return true;
   } catch (err) {
     console.error('Portalaufbau fehlgeschlagen:', err);
@@ -2559,6 +2561,7 @@ function personalBearbeiten(nr) {
     (!neu ? '<button id="persRangantrag" type="button">Rangänderung beim POR beantragen</button>' : '') +
     '<button id="persAbbrechen" type="button">Abbrechen</button>' +
     '<button id="persSpeichern" class="p" type="submit">Speichern</button></div></form>';
+  dialog.dataset.revision=neu?'':String(p._revision||'');
   dialog.showModal();
   if(!neu&&p.status!=='Gekündigt'){
     const wechselAktualisieren=()=>{
@@ -2666,7 +2669,8 @@ async function personalSpeichern(event, neu, nr) {
   $('#persFormFehler').textContent = '';
   try {
     const antwort=await api(neu ? '/personal' : '/personal/' + nr, {
-      method: neu ? 'POST' : 'PATCH', body: JSON.stringify(body)
+      method: neu ? 'POST' : 'PATCH', body: JSON.stringify(body),
+      ...(!neu?{headers:{'Content-Type':'application/json','If-Match':$('#personalDialog').dataset.revision}}:{})
     });
     personalDialogSchliessen();
     await starten();
@@ -3053,6 +3057,7 @@ function kueDocsDialog(id){
  (info.url?'<a class="l" href="'+esc(info.url)+'" target="_blank" rel="noopener noreferrer">Aktuelles Dokument öffnen ↗</a>':'')+'</fieldset>'}).join('')+
  '<p id="kueDocsFehler" class="fehler" role="alert"></p><div class="actions"><button type="button" id="kueDocsCancel">Abbrechen</button><button type="submit" class="p" id="kueDocsSave">Dokumente speichern</button></div></form>';
  d.showModal();
+ d.dataset.revision=String(k._revision||'');
  const close=()=>d.close();
  d.querySelector('#kueDocsClose').onclick=close;
  d.querySelector('#kueDocsCancel').onclick=close;
@@ -3061,9 +3066,10 @@ function kueDocsDialog(id){
   const dokumente=Object.fromEntries(felder.map(([f])=>[f,{name:d.querySelector('#kueDocName_'+f).value.trim(),url:d.querySelector('#kueDocUrl_'+f).value.trim()}]));
   btn.disabled=true;err.textContent='';
   try{
-   const result=await api('/kuendigung/'+id+'/dokumente',{method:'PATCH',body:JSON.stringify({dokumente})});
+   const result=await api('/kuendigung/'+id+'/dokumente',{method:'PATCH',body:JSON.stringify({dokumente}),headers:{'Content-Type':'application/json','If-Match':d.dataset.revision}});
    for(const [f] of felder)k[f]=result.dokumente[f];
-   close();if(tab==='kue')zeichne();
+   k._revision=result._revision;
+    close();if(tab==='kue')zeichne();
   }catch(error){
    err.textContent='Speichern fehlgeschlagen: '+error.message;
    const feld=error.feld;if(feld&&d.querySelector('#kueDocUrl_'+feld))d.querySelector('#kueDocUrl_'+feld).focus();
@@ -3104,8 +3110,8 @@ async function kueStatusAendern(id,feld,knopf) {
   const neu=kueWert(k,feld)===werte[0]?werte[1]:werte[0];
   knopf.disabled=true;
   try{
-    await api('/kuendigung/'+id,{method:'PATCH',body:JSON.stringify({[feld]:neu})});
-    k[feld]=neu;
+    const result=await api('/kuendigung/'+id,{method:'PATCH',body:JSON.stringify({[feld]:neu}),headers:{'Content-Type':'application/json','If-Match':String(k._revision||'')}});
+    k[feld]=neu;k._revision=result._revision;
     zeichne();
   }catch(err){alert('Status konnte nicht gespeichert werden: '+err.message);knopf.disabled=false;}
 }
@@ -3166,7 +3172,7 @@ async function kueLoeschen(id) {
   const k=(D.kuendigungen||[]).find(x=>Number(x.id)===id);
   if(!k)return;
   if(!confirm('Diesen Kündigungsvorgang endgültig löschen?\n'+[k.vorname,k.nachname].filter(Boolean).join(' ')))return;
-  try{await api('/kuendigung/'+id,{method:'DELETE'});await starten();}
+  try{await api('/kuendigung/'+id,{method:'DELETE',headers:{'If-Match':String(k._revision||'')}});await starten();}
   catch(err){alert('Löschen fehlgeschlagen: '+err.message);}
 }
 document.addEventListener('click',event=>{
@@ -3200,7 +3206,7 @@ function disAkte(nr){
     return check!=null||t||d?{done:check==='true',t,u:'',d}:null;
   });
   return {slots:Array.isArray(e.slots)&&e.slots.length===6
-    ?e.slots.map(x=>x||null):legacy,bemerkung:e.bemerkung||''};
+    ?e.slots.map(x=>x||null):legacy,bemerkung:e.bemerkung||'',_revision:e._revision||'0'};
 }
 function vDis(){
   const personen=D.personal||[], schreiben=can('dis',2);
@@ -3253,7 +3259,7 @@ function disBearbeiten(nr){
     '<p id="disError" class="fehler" role="alert"></p>'+
     '<div class="dis-buttons"><button type="button" id="disCancel">Abbrechen</button>'+
     '<button class="p" type="submit" id="disSave">Speichern</button></div></form>';
-  dlg.dataset.nr=nr;dlg.showModal();$('#disBem').value=akt.bemerkung;
+  dlg.dataset.nr=nr;dlg.dataset.revision=String(akt._revision||'0');dlg.showModal();$('#disBem').value=akt.bemerkung;
   $('#disCancel').onclick=()=>dlg.close();
   $('#disForm').onsubmit=async e=>{
     e.preventDefault();const nummer=Number(dlg.dataset.nr);
@@ -3264,7 +3270,7 @@ function disBearbeiten(nr){
     });
     const btn=$('#disSave');btn.disabled=true;$('#disError').textContent='';
     try{
-      await api('/disziplin/'+nummer,{method:'PATCH',body:JSON.stringify({slots,bemerkung:$('#disBem').value})});
+      await api('/disziplin/'+nummer,{method:'PATCH',body:JSON.stringify({slots,bemerkung:$('#disBem').value}),headers:{'Content-Type':'application/json','If-Match':dlg.dataset.revision}});
       dlg.close();await starten();
     }catch(err){$('#disError').textContent='Speichern fehlgeschlagen: '+err.message;}
     finally{if($('#disSave'))$('#disSave').disabled=false;}
@@ -4967,5 +4973,6 @@ document.addEventListener('click',async e=>{
 </script>
 <script src="/dokumentUI.js"></script>
 <script src="/befRichtUI.js"></script>
+<script src="/liveUpdates.js"></script>
 </body>
 </html>
