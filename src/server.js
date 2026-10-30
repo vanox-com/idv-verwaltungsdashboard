@@ -74,7 +74,11 @@ app.use((req,res,next)=>{
       if(!req.user||res.statusCode<200||res.statusCode>=300)return;
       const message='event: aktualisierung\ndata: '+
         JSON.stringify({seq:++liveSequence,bereich:req.path.split('/')[2]||'portal'})+'\n\n';
+      // Eigene Änderungen nicht nochmals an denselben Browser senden.
+      // Andere Tabs (auch desselben Kontos) erhalten die Meldung weiterhin.
+      const absender=String(req.get('x-idv-client')||'');
       for(const listener of liveClients){
+        if(absender && listener.idvClient===absender)continue;
         try{listener.write(message);}catch{liveClients.delete(listener);}
       }
     });
@@ -169,6 +173,9 @@ app.get('/api/changes',requireLogin,(req,res)=>{
   });
   res.flushHeaders();
   res.write('retry: 3000\n: verbunden\n\n');
+  // EventSource unterstützt keine Header; jede Registerkarte besitzt ihre eigene Kennung.
+  const clientId=String(req.query.client||'');
+  res.idvClient=/^[a-f0-9-]{16,64}$/i.test(clientId)?clientId:null;
   liveClients.add(res);
   const heartbeat=setInterval(()=>{
     void currentUser(req).then(user=>{

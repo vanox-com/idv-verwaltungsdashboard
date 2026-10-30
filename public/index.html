@@ -1586,10 +1586,16 @@ async function api(pfad, optionen) {
   const controller = pfad === '/bootstrap' ? new AbortController() : null;
   const timeout = controller ? setTimeout(() => controller.abort(), 12000) : null;
   try {
-    const r = await fetch('/api' + pfad, Object.assign({
+    const einstellungen=Object.assign({
       credentials: 'same-origin', cache: 'no-store',
       headers: { 'Content-Type': 'application/json' }
-    }, optionen, controller ? { signal: controller.signal } : {}));
+    }, optionen, controller ? { signal: controller.signal } : {});
+    // Ein eigenes Speichern darf keinen zusätzlichen Live-Refresh in diesem Tab auslösen.
+    if(['POST','PUT','PATCH','DELETE'].includes(String(einstellungen.method||'GET').toUpperCase())
+       &&window.IDVLive?.clientId){
+      einstellungen.headers={...einstellungen.headers,'X-IDV-Client':window.IDVLive.clientId};
+    }
+    const r = await fetch('/api' + pfad,einstellungen);
     const daten = await r.json().catch(() => ({}));
     if (!r.ok) {
       const fehler=new Error(daten.error || 'Serverfehler (HTTP '+r.status+')');
@@ -1716,6 +1722,8 @@ $('#pw').addEventListener('keydown', function (e) {
    den Zugang nicht stillschweigend blockieren. Die Minimalansicht gibt es nur
    nach erneuter, serverseitiger Authentifizierung über /api/me. */
 async function starten() {
+  const bereitsOffen=Boolean(ME&&D&&!$('#app').classList.contains('hide'));
+  const letzteRechte=bereitsOffen?JSON.stringify(ME.rechte||{}):'';
   try {
     const antwort = await api('/bootstrap');
     if (!antwort || !antwort.user || !antwort.daten || !antwort.daten.dashboard) {
@@ -1725,19 +1733,21 @@ async function starten() {
     D = antwort.daten;
     // Persönliche Gestaltung vor dem Anzeigen des Dashboards aus der DB holen.
     // Ein Fehler darf den Login nicht blockieren, wird aber nicht mehr verschluckt.
-    try {
-      const gespeichertesDesign=await api('/portal-design');
-      applyPortalDesign(gespeichertesDesign);
-    } catch(designFehler) {
-      console.warn('Persönliches Design konnte nicht geladen werden:',designFehler);
+    if(!bereitsOffen){
+      try {
+        const gespeichertesDesign=await api('/portal-design');
+        applyPortalDesign(gespeichertesDesign);
+      } catch(designFehler) {
+        console.warn('Persönliches Design konnte nicht geladen werden:',designFehler);
+      }
+      api('/system-optionen').then(o=>{if(D)D.systemOptionen=o;}).catch(()=>{});
     }
-    api('/system-optionen').then(o=>{if(D)D.systemOptionen=o;}).catch(()=>{});
     $('#meName').textContent = ME.anzeigename || 'Dienstkonto';
     $('#meRolle').textContent = ME.rolle + (ME.sensibel ? ' · Personaldaten' : '');
     $('#login').classList.add('hide');
     $('#app').classList.remove('hide');
-    zeichneMenue();
-    zeichne();
+    if(!bereitsOffen||JSON.stringify(ME.rechte||{})!==letzteRechte)zeichneMenue();
+    if(!bereitsOffen||!window.IDVLive?.updateView?.())zeichne();
     window.IDVLive?.synced();
     window.IDVLive?.connect();
     return true;
@@ -3077,7 +3087,7 @@ function kueDocsDialog(id){
    const result=await api('/kuendigung/'+id+'/dokumente',{method:'PATCH',body:JSON.stringify({dokumente}),headers:{'Content-Type':'application/json','If-Match':d.dataset.revision}});
    for(const [f] of felder)k[f]=result.dokumente[f];
    k._revision=result._revision;
-    close();if(tab==='kue')zeichne();
+    close();if(tab==='kue'&&!window.IDVLive?.updateView?.())zeichne();
   }catch(error){
    err.textContent='Speichern fehlgeschlagen: '+error.message;
    const feld=error.feld;if(feld&&d.querySelector('#kueDocUrl_'+feld))d.querySelector('#kueDocUrl_'+feld).focus();
@@ -3120,7 +3130,19 @@ async function kueStatusAendern(id,feld,knopf) {
   try{
     const result=await api('/kuendigung/'+id,{method:'PATCH',body:JSON.stringify({[feld]:neu}),headers:{'Content-Type':'application/json','If-Match':String(k._revision||'')}});
     k[feld]=neu;k._revision=result._revision;
-    zeichne();
+    // Nur den geänderten Status und den Zähler in dieser Zeile aktualisieren.
+    const label=KUE_STATUS.find(x=>x[0]===feld)?.[1]||feld;
+    const offen=neu==='Offen';
+    knopf.className='tag kue-status '+(offen?'warn':neu==='Nein'?'':'ok');
+    knopf.textContent=label+': '+neu;
+    const row=knopf.closest('tr');
+    const anzahl=KUE_STATUS.filter(x=>x[0]!=='anzeige'&&/^(offen)?$/i.test(kueWert(k,x[0]))).length;
+    const zaehler=row?.cells[1]?.querySelector('.tag');
+    if(zaehler){
+      zaehler.textContent=anzahl?anzahl+' offen':'erledigt';
+      zaehler.className='tag '+(anzahl?'warn':'ok');
+    }
+    knopf.disabled=false;
   }catch(err){alert('Status konnte nicht gespeichert werden: '+err.message);knopf.disabled=false;}
 }
 function kueFormFeld(label,id,typ,wert) {
@@ -3726,7 +3748,15 @@ async function chkSetzen(input){
     const old=(D.checklistenStatus||[]).find(x=>x.name===name&&Number(x.punkt)===index);
     if(old)old.erledigt=fertig;
     else (D.checklistenStatus ||= []).push({name,punkt:index,erledigt:fertig});
-    zeichne();
+    input.closest('.checklist-item')?.classList.toggle('done',fertig);
+    const karte=input.closest('.checklist-box');
+    const boxes=[...karte?.querySelectorAll('[data-check-name]')||[]];
+    const erledigt=boxes.filter(el=>el.checked).length;
+    const progress=karte?.querySelector('.checklist-progress>div');
+    if(progress)progress.style.width=(boxes.length?Math.round(erledigt/boxes.length*100):0)+'%';
+    const counter=karte?.querySelector('.checklist-head .tag');
+    if(counter){counter.textContent=erledigt+' / '+boxes.length;counter.classList.toggle('ok',erledigt===boxes.length&&boxes.length>0);}
+    input.disabled=false;
   }catch(err){
     input.checked=!fertig;
     input.disabled=false;
@@ -3740,7 +3770,19 @@ async function chkZuruecksetzen(){
   const btn=$('#checkReset');btn.disabled=true;
   try{
     await api('/checklisten/reset',{method:'POST'});
-    D.checklistenStatus=[];zeichne();
+    D.checklistenStatus=[];
+    document.querySelectorAll('.checklist-box').forEach(karte=>{
+      karte.querySelectorAll('[data-check-name]').forEach(input=>{
+        input.checked=false;input.disabled=false;
+        input.closest('.checklist-item')?.classList.remove('done');
+      });
+      const total=karte.querySelectorAll('[data-check-name]').length;
+      const counter=karte.querySelector('.checklist-head .tag');
+      if(counter){counter.textContent='0 / '+total;counter.classList.remove('ok');}
+      const progress=karte.querySelector('.checklist-progress>div');
+      if(progress)progress.style.width='0%';
+    });
+    btn.disabled=false;
   }catch(err){
     if($('#checkInfo'))$('#checkInfo').textContent='Zurücksetzen fehlgeschlagen: '+err.message;
     btn.disabled=false;
