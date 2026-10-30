@@ -582,7 +582,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
     const [personal, raenge, funktionen, funktionsspalten, kuendigungen, disziplin,
       disziplinSpalten, richtlinie, checklisten, checklistenStatus, dashboard, routine, sonderzahlungen,
       organigramm, befoerderungen, dashboardLayout, bekanntmachungen] = await Promise.all([
-      db.query(`SELECT *, xmin::text AS _revision FROM personal ORDER BY personalnummer`),
+      db.query(`SELECT *, xmin::text AS _revision FROM personal WHERE administrativ_geloescht_am IS NULL ORDER BY personalnummer`),
       db.query(`SELECT * FROM raenge ORDER BY sortierung, name`),
       db.query(`SELECT *, xmin::text AS _revision FROM sonderfunktionen`),
       db.query(`SELECT * FROM sonderfunktionsspalten ORDER BY sortierung`),
@@ -2147,6 +2147,42 @@ function nurAdmin(req, res, next) {
   }
   next();
 }
+
+/* Nur Administrator: Personalstammdaten reversibel bereinigen.
+   Keine CASCADE-Löschung: bestehende Kündigungen, Dokumente, CopNet-Zuordnungen
+   und historische Berichte bleiben physisch erhalten. */
+app.post('/api/personal/:nr/administrativ-loeschen',requireLogin,nurAdmin,async(req,res,next)=>{
+ const nr=Number(req.params.nr),bestaetigung=String(req.body?.bestaetigung||'');
+ if(!Number.isSafeInteger(nr)||nr<1)return res.status(400).json({error:'Ungültige Personalnummer'});
+ if(bestaetigung!==String(nr))return res.status(400).json({error:'Bitte die Dienstnummer zur Bestätigung exakt eingeben'});
+ const revision=aktenRevision(req,res);if(revision===null)return;
+ const client=await db.connect().catch(next);if(!client)return;
+ try{
+  await client.query('BEGIN');
+  const {rows}=await client.query('SELECT *,xmin::text AS _revision FROM personal WHERE personalnummer=$1 FOR UPDATE',[nr]);
+  if(!rows.length){await client.query('ROLLBACK');return res.status(404).json({error:'Personaldatensatz nicht gefunden'});}
+  const { _revision,...original }=rows[0];
+  if(rows[0].administrativ_geloescht_am){await client.query('ROLLBACK');return res.status(409).json({error:'Der Eintrag ist bereits im Papierkorb'});}
+  if(rows[0]._revision!==revision){await client.query('ROLLBACK');return aktenKonflikt(res);}
+  if(rows[0].status==='Gekündigt'){
+    await client.query('ROLLBACK');
+    return res.status(409).json({error:'Gekündigte Personalakten werden über Kündigungen verwaltet und dürfen hier nicht bereinigt werden'});
+  }
+  await client.query("SELECT set_config('idv.benutzer',$1,true)",[String(req.user.id)]);
+  const anzeige=[rows[0].vorname,rows[0].nachname].filter(Boolean).join(' ').trim()||'Unbenannter Personaldatensatz';
+  await client.query(
+   "INSERT INTO idv_papierkorb(bereich,schluessel,titel,datensatz,geloescht_von) VALUES('personal',$1,$2,$3::jsonb,$4)",
+   [String(nr),'Personalnummer '+nr+' · '+anzeige,JSON.stringify(original),req.user.id]);
+  await client.query(
+   'UPDATE personal SET administrativ_geloescht_am=now(),administrativ_geloescht_von=$2 WHERE personalnummer=$1',
+   [nr,req.user.id]);
+  await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'del')",
+   [req.user.id,'Personalnummer '+nr+' administrativ in Papierkorb verschoben']);
+  await client.query('COMMIT');
+  res.json({ok:true,personalnummer:nr,im_papierkorb:true});
+ }catch(err){await client.query('ROLLBACK').catch(()=>{});next(err);}
+ finally{client.release();}
+});
 
 app.get('/api/users', requireLogin, nurAdmin, async (req, res, next) => {
   try {

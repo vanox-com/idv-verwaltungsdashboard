@@ -2,16 +2,25 @@
    "Aktuell" bedeutet: belegtes Kündigungs- oder Erfassungsdatum
    innerhalb der letzten 60 Kalendertage, heute eingeschlossen.
    Undatierte Altvorgänge liegen im Archiv, nicht fälschlich unter "neu". */
+/* Bei Altvorgängen ohne Datum gilt der nachweisbare Statuswechsel auf
+   "Gekündigt" als Erfassungsereignis für die 60-Tage-Ansicht.
+   Die tatsächlichen historischen Kündigungsdaten bleiben unbekannt. */
+const KUE_STATUSWECHSEL=
+  "(SELECT MAX(a.zeit) FROM personal_audit a JOIN personal p ON p.personalnummer=a.personalnummer "+
+  "WHERE a.personalnummer=kuendigungen.personalnummer AND p.status='Gekündigt' "+
+  "AND a.aenderungen->'status'->>'neu'='Gekündigt')";
 export const KUE_AKTUELL_BEDINGUNG=
-  "(COALESCE(kuendigungsdatum,(erfasst_am AT TIME ZONE 'Europe/Berlin')::date) "+
+  "(COALESCE(kuendigungsdatum,(erfasst_am AT TIME ZONE 'Europe/Berlin')::date,"+
+  "("+KUE_STATUSWECHSEL+" AT TIME ZONE 'Europe/Berlin')::date) "+
   ">= (now() AT TIME ZONE 'Europe/Berlin')::date - 59)";
+export const KUE_STATUSWECHSEL_SPALTE=KUE_STATUSWECHSEL+" AS statuswechsel_am";
 
 export const KUE_LIST_COLUMNS=[
   'id','personalnummer','vorname','nachname','rang','grund','handy',
   'vertrag','eintritt','urkunde','zeugnis','kuendigung','waffe','copnet',
   'emd','ic','discord','dienstgegenstaende','anzeige','kuendigungsdatum',
   'erfasst_am'
-].join(',')+',xmin::text AS _revision';
+].join(',')+','+KUE_STATUSWECHSEL_SPALTE+',xmin::text AS _revision';
 
 export function registerKueArchivRoutes(app,db,requireLogin,requireRight,effektiveRechte){
   app.get('/api/kuendigungen/archiv',

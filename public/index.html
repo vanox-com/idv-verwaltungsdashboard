@@ -1367,6 +1367,10 @@ body:has(#login:not(.hide)){
 
 /* Personalübersicht: eine klare Aktion statt drei Dokumentlinks pro Zeile. */
 .pers-action-cell{min-width:132px;white-space:normal}
+.pers-admin-remove{border:1px solid rgba(224,117,117,.6);background:rgba(158,51,51,.12);
+color:#ffcccc;padding:7px 10px;margin:4px 0 0 5px;border-radius:7px;cursor:pointer;
+font-size:11px;font-weight:650;white-space:nowrap}
+.pers-admin-remove:hover{background:rgba(176,55,55,.25);border-color:#ffadad}
 .pers-kue-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
   padding:7px 9px;margin:4px 0 0 5px;border:1px solid #6688ad;border-radius:6px;
   color:#dceafa;background:rgba(55,101,147,.2);font-size:11px;font-weight:650;white-space:nowrap}
@@ -2307,12 +2311,15 @@ function vPers() {
     const bearbeitung = schreiben ? '<button type="button" class="pers-edit-btn" data-edit-person="'+nummer+'" aria-label="Personalakte von '+name+' bearbeiten" title="Personalakte bearbeiten">'+
       '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16 5 3 3M4 20l4.5-1 10.8-10.8a2.12 2.12 0 0 0-3-3L5.5 16 4 20z"/><path d="M4 20h16"/></svg>'+
       '<span>Bearbeiten</span></button>' : '';
+    const entfernen=ME.rolle==='Administrator'?
+      '<button type="button" class="pers-admin-remove" data-pers-admin-remove="'+nummer+
+        '" title="Administrativ ausblenden und im Papierkorb sichern">Entfernen</button>':'';
     return '<tr class="pers-row" data-name="' + esc([p.personalnummer,p.vorname,p.nachname,p.dienstgrad,p.nebenjob].join(' ').toLowerCase()) + '" data-group="' + esc(p.gruppe || '') + '" data-status="' + esc(p.status || '') + '" data-art="' + esc(p.beschaeftigungsart || 'Hauptberuf') + '">' +
       '<td>' + nummer + '</td>' +
       '<td><button class="pers-link" type="button" data-show-person="' + nummer + '">' + name + '</button></td>' +
       '<td>' + rangMitAbzeichen(p.dienstgrad) + '</td><td>' + esc(p.gruppe || '–') + '</td><td>' + esc(p.beschaeftigungsart || (p.gruppe === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf')) + '</td>' +
       '<td>' + fd(p.eintrittsdatum) + '</td><td>' + handy + '</td>' +
-      '<td>' + status + '</td><td class="pers-action-cell">' + bearbeitung + personalKuendigungButton(p) + '</td></tr>';
+      '<td>' + status + '</td><td class="pers-action-cell">' + bearbeitung + entfernen + personalKuendigungButton(p) + '</td></tr>';
   }).join('');
   const auswahl = (werte) => '<option value="">Alle</option>' + werte.map(v => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
   return '<h1>Personalverwaltung</h1>' + '<section id="personalRangantraege" class="box"><h3>Offene Rangänderungen – POR-Freigabe</h3><p class="mut">Lade …</p></section>' +
@@ -2322,12 +2329,56 @@ function vPers() {
     '<select id="persArt" aria-label="Beschäftigungsart filtern" onchange="personalFiltern()">' + auswahl(arten) + '</select>' +
     '<select id="persStatus" aria-label="Status filtern" onchange="personalFiltern()">' + auswahl(statusListe) + '</select>' +
     '<span class="spacer"></span><span id="persAnzahl" class="mut">' + personen.length + ' Personen</span>' +
+    (can('kue')?'<button type="button" data-pers-kuendigungen-oeffnen>Gekündigte in Kündigungen öffnen ↗</button>':'')+
     (schreiben ? '<button class="p" type="button" id="persNeu">+ Neue Person</button>' : '') +
     '</div><div class="tw"><table><thead><tr>' +
     ['Nr.','Name','Dienstgrad','Mitarbeitergruppe','Beschäftigungsart','Eintritt','Handy','Status','Aktion'].map(s => '<th>' + s + '</th>').join('') +
     '</tr></thead><tbody>' + (zeilen || '<tr><td colspan="9">Keine Einträge</td></tr>') +
     '</tbody></table></div>';
 }
+
+
+/* Administratives Bereinigen der Personalübersicht.
+   Die Personalakte bleibt mit allen Verknüpfungen im Papierkorb erhalten. */
+async function personalAdminEntfernen(nr,button){
+  if(ME?.rolle!=='Administrator')return;
+  const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nr);
+  if(!p||p.status==='Gekündigt')return;
+  const anzeige=[p.vorname,p.nachname].filter(Boolean).join(' ').trim()||'Unbenannter Personaldatensatz';
+  const verkn=Number(D.kuendigungsVerknuepfungen?.[nr]?.gesamt||0);
+  const text='Personalnummer '+nr+' ('+anzeige+') administrativ entfernen?\n\n'+
+    'Der Eintrag wird aus der aktiven Personalübersicht ausgeblendet und kann im Papierkorb wiederhergestellt werden.'+
+    (verkn?'\n\nAchtung: '+verkn+' Kündigungsvorgang/Vorgänge sind verknüpft. Diese bleiben erhalten.':'')+
+    '\n\nZur Bestätigung bitte die Personalnummer '+nr+' eingeben:';
+  const eingabe=window.prompt(text);
+  if(eingabe===null)return;
+  if(eingabe.trim()!==String(nr)){
+    alert('Abgebrochen: Die eingegebene Personalnummer stimmt nicht überein.');return;
+  }
+  button.disabled=true;
+  try{
+    await api('/personal/'+nr+'/administrativ-loeschen',{
+      method:'POST',body:JSON.stringify({bestaetigung:String(nr)}),
+      headers:{'Content-Type':'application/json','If-Match':String(p._revision||'')}
+    });
+    D.personal=(D.personal||[]).filter(x=>Number(x.personalnummer)!==nr);
+    if(!window.IDVLive?.updateView?.())zeichne();
+    alert('Personalnummer '+nr+' wurde aus der Personalübersicht entfernt. Die Wiederherstellung ist unter Administration → Papierkorb möglich.');
+  }catch(err){
+    alert('Administrative Bereinigung fehlgeschlagen: '+err.message);
+  }finally{button.disabled=false;}
+}
+document.addEventListener('click',event=>{
+  const entfernen=event.target.closest('[data-pers-admin-remove]');
+  if(entfernen){
+    const nr=Number(entfernen.dataset.persAdminRemove);
+    if(Number.isSafeInteger(nr)&&nr>0)void personalAdminEntfernen(nr,entfernen);
+    return;
+  }
+  if(event.target.closest('[data-pers-kuendigungen-oeffnen]')&&can('kue')){
+    wechsleZuModul('kue');
+  }
+});
 
 function personalFiltern() {
   const q = ($('#persSuche')?.value || '').trim().toLowerCase();
@@ -2740,6 +2791,9 @@ async function personalSpeichern(event, neu, nr) {
     });
     personalDialogSchliessen();
     await starten();
+    if(!neu&&body.status==='Gekündigt'&&can('kue')){
+      personalKuendigungZiel(Number(nr));
+    }
     if(antwort?.rangantrag_angelegt)alert('Personalakte gespeichert. Die Rangänderung wurde zur POR-Freigabe eingereicht und erscheint in der Personaltabelle.');
     if(antwort?.kuendigung_angelegt)
       alert('Status auf „Gekündigt“ gesetzt. Der Kündigungsvorgang wurde automatisch angelegt.');
@@ -3236,7 +3290,9 @@ function vKue() {
       (schreiben?'<button type="button" class="kue-docs-open" data-kue-docs-edit="'+Number(k.id)+'">Dokumente bearbeiten</button> '+
       '<button type="button" data-dg-type="fristgerecht" data-dg-nr="'+Number(k.personalnummer)+'" data-dg-context="'+Number(k.id)+'">Fristgerecht</button> '+
       '<button type="button" data-dg-type="fristlos" data-dg-nr="'+Number(k.personalnummer)+'" data-dg-context="'+Number(k.id)+'">Fristlos</button>':'');
-    const date=k.kuendigungsdatum?fd(k.kuendigungsdatum):k.erfasst_am?fd(k.erfasst_am):'Unbekannt';
+    const date=k.kuendigungsdatum?fd(k.kuendigungsdatum):
+      k.erfasst_am?'Erfasst: '+fd(k.erfasst_am):
+      k.statuswechsel_am?'Statuswechsel: '+fd(k.statuswechsel_am):'Unbekannt';
     return '<td>'+esc(k.personalnummer)+'</td><td><strong>'+esc([k.vorname,k.nachname].filter(Boolean).join(' '))+'</strong> '+
       '<span class="tag '+(offen?'warn':'ok')+'">'+(offen?offen+' offen':'erledigt')+'</span></td>'+
       '<td>'+esc(k.rang||'–')+'</td><td>'+esc(k.grund||'–')+'</td><td>'+esc(date)+'</td>'+

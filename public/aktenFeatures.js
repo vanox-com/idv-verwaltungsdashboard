@@ -87,7 +87,7 @@ async function papierkorb(){
  el.innerHTML='<h1>Papierkorb</h1><p class="mut">Lade wiederherstellbare Vorgänge …</p>';
  try{
   const list=await api('/papierkorb');if(tab!=='papierkorb'||!el.isConnected)return;
-  el.innerHTML='<h1>Papierkorb</h1><p class="mut">Gelöschte Kündigungsvorgänge, Checklisten samt Häkchen und Textbausteine können wiederhergestellt werden. Frühere endgültige Löschungen können nicht nachträglich rekonstruiert werden.</p>'+
+  el.innerHTML='<h1>Papierkorb</h1><p class="mut">Gelöschte Kündigungsvorgänge, Checklisten und Textbausteine können hier wiederhergestellt werden. Administrativ entfernte Personal-Datensätze sind ausschließlich für Administratoren sichtbar und bleiben mit ihren Verknüpfungen erhalten. Frühere endgültige Löschungen können nicht nachträglich rekonstruiert werden.</p>'+
    '<p id="idvTrashInfo" class="mut" role="status"></p><div class="idv-trash-list">'+
    (list.length?list.map(x=>'<div class="idv-trash-row"><div><strong>'+esc(x.titel)+'</strong><div class="idv-trash-meta">'+
     esc(labels[x.bereich]||x.bereich)+' · '+esc(x.schluessel)+' · '+esc(datum(x.geloescht_am))+

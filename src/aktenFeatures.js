@@ -75,6 +75,7 @@ export function registerAktenFeatures(app,db,requireLogin,requireRight,effektive
     try{
       const rechte=await effektiveRechte(req.user);
       const bereiche=['kuendigungen','checklisten','textbausteine'].filter(x=>Number(rechte[{kuendigungen:'kue',checklisten:'chk',textbausteine:'texte'}[x]]||0)>=1);
+      if(req.user.rolle==='Administrator')bereiche.push('personal');
       if(!bereiche.length)return res.json([]);
       const {rows}=await db.query(
         "SELECT p.id,p.bereich,p.schluessel,p.titel,p.geloescht_am,u.anzeigename AS geloescht_von FROM idv_papierkorb p LEFT JOIN users u ON u.id=p.geloescht_von WHERE p.wiederhergestellt_am IS NULL AND p.bereich=ANY($1::text[]) ORDER BY p.id DESC LIMIT 150",
@@ -96,7 +97,11 @@ export function registerAktenFeatures(app,db,requireLogin,requireRight,effektive
       const p=rows[0];
       const passendeRechte={kuendigungen:'kue',checklisten:'chk',textbausteine:'texte'};
       const rechte=await effektiveRechte(req.user);
-      if(Number(rechte[passendeRechte[p.bereich]]||0)<2){
+      if(p.bereich==='personal'&&req.user.rolle!=='Administrator'){
+        await client.query('ROLLBACK');
+        return res.status(403).json({error:'Nur Administratoren können Personaldatensätze wiederherstellen'});
+      }
+      if(p.bereich!=='personal'&&Number(rechte[passendeRechte[p.bereich]]||0)<2){
         await client.query('ROLLBACK');
         return res.status(403).json({error:'Für die Wiederherstellung fehlt das Bearbeitungsrecht im ursprünglichen Bereich'});
       }
@@ -106,6 +111,15 @@ export function registerAktenFeatures(app,db,requireLogin,requireRight,effektive
         await client.query('INSERT INTO checklisten SELECT (jsonb_populate_record(NULL::checklisten,$1::jsonb)).*',[JSON.stringify(p.datensatz)]);
         const extra=Array.isArray(p.zusatz)?p.zusatz:[];
         if(extra.length)await client.query('INSERT INTO checklisten_status SELECT (jsonb_populate_recordset(NULL::checklisten_status,$1::jsonb)).*',[JSON.stringify(extra)]);
+      }else if(p.bereich==='personal'){
+        const nr=Number(p.datensatz?.personalnummer);
+        if(!Number.isSafeInteger(nr)||nr<1||String(nr)!==p.schluessel)
+          throw Object.assign(new Error('Ungültiger Personaldatensatz'),{status:409});
+        const restored=await client.query(
+          'UPDATE personal SET administrativ_geloescht_am=NULL,administrativ_geloescht_von=NULL '+
+          'WHERE personalnummer=$1 AND administrativ_geloescht_am IS NOT NULL RETURNING personalnummer',[nr]);
+        if(restored.rowCount!==1)
+          throw Object.assign(new Error('Personaldatensatz ist nicht mehr im Papierkorb'),{status:409});
       }else if(p.bereich==='textbausteine'){
         const d=p.datensatz;
         const result=await client.query(
