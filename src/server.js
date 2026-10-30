@@ -9,6 +9,7 @@ import { fillCertificateDocx } from './urkundenDocx.js';
 import { dokumentRoutes } from './dokumentApi.js';
 import { registerBefRichtRoutes } from './befRichtApi.js';
 import { ANWAERTER_PRUEFUNGEN } from './befPruefungMap.js';
+import { registerRoutineArchive } from './routineArchiv.js';
 import { hashPassword, verifyPassword, newSessionToken, SESSION_HOURS } from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1100,6 +1101,9 @@ app.patch('/api/disziplin/:nr', requireLogin, requireRight('dis', 2), async(req,
 });
 
 
+/* Archiv-Lese- und Schreibrechte werden separat vom normalen Routine-Recht geprüft. */
+registerRoutineArchive(app,db,requireLogin,requireRight);
+
 /* ---------- Routine und Sonderzahlungen ---------- */
 /* Alle Routineänderungen sperren die betreffende Zeile für die Dauer der
    Transaktion. So überschreiben zwei parallele Anwesenheitsklicks nicht
@@ -1162,12 +1166,17 @@ function routineIsoDatum(tag){
   return m?m[3]+'-'+m[2]+'-'+m[1]:null;
 }
 app.post('/api/routine/:id/termin',requireLogin,requireRight('rout',2),
-  async(req,res,next)=>routineAendern(req,res,next,async({tage,personen})=>{
+  async(req,res,next)=>routineAendern(req,res,next,async({tage,personen,client})=>{
     const iso=req.body?.datum, d=routineDatum(iso);
     if(!d)throw routineFehler(400,'Ungültiges Termindatum');
     if(tage.length>=52)throw routineFehler(409,'Maximal 52 Routinetermine');
     if(tage.some(t=>routineIsoDatum(t)===iso))
       throw routineFehler(409,'Termin existiert bereits');
+    const vorhanden=await client.query(
+      'SELECT 1 FROM routine_archiv WHERE routine_id=$1 AND datum=$2',
+      [req.params.id,iso]);
+    if(vorhanden.rowCount)
+      throw routineFehler(409,'Termin liegt bereits im Archiv. Bitte dort wiederherstellen.');
     if(tage.some(t=>!routineDatum(routineIsoDatum(t))))
       throw routineFehler(409,'Ein vorhandenes Termindatum ist ungültig');
     const index=tage.findIndex(t=>routineIsoDatum(t)>iso);
@@ -2039,7 +2048,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
   try {
     const rolle = req.params.rolle, modul = req.params.modul;
     const stufe = req.body?.stufe;
-    const erlaubteModule = new Set(['dash','pers','bef','rout','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen']);
+    const erlaubteModule = new Set(['dash','pers','bef','rout','routarchiv','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen']);
     if (rolle === 'Administrator')
       return res.status(403).json({ error: 'Administratorrechte sind fest' });
     if (!erlaubteModule.has(modul) || ![0, 1, 2].includes(stufe))
@@ -2061,7 +2070,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
 app.patch('/api/users/:id/recht/:modul',requireLogin,nurAdmin,async(req,res,next)=>{
   try{
     const userId=Number(req.params.id),modul=req.params.modul,stufe=req.body?.stufe;
-    const erlaubte=new Set(['dash','pers','bef','rout','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen']);
+    const erlaubte=new Set(['dash','pers','bef','rout','routarchiv','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen']);
     if(!Number.isSafeInteger(userId)||userId<1||!erlaubte.has(modul)||
        ![null,0,1,2].includes(stufe))
       return res.status(400).json({error:'Ungültige Berechtigung'});
