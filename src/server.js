@@ -624,7 +624,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
         info: dashboard.rows.filter(r => r.art === 'info').map(r => ({ text: r.text, url: r.url })),
         links: dashboard.rows.filter(r => r.art === 'link').map(r => ({ text: r.text, url: r.url }))
       },
-      routine: routine.rows.map(r => ({ id: r.id, nr: r.personalnummer, tage: r.tage, personen: r.personen })),
+      routine: routine.rows.map(r => ({ id: r.id, nr: r.personalnummer, tage: r.tage, personen: r.personen, _revision: r._revision })),
       sonderzahlungen: sonderzahlungen.rows,
       organigramm: organigramm.rows,
       befoerderungen: befoerderungen.rows
@@ -1335,7 +1335,7 @@ app.post('/api/routine/:id/teilnehmer',requireLogin,requireRight('rout',2),
     if(!rows.length)throw routineFehler(404,'Personalakte nicht gefunden');
     personen.push({nr,vorname:rows[0].vorname||'',nachname:rows[0].nachname||'',
       abgemeldet:rows[0].status==='Abgemeldet',
-      anwesend:Array.from({length:tage.length},()=>false)});
+      anwesend:Array.from({length:tage.length},()=>null)});
     return 'Routine '+req.params.id+': Person '+nr+' aufgenommen';
   }));
 app.patch('/api/routine/:id/teilnehmer/:nr',requireLogin,requireRight('rout',2),

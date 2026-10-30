@@ -945,3 +945,33 @@ CREATE INDEX IF NOT EXISTS idv_personal_aktiv_idx
 ALTER TABLE idv_papierkorb DROP CONSTRAINT IF EXISTS idv_papierkorb_bereich_check;
 ALTER TABLE idv_papierkorb ADD CONSTRAINT idv_papierkorb_bereich_check
  CHECK (bereich IN ('kuendigungen','checklisten','textbausteine','personal'));
+
+
+/* IDV-Reparatur Routine: Jonas Schulz (Personalnummer 1) wurde bei einer
+   älteren Übernahme nicht in den Routineplan übernommen. NUR dann ergänzen,
+   wenn sein Teilnehmerdatensatz weiterhin fehlt; alle bestehenden Anwesen-
+   heiten anderer Personen bleiben unverändert. Fehlende historische Werte
+   ausdrücklich als NULL (= unbekannt) sichern, NICHT als abwesend erfinden.
+   Diese Migration ist idempotent und wird nach dem ersten Durchlauf nicht
+   nochmals ausgeführt. */
+UPDATE routine AS r
+SET personen = jsonb_build_array(jsonb_build_object(
+ 'nr',p.personalnummer,
+ 'vorname',p.vorname,
+ 'nachname',p.nachname,
+ 'abgemeldet',p.status='Abgemeldet',
+ 'anwesend',(SELECT COALESCE(jsonb_agg(to_jsonb(NULL::boolean)),'[]'::jsonb)
+             FROM generate_series(1,jsonb_array_length(r.tage)))
+)) || r.personen
+FROM personal AS p
+WHERE r.id=2
+ AND p.personalnummer=1
+ AND p.administrativ_geloescht_am IS NULL
+ AND p.vorname='Jonas'
+ AND p.nachname='Schulz'
+ AND jsonb_typeof(r.personen)='array'
+ AND jsonb_typeof(r.tage)='array'
+ AND NOT EXISTS (
+   SELECT 1 FROM jsonb_array_elements(r.personen) AS eintrag
+   WHERE eintrag->>'nr'='1'
+ );

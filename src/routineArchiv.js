@@ -80,7 +80,7 @@ export function registerRoutineArchive(app,db,requireLogin,requireRight){
    // Vor dem Entfernen aller Spaltenwerte den vollständigen Stand sichern.
    const snapshot=plan.personen.map(p=>({
     nr:Number(p.nr),vorname:String(p.vorname||''),nachname:String(p.nachname||''),
-    abgemeldet:p.abgemeldet===true,anwesend:p.anwesend[index]===true
+    abgemeldet:p.abgemeldet===true,anwesend:p.anwesend[index]===null?null:p.anwesend[index]===true
    }));
    await client.query(
     'INSERT INTO routine_archiv(routine_id,datum,teilnehmer,archiviert_von) VALUES($1,$2,$3::jsonb,$4)',
@@ -110,10 +110,10 @@ export function registerRoutineArchive(app,db,requireLogin,requireRight){
    if(plan.tage.length>=52)throw err(409,'Maximal 52 aktive Routinetermine');
    const index=plan.tage.findIndex(t=>toIso(t)>datum);
    const position=index<0?plan.tage.length:index;
-   const byNumber=new Map(archived.teilnehmer.map(p=>[Number(p.nr),p.anwesend===true]));
+   const byNumber=new Map(archived.teilnehmer.map(p=>[Number(p.nr),p.anwesend===null?null:p.anwesend===true]));
    plan.tage.splice(position,0,toGerman(datum));
    for(const person of plan.personen){
-    person.anwesend.splice(position,0,byNumber.get(Number(person.nr))===true);
+    person.anwesend.splice(position,0,byNumber.has(Number(person.nr))?byNumber.get(Number(person.nr)):null);
    }
    await client.query('DELETE FROM routine_archiv WHERE id=$1 AND routine_id=$2',
     [archivId,plan.id]);

@@ -192,6 +192,7 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .routine-mark{padding:6px 5px}
 .att-button,.att-display{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;background:#283748;border:1px solid #45556b;color:#aebed0}
 .att-button.is-here,.att-display.is-here{background:#205d45;border-color:#388e6d;color:#d0ffdf;font-weight:800}
+.att-button.is-unknown,.att-display.is-unknown{background:#38392f;border-color:#777052;color:#f1daa9;font-weight:700}
 .routine-ab{min-width:94px;font-size:12px;padding:6px}.routine-ab.off{color:#ffcc85;background:#40352e}
 .routine-sum{font-weight:650}.routine-person[hidden]{display:none}
 #zahlungDialog{background:#182433;color:var(--txt);border:1px solid #536781;border-radius:12px;width:min(560px,96vw);max-height:90vh;overflow:auto;padding:26px}
@@ -3650,12 +3651,13 @@ function vRout(){
   const body=personen.map(p=>{
     const nr=Number(p.nr),a=Array.isArray(p.anwesend)?p.anwesend:[],anzahl=a.filter(Boolean).length;
     const cells=tage.map((tag,i)=>{
-      const anwesend=!!a[i];
+      const anwesend=a[i]===true,unbekannt=a[i]===null;
       return '<td class="routine-mark">'+(w?
-        '<button type="button" class="att-button '+(anwesend?'is-here':'')+'" data-routine-nr="'+nr+
+        '<button type="button" class="att-button '+(anwesend?'is-here':unbekannt?'is-unknown':'')+'" data-routine-nr="'+nr+
         '" data-routine-index="'+i+'" aria-pressed="'+anwesend+'" title="'+esc(routineDatumAnzeigen(tag))+
-        ': '+(anwesend?'anwesend':'abwesend')+'">'+(anwesend?'✓':'–')+'</button>':
-        '<span class="att-display '+(anwesend?'is-here':'')+'">'+(anwesend?'✓':'–')+'</span>')+'</td>';
+        ': '+(anwesend?'anwesend':unbekannt?'früher nicht erfasst':'abwesend')+'">'+(anwesend?'✓':unbekannt?'?':'–')+'</button>':
+        '<span class="att-display '+(anwesend?'is-here':unbekannt?'is-unknown':'')+'" title="'+
+          (unbekannt?'Frühere Anwesenheit nicht erfasst':'')+'">'+(anwesend?'✓':unbekannt?'?':'–')+'</span>')+'</td>';
     }).join('');
     const name=[p.vorname,p.nachname].filter(Boolean).join(' ');
     return '<tr class="routine-person" data-routine-search="'+esc((nr+' '+name).toLowerCase())+'">'+
@@ -3666,7 +3668,7 @@ function vRout(){
       '</td>'+cells+'<td class="routine-sum">'+anzahl+' / '+tage.length+'</td></tr>';
   }).join('');
   return '<h1>Routineverwaltung</h1>'+nav+
-    '<p class="mut">Kästchen anklicken = anwesend. Änderungen werden direkt gespeichert. Abmeldungen bleiben mit ihrer bisherigen Anwesenheit dokumentiert.</p>'+
+    '<p class="mut">Kästchen anklicken = anwesend. Änderungen werden direkt gespeichert. Abmeldungen bleiben mit ihrer bisherigen Anwesenheit dokumentiert. Ein ? bedeutet: frühere Anwesenheit nicht erfasst.</p>'+
     steuerung+'<p id="routineInfo" role="status" class="mut"></p>'+
     '<div class="tw"><table class="routine-table"><thead><tr><th>Nr.</th><th>Person</th><th>Status</th>'+th+
       '<th>Summe</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
@@ -3684,7 +3686,8 @@ async function routineArchivLaden(){
    const entries=Array.isArray(a.teilnehmer)?a.teilnehmer:[];
    const present=entries.filter(p=>p.anwesend===true).length;
    const rows=entries.map(p=>'<tr><td>'+Number(p.nr)+'</td><td>'+esc([p.vorname,p.nachname].filter(Boolean).join(' '))+
-    '</td><td><span class="tag '+(p.anwesend?'ok':'warn')+'">'+(p.anwesend?'Anwesend':'Abwesend')+'</span></td>'+
+    '</td><td><span class="tag '+(p.anwesend===true?'ok':p.anwesend===null?'':'warn')+'">'+
+    (p.anwesend===true?'Anwesend':p.anwesend===null?'Nicht erfasst':'Abwesend')+'</span></td>'+
     '<td>'+esc(p.abgemeldet?'Abgemeldet':'Aktiv')+'</td></tr>').join('');
    return '<details class="routine-archive-entry"><summary><strong>'+esc(fd(a.datum))+
     '</strong><span class="tag">'+present+' / '+entries.length+' anwesend</span>'+
@@ -3747,13 +3750,14 @@ async function routineKlick(btn){
   const nr=Number(btn.dataset.routineNr),i=Number(btn.dataset.routineIndex);
   const p=(r.personen||[]).find(x=>Number(x.nr)===nr);
   if(!p||!Array.isArray(p.anwesend)||i<0||i>=r.tage.length)return;
-  const neu=!p.anwesend[i];btn.disabled=true;
+  const neu=p.anwesend[i]!==true;btn.disabled=true;
   try{
     const response=await api('/routine/'+r.id+'/anwesenheit',
       routineSchreibOptionen(r,'POST',{nr,tagIndex:i,anwesend:neu}));
     r._revision=response._revision;
     p.anwesend[i]=neu;
     btn.classList.toggle('is-here',neu);
+    btn.classList.remove('is-unknown');
     btn.textContent=neu?'✓':'–';
     btn.setAttribute('aria-pressed',String(neu));
     btn.title=routineDatumAnzeigen(r.tage[i])+': '+(neu?'anwesend':'abwesend');
