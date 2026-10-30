@@ -525,7 +525,7 @@ RETURNS text LANGUAGE sql IMMUTABLE AS $$
    'Polizeihauptmeister','Polizeihauptmeister AZ','Polizeihauptmeister mit Amtszulage'
   ) THEN 'Mittlerer Dienst'
   WHEN trim(coalesce(rang,'')) IN (
-   'Polizeikommissaranwärter','Polizeikommissar','Kriminalkommissar',
+   'Polizeikommissaranwärter','Kriminalkommissaranwärter','Polizeikommissar','Kriminalkommissar',
    'Polizeioberkommissar','Kriminaloberkommissar','Polizeihauptkommissar',
    'Kriminalhauptkommissar','Polizeihauptkommissar A12','Erster Polizeihauptkommissar'
   ) THEN 'Gehobener Dienst'
