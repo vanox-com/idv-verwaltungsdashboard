@@ -6,7 +6,7 @@ export const VORLAGEN={
  hauptvertrag:{titel:'Arbeitsvertrag Hauptberuf',id:'1v6bFm7e5jPAgxIIRxaqBGmF4uVwm63aD_Js74DTi9vo',recht:'pers'},
  pmavertrag:{titel:'Arbeitsvertrag PMA',id:'1REMFYLPcyxu0FPxImCuxKKgvs_vTaZwaJMWdi4v_aPM',recht:'pers'},
  nebenvertrag:{titel:'Arbeitsvertrag Nebenberuf',id:'10KZ2qRLCLcPD2aqJf1M26Y8oEjuk2K48FNnMrBpj_Ls',recht:'pers'},
- praktikum:{titel:'Praktikumsvertrag',id:'1S-pcycKNd_QSypYs2Hv91rENjZLS12BNbtXpw3sPbfw',recht:'pers'},
- praktikumsbestaetigung:{titel:'Praktikumsbestätigung',id:'15RWiI94EB1EGqZNnX-h95awljtHBt_Krrute35UWhkA',recht:'pers'},
+ praktikum:{titel:'Praktikumsvertrag',id:'1S-pcycKNd_QSypYs2Hv91rENjZLS12BNbtXpw3sPbfw',recht:'praktika'},
+ praktikumsbestaetigung:{titel:'Praktikumsbestätigung',id:'15RWiI94EB1EGqZNnX-h95awljtHBt_Krrute35UWhkA',recht:'praktika'},
  nebenjob:{titel:'Nebenjobfreigabe',id:'1Xrr8Sz4zNxYU1TY0Tk_OjBVeAq0muuw7ty3xkILENVM',recht:'pers'}
 };
