@@ -1371,6 +1371,20 @@ body:has(#login:not(.hide)){
   padding:7px 9px;margin:4px 0 0 5px;border:1px solid #6688ad;border-radius:6px;
   color:#dceafa;background:rgba(55,101,147,.2);font-size:11px;font-weight:650;white-space:nowrap}
 .pers-kue-btn:hover{border-color:#9cc1e9;background:rgba(60,116,173,.3)}
+.kue-group-detail[hidden]{display:none!important}
+.kue-group-heading{background:rgba(55,90,125,.13)}
+.kue-group-heading button{border-color:#6c8db4;color:#dceaff}
+.kue-archive-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0 16px}
+.kue-archive-toolbar button.active{background:#304e6d;border-color:#8cadd3;color:#f4f9ff}
+.kue-archive-notice{font-size:13px;color:#b6c8d9;margin:10px 0}
+#kueAkteDialog{width:min(820px,calc(100vw - 28px));max-height:88vh;overflow:auto;background:#172638;
+color:#eaf0f8;border:1px solid #56718f;border-radius:12px;padding:23px;box-shadow:0 24px 66px #000b}
+#kueAkteDialog::backdrop{background:#030b18bb}
+.kue-akte-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:9px;margin:14px 0}
+.kue-akte-grid>div{background:#102031;border:1px solid #35506b;border-radius:7px;padding:9px;overflow-wrap:anywhere}
+.kue-akte-grid small{display:block;color:#b3c2d0;margin-bottom:4px}
+.kue-akte-docs{display:grid;gap:8px;margin:12px 0 20px}
+.kue-akte-docs>div{border-bottom:1px solid #42566a;padding:8px 0}
 .pers-kue-filter{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:10px 14px;
   margin:12px 0;border:1px solid #547398;border-radius:8px;background:#1a2c40}
 #personalKuendigungDialog{width:min(500px,calc(100vw - 28px));max-height:90vh;overflow-y:auto;
@@ -1839,7 +1853,7 @@ function navIcon(id) {
 
 function wechsleZuModul(id,optionen={}){
   if(!MODS.some(m=>m[0]===id)||!can(id))return false;
-  if(id==='kue'&&!optionen.fokus)KUE_FOKUS_NR=null;
+  if(id==='kue'&&!optionen.fokus){KUE_FOKUS_NR=null;KUE_VIEW_MODE='aktuell';}
   tab=id;
   const gruppe=NAV_GRUPPEN.find(g=>g.module.includes(id));
   if(gruppe)NAV_OFFEN.add(gruppe.id);
@@ -1911,6 +1925,7 @@ function zeichne() {
     if(tab==='system' && ME.rolle!=='Administrator'){$('#inhalt').innerHTML='<p>Nur Administratoren.</p>';return;}
     const f = ansichten[tab];
     $('#inhalt').innerHTML = f ? f() : '<p>Dieser Bereich ist für deine Rolle nicht freigegeben.</p>';
+    if(tab==='kue'&&KUE_VIEW_MODE==='archiv'&&KUE_ARCHIV_DATEN===null)void kueArchivLaden();
     if(tab==='dash'&&can('mitteilungen'))ladeDashboardMeldungen();
     if(tab === 'system') ladeSystemoptionen();
     if(tab === 'meldungen') ladeMeldungen();
@@ -2266,7 +2281,10 @@ function personalKuendigungButton(p){
   if(!p||p.status!=='Gekündigt'||!can('kue'))return '';
   const nr=Number(p.personalnummer);
   if(!Number.isSafeInteger(nr)||nr<1)return '';
-  const anzahl=(D.kuendigungen||[]).filter(k=>Number(k.personalnummer)===nr).length;
+  const verkn=D.kuendigungsVerknuepfungen?.[nr];
+  const anzahl=Number(verkn?.gesamt??(D.kuendigungen||[]).filter(k=>Number(k.personalnummer)===nr).length);
+  const aktuell=Number(verkn?.aktuell??(D.kuendigungen||[]).filter(k=>Number(k.personalnummer)===nr).length);
+  if(anzahl&&!aktuell&&!can('kuearchiv'))return '';
   if(!anzahl&&!can('kue',2))return '';
   const label=anzahl?'Zu Kündigungen'+(anzahl>1?' ('+anzahl+')':''):'In Kündigungen übernehmen';
   return '<button type="button" class="pers-kue-btn" data-person-kuendigungen="'+nr+
@@ -2275,7 +2293,8 @@ function personalKuendigungButton(p){
 }
 
 function vPers() {
-  const personen = D.personal || [];
+  // Ausgeschiedene bleiben in der Datenbank und ihrer Kündigungsakte, nicht in der aktiven Personalliste.
+  const personen = (D.personal || []).filter(p=>p.status!=='Gekündigt');
   const gruppen = [...new Set(personen.map(p => p.gruppe).filter(Boolean))];
   const statusListe = [...new Set(personen.map(p => p.status).filter(Boolean))];
   const arten = ['Hauptberuf','Nebenberuf'];
@@ -2738,11 +2757,16 @@ async function personalSpeichern(event, neu, nr) {
 /* Vom gekündigten Personal zu seinen vorhandenen Kündigungsvorgängen.
    Nur bei einem fehlenden Vorgang ist überhaupt ein Schreibzugriff nötig. */
 let KUE_FOKUS_NR=null;
+let KUE_VIEW_MODE='aktuell';
+let KUE_ARCHIV_DATEN=null,KUE_ARCHIV_LOADING=false;
+const KUE_OFFENE_GRUPPEN=new Set();
 function personalKuendigungZiel(nr){
   const person=(D.personal||[]).find(p=>Number(p.personalnummer)===nr);
   if(!person||person.status!=='Gekündigt'||!can('kue'))return;
   personalDialogSchliessen();
   KUE_FOKUS_NR=nr;
+  const verkn=D.kuendigungsVerknuepfungen?.[nr];
+  KUE_VIEW_MODE=Number(verkn?.gesamt||0)>0&&Number(verkn?.aktuell||0)===0?'archiv':'aktuell';
   wechsleZuModul('kue',{fokus:true});
 }
 function personalKuendigungUebernehmen(nr){
@@ -2787,7 +2811,7 @@ document.addEventListener('click',event=>{
   if(!Number.isSafeInteger(nr)||nr<1)return;
   const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nr);
   if(!p||p.status!=='Gekündigt'||!can('kue'))return;
-  const anzahl=(D.kuendigungen||[]).filter(k=>Number(k.personalnummer)===nr).length;
+  const anzahl=Number(D.kuendigungsVerknuepfungen?.[nr]?.gesamt??(D.kuendigungen||[]).filter(k=>Number(k.personalnummer)===nr).length);
   if(anzahl){personalKuendigungZiel(nr);return;}
   personalKuendigungUebernehmen(nr);
 });
@@ -3150,8 +3174,8 @@ function kueDokument(raw,feld){
   '<span class="kue-document-missing" title="'+esc(d.name||'Kein Dokumentlink')+'">'+esc(labels[feld])+' <small>ohne Link</small></span>';
 }
 function kueDocsDialog(id){
- if(!can('kue',2))return;
- const k=(D.kuendigungen||[]).find(x=>Number(x.id)===Number(id));if(!k)return;
+ if(!can('kue',2)||(KUE_VIEW_MODE==='archiv'&&!can('kuearchiv',2)))return;
+ const k=(KUE_VIEW_MODE==='archiv'?(KUE_ARCHIV_DATEN||[]):(D.kuendigungen||[])).find(x=>Number(x.id)===Number(id));if(!k)return;
  const felder=[['vertrag','Arbeitsvertrag'],['urkunde','Ernennungsurkunde'],['zeugnis','Arbeitszeugnis'],['kuendigung','Kündigung']];
  let d=document.getElementById('kueDocsDialog');
  if(!d){d=document.createElement('dialog');d.id='kueDocsDialog';document.body.appendChild(d);}
@@ -3184,40 +3208,88 @@ function kueDocsDialog(id){
 }
 document.addEventListener('click',e=>{const btn=e.target.closest('[data-kue-docs-edit]');if(btn)kueDocsDialog(Number(btn.dataset.kueDocsEdit));});
 function vKue() {
-  const schreiben=can('kue',2),alle=D.kuendigungen||[];
+  const archiv=KUE_VIEW_MODE==='archiv'&&can('kuearchiv');
+  const schreiben=can('kue',2)&&(!archiv||can('kuearchiv',2));
+  const alle=archiv?(KUE_ARCHIV_DATEN||[]):(D.kuendigungen||[]);
   const eintraege=KUE_FOKUS_NR?alle.filter(k=>Number(k.personalnummer)===KUE_FOKUS_NR):alle;
   const fokusPerson=(D.personal||[]).find(p=>Number(p.personalnummer)===KUE_FOKUS_NR);
   const fokusInfo=KUE_FOKUS_NR?'<div class="pers-kue-filter" role="status">'+
     '<strong>Kündigungen für '+esc([fokusPerson?.vorname,fokusPerson?.nachname].filter(Boolean).join(' ')||'Personalnummer '+KUE_FOKUS_NR)+'</strong>'+
-    '<span class="mut">'+eintraege.length+' vorhandene'+(eintraege.length===1?'r Vorgang':' Vorgänge')+'</span>'+
+    '<span class="mut">'+eintraege.length+' Vorgänge</span>'+
     '<button type="button" data-kue-alle>Alle Kündigungen anzeigen</button></div>':'';
-
-  const rows=eintraege.map(k=>{
-    const offen=KUE_STATUS.filter(x=>x[0]!=='anzeige' && /^(offen)?$/i.test(kueWert(k,x[0]))).length;
+  const tabs='<div class="kue-archive-toolbar" role="group" aria-label="Kündigungsübersicht">'+
+    '<button type="button" data-kue-view="aktuell" class="'+(!archiv?'active':'')+'">Aktuell · 60 Tage</button>'+
+    (can('kuearchiv')?'<button type="button" data-kue-view="archiv" class="'+(archiv?'active':'')+'">Archiv</button>':'')+
+    (archiv?'<button type="button" data-kue-refresh>Archiv aktualisieren</button>':'')+'</div>';
+  const hinweis=archiv?'Historische Kündigungen und Vorgänge ohne belegtes Datum. Vorhandene Unterlagen und die gesicherte Personalakte bleiben über „Akte & Dokumente“ abrufbar.':
+    'Aktuelle Kündigungen aus den letzten 60 Kalendertagen. Ältere Vorgänge und undatierte Altbestände findest du im berechtigungsgeschützten Archiv.';
+  const detailRow=k=>{
+    const offen=KUE_STATUS.filter(x=>x[0]!=='anzeige'&&/^(offen)?$/i.test(kueWert(k,x[0]))).length;
     const badges=KUE_STATUS.map(([feld,label])=>{
-      const wert=kueWert(k,feld), offen=wert==='Offen', cls=offen?'warn':wert==='Nein'?'':'ok';
+      const wert=kueWert(k,feld),istOffen=wert==='Offen',cls=istOffen?'warn':wert==='Nein'?'':'ok';
       const text=esc(label)+': '+esc(wert);
-      return schreiben ? '<button type="button" class="tag kue-status '+cls+'" title="Status umschalten" data-kue-id="'+Number(k.id)+'" data-kue-field="'+feld+'">'+text+'</button>'
-        : '<span class="tag '+cls+'">'+text+'</span>';
+      return schreiben?'<button type="button" class="tag kue-status '+cls+'" title="Status umschalten" data-kue-id="'+Number(k.id)+'" data-kue-field="'+feld+'">'+text+'</button>':
+        '<span class="tag '+cls+'">'+text+'</span>';
     }).join(' ');
-    const docs='<div class="kue-doc-links">'+['vertrag','urkunde','zeugnis','kuendigung'].map(x=>kueDokument(k[x],x)).join('')+'</div>'+(schreiben?'<button type="button" class="kue-docs-open" data-kue-docs-edit="'+Number(k.id)+'">Dokumente bearbeiten</button> '+
+    const docs='<div class="kue-doc-links">'+['vertrag','urkunde','zeugnis','kuendigung'].map(x=>kueDokument(k[x],x)).join('')+'</div>'+
+      '<button type="button" data-kue-akte="'+Number(k.id)+'">Akte &amp; alle Dokumente</button> '+
+      (schreiben?'<button type="button" class="kue-docs-open" data-kue-docs-edit="'+Number(k.id)+'">Dokumente bearbeiten</button> '+
       '<button type="button" data-dg-type="fristgerecht" data-dg-nr="'+Number(k.personalnummer)+'" data-dg-context="'+Number(k.id)+'">Fristgerecht</button> '+
       '<button type="button" data-dg-type="fristlos" data-dg-nr="'+Number(k.personalnummer)+'" data-dg-context="'+Number(k.id)+'">Fristlos</button>':'');
-    return '<tr><td>'+esc(k.personalnummer)+'</td><td><strong>'+esc([k.vorname,k.nachname].filter(Boolean).join(' '))+'</strong> '+
+    const date=k.kuendigungsdatum?fd(k.kuendigungsdatum):k.erfasst_am?fd(k.erfasst_am):'Unbekannt';
+    return '<td>'+esc(k.personalnummer)+'</td><td><strong>'+esc([k.vorname,k.nachname].filter(Boolean).join(' '))+'</strong> '+
       '<span class="tag '+(offen?'warn':'ok')+'">'+(offen?offen+' offen':'erledigt')+'</span></td>'+
-      '<td>'+esc(k.rang||'–')+'</td><td>'+esc(k.grund||'–')+'</td><td>'+fd(k.eintritt)+'</td>'+
+      '<td>'+esc(k.rang||'–')+'</td><td>'+esc(k.grund||'–')+'</td><td>'+esc(date)+'</td>'+
       '<td>'+docs+'</td><td class="kue-statuscell">'+badges+'</td>'+
-      '<td>'+(schreiben?'<button class="kue-delete" type="button" data-kue-delete="'+Number(k.id)+'" title="Kündigung löschen">Löschen</button>':'')+'</td></tr>';
+      '<td>'+(schreiben?'<button class="kue-delete" type="button" data-kue-delete="'+Number(k.id)+'" title="Kündigung in Papierkorb verschieben">Löschen</button>':'')+'</td>';
+  };
+  /* Nach eindeutiger Personalnummer gruppieren, damit namensgleiche Personen
+     niemals fälschlich miteinander vermischt werden. */
+  const gruppen=new Map();
+  for(const k of eintraege){
+    const nummer=Number(k.personalnummer);
+    const key=Number.isSafeInteger(nummer)&&nummer>0?'nr-'+nummer:
+      'name-'+String(k.vorname||'').trim().toLocaleLowerCase('de')+'-'+String(k.nachname||'').trim().toLocaleLowerCase('de');
+    if(!gruppen.has(key))gruppen.set(key,[]);
+    gruppen.get(key).push(k);
+  }
+  const rows=[...gruppen].map(([key,vorgaenge])=>{
+    if(vorgaenge.length===1)return '<tr>'+detailRow(vorgaenge[0])+'</tr>';
+    const p=vorgaenge[0],name=[p.vorname,p.nachname].filter(Boolean).join(' ')||'Personalnummer '+p.personalnummer;
+    const safeKey=esc(key);
+    const summary='<tr class="kue-group-heading"><td>'+esc(p.personalnummer)+'</td>'+
+      '<td><strong>'+esc(name)+'</strong> <span class="tag">'+vorgaenge.length+' Vorgänge</span></td>'+
+      '<td colspan="6"><button type="button" data-kue-group-toggle="'+safeKey+'" aria-expanded="'+KUE_OFFENE_GRUPPEN.has(key)+'">'+
+        (KUE_OFFENE_GRUPPEN.has(key)?'Vorgänge ausblenden ▴':'Vorgänge anzeigen ('+vorgaenge.length+') ▾')+'</button>'+
+      ' <span class="mut">Alle einzelnen Dokumente und Status bleiben erhalten.</span></td></tr>';
+    return summary+vorgaenge.map(k=>'<tr class="kue-group-detail" data-kue-group="'+safeKey+'"'+(KUE_OFFENE_GRUPPEN.has(key)?'':' hidden')+'>'+detailRow(k)+'</tr>').join('');
   }).join('');
-  return '<h1>Kündigungen</h1><div class="pers-bar"><span class="mut">Rückgaben und Sperrungen pro Vorgang verwalten.</span>'+
-    '<span class="spacer"></span>'+(schreiben?'<button type="button" class="p" id="kueNeu">+ Neue Kündigung</button>':'')+
-    '</div>'+fokusInfo+'<div class="tw kue-table-wrap"><table class="kue-table"><thead><tr>'+
-    ['Nr.','Name','Dienstgrad','Grund','Eintritt','Dokumente','Rückgaben & Zugangssperren','Aktion'].map(x=>'<th>'+x+'</th>').join('')+
-    '</tr></thead><tbody>'+(rows||'<tr><td colspan="8">Keine Kündigungen vorhanden</td></tr>')+'</tbody></table></div>';
+  return '<h1>Kündigungen</h1>'+tabs+'<p class="kue-archive-notice">'+esc(hinweis)+'</p>'+
+    '<div class="pers-bar"><span class="mut">Rückgaben, Sperrungen und gesicherte Personalakten.</span>'+
+    '<span class="spacer"></span>'+(!archiv&&can('kue',2)?'<button type="button" class="p" id="kueNeu">+ Neue Kündigung</button>':'')+
+    '</div>'+fokusInfo+(archiv&&!KUE_ARCHIV_DATEN?'<p class="mut" role="status">Archiv wird geladen …</p>':'')+
+    '<div class="tw kue-table-wrap"><table class="kue-table"><thead><tr>'+
+    ['Nr.','Name','Dienstgrad','Grund','Kündigungsdatum','Dokumente','Rückgaben & Zugangssperren','Aktion'].map(x=>'<th>'+x+'</th>').join('')+
+    '</tr></thead><tbody>'+(rows||'<tr><td colspan="8">Keine Kündigungsvorgänge in dieser Ansicht.</td></tr>')+
+    '</tbody></table></div>';
+}
+async function kueArchivLaden(){
+  if(!can('kue')||!can('kuearchiv')||KUE_ARCHIV_LOADING)return;
+  KUE_ARCHIV_LOADING=true;
+  try{
+    const rows=await api('/kuendigungen/archiv');
+    KUE_ARCHIV_DATEN=Array.isArray(rows)?rows:[];
+    if(tab==='kue'&&KUE_VIEW_MODE==='archiv')zeichne();
+  }catch(err){
+    if(tab==='kue'&&KUE_VIEW_MODE==='archiv') {
+      const box=document.querySelector('#inhalt');
+      if(box)box.insertAdjacentHTML('afterbegin','<p class="fehler">Archiv konnte nicht geladen werden: '+esc(err.message)+'</p>');
+    }
+  }finally{KUE_ARCHIV_LOADING=false;}
 }
 async function kueStatusAendern(id,feld,knopf) {
-  if(!can('kue',2))return;
-  const k=(D.kuendigungen||[]).find(x=>Number(x.id)===id);
+  if(!can('kue',2)||(KUE_VIEW_MODE==='archiv'&&!can('kuearchiv',2)))return;
+  const k=(KUE_VIEW_MODE==='archiv'?(KUE_ARCHIV_DATEN||[]):(D.kuendigungen||[])).find(x=>Number(x.id)===id);
   if(!k||!KUE_STATUS.some(x=>x[0]===feld))return;
   const werte=feld==='waffe'?['Offen','Informiert']:feld==='anzeige'?['Nein','Ja']:['Offen','Entfernt'];
   const neu=kueWert(k,feld)===werte[0]?werte[1]:werte[0];
@@ -3293,14 +3365,42 @@ function kueNeuDialog() {
   };
 }
 async function kueLoeschen(id) {
-  if(!can('kue',2))return;
-  const k=(D.kuendigungen||[]).find(x=>Number(x.id)===id);
+  if(!can('kue',2)||(KUE_VIEW_MODE==='archiv'&&!can('kuearchiv',2)))return;
+  const k=(KUE_VIEW_MODE==='archiv'?(KUE_ARCHIV_DATEN||[]):(D.kuendigungen||[])).find(x=>Number(x.id)===id);
   if(!k)return;
-  if(!confirm('Diesen Kündigungsvorgang endgültig löschen?\n'+[k.vorname,k.nachname].filter(Boolean).join(' ')))return;
-  try{await api('/kuendigung/'+id,{method:'DELETE',headers:{'If-Match':String(k._revision||'')}});await starten();}
+  if(!confirm('Diesen Kündigungsvorgang in den Papierkorb verschieben?\n'+[k.vorname,k.nachname].filter(Boolean).join(' ')))return;
+  try{
+    await api('/kuendigung/'+id,{method:'DELETE',headers:{'If-Match':String(k._revision||'')}});
+    if(KUE_VIEW_MODE==='archiv')KUE_ARCHIV_DATEN=null;
+    await starten();
+    if(tab==='kue'&&KUE_VIEW_MODE==='archiv')void kueArchivLaden();
+  }
   catch(err){alert('Löschen fehlgeschlagen: '+err.message);}
 }
 document.addEventListener('click',event=>{
+  const switcher=event.target.closest('[data-kue-view]');
+  if(switcher){
+    const view=switcher.dataset.kueView;
+    if(view==='aktuell'||view==='archiv'&&can('kuearchiv')){
+      KUE_VIEW_MODE=view;KUE_FOKUS_NR=null;zeichne();
+    }
+    return;
+  }
+  if(event.target.closest('[data-kue-refresh]')&&can('kuearchiv')){KUE_ARCHIV_DATEN=null;zeichne();return;}
+  const group=event.target.closest('[data-kue-group-toggle]');
+  if(group){
+    const key=group.dataset.kueGroupToggle;
+    const open=group.getAttribute('aria-expanded')!=='true';
+    if(open)KUE_OFFENE_GRUPPEN.add(key);else KUE_OFFENE_GRUPPEN.delete(key);
+    group.setAttribute('aria-expanded',String(open));
+    document.querySelectorAll('tr[data-kue-group]').forEach(row=>{
+      if(row.dataset.kueGroup===key)row.hidden=!open;
+    });
+    group.textContent=open?'Vorgänge ausblenden ▴':'Vorgänge anzeigen ▾';
+    return;
+  }
+  const akte=event.target.closest('[data-kue-akte]');
+  if(akte){void window.IDVKueArchiv?.akte(Number(akte.dataset.kueAkte));return;}
   if(event.target.closest('[data-kue-alle]')){KUE_FOKUS_NR=null;zeichne();return;}
   if(event.target.closest('#kueNeu')){kueNeuDialog();return;}
   const state=event.target.closest('[data-kue-field]');
@@ -4411,7 +4511,7 @@ document.addEventListener('click',e=>{
   if(btn)textbausteinKopieren(btn);
 });
 
-const RECHTE_MODULE=[...MODS.filter(m=>!['users','system','statistik','meldungen'].includes(m[0])),['mitteilungen','Mitteilungen verwalten',''],['por','POR-Freigabe',''],['ranghistorie','Rangänderungs-Historie',''],['routarchiv','Routinearchiv','']];
+const RECHTE_MODULE=[...MODS.filter(m=>!['users','system','statistik','meldungen'].includes(m[0])),['kuearchiv','Kündigungsarchiv',''],['mitteilungen','Mitteilungen verwalten',''],['por','POR-Freigabe',''],['ranghistorie','Rangänderungs-Historie',''],['routarchiv','Routinearchiv','']];
 let USER_ADMIN=null;
 function vUsers() {
   if(ME.rolle!=='Administrator')return '<p>Nur der Administrator darf Zugänge verwalten.</p>';
@@ -5135,5 +5235,6 @@ document.addEventListener('click',async e=>{
 <script src="/befRichtUI.js"></script>
 <script src="/liveUpdates.js"></script>
 <script src="/aktenFeatures.js"></script>
+<script src="/kuendigungsArchiv.js"></script>
 </body>
 </html>

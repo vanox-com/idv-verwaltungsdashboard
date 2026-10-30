@@ -1,6 +1,7 @@
 import {VORLAGEN} from './dokumentVorlagen.js';
 import {befuellen} from './dokumentBefuellen.js';
 import {validDate,originOk,googleCodeToken,googleDocsUpload,deleteGoogleDoc} from './dokumentOAuth.js';
+import {KUE_AKTUELL_BEDINGUNG} from './kuendigungsArchiv.js';
 
 const fail=(code,msg)=>Object.assign(new Error(msg),{httpStatus:code});
 const iso=x=>x instanceof Date?x.toISOString().slice(0,10):String(x||'').slice(0,10);
@@ -53,7 +54,20 @@ export function dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAu
    if(!Number.isSafeInteger(nr)||nr<0)throw fail(400,'Ungültige Personalnummer');
    const {rows}=await db.query(
     'SELECT id,personalnummer,person_name,typ,titel,url,kontext_id,erstellt FROM generierte_dokumente WHERE ($1::integer=0 OR personalnummer=$1) ORDER BY erstellt DESC,id DESC LIMIT 400',[nr]);
-   res.json(rows.filter(r=>allowed(rights,r.typ,1)));
+   let ausgabe=rows.filter(r=>allowed(rights,r.typ,1));
+   if(Number(rights.kuearchiv||0)<1){
+     const ids=[...new Set(ausgabe.filter(r=>['fristgerecht','fristlos'].includes(r.typ)&&r.kontext_id)
+       .map(r=>Number(r.kontext_id)).filter(Number.isSafeInteger))];
+     if(ids.length){
+       const old=await db.query(
+         'SELECT id FROM kuendigungen WHERE id=ANY($1::int[]) AND ('+KUE_AKTUELL_BEDINGUNG+') IS NOT TRUE',
+         [ids]);
+       const gesperrt=new Set(old.rows.map(x=>Number(x.id)));
+       ausgabe=ausgabe.filter(r=>!['fristgerecht','fristlos'].includes(r.typ)||
+         !gesperrt.has(Number(r.kontext_id)));
+     }
+   }
+   res.json(ausgabe);
   }catch(e){next(e);}
  });
  app.post('/api/dokumentgenerator/erstellen',requireLogin,async(req,res,next)=>{
@@ -96,8 +110,12 @@ export function dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAu
    person.geburtsdatum=iso(person.geburtsdatum);
    if(!validDate(person.geburtsdatum))throw fail(400,'Geburtsdatum fehlt in der Personalakte');
    if(['fristgerecht','fristlos'].includes(type)){
-    const k=(await db.query('SELECT personalnummer,kuendigung FROM kuendigungen WHERE id=$1',[kontext])).rows[0];
+    const k=(await db.query(
+      'SELECT personalnummer,kuendigung,'+KUE_AKTUELL_BEDINGUNG+' AS aktuell FROM kuendigungen WHERE id=$1',
+      [kontext])).rows[0];
     if(!k)throw fail(404,'Kündigung nicht gefunden');
+    if(k.aktuell!==true&&Number(rights.kuearchiv||0)<2)
+      throw fail(403,'Für archivierte Kündigungen fehlt das Bearbeitungsrecht im Kündigungsarchiv');
     if(Number(k.personalnummer)!==nr)throw fail(409,'Kündigung gehört zu anderer Personalakte');
    }
    const title=tpl.titel+' – '+person.vorname+' '+person.nachname;

@@ -11,6 +11,7 @@ import { registerBefRichtRoutes } from './befRichtApi.js';
 import { ANWAERTER_PRUEFUNGEN } from './befPruefungMap.js';
 import { registerRoutineArchive } from './routineArchiv.js';
 import { registerAktenFeatures } from './aktenFeatures.js';
+import { registerKueArchivRoutes,KUE_AKTUELL_BEDINGUNG,KUE_LIST_COLUMNS } from './kuendigungsArchiv.js';
 import { hashPassword, verifyPassword, newSessionToken, SESSION_HOURS } from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -585,7 +586,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       db.query(`SELECT * FROM raenge ORDER BY sortierung, name`),
       db.query(`SELECT *, xmin::text AS _revision FROM sonderfunktionen`),
       db.query(`SELECT * FROM sonderfunktionsspalten ORDER BY sortierung`),
-      db.query(`SELECT *, xmin::text AS _revision FROM kuendigungen ORDER BY nachname`),
+      db.query('SELECT '+KUE_LIST_COLUMNS+' FROM kuendigungen WHERE '+KUE_AKTUELL_BEDINGUNG+' ORDER BY nachname,id DESC'),
       db.query(`SELECT *, xmin::text AS _revision FROM disziplin ORDER BY personalnummer`),
       db.query(`SELECT * FROM disziplinspalten ORDER BY sortierung`),
       db.query(`SELECT * FROM richtlinie ORDER BY sortierung`),
@@ -609,6 +610,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       funktionsspalten: funktionsspalten.rows.map(r => r.name),
       funktionen: funktionen.rows.map(r => ({ nr: r.personalnummer, leitung: r.leitung, sonstige: r.sonstige, werte: r.werte, _revision: r._revision })),
       kuendigungen: kuendigungen.rows,
+      kuendigungsVerknuepfungen: {},
       disziplinSpalten: disziplinSpalten.rows.map(r => r.name),
       disziplin: disziplin.rows.map(r => ({ nr: r.personalnummer, massnahmen: r.massnahmen, slots: r.slots, bemerkung: r.bemerkung, _revision:r._revision })),
       richtlinie: { stand: richtlinie.rows[0]?.stand || '', zeilen: richtlinie.rows },
@@ -642,6 +644,13 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
 
     /* Berechtigungen auch bei API-Ausgabe erzwingen, nicht nur Menüpunkte verstecken. */
     const berechtigt = m => (rechte[m] || 0) >= 1;
+    if(berechtigt('kue')){
+      const {rows:zuordnung}=await db.query(
+        'SELECT personalnummer,COUNT(*)::int AS gesamt,COUNT(*) FILTER (WHERE '+
+        KUE_AKTUELL_BEDINGUNG+')::int AS aktuell FROM kuendigungen WHERE personalnummer IS NOT NULL GROUP BY personalnummer');
+      daten.kuendigungsVerknuepfungen=Object.fromEntries(
+        zuordnung.map(x=>[x.personalnummer,{gesamt:x.gesamt,aktuell:x.aktuell}]));
+    }
     const pruefungswerte=new Map(funktionen.rows.map(f=>[Number(f.personalnummer),f.werte||{}]));
     const hatPruefung=(nr,code)=>pruefungswerte.get(Number(nr))?.[code]===true;
 
@@ -767,7 +776,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       daten.funktionen = [];
       daten.funktionsspalten = [];
     }
-    if (!berechtigt('kue')) daten.kuendigungen = [];
+    if (!berechtigt('kue')) {daten.kuendigungen=[];daten.kuendigungsVerknuepfungen={};}
     if (!berechtigt('dis')) {
       daten.disziplin = [];
       daten.disziplinSpalten = [];
@@ -1697,6 +1706,21 @@ app.post('/api/kuendigung', requireLogin, requireRight('kue', 2), async (req, re
   } catch (e) { next(e); }
 });
 
+/* Änderungen am Archiv brauchen zusätzlich dessen eigenes Bearbeitungsrecht.
+   Bei unbekanntem Kündigungsdatum gilt der Vorgang als archiviert. */
+async function kuendigungArchivSchreibrecht(req,res,id){
+  const {rows}=await db.query(
+    'SELECT '+KUE_AKTUELL_BEDINGUNG+' AS aktuell FROM kuendigungen WHERE id=$1',[id]);
+  if(!rows.length){res.status(404).json({error:'Kündigung nicht gefunden'});return false;}
+  if(rows[0].aktuell===true)return true;
+  const rechte=await effektiveRechte(req.user);
+  if(Number(rechte.kuearchiv||0)<2){
+    res.status(403).json({error:'Zum Bearbeiten archivierter Kündigungen ist „Kündigungsarchiv → Bearbeiten“ erforderlich'});
+    return false;
+  }
+  return true;
+}
+
 /* Statuswechsel in der Kündigungsliste. Werte serverseitig prüfen. */
 /* Dokumentadressen gezielt pro historischem Kündigungsvorgang pflegen. */
 /* Ein Dialog speichert die vier Kündigungsdokumente atomar, ohne die Personaldaten zu ändern. */
@@ -1708,6 +1732,7 @@ app.patch('/api/kuendigung/:id/dokumente',requireLogin,requireRight('kue',2),asy
   if(!Number.isSafeInteger(id)||id<1||!daten||typeof daten!=='object'||Array.isArray(daten)||
      Object.keys(daten).some(k=>!felder.includes(k))||!felder.every(k=>Object.hasOwn(daten,k)))
    return res.status(400).json({error:'Ungültige Dokumentangaben'});
+  if(!await kuendigungArchivSchreibrecht(req,res,id))return;
   const werte=[];
   for(const feld of felder){
    const d=daten[feld];
@@ -1741,6 +1766,7 @@ app.patch('/api/kuendigung/:id/dokument',requireLogin,requireRight('kue',2),asyn
    return res.status(400).json({error:'Ungültiger Dokumenteintrag'});
   if(url){try{const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||!u.hostname.includes('.'))throw Error('bad');}
    catch{return res.status(400).json({error:'Bitte einen gültigen HTTPS-Link eingeben'});}}
+  if(!await kuendigungArchivSchreibrecht(req,res,id))return;
   const value=name||url?JSON.stringify({t:name||'Dokument',u:url}):'';
   const r=await db.query('UPDATE kuendigungen SET '+feld+'=$1 WHERE id=$2 AND xmin::text=$3',[value,id,revision]);
   if(!r.rowCount)return aktenKonflikt(res);
@@ -1766,6 +1792,7 @@ app.patch('/api/kuendigung/:id', requireLogin, requireRight('kue', 2), async (re
     const feld = keys[0], status = req.body[feld];
     if (!erlaubte[feld].includes(status))
       return res.status(400).json({ error: 'Ungültiger Status' });
+    if(!await kuendigungArchivSchreibrecht(req,res,Number(req.params.id)))return;
     const { rows } = await db.query(
       `UPDATE kuendigungen SET ${feld} = $1 WHERE id = $2 AND xmin::text=$3 RETURNING id,xmin::text AS _revision`,
       [status, req.params.id,revision]
@@ -1782,6 +1809,7 @@ app.delete('/api/kuendigung/:id',requireLogin,requireRight('kue',2),async(req,re
  const revision=aktenRevision(req,res);if(revision===null)return;
  const id=Number(req.params.id);
  if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:'Ungültiger Vorgang'});
+ if(!await kuendigungArchivSchreibrecht(req,res,id))return;
  const client=await db.connect().catch(next);if(!client)return;
  try{
   await client.query('BEGIN');
@@ -2201,7 +2229,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
   try {
     const rolle = req.params.rolle, modul = req.params.modul;
     const stufe = req.body?.stufe;
-    const erlaubteModule = new Set(['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen','papierkorb']);
+    const erlaubteModule = new Set(['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen','papierkorb','kuearchiv']);
     if (rolle === 'Administrator')
       return res.status(403).json({ error: 'Administratorrechte sind fest' });
     if (!erlaubteModule.has(modul) || ![0, 1, 2].includes(stufe))
@@ -2223,7 +2251,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
 app.patch('/api/users/:id/recht/:modul',requireLogin,nurAdmin,async(req,res,next)=>{
   try{
     const userId=Number(req.params.id),modul=req.params.modul,stufe=req.body?.stufe;
-    const erlaubte=new Set(['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen','papierkorb']);
+    const erlaubte=new Set(['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen','papierkorb','kuearchiv']);
     if(!Number.isSafeInteger(userId)||userId<1||!erlaubte.has(modul)||
        ![null,0,1,2].includes(stufe))
       return res.status(400).json({error:'Ungültige Berechtigung'});
@@ -2420,6 +2448,7 @@ app.get('/api/log', requireLogin, requireRight('log', 1), async (req, res, next)
 dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAuth,nameFuerDienstnummer);
 registerBefRichtRoutes(app,db,requireLogin,requireRight);
 registerAktenFeatures(app,db,requireLogin,requireRight,effektiveRechte);
+registerKueArchivRoutes(app,db,requireLogin,requireRight,effektiveRechte);
 
 app.use((err, req, res, next) => {
   console.error(err);
