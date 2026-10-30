@@ -726,3 +726,130 @@ INSERT INTO role_perms(rolle,modul,stufe) VALUES
  ('Ausbilder','praktika',0),
  ('Mitarbeiter','praktika',0)
 ON CONFLICT(rolle,modul) DO NOTHING;
+
+
+/* Verwaltungsjournal: strukturierte, feldweise Vorher/Nachher-Werte.
+   Der Trigger erfasst ausschließlich bewusst freigegebene Felder und niemals
+   CopNet-Passwörter, Login-Sitzungen oder sonstige Zugangsdaten. */
+CREATE TABLE IF NOT EXISTS idv_aenderungen (
+ id bigserial PRIMARY KEY,
+ bereich text NOT NULL,
+ schluessel text NOT NULL,
+ personalnummer integer,
+ vorgang text NOT NULL,
+ felder jsonb NOT NULL DEFAULT '{}'::jsonb,
+ user_id integer REFERENCES users(id) ON DELETE SET NULL,
+ zeit timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idv_aenderungen_bereich_zeit
+ ON idv_aenderungen(bereich,zeit DESC,id DESC);
+CREATE INDEX IF NOT EXISTS idv_aenderungen_person_zeit
+ ON idv_aenderungen(personalnummer,zeit DESC,id DESC);
+
+CREATE OR REPLACE FUNCTION idv_aenderung_mitschreiben() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+ vorher jsonb := '{}'::jsonb;
+ nachher jsonb := '{}'::jsonb;
+ felderliste text[];
+ veraenderungen jsonb := '{}'::jsonb;
+ feld text;
+ schluessel text;
+ nr_text text;
+ nr integer;
+ benutzer integer;
+BEGIN
+ IF TG_OP <> 'INSERT' THEN vorher := to_jsonb(OLD); END IF;
+ IF TG_OP <> 'DELETE' THEN nachher := to_jsonb(NEW); END IF;
+ CASE TG_TABLE_NAME
+  WHEN 'personal' THEN
+   felderliste:=ARRAY['vorname','nachname','dienstgrad','status','gruppe','beschaeftigungsart',
+     'eintrittsdatum','letzte_befoerderung','naechste_befoerderung','por_status',
+     'waffenschein','spind','rsa','nebenjob'];
+   schluessel:=COALESCE(nachher->>'personalnummer',vorher->>'personalnummer');
+  WHEN 'kuendigungen' THEN
+   felderliste:=ARRAY['vorname','nachname','rang','grund','kuendigungsdatum','waffe',
+     'copnet','emd','ic','discord','dienstgegenstaende','anzeige',
+     'vertrag','urkunde','zeugnis','kuendigung'];
+   schluessel:=COALESCE(nachher->>'id',vorher->>'id');
+  WHEN 'disziplin' THEN
+   felderliste:=ARRAY['slots','bemerkung'];
+   schluessel:=COALESCE(nachher->>'personalnummer',vorher->>'personalnummer');
+  WHEN 'sonderfunktionen' THEN
+   felderliste:=ARRAY['leitung','sonstige','werte'];
+   schluessel:=COALESCE(nachher->>'personalnummer',vorher->>'personalnummer');
+  WHEN 'checklisten' THEN
+   felderliste:=ARRAY['aufgaben','sortierung'];
+   schluessel:=COALESCE(nachher->>'name',vorher->>'name');
+  WHEN 'textbausteine' THEN
+   felderliste:=ARRAY['kategorie','titel','inhalt','geloescht'];
+   schluessel:=COALESCE(nachher->>'schluessel',vorher->>'schluessel');
+  WHEN 'routine' THEN
+   felderliste:=ARRAY['tage','personen'];
+   schluessel:=COALESCE(nachher->>'id',vorher->>'id');
+  WHEN 'sonderzahlungen' THEN
+   felderliste:=ARRAY['erhalten','datum','betrag','grund'];
+   schluessel:=COALESCE(nachher->>'id',vorher->>'id');
+  ELSE
+   IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
+ END CASE;
+ FOREACH feld IN ARRAY felderliste LOOP
+  IF (vorher->feld) IS DISTINCT FROM (nachher->feld) THEN
+   veraenderungen:=jsonb_set(veraenderungen,ARRAY[feld],
+     jsonb_build_object('alt',vorher->feld,'neu',nachher->feld),true);
+  END IF;
+ END LOOP;
+ IF veraenderungen <> '{}'::jsonb THEN
+  nr_text:=COALESCE(nachher->>'personalnummer',vorher->>'personalnummer');
+  IF nr_text ~ '^[0-9]{1,8}$' THEN nr:=nr_text::integer; END IF;
+  benutzer:=NULLIF(current_setting('idv.benutzer',true),'')::integer;
+  INSERT INTO idv_aenderungen(bereich,schluessel,personalnummer,vorgang,felder,user_id)
+    VALUES(TG_TABLE_NAME,schluessel,nr,
+      CASE TG_OP WHEN 'INSERT' THEN 'Angelegt' WHEN 'DELETE' THEN 'Entfernt' ELSE 'Bearbeitet' END,
+      veraenderungen,benutzer);
+ END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
+END;
+$$;
+
+/* Nur einmal pro Tabelle registrieren. Beim Neustart keine alten Daten löschen. */
+DO $$
+DECLARE tablename text; triggername text;
+BEGIN
+ FOREACH tablename IN ARRAY ARRAY[
+ 'personal','kuendigungen','disziplin','sonderfunktionen','checklisten',
+ 'textbausteine','routine','sonderzahlungen'] LOOP
+  triggername:='idv_journal_'||tablename;
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger
+    WHERE tgname=triggername AND tgrelid=tablename::regclass) THEN
+   EXECUTE format('CREATE TRIGGER %I AFTER INSERT OR UPDATE OR DELETE ON %I FOR EACH ROW EXECUTE FUNCTION idv_aenderung_mitschreiben()',triggername,tablename);
+  END IF;
+ END LOOP;
+END;
+$$;
+
+/* Papierkorb: Originaldatensätze und abhängige Häkchen vor dem Löschen sichern.
+   Inhalte ausschließlich über separat berechtigte API ausgeben. */
+CREATE TABLE IF NOT EXISTS idv_papierkorb (
+ id bigserial PRIMARY KEY,
+ bereich text NOT NULL CHECK (bereich IN ('kuendigungen','checklisten','textbausteine')),
+ schluessel text NOT NULL,
+ titel text NOT NULL,
+ datensatz jsonb NOT NULL,
+ zusatz jsonb NOT NULL DEFAULT '[]'::jsonb,
+ geloescht_von integer REFERENCES users(id) ON DELETE SET NULL,
+ geloescht_am timestamptz NOT NULL DEFAULT now(),
+ wiederhergestellt_von integer REFERENCES users(id) ON DELETE SET NULL,
+ wiederhergestellt_am timestamptz
+);
+CREATE INDEX IF NOT EXISTS idv_papierkorb_offen_idx
+ ON idv_papierkorb(geloescht_am DESC,id DESC)
+ WHERE wiederhergestellt_am IS NULL;
+
+INSERT INTO role_perms(rolle,modul,stufe) VALUES
+ ('Administrator','papierkorb',2),
+ ('Polizeirat','papierkorb',0),
+ ('Leitungsdienst','papierkorb',0),
+ ('Ausbilder','papierkorb',0),
+ ('Mitarbeiter','papierkorb',0)
+ON CONFLICT(rolle,modul) DO NOTHING;
