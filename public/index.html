@@ -1364,6 +1364,43 @@ body:has(#login:not(.hide)){
 .routine-archive-details{margin-top:14px}
 .routine-archive-details table{width:100%}
 .routine-archive-restore{margin-top:10px}
+
+/* Personalübersicht: eine klare Aktion statt drei Dokumentlinks pro Zeile. */
+.pers-action-cell{min-width:132px;white-space:nowrap}
+.pers-edit-btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  padding:9px 14px;min-height:37px;border-radius:10px;border:1px solid rgba(156,181,244,.42);
+  background:linear-gradient(135deg,rgba(107,147,233,.27),rgba(150,116,213,.22));
+  color:#e6edff;font-size:12px;font-weight:750;letter-spacing:.01em;white-space:nowrap;
+  cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 4px 14px rgba(12,20,41,.16);
+  transition:background .16s,border-color .16s,box-shadow .16s,transform .16s}
+.pers-edit-btn svg{width:16px;height:16px;flex-shrink:0}
+.pers-edit-btn:hover{transform:translateY(-1px);color:#fff;border-color:rgba(186,204,255,.73);
+  background:linear-gradient(135deg,rgba(113,154,250,.44),rgba(165,126,234,.35));
+  box-shadow:0 6px 19px rgba(26,40,85,.24)}
+.pers-edit-btn:focus-visible,.pers-document-action:focus-visible{outline:2px solid #aecfff;outline-offset:3px}
+.pers-documents{margin-top:18px}
+.pers-documents-head h3{margin:0 0 7px}
+.pers-documents-head p{margin:0 0 15px;line-height:1.5}
+.pers-documents-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.pers-document-action{width:100%;min-width:0;display:flex;align-items:center;gap:11px;
+  padding:13px;border:1px solid rgba(128,154,206,.34);border-radius:12px;
+  background:linear-gradient(145deg,rgba(67,92,144,.23),rgba(53,66,103,.14));
+  color:var(--txt);text-align:left;cursor:pointer;
+  transition:transform .15s,border-color .15s,background .15s}
+.pers-document-action:hover{transform:translateY(-1px);border-color:rgba(156,188,255,.69);
+  background:linear-gradient(145deg,rgba(91,123,194,.34),rgba(81,74,140,.22))}
+.pers-document-icon{display:grid;place-items:center;width:42px;height:42px;flex-shrink:0;
+  background:rgba(125,157,240,.13);color:#a9caff;border:1px solid rgba(135,167,237,.27);
+  border-radius:11px}
+.pers-document-icon svg{width:23px;height:23px}
+.pers-document-action>span:nth-child(2){display:flex;flex-direction:column;gap:5px;min-width:0}
+.pers-document-action strong{font-size:13px;font-weight:750}
+.pers-document-action small{font-size:11px;color:var(--mut);line-height:1.35}
+.pers-document-arrow{margin-left:auto;color:#b6c7e7;font-size:24px;line-height:1}
+.pers-documents-archive{margin-top:20px;padding-top:14px;border-top:1px solid var(--line)}
+.pers-documents-archive h4{font-size:13px;margin:0 0 12px}
+.pers-documents-archive .dashboard-line{flex-wrap:wrap;gap:10px}
+@media(max-width:650px){.pers-documents-actions{grid-template-columns:1fr}.pers-edit-btn{padding:8px 11px}}
 </style>
 </head>
 <body>
@@ -2201,16 +2238,15 @@ function vPers() {
     const name = esc([p.vorname, p.nachname].filter(Boolean).join(' '));
     const status = '<span class="tag ' + (p.status === 'Aktiv' ? 'ok' : 'warn') + '">' + esc(p.status || '–') + '</span>';
     const handy = ME.sensibel ? esc(p.handy || '–') : '<span class="tag">geschützt</span>';
-    const vertragArt = p.dienstgrad==='Polizeimeisteranwärter'?'pmavertrag':p.beschaeftigungsart==='Nebenberuf'?'nebenvertrag':'hauptvertrag';
-    const generator = schreiben ? ' <button type="button" class="pers-link" data-dg-type="'+vertragArt+'" data-dg-nr="'+nummer+'">Arbeitsvertrag</button> '+
-      '<button type="button" class="pers-link" data-dg-type="nebenjob" data-dg-nr="'+nummer+'">Nebenjobfreigabe</button>' : '';
-    const bearbeitung = schreiben ? ' <button type="button" class="pers-link" data-edit-person="' + nummer + '">Bearbeiten</button>' : '';
+    const bearbeitung = schreiben ? '<button type="button" class="pers-edit-btn" data-edit-person="'+nummer+'" aria-label="Personalakte von '+name+' bearbeiten" title="Personalakte bearbeiten">'+
+      '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16 5 3 3M4 20l4.5-1 10.8-10.8a2.12 2.12 0 0 0-3-3L5.5 16 4 20z"/><path d="M4 20h16"/></svg>'+
+      '<span>Bearbeiten</span></button>' : '';
     return '<tr class="pers-row" data-name="' + esc([p.personalnummer,p.vorname,p.nachname,p.dienstgrad,p.nebenjob].join(' ').toLowerCase()) + '" data-group="' + esc(p.gruppe || '') + '" data-status="' + esc(p.status || '') + '" data-art="' + esc(p.beschaeftigungsart || 'Hauptberuf') + '">' +
       '<td>' + nummer + '</td>' +
       '<td><button class="pers-link" type="button" data-show-person="' + nummer + '">' + name + '</button></td>' +
       '<td>' + rangMitAbzeichen(p.dienstgrad) + '</td><td>' + esc(p.gruppe || '–') + '</td><td>' + esc(p.beschaeftigungsart || (p.gruppe === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf')) + '</td>' +
       '<td>' + fd(p.eintrittsdatum) + '</td><td>' + handy + '</td>' +
-      '<td>' + status + '</td><td>' + bearbeitung + generator + '</td></tr>';
+      '<td>' + status + '</td><td class="pers-action-cell">' + bearbeitung + '</td></tr>';
   }).join('');
   const auswahl = (werte) => '<option value="">Alle</option>' + werte.map(v => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
   return '<h1>Personalverwaltung</h1>' + '<section id="personalRangantraege" class="box"><h3>Offene Rangänderungen – POR-Freigabe</h3><p class="mut">Lade …</p></section>' +
@@ -2317,10 +2353,19 @@ function personalAnzeigen(nr) {
         ? personalDokumentLink(k,v,k==='Arbeitsvertrag'?p.arbeitsvertrag_url:p.ernennungsurkunde_url)
         : esc(v == null || v === '' ? '–' : v)) + '</div>'
     ).join('') + '</div>' +
-    (can('pers',2)?'<section class="box"><h3>Dokumente & Generator</h3>'+
-      '<button type="button" data-dg-type="'+(p.dienstgrad==='Polizeimeisteranwärter'?'pmavertrag':p.beschaeftigungsart==='Nebenberuf'?'nebenvertrag':'hauptvertrag')+'" data-dg-nr="'+Number(nr)+'">Arbeitsvertrag erstellen</button> '+
-      '<button type="button" data-dg-type="nebenjob" data-dg-nr="'+Number(nr)+'">Nebenjobfreigabe erstellen</button>'+
-      '<div id="dgAkteArchiv">Lade Dokumente …</div></section>':'') +
+    (can('pers',2)?'<section class="box pers-documents"><div class="pers-documents-head">'+
+      '<div><h3>Dokumente & Vorlagen</h3><p class="mut">Neue Dokumente erstellen und vorhandene Unterlagen dieser Personalakte öffnen.</p></div></div>'+
+      '<div class="pers-documents-actions">'+
+      '<button type="button" class="pers-document-action" data-dg-type="'+(p.dienstgrad==='Polizeimeisteranwärter'?'pmavertrag':p.beschaeftigungsart==='Nebenberuf'?'nebenvertrag':'hauptvertrag')+'" data-dg-nr="'+Number(nr)+'">'+
+      '<span class="pers-document-icon"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg></span>'+
+      '<span><strong>Arbeitsvertrag</strong><small>Vertrag aus Vorlage erstellen</small></span>'+
+      '<span class="pers-document-arrow" aria-hidden="true">›</span></button>'+
+      '<button type="button" class="pers-document-action" data-dg-type="nebenjob" data-dg-nr="'+Number(nr)+'">'+
+      '<span class="pers-document-icon"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18M10 13v2h4v-2"/></svg></span>'+
+      '<span><strong>Nebenjobfreigabe</strong><small>Genehmigung erstellen</small></span>'+
+      '<span class="pers-document-arrow" aria-hidden="true">›</span></button></div>'+
+      '<div class="pers-documents-archive"><h4>Bereits hinterlegte Dokumente</h4>'+
+      '<div id="dgAkteArchiv" aria-live="polite">Lade Dokumente …</div></div></section>':'') +
     (can('persverlauf') ? '<section class="box"><button type="button" data-open-verlauf="'+Number(nr)+'">Personalakten-Verlauf öffnen</button><div id="personalVerlauf" hidden></div></section>' : '') +
     (can('dis') ? (() => {
       const akte=disAkte(Number(nr));
@@ -2337,7 +2382,9 @@ function personalAnzeigen(nr) {
     })() : '') +
     (ME.sensibel ? '<section class="copnet-box"><h3>CopNet-Zugangsdaten</h3><div id="copnetArea" aria-live="polite">Zugangsdaten werden geschützt geladen …</div></section>' : '') +
     '<div class="actions"><button type="button" id="persAbbrechen">Schließen</button>' +
-    (can('pers',2) ? '<button type="button" class="p" data-edit-person="' + Number(nr) + '">Bearbeiten</button>' : '') + '</div>';
+    (can('pers',2) ? '<button type="button" class="pers-edit-btn" data-edit-person="' + Number(nr) + '">'+
+      '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16 5 3 3M4 20l4.5-1 10.8-10.8a2.12 2.12 0 0 0-3-3L5.5 16 4 20z"/><path d="M4 20h16"/></svg>'+
+      '<span>Bearbeiten</span></button>' : '') + '</div>';
   dialog.showModal();
   if(can('pers',2))void dgArchivLaden(nr,'dgAkteArchiv');
   $('#persAbbrechen').addEventListener('click',personalDialogSchliessen);
