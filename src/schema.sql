@@ -901,7 +901,7 @@ BEGIN
  RETURN NEW;
 END;
 $$;
-DO $
+DO $snapshot_trigger$
 BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='idv_kuendigung_snapshot_insert'
    AND tgrelid='kuendigungen'::regclass) THEN
@@ -910,7 +910,7 @@ BEGIN
    EXECUTE FUNCTION idv_kuendigung_snapshot_erstellen();
  END IF;
 END;
-$;
+$snapshot_trigger$;
 
 /* Für alte Kündigungsvorgänge ist es ausdrücklich eine nachträgliche Sicherung
    des JETZIGEN Personalstands – niemals eine behauptete historische Momentaufnahme. */
