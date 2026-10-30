@@ -1851,6 +1851,7 @@ function zeichne() {
     if(tab === 'befricht') void befRichtLaden();
     if(tab === 'pers') ladePersonalRangantraege();
     if(tab === 'praktika') void dgArchivLaden(0,'dgPraktikaArchiv');
+    if(tab === 'rout'&&routineBereich==='archiv') void routineArchivLaden();
     if(tab === 'users') ladeBenutzer().catch(err => { if($('#benutzerBereich')) $('#benutzerBereich').textContent = 'Benutzerverwaltung konnte nicht geladen werden: ' + err.message; });
   } catch (err) {
     $('#inhalt').innerHTML = '<h1>Fehler beim Laden</h1><p class="fehler">' + esc(err.message) + '</p>';
@@ -3231,14 +3232,27 @@ document.addEventListener('click',e=>{
 let routineBereich='anwesenheit';
 function routinePlan(){return (D.routine||[])[0]||null;}
 function routineDatumAnzeigen(t){return /^\d{4}-\d{2}-\d{2}$/.test(String(t))?fd(t):String(t||'');}
+function routineTagIso(t){
+ const str=String(t||'');
+ if(/^\d{4}-\d{2}-\d{2}$/.test(str))return str;
+ const match=/^(\d{2})\.(\d{2})\.(\d{4})$/.exec(str);
+ return match?match[3]+'-'+match[2]+'-'+match[1]:'';
+}
 function routineSwitch(name){routineBereich=name;zeichne();}
 function vRout(){
-  const r=routinePlan(),w=can('rout',2);
+  const r=routinePlan(),w=can('rout',2),archivLesen=can('routarchiv',1),archivSchreiben=can('routarchiv',2);
   if(!r)return '<h1>Routine</h1><p>Kein Routineplan vorhanden.</p>';
+  if(routineBereich==='archiv'&&!archivLesen)routineBereich='anwesenheit';
   const nav='<div class="routine-tabs">'+
     '<button type="button" data-routine-tab="anwesenheit" class="'+(routineBereich==='anwesenheit'?'p':'')+'">Anwesenheit &amp; Termine</button>'+
-    '<button type="button" data-routine-tab="zahlungen" class="'+(routineBereich==='zahlungen'?'p':'')+'">Sonderzahlungen</button></div>';
+    '<button type="button" data-routine-tab="zahlungen" class="'+(routineBereich==='zahlungen'?'p':'')+'">Sonderzahlungen</button>'+
+    (archivLesen?'<button type="button" data-routine-tab="archiv" class="'+(routineBereich==='archiv'?'p':'')+'">Terminarchiv</button>':'')+'</div>';
   if(routineBereich==='zahlungen')return '<h1>Routineverwaltung</h1>'+nav+vSonderzahlungen();
+  if(routineBereich==='archiv')return '<h1>Routineverwaltung</h1>'+nav+
+    '<p class="mut">Archivierte Routinetermine bleiben mit ihren Anwesenheitslisten erhalten. '+
+    (archivSchreiben?'Du kannst Termine wiederherstellen.':'Das Archiv ist für dich schreibgeschützt.')+'</p>'+
+    '<p id="routineArchivStatus" role="status" class="mut"></p>'+
+    '<div id="routineArchivListe">Lade Archiv …</div>';
   const personen=r.personen||[],tage=r.tage||[];
   const opts=(D.personal||[]).filter(p=>p.personalnummer!=null&&!personen.some(x=>Number(x.nr)===Number(p.personalnummer)))
     .map(p=>'<option value="'+Number(p.personalnummer)+'">'+esc(p.personalnummer+' · '+[p.vorname,p.nachname].filter(Boolean).join(' '))+'</option>').join('');
@@ -3250,7 +3264,11 @@ function vRout(){
     (w?'<form id="routinePersonForm" class="routine-inline"><select id="routineNewPerson" aria-label="Person zur Routine hinzufügen" required>'+
       '<option value="">Person hinzufügen …</option>'+opts+'</select><button type="submit">+ Person</button></form>':'')+
     '</div>';
-  const th=tage.map((tag,i)=>'<th title="'+esc(routineDatumAnzeigen(tag))+'">'+esc(routineDatumAnzeigen(tag).slice(0,5))+'</th>').join('');
+  const th=tage.map((tag,i)=>'<th title="'+esc(routineDatumAnzeigen(tag))+'">'+
+    esc(routineDatumAnzeigen(tag).slice(0,5))+
+    (archivSchreiben&&routineTagIso(tag)?'<button type="button" class="routine-archive-action" data-routine-archive-date="'+
+      esc(routineTagIso(tag))+'" title="Termin '+esc(routineDatumAnzeigen(tag))+' archivieren">Archivieren</button>':'')+
+    '</th>').join('');
   const body=personen.map(p=>{
     const nr=Number(p.nr),a=Array.isArray(p.anwesend)?p.anwesend:[],anzahl=a.filter(Boolean).length;
     const cells=tage.map((tag,i)=>{
@@ -3276,6 +3294,63 @@ function vRout(){
       '<th>Summe</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
     '<p class="mut" id="routineAnzahl">'+personen.length+' Teilnehmende · '+tage.length+' Routinetermine</p>';
 }
+
+async function routineArchivLaden(){
+ const r=routinePlan(),target=$('#routineArchivListe');
+ if(!r||!target||!can('rout',1)||!can('routarchiv',1))return;
+ try{
+  const data=await api('/routine/'+r.id+'/archiv');
+  if(!target.isConnected||routineBereich!=='archiv'||tab!=='rout')return;
+  const canRestore=can('routarchiv',2);
+  target.innerHTML=data.length?'<div class="routine-archive-list">'+data.map(a=>{
+   const entries=Array.isArray(a.teilnehmer)?a.teilnehmer:[];
+   const present=entries.filter(p=>p.anwesend===true).length;
+   const rows=entries.map(p=>'<tr><td>'+Number(p.nr)+'</td><td>'+esc([p.vorname,p.nachname].filter(Boolean).join(' '))+
+    '</td><td><span class="tag '+(p.anwesend?'ok':'warn')+'">'+(p.anwesend?'Anwesend':'Abwesend')+'</span></td>'+
+    '<td>'+esc(p.abgemeldet?'Abgemeldet':'Aktiv')+'</td></tr>').join('');
+   return '<details class="routine-archive-entry"><summary><strong>'+esc(fd(a.datum))+
+    '</strong><span class="tag">'+present+' / '+entries.length+' anwesend</span>'+
+    '<span class="routine-archive-meta">Archiviert am '+esc(new Date(a.archiviert_am).toLocaleString('de-DE'))+
+    ' · '+esc(a.archiviert_von||'–')+'</span></summary>'+
+    '<div class="routine-archive-details"><div class="tw"><table><thead><tr><th>Nr.</th><th>Person</th><th>Teilnahme</th><th>Status damals</th></tr></thead><tbody>'+
+    rows+'</tbody></table></div>'+
+    (canRestore?'<button type="button" class="routine-archive-restore" data-routine-restore="'+Number(a.id)+'">Termin wiederherstellen</button>':'')+
+    '</div></details>';
+  }).join('')+'</div>':'<p class="mut">Noch keine Routinetermine archiviert.</p>';
+ }catch(err){
+  if(target.isConnected)target.textContent='Archiv konnte nicht geladen werden: '+err.message;
+ }
+}
+async function routineArchivieren(button){
+ const r=routinePlan();if(!r||!can('routarchiv',2))return;
+ const datum=button.dataset.routineArchiveDate;
+ if(!datum||!confirm('Routinetermin '+fd(datum)+' mit allen Anwesenheitsdaten ins Archiv verschieben?'))return;
+ button.disabled=true;
+ try{
+  await api('/routine/'+r.id+'/archiv',{method:'POST',body:JSON.stringify({datum})});
+  await starten();
+  routineNachricht('Termin '+fd(datum)+' wurde archiviert.');
+ }catch(err){
+  routineNachricht('Archivierung fehlgeschlagen: '+err.message,true);
+  button.disabled=false;
+ }
+}
+async function routineArchivWiederherstellen(button){
+ const r=routinePlan();if(!r||!can('routarchiv',2))return;
+ const id=Number(button.dataset.routineRestore);
+ if(!Number.isSafeInteger(id)||id<1)return;
+ if(!confirm('Archivierten Routinetermin samt Anwesenheitsdaten wieder aktivieren?'))return;
+ button.disabled=true;
+ try{
+  await api('/routine/'+r.id+'/archiv/'+id+'/wiederherstellen',{method:'POST'});
+  await starten();
+ }catch(err){
+  const el=$('#routineArchivStatus');
+  if(el)el.textContent='Wiederherstellung fehlgeschlagen: '+err.message;
+  button.disabled=false;
+ }
+}
+
 function routineFiltern(){
   const q=($('#routineSuche')?.value||'').trim().toLowerCase();let count=0;
   document.querySelectorAll('.routine-person').forEach(x=>{
@@ -3388,6 +3463,10 @@ function sonderzahlungDialog(id){
   };
 }
 document.addEventListener('click',e=>{
+  const archivieren=e.target.closest('[data-routine-archive-date]');
+  if(archivieren){void routineArchivieren(archivieren);return;}
+  const restore=e.target.closest('[data-routine-restore]');
+  if(restore){void routineArchivWiederherstellen(restore);return;}
   const tab=e.target.closest('[data-routine-tab]');
   if(tab){routineSwitch(tab.dataset.routineTab);return;}
   const att=e.target.closest('[data-routine-nr]');
