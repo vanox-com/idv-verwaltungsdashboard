@@ -716,3 +716,13 @@ INSERT INTO role_perms (rolle,modul,stufe) VALUES
  ('Ausbilder','routarchiv',0),
  ('Mitarbeiter','routarchiv',0)
 ON CONFLICT (rolle,modul) DO NOTHING;
+
+/* Eigenständige Berechtigung für Praktikumsverträge und -bestätigungen.
+   Das Personalrecht wird nicht mehr als Ersatz für Praktika verwendet. */
+INSERT INTO role_perms(rolle,modul,stufe) VALUES
+ ('Administrator','praktika',2),
+ ('Polizeirat','praktika',0),
+ ('Leitungsdienst','praktika',0),
+ ('Ausbilder','praktika',0),
+ ('Mitarbeiter','praktika',0)
+ON CONFLICT(rolle,modul) DO NOTHING;
