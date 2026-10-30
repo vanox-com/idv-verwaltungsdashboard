@@ -1379,7 +1379,7 @@ app.patch('/api/sonderzahlung/:id',requireLogin,requireRight('rout',2),
 app.get('/api/rangantraege',requireLogin,async(req,res,next)=>{
  try{
   const rechte=await effektiveRechte(req.user);
-  if((rechte.pers||0)<1&&(rechte.bef||0)<1)
+  if((rechte.pers||0)<1&&(rechte.bef||0)<1&&(rechte.por||0)<2)
    return res.status(403).json({error:'Keine Berechtigung für Rangänderungsanträge'});
   const {rows}=await db.query(`SELECT a.id,a.personalnummer,a.alter_rang,a.beantragter_rang,
      a.begruendung,a.status,a.erstellt,a.korrigiertes_befoerderungsdatum,

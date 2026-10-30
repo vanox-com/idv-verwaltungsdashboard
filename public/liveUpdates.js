@@ -184,9 +184,18 @@
     connect(){
       if(stream||!window.EventSource)return;
       stream=new EventSource('/api/changes?client='+encodeURIComponent(clientId));
-      stream.addEventListener('aktualisierung',changed);
+      stream.addEventListener('aktualisierung',event=>{
+        changed();
+        try{
+          const bereich=JSON.parse(event.data||'{}').bereich;
+          window.IDVPOR?.changed(bereich);
+        }catch(err){console.warn('IDV: Unbekannte Live-Mitteilung',err);}
+      });
       stream.addEventListener('open',()=>{
-        if(connected)changed(); // Nur Reconnect, nicht jeder neue Login.
+        if(connected){
+          changed(); // Reconnect: nach verpassten Ereignissen nachladen.
+          window.IDVPOR?.refresh();
+        }
         connected=true;
       });
     },
