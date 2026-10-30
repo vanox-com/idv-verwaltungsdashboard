@@ -629,3 +629,44 @@ CREATE INDEX IF NOT EXISTS generierte_dokumente_person_idx
  ON generierte_dokumente(personalnummer,erstellt DESC);
 CREATE INDEX IF NOT EXISTS generierte_dokumente_kontext_idx
  ON generierte_dokumente(kontext_id,typ);
+
+
+/* Eigenständiges Recht zur Pflege der Beförderungsrichtlinien:
+   0 kein Zugriff, 1 lesen, 2 ändern. Historische Entscheidungen bleiben unverändert. */
+INSERT INTO role_perms(rolle,modul,stufe) VALUES
+ ('Administrator','befricht',2),
+ ('Polizeirat','befricht',0),
+ ('Leitungsdienst','befricht',0),
+ ('Ausbilder','befricht',0),
+ ('Mitarbeiter','befricht',0)
+ON CONFLICT (rolle,modul) DO NOTHING;
+
+/* Nicht mehr die numerisch nächste Zeile befördern: Polizei- und
+   Kriminalkommissare durchlaufen eigenständige, gleichgestellte Laufbahnen.
+   Die Erstmigration setzt nur unkonfigurierte Ränge; spätere Änderungen
+   werden durch erneuten Serverstart nicht überschrieben. */
+ALTER TABLE raenge ADD COLUMN IF NOT EXISTS naechster_rang text;
+WITH neu AS (
+ INSERT INTO migrationen(name) VALUES ('bef-rank-paths-parallel-20261030')
+ ON CONFLICT DO NOTHING RETURNING name
+)
+UPDATE raenge AS r SET naechster_rang=v.ziel
+FROM (VALUES
+ ('Polizeimeisteranwärter','Polizeimeister'),
+ ('Polizeimeister','Polizeiobermeister'),
+ ('Polizeiobermeister','Polizeihauptmeister'),
+ ('Polizeihauptmeister','Polizeihauptmeister AZ'),
+ ('Polizeikommissaranwärter','Polizeikommissar'),
+ ('Polizeikommissar','Polizeioberkommissar'),
+ ('Polizeioberkommissar','Polizeihauptkommissar'),
+ ('Kriminalkommissar','Kriminaloberkommissar'),
+ ('Kriminaloberkommissar','Kriminalhauptkommissar'),
+ ('Polizeihauptkommissar','Polizeihauptkommissar A12'),
+ ('Polizeihauptkommissar A12','Erster Polizeihauptkommissar'),
+ ('Polizeiratanwärter','Polizeirat'),
+ ('Polizeirat','Polizeioberrat'),
+ ('Polizeioberrat','Leitender Polizeidirektor'),
+ ('Leitender Polizeidirektor','Polizeivizepräsident'),
+ ('Polizeivizepräsident','Polizeipräsident')
+) AS v(name,ziel)
+WHERE r.name=v.name AND EXISTS(SELECT 1 FROM neu);
