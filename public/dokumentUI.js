@@ -104,7 +104,7 @@ async function dgPrepareAuth(){
 }
 async function dgShow(typ,nr=0,kontext=0){
  if(!DG_TYPES[typ])return;
- const right=['abmahnung'].includes(typ)?'dis':['fristgerecht','fristlos'].includes(typ)?'kue':'pers';
+ const right=['abmahnung'].includes(typ)?'dis':['fristgerecht','fristlos'].includes(typ)?'kue':['praktikum','praktikumsbestaetigung'].includes(typ)?'praktika':'pers';
  if(!can(right,2))return;
  const person=(D.personal||[]).find(x=>Number(x.personalnummer)===Number(nr));
  const name=person?[person.vorname,person.nachname].join(' '):'Externe Person';
@@ -188,7 +188,7 @@ window.dgArchivLaden=async (nr,target)=>{
 window.dgPraktika=()=>{
  const persons=(D.personal||[]).filter(p=>p.vorname&&p.nachname);
  return '<h1>Praktika</h1><p class="mut">Praktikumsverträge und Bestätigungen erstellen. Auch Praktikanten ohne Personalnummer sind möglich.</p>'+
- '<div class="box">'+(can('pers',2)?
+ '<div class="box">'+(can('praktika',2)?
  '<label for="dgPraktikaPerson">Personalakte übernehmen (optional)</label>'+
  '<select id="dgPraktikaPerson"><option value="0">Externer Praktikant – Daten manuell eintragen</option>'+
  persons.map(p=>'<option value="'+Number(p.personalnummer)+'">'+dgEsc(p.personalnummer+' · '+p.vorname+' '+p.nachname)+'</option>').join('')+'</select>'+
