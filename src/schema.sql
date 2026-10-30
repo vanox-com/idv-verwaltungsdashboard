@@ -690,3 +690,29 @@ WHERE name IN ('Polizeimeisteranwärter','Polizeikommissaranwärter','Kriminalko
   AND tage IS NOT NULL;
 INSERT INTO sonderfunktionsspalten(name,sortierung) VALUES('KK',17)
 ON CONFLICT(name) DO NOTHING;
+
+
+/* Routinetermin-Archiv: eigener unveränderter Anwesenheits-Schnappschuss.
+   Archivierung entfernt einen Termin aus dem aktiven Plan, löscht aber
+   weder den Termin noch die Teilnehmerdaten. */
+CREATE TABLE IF NOT EXISTS routine_archiv (
+ id bigserial PRIMARY KEY,
+ routine_id integer NOT NULL REFERENCES routine(id) ON DELETE CASCADE,
+ datum date NOT NULL,
+ teilnehmer jsonb NOT NULL DEFAULT '[]'::jsonb,
+ archiviert_am timestamptz NOT NULL DEFAULT now(),
+ archiviert_von integer REFERENCES users(id) ON DELETE SET NULL,
+ CONSTRAINT routine_archiv_routine_datum_unique UNIQUE(routine_id,datum)
+);
+CREATE INDEX IF NOT EXISTS routine_archiv_routine_datum_idx
+ ON routine_archiv(routine_id,datum DESC);
+
+/* Gesondertes Archivrecht: 0 gesperrt, 1 Archiv lesen, 2 archivieren/
+   wiederherstellen. Es überschreibt niemals bestehende Rollenrechte. */
+INSERT INTO role_perms (rolle,modul,stufe) VALUES
+ ('Administrator','routarchiv',2),
+ ('Polizeirat','routarchiv',0),
+ ('Leitungsdienst','routarchiv',0),
+ ('Ausbilder','routarchiv',0),
+ ('Mitarbeiter','routarchiv',0)
+ON CONFLICT (rolle,modul) DO NOTHING;
