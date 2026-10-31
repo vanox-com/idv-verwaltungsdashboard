@@ -121,6 +121,11 @@ async function dgShow(typ,nr=0,kontext=0){
  const right=['abmahnung'].includes(typ)?'dis':['fristgerecht','fristlos'].includes(typ)?'kue':['praktikum','praktikumsbestaetigung'].includes(typ)?'praktika':'pers';
  if(!can(right,2))return;
  const person=(D.personal||[]).find(x=>Number(x.personalnummer)===Number(nr));
+ // Die Nummer führt die Vertragskategorie, auch bei älteren Akten.
+ if(person&&['hauptvertrag','nebenvertrag','pmavertrag'].includes(typ)){
+  const n=Number(person.personalnummer);
+  typ=n>=50&&n<=60?'nebenvertrag':person.dienstgrad==='Polizeimeisteranwärter'?'pmavertrag':'hauptvertrag';
+ }
  const name=person?[person.vorname,person.nachname].join(' '):'Externe Person';
  const defaults={datum:dgNow(),beginn:person?.eintrittsdatum?String(person.eintrittsdatum).slice(0,10):dgNow(),
   unterzeichner:ME?.anzeigename||'',rang:'',
