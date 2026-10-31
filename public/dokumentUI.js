@@ -25,6 +25,16 @@ const DG_TYPES={
 };
 const dgEsc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let dgCodeClient=null,dgPending=null,dgClientId='',dgScript;
+const DG_GOOGLE_MAIN_ORIGIN='https://idv-ppverwaltung.de';
+function dgPruefeGooglePortalUrsprung(){
+  // Google Identity Services startet den OAuth-Code-Flow aus der aktiven
+  // Browser-Origin. Die Render-Subdomain ist nur als technische Fallback-
+  // Adresse gedacht und nicht als dauerhaft freigegebene OAuth-Domain.
+  if(window.location.origin!==DG_GOOGLE_MAIN_ORIGIN)
+    throw Error('Google-Dokumente bitte über die IDV-Hauptdomain erstellen. '+
+      'Diese Portal-Adresse ist für Google OAuth nicht als Ursprung vorgesehen. '+
+      'Bitte die Hauptdomain öffnen und dich dort mit deiner Dienstnummer anmelden.');
+}
 function dgLoadGoogle(){
  if(window.google?.accounts?.oauth2)return Promise.resolve();
  if(!dgScript)dgScript=new Promise((resolve,reject)=>{
@@ -62,6 +72,7 @@ async function dgTextbausteine(){
 }
 async function dgPrepareAuth(){
   try{
+   dgPruefeGooglePortalUrsprung();
    const result=await api('/dokumentgenerator/status');
    if(!result.eingerichtet)throw Error('Google OAuth ist noch nicht eingerichtet.');
    const nameInput=document.getElementById('dg_unterzeichner');
@@ -144,7 +155,21 @@ async function dgShow(typ,nr=0,kontext=0){
  void dgPrepareAuth().then(()=>{
   if(createButton.isConnected){createButton.disabled=false;createButton.textContent='Mit Google Drive erstellen';}
  }).catch(err=>{
-  if(createButton.isConnected){document.getElementById('dg_error').textContent=err.message;createButton.textContent='Google nicht verfügbar';}
+  if(!createButton.isConnected)return;
+  const fehler=document.getElementById('dg_error');
+  if(fehler){
+    fehler.textContent=err.message;
+    if(window.location.origin!==DG_GOOGLE_MAIN_ORIGIN){
+      const link=document.createElement('a');
+      link.href=DG_GOOGLE_MAIN_ORIGIN;
+      link.target='_blank';
+      link.rel='noopener noreferrer';
+      link.textContent=' IDV-Hauptdomain öffnen ↗';
+      link.style.cssText='display:block;margin-top:8px;color:#b9d8ff;text-decoration:underline';
+      fehler.appendChild(link);
+    }
+  }
+  createButton.textContent='Google nicht verfügbar';
  });
  if(snippets){
   void dgTextbausteine();

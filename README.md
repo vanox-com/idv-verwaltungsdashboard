@@ -108,7 +108,10 @@ Einmalige technische Konfiguration:
 5. Render neu deployen und nach der Anmeldung eine bereits durchgeführte
    PMA→PM-Beförderung zum Test verwenden.
 
-Die OAuth-App fordert nur `https://www.googleapis.com/auth/drive.file` an.
+Die OAuth-App fordert `https://www.googleapis.com/auth/drive.file` zum
+Anlegen des fertigen Dokuments sowie `https://www.googleapis.com/auth/drive.readonly`
+zum authentifizierten Lesen der geschützten Originalvorlage an. Dieser zweite
+Scope kann eine erneute Google-Zustimmung bzw. OAuth-App-Verifizierung erfordern.
 Beim Erstellen wird **einmalig** ein Google-Autorisierungscode gegen einen
 kurzlebigen Zugriffs-Token getauscht und das Dokument direkt im gewählten
 Drive-Konto angelegt. Der Browser erhält keinen Google-Token zurück.
@@ -121,6 +124,31 @@ die Google-Kontoauswahl ist daher bewusst erforderlich.
 **Hinweis:** Vor einem ersten Einsatz muss die neue Google-OAuth-App eingerichtet
 und der Prozess mit einem tatsächlich ausgewählten Google-Konto getestet werden.
 Ohne diese Konfiguration bleibt die Erzeugungsfunktion gesperrt.
+
+## Google OAuth: Fehler 400 `origin_mismatch`
+
+Dieser Fehler tritt **vor der eigentlichen Google-Kontoanmeldung** auf, wenn
+der Ursprung der Website nicht in der OAuth-Client-Konfiguration freigegeben ist.
+Der verwendete Browser-Host muss exakt mit einem der **Authorized JavaScript origins**
+unter Google Cloud Console → **Google Auth Platform → Clients → Web application**
+übereinstimmen. Empfohlene Hauptadresse:
+
+```text
+https://idv-ppverwaltung.de
+```
+
+Keinen abschließenden Schrägstrich, keine Pfade, keine Platzhalter. Für den
+produktiven Google-Login das Dashboard über die **Hauptdomain** aufrufen,
+nicht über die Render-Subdomain. Wer sich bisher nur auf der Render-Adresse
+angemeldet hat, muss sich auf der Hauptdomain erneut mit der Dienstnummer
+anmelden (separates Session-Cookie).
+
+Ein `origin_mismatch` wird **nicht** durch neue Benutzerkonten, freigegebene
+Google-Drive-Vorlagen, Render-Umgebungsvariablen oder `Strg + F5` behoben.
+Das Hinzufügen der Origin muss im Google-Cloud-Projekt des OAuth-Clients
+erfolgen. Benutzer mit bislang unbekannten Google-Konten können danach
+zusätzlich den OAuth-Testnutzer-/Verifizierungsstatus betreffen; dabei würde
+Google aber einen anderen Fehler melden.
 
 ## Öffentliche Seiten für Google-OAuth-Branding
 
