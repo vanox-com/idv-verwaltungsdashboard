@@ -4125,9 +4125,9 @@ function vChk(){
   }).join('');
   return '<h1>Checklisten</h1><div class="pers-bar">'+
     '<span class="mut">Gemeinsame Arbeitschecklisten für die Verwaltung. Fortschritt wird gespeichert.</span>'+
-    '<span class="spacer"></span>'+(schreiben?
-      '<button type="button" class="p" id="checkAdd">+ Neue Checkliste</button>'+
-      '<button type="button" id="checkReset">Alle Häkchen zurücksetzen</button>':'')+
+    '<span class="spacer"></span>'+
+    (schreiben?'<button type="button" class="p" id="checkAdd">+ Neue Checkliste</button>':'')+
+    (haken?'<button type="button" id="checkReset">Alle Häkchen zurücksetzen</button>':'')+
     '</div><p id="checkInfo" class="mut" role="status"></p>'+
     '<div class="grid2">'+blocks+'</div>';
 }
@@ -4160,7 +4160,7 @@ async function chkSetzen(input){
   }
 }
 async function chkZuruecksetzen(){
-  if(!can('chk',2))return;
+  if(!chkDarfAbhaken())return;
   if(!confirm('Alle Häkchen in sämtlichen Checklisten wirklich zurücksetzen?'))return;
   const btn=$('#checkReset');btn.disabled=true;
   try{
