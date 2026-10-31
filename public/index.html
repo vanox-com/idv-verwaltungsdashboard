@@ -2451,7 +2451,7 @@ function vPers() {
       '<td>' + status + '</td><td class="pers-action-cell">' + bearbeitung + entfernen + personalKuendigungButton(p) + '</td></tr>';
   }).join('');
   const auswahl = (werte) => '<option value="">Alle</option>' + werte.map(v => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
-  return '<h1>Personalverwaltung</h1>' + '<section id="personalRangantraege" class="box"><h3>Offene Rangänderungen – POR-Freigabe</h3><p class="mut">Lade …</p></section>' +
+  return '<h1>Personalverwaltung</h1><p class="mut">Dienstnummern <span class="dienstnummer-pill haupt">1–49</span> Hauptberuf · <span class="dienstnummer-pill neben">50–60</span> Nebenberuf · ab 61 wieder Hauptberuf.</p>' + '<section id="personalRangantraege" class="box"><h3>Offene Rangänderungen – POR-Freigabe</h3><p class="mut">Lade …</p></section>' +
     '<div class="pers-bar">' +
     '<input id="persSuche" aria-label="Personal durchsuchen" placeholder="Name, Dienstgrad oder Nummer suchen …" oninput="personalFiltern()">' +
     '<select id="persGruppe" aria-label="Gruppe filtern" onchange="personalFiltern()">' + auswahl(gruppen) + '</select>' +
@@ -2747,7 +2747,7 @@ function personalBearbeiten(nr) {
   const p = neu ? {} : (D.personal || []).find(x => Number(x.personalnummer) === Number(nr));
   if (!p) return;
   const used = (D.personal || []).map(x => Number(x.personalnummer));
-  const vorschlag = Array.from({length:60},(_,i)=>i+1).find(n=>!used.includes(n))||Math.max(61,...used)+1;
+  const vorschlag = Array.from({length:60},(_,i)=>i+1).find(n=>!used.includes(n))||Math.max(60,...used)+1;
   const raenge = (D.raenge || []).map(r => r.name).filter(Boolean);
   const gruppen = [...new Set([...(D.systemOptionen?.mitarbeitergruppen||['Mittlerer Dienst','Gehobener Dienst','Polizeirat','Leitungsdienst','Nicht zugeordnet']),...(D.personal||[]).map(x=>x.gruppe).filter(Boolean)])];
   const statusAlle = ['Aktiv','Abgemeldet','Inaktiv','Suspendiert','Gekündigt','freihalten',...(D.personal || []).map(x => x.status).filter(Boolean)];
