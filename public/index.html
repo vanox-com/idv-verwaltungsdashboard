@@ -1472,6 +1472,74 @@ color:#eaf0f8;border:1px solid #56718f;border-radius:12px;padding:23px;box-shado
 #idvPorHinweisSchliessen{border:0;background:transparent;color:#e3c9aa;
   cursor:pointer;padding:0 3px;font-size:22px;line-height:1;}
 @media(max-width:600px){#idvPorHinweis{bottom:94px;right:12px;max-width:calc(100vw - 24px);width:360px;}}
+
+/* Berufsgruppen: klare, aber zurückhaltende visuelle Differenzierung. */
+.pers-row-neben td:first-child{background:repeating-linear-gradient(135deg,rgba(218,179,115,.12) 0 4px,rgba(218,179,115,.02) 4px 10px)}
+.dienstnummer-pill{display:inline-flex;justify-content:center;align-items:center;min-width:35px;padding:4px 9px;border-radius:7px;font-weight:800;font-variant-numeric:tabular-nums}
+.dienstnummer-pill.haupt{background:rgba(101,152,192,.13);border:1px solid rgba(101,152,192,.4);color:#afdaef}
+.dienstnummer-pill.neben{background:rgba(190,146,98,.18);border:1px dashed rgba(219,180,127,.75);color:#f1c99a}
+.dienstnummer-auswahl{background:rgba(103,122,142,.08);border:1px solid var(--line);padding:14px;border-radius:12px}
+.dienstnummer-auswahl p{margin:0 0 8px}.dienstnummer-gruppe{margin:11px 0}.dienstnummer-gruppe strong{display:block;margin-bottom:8px}
+.dienstnummer-chips{display:flex;flex-wrap:wrap;gap:6px}
+.dienstnummer-chip{width:43px;min-height:36px;padding:6px!important;font-variant-numeric:tabular-nums;border:1px solid var(--line);background:var(--panel);color:var(--txt);border-radius:7px}
+.dienstnummer-chip.gewaehlt{outline:2px solid var(--acc);background:var(--portal-highlight)!important}
+.dienstnummer-chip:hover{border-color:var(--acc)}
+/* Flori: dunkles Beige mit großflächigem Kuhfleckenmuster. */
+html[data-design-preset="flori"]{color-scheme:dark}
+html[data-design-preset="flori"] body{background:#15110f!important;color:#f1e4d1!important}
+html[data-design-preset="flori"] #app{
+ background-color:#1e1915!important;
+ background-image:
+ radial-gradient(ellipse 67px 38px at 14% 17%,#0f0d0c 96%,transparent 100%),
+ radial-gradient(ellipse 48px 70px at 77% 31%,#100d0a 96%,transparent 100%),
+ radial-gradient(ellipse 37px 47px at 49% 82%,#14100c 96%,transparent 100%),
+ radial-gradient(ellipse 24px 52px at 91% 75%,#19130e 96%,transparent 100%),
+ linear-gradient(140deg,#352a20,#241d17)!important;
+ background-size:360px 320px!important;background-repeat:repeat!important;
+}
+html[data-design-preset="flori"] aside{
+ background:radial-gradient(ellipse 57px 34px at 22% 26%,#0d0b0a 93%,transparent 100%),
+ radial-gradient(ellipse 49px 41px at 76% 75%,#0d0b0a 93%,transparent 100%),#251e19!important;
+ background-size:270px 310px!important;border-right:2px dashed #9d8267!important
+}
+html[data-design-preset="flori"] .box,html[data-design-preset="flori"] .karte,html[data-design-preset="flori"] .kachel{
+ background:#2a231e!important;border:1px solid #806c57!important;border-radius:14px!important;
+ box-shadow:0 5px 0 rgba(14,11,8,.55)!important;color:#f0e5d6!important
+}
+html[data-design-preset="flori"] input,html[data-design-preset="flori"] select,html[data-design-preset="flori"] textarea{
+ background:#211b17!important;color:#f0e5d6!important;border-color:#66523f!important
+}
+html[data-design-preset="flori"] .dienstnummer-pill.haupt{color:#e4d8be}
+html[data-design-preset="flori"] .dienstnummer-pill.neben{color:#f7d5a2}
+html[data-design-preset="flori"] h1::after{content:' 🐄'!important}
+html[data-design-preset="flori"] #inhalt h2::after{content:' 🐮'}
+html[data-design-preset="flori"] button:hover{transform:rotate(-.6deg)}
+/* Schulzi: monochromes 80er Terminal mit scanline/texturiertem Retro-Raster. */
+html[data-design-preset="schulzi"]{color-scheme:dark}
+html[data-design-preset="schulzi"] body,html[data-design-preset="schulzi"] button,
+html[data-design-preset="schulzi"] input,html[data-design-preset="schulzi"] select,
+html[data-design-preset="schulzi"] textarea{font-family:"Courier New",monospace!important}
+html[data-design-preset="schulzi"] #app{
+ background-color:#101010!important;
+ background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 4px),
+ repeating-linear-gradient(90deg,transparent 0 40px,rgba(255,255,255,.035) 40px 41px),linear-gradient(145deg,#080808,#242424)!important;
+ background-size:auto!important;
+}
+html[data-design-preset="schulzi"] aside{background:#0a0a0a!important;border-right:3px double #f6f6f6!important}
+html[data-design-preset="schulzi"] .box,html[data-design-preset="schulzi"] .karte,html[data-design-preset="schulzi"] .kachel{
+ background:#1b1b1b!important;color:#f8f8f8!important;border:2px solid #c8c8c8!important;
+ border-radius:0!important;box-shadow:5px 5px 0 #050505!important
+}
+html[data-design-preset="schulzi"] button{border-radius:0!important;box-shadow:2px 2px 0 #8f8f8f}
+html[data-design-preset="schulzi"] button:hover{filter:invert(1)}
+html[data-design-preset="schulzi"] h1,html[data-design-preset="schulzi"] h2{text-transform:uppercase;letter-spacing:.07em;text-shadow:2px 2px #4e4e4e}
+html[data-design-preset="schulzi"] #inhalt h1::after{content:' ◼ 1982';font-size:.5em;color:#ccc}
+html[data-design-preset="schulzi"] .tag{border-radius:0!important}
+html[data-design-preset="schulzi"] input,html[data-design-preset="schulzi"] select,html[data-design-preset="schulzi"] textarea{background:#0a0a0a!important;color:#fff!important;border:1px solid #bdbdbd!important}
+#idvThemeParticles{position:fixed;inset:0;pointer-events:none;z-index:34;overflow:hidden}
+#idvThemeParticles .theme-particle{position:absolute;display:block;color:#bd9b73;opacity:.28;animation:idvPartikelSchweben var(--zeit) ease-in-out infinite alternate}
+@keyframes idvPartikelSchweben{0%{transform:translate3d(-5px,6px,0) rotate(-18deg);opacity:.14}100%{transform:translate3d(28px,-35px,0) rotate(15deg);opacity:.4}}
+@media(prefers-reduced-motion:reduce){#idvThemeParticles .theme-particle{animation:none!important;opacity:.12}}
 </style>
 </head>
 <body>
@@ -4985,6 +5053,45 @@ async function ladeBackup(){
  }catch(e){el.textContent='Datenbankstatus konnte nicht geladen werden: '+e.message;}
 }
 
+/* Spielerischer, nur dekorativer Partikelschleier im Florimodus. */
+function idvThemePartikelAktualisieren(){
+ const active=document.documentElement.dataset.designPreset==='flori';
+ let layer=document.getElementById('idvThemeParticles');
+ if(!active){layer?.remove();return;}
+ if(layer)return;
+ layer=document.createElement('div');layer.id='idvThemeParticles';layer.setAttribute('aria-hidden','true');
+ for(let i=0;i<13;i++){
+  const spot=document.createElement('span');spot.className='theme-particle';
+  spot.textContent=i%3===0?'✦':i%3===1?'●':'✧';
+  spot.style.left=((i*43+13)%97)+'%';spot.style.top=((i*31+17)%95)+'%';
+  spot.style.fontSize=(11+(i%5)*6)+'px';spot.style.setProperty('--zeit',(4+i%6)+'s');
+  spot.style.animationDelay=(-(i%7)*.8)+'s';layer.appendChild(spot);
+ }
+ document.body.append(layer);
+}
+let schulziAudioCtx=null,schulziLetzterRuelpser=0;
+function schulziRuelps(test=false){
+ if(!test&&document.documentElement.dataset.designPreset!=='schulzi')return;
+ if(Date.now()-schulziLetzterRuelpser<1700)return;
+ schulziLetzterRuelpser=Date.now();
+ try{
+  const AudioKontext=window.AudioContext||window.webkitAudioContext;if(!AudioKontext)return;
+  const ctx=schulziAudioCtx||(schulziAudioCtx=new AudioKontext());
+  if(ctx.state==='suspended')void ctx.resume();
+  const t=ctx.currentTime,laut=ctx.createGain(),filter=ctx.createBiquadFilter();
+  filter.type='lowpass';filter.frequency.value=520;
+  laut.gain.setValueAtTime(.0001,t);laut.gain.exponentialRampToValueAtTime(.22,t+.08);
+  laut.gain.setValueAtTime(.20,t+.30);laut.gain.exponentialRampToValueAtTime(.0001,t+.62);
+  filter.connect(laut);laut.connect(ctx.destination);
+  for(let i=0;i<2;i++){
+   const osc=ctx.createOscillator();
+   osc.type=i?'sawtooth':'triangle';
+   osc.frequency.setValueAtTime(138+i*11,t);
+   osc.frequency.exponentialRampToValueAtTime(58+i*4,t+.6);
+   osc.connect(filter);osc.start(t);osc.stop(t+.63);
+  }
+ }catch(e){/* Dekorativer Ton darf keine Bedienung beeinträchtigen. */}
+}
 /* Persistente Gestaltung, ausschließlich vordefinierte Hintergrundmotive. */
 function applyPortalDesign(d){
  if(!d||!/^#[0-9a-f]{6}$/i.test(d.akzent))return;
@@ -4993,7 +5100,8 @@ function applyPortalDesign(d){
  document.documentElement.style.setProperty('--acc',a);
  const ex=d.extras||{},light=ex.modus==='hell';
  document.documentElement.dataset.portalMode=light?'hell':'dunkel';
- document.documentElement.dataset.designPreset=ex.preset==='flori'?'flori':'';
+ document.documentElement.dataset.designPreset=['flori','schulzi'].includes(ex.preset)?ex.preset:'';
+  idvThemePartikelAktualisieren();
  const defaults=light?{flaeche:'#ffffff',seitenleiste:'#e9eff7',rahmen:'#c6d1df',schrift:'#15253b',sekundaer:'#52677f',highlight:'#e6f0ff'}:
  {flaeche:'#182333',seitenleiste:'#0b111a',rahmen:'#26354b',schrift:'#e6edf6',sekundaer:'#8ea0b8',highlight:'#203958'};
  const map={flaeche:'--panel',seitenleiste:'--portal-sidebar',rahmen:'--line',schrift:'--txt',sekundaer:'--mut',highlight:'--portal-highlight'};
@@ -5011,18 +5119,19 @@ const PORTAL_PRESETS={
  amethyst:{name:'Amethyst',akzent:'#a18ae7',hintergrund:'stahl',extras:{modus:'dunkel',flaeche:'#2c2740',seitenleiste:'#1c182a',rahmen:'#4a4165',schrift:'#f2edff',sekundaer:'#bfb3da',highlight:'#443761'}},
  bernstein:{name:'Bernstein',akzent:'#e8a34f',hintergrund:'stahl',extras:{modus:'dunkel',flaeche:'#332b24',seitenleiste:'#201a16',rahmen:'#65503c',schrift:'#fff5e7',sekundaer:'#d4bba0',highlight:'#5a3f23'}},
  hell:{name:'Arktis Hell',akzent:'#2872bc',hintergrund:'ohne',extras:{modus:'hell',flaeche:'#ffffff',seitenleiste:'#e9eff7',rahmen:'#c6d1df',schrift:'#15253b',sekundaer:'#52677f',highlight:'#d6e9fa'}},
- flori:{name:'🐄 Florimodus (Muh!)',akzent:'#b6772e',hintergrund:'ohne',extras:{preset:'flori',modus:'hell',flaeche:'#fff8e9',seitenleiste:'#e4cfa7',rahmen:'#916d48',schrift:'#3d2c19',sekundaer:'#796044',highlight:'#eed59a'}}
+ flori:{name:'🐄 Florimodus (Muh!)',akzent:'#cfaa7d',hintergrund:'ohne',extras:{preset:'flori',modus:'dunkel',flaeche:'#2a231e',seitenleiste:'#17130f',rahmen:'#655444',schrift:'#f0e5d6',sekundaer:'#c4ae98',highlight:'#3f3329'}},
+  schulzi:{name:'📼 Schulzi-Modus (Retro)',akzent:'#e1e1e1',hintergrund:'ohne',extras:{preset:'schulzi',modus:'dunkel',flaeche:'#191919',seitenleiste:'#090909',rahmen:'#aaa9a8',schrift:'#f7f7f7',sekundaer:'#b2b2b2',highlight:'#303030'}}
 };
 async function ladeDesign(){
  const area=$('#inhalt');
  area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p>Lade Gestaltung …</p>';
  try{
   const d=await api('/portal-design');
-  ausgewaehltesDesignPreset=d.extras?.preset==='flori'?'flori':'';
+  ausgewaehltesDesignPreset=['flori','schulzi'].includes(d.extras?.preset)?d.extras.preset:'';
   area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p class="mut">Du kannst dein eigenes Design speichern. Administratoren können zusätzlich den Standard für alle vorgeben.</p>'+
    '<section class="box"><h3>Farb-Presets</h3><p class="mut">Ein Preset übernimmt passende Farben. Über Vorschau testen und anschließend persönlich speichern.</p>'+
    '<div class="design-preset-grid">'+Object.entries(PORTAL_PRESETS).map(([id,p])=>'<button type="button" data-design-preset="'+id+'" title="'+esc(p.name)+'"><span class="design-preset-swatch" style="background:linear-gradient(125deg,'+p.extras.seitenleiste+','+p.extras.flaeche+')"><i style="background:'+p.akzent+'"></i></span><strong>'+esc(p.name)+'</strong></button>').join('')+'</div>'+ 
-   '<div class="flori-audio-test"><button type="button" id="floriMuhTest">🐮 Kräftiges MUUUH testen 🔊</button>'+
+   '<div class="flori-audio-test"><button type="button" id="floriMuhTest">🐮 Kräftiges MUUUH testen 🔊</button><button type="button" id="schulziRuelpsTest">📼 Retro-Rülpser testen 🔊</button>'+
    '<small>Echte Kuhaufnahme: <a href="https://commons.wikimedia.org/wiki/File:Mudchute_cow_1.ogg" target="_blank" rel="noopener noreferrer">Secretlondon / Wikimedia Commons</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 3.0</a>. Im Florimodus muhende Klicks.</small></div></section>'+
    '<section class="box"><h3>Portal-Design</h3>'+
    '<label for="designAkzent">Akzentfarbe</label><input id="designAkzent" type="color" value="'+esc(d.akzent)+'" style="width:110px;height:48px;padding:5px">'+
@@ -5081,7 +5190,7 @@ function designEingabeVorschau(ev){
 document.addEventListener('input',designEingabeVorschau);
 document.addEventListener('change',designEingabeVorschau);
 function aktuelleDesignWerte(){
- return {akzent:$('#designAkzent').value,schleier:Number($('#designSchleier').value),hintergrund:$('#designMotiv').value,extras:{...(ausgewaehltesDesignPreset==='flori'?{preset:'flori'}:{}),modus:$('#designModus').value,...Object.fromEntries([...document.querySelectorAll('[data-design-color]')].map(x=>[x.dataset.designColor,x.value]))}};
+ return {akzent:$('#designAkzent').value,schleier:Number($('#designSchleier').value),hintergrund:$('#designMotiv').value,extras:{...(['flori','schulzi'].includes(ausgewaehltesDesignPreset)?{preset:ausgewaehltesDesignPreset}:{}),modus:$('#designModus').value,...Object.fromEntries([...document.querySelectorAll('[data-design-color]')].map(x=>[x.dataset.designColor,x.value]))}};
 }
 document.addEventListener('click',async ev=>{
  const preset=ev.target.closest('[data-design-preset]');
@@ -5173,8 +5282,9 @@ function florimodusMuh(test=false){
 }
 document.addEventListener('click',e=>{
  if(e.target.closest('#floriMuhTest')){florimodusMuh(true);return;}
+  if(e.target.closest('#schulziRuelpsTest')){schulziRuelps(true);return;}
  if(e.target.closest('button,a,[role="button"],summary,select,input[type="checkbox"],input[type="radio"]'))
-  florimodusMuh();
+  {florimodusMuh();schulziRuelps();}
 });
 
 /* Personalisierung und Rechteansicht – bestehende Module werden nur verlinkt. */
