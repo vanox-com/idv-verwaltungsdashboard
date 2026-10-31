@@ -706,7 +706,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
     const nachGruppe=new Map(matrix.map(z=>[z.gruppe,z]));
     const summen={hauptberuf:0,nebenberuf:0,gesamt:0};
     for(const p of aktuelleBeamte){
-      const art=p.beschaeftigungsart='Nebenberuf'?'nebenberuf':'hauptberuf';
+      const art=p.beschaeftigungsart==='Nebenberuf'?'nebenberuf':'hauptberuf';
       const gruppe=nachGruppe.has(p.gruppe)?p.gruppe:'Nicht zugeordnet';
       const zeile=nachGruppe.get(gruppe);
       zeile[art]++; zeile.gesamt++;
