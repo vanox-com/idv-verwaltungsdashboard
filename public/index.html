@@ -5070,28 +5070,62 @@ function idvThemePartikelAktualisieren(){
  }
  document.body.append(layer);
 }
-let schulziAudioCtx=null,schulziLetzterRuelpser=0;
-function schulziRuelps(test=false){
+/* Schulzi-Modus: eigens synthetisiertes 80er-Jahre-Computer-Startsignal
+   mit leisem Kassettenknistern, Diskettenrattern und 8-Bit-Pieptönen.
+   Funktioniert ohne externe Audiodateien; nur nach Nutzer-Klicks. */
+let schulziAudioCtx=null,schulziLetzterSound=0;
+function schulziRetroSound(test=false){
  if(!test&&document.documentElement.dataset.designPreset!=='schulzi')return;
- if(Date.now()-schulziLetzterRuelpser<1700)return;
- schulziLetzterRuelpser=Date.now();
+ const jetzt=Date.now();
+ if(jetzt-schulziLetzterSound<1600)return;
+ schulziLetzterSound=jetzt;
  try{
   const AudioKontext=window.AudioContext||window.webkitAudioContext;if(!AudioKontext)return;
   const ctx=schulziAudioCtx||(schulziAudioCtx=new AudioKontext());
-  if(ctx.state==='suspended')void ctx.resume();
-  const t=ctx.currentTime,laut=ctx.createGain(),filter=ctx.createBiquadFilter();
-  filter.type='lowpass';filter.frequency.value=520;
-  laut.gain.setValueAtTime(.0001,t);laut.gain.exponentialRampToValueAtTime(.22,t+.08);
-  laut.gain.setValueAtTime(.20,t+.30);laut.gain.exponentialRampToValueAtTime(.0001,t+.62);
-  filter.connect(laut);laut.connect(ctx.destination);
-  for(let i=0;i<2;i++){
-   const osc=ctx.createOscillator();
-   osc.type=i?'sawtooth':'triangle';
-   osc.frequency.setValueAtTime(138+i*11,t);
-   osc.frequency.exponentialRampToValueAtTime(58+i*4,t+.6);
-   osc.connect(filter);osc.start(t);osc.stop(t+.63);
+  if(ctx.state==='suspended')void ctx.resume().catch(()=>{});
+  const t=ctx.currentTime+.01;
+  const master=ctx.createGain(),retroFilter=ctx.createBiquadFilter();
+  retroFilter.type='lowpass';retroFilter.frequency.value=2400;
+  master.gain.setValueAtTime(.0001,t);
+  master.gain.exponentialRampToValueAtTime(.23,t+.05);
+  master.gain.setValueAtTime(.23,t+1.10);
+  master.gain.exponentialRampToValueAtTime(.0001,t+1.42);
+  retroFilter.connect(master);master.connect(ctx.destination);
+
+  // Sanftes Bandrauschen und kurzes Knacken wie von einer alten Kassette.
+  const rauschen=ctx.createBuffer(1,Math.floor(ctx.sampleRate*.52),ctx.sampleRate);
+  const samples=rauschen.getChannelData(0);
+  for(let i=0;i<samples.length;i++)samples[i]=(Math.random()*2-1)*(i%1103<11?1:.22);
+  const tape=ctx.createBufferSource(),tapeLaut=ctx.createGain(),tapeFilter=ctx.createBiquadFilter();
+  tape.buffer=rauschen;tapeFilter.type='highpass';tapeFilter.frequency.value=700;
+  tapeLaut.gain.setValueAtTime(.09,t);
+  tapeLaut.gain.exponentialRampToValueAtTime(.0001,t+.51);
+  tape.connect(tapeFilter);tapeFilter.connect(tapeLaut);tapeLaut.connect(retroFilter);
+  tape.start(t);tape.stop(t+.51);
+
+  // Kurzes mechanisches Surren, als würde ein Diskettenlaufwerk anlaufen.
+  const laufwerk=ctx.createOscillator(),laufwerkLaut=ctx.createGain();
+  laufwerk.type='sawtooth';laufwerk.frequency.setValueAtTime(118,t+.06);
+  laufwerk.frequency.linearRampToValueAtTime(80,t+.36);
+  laufwerkLaut.gain.setValueAtTime(.0001,t+.06);
+  laufwerkLaut.gain.exponentialRampToValueAtTime(.12,t+.11);
+  laufwerkLaut.gain.exponentialRampToValueAtTime(.0001,t+.37);
+  laufwerk.connect(laufwerkLaut);laufwerkLaut.connect(retroFilter);
+  laufwerk.start(t+.06);laufwerk.stop(t+.38);
+
+  // Eigenständige, kurze 8-Bit-Bootmelodie aus frühen Computer-Pieptönen.
+  const toene=[[.27,392,.11],[.43,523,.11],[.60,659,.12],[.80,784,.16],[1.04,523,.24]];
+  for(const [offset,frequenz,dauer] of toene){
+   const osc=ctx.createOscillator(),laut=ctx.createGain(),beginn=t+offset;
+   osc.type='square';osc.frequency.value=frequenz;
+   laut.gain.setValueAtTime(.0001,beginn);
+   laut.gain.exponentialRampToValueAtTime(.20,beginn+.012);
+   laut.gain.setValueAtTime(.20,beginn+dauer-.025);
+   laut.gain.exponentialRampToValueAtTime(.0001,beginn+dauer);
+   osc.connect(laut);laut.connect(retroFilter);
+   osc.start(beginn);osc.stop(beginn+dauer+.01);
   }
- }catch(e){/* Dekorativer Ton darf keine Bedienung beeinträchtigen. */}
+ }catch(e){/* Dekorative Klänge dürfen das Portal nicht beeinträchtigen. */}
 }
 /* Persistente Gestaltung, ausschließlich vordefinierte Hintergrundmotive. */
 function applyPortalDesign(d){
@@ -5132,7 +5166,7 @@ async function ladeDesign(){
   area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p class="mut">Du kannst dein eigenes Design speichern. Administratoren können zusätzlich den Standard für alle vorgeben.</p>'+
    '<section class="box"><h3>Farb-Presets</h3><p class="mut">Ein Preset übernimmt passende Farben. Über Vorschau testen und anschließend persönlich speichern.</p>'+
    '<div class="design-preset-grid">'+Object.entries(PORTAL_PRESETS).map(([id,p])=>'<button type="button" data-design-preset="'+id+'" title="'+esc(p.name)+'"><span class="design-preset-swatch" style="background:linear-gradient(125deg,'+p.extras.seitenleiste+','+p.extras.flaeche+')"><i style="background:'+p.akzent+'"></i></span><strong>'+esc(p.name)+'</strong></button>').join('')+'</div>'+ 
-   '<div class="flori-audio-test"><button type="button" id="floriMuhTest">🐮 Kräftiges MUUUH testen 🔊</button><button type="button" id="schulziRuelpsTest">📼 Retro-Rülpser testen 🔊</button>'+
+   '<div class="flori-audio-test"><button type="button" id="floriMuhTest">🐮 Kräftiges MUUUH testen 🔊</button><button type="button" id="schulziRetroTest">📼 80er-Computerstart testen 🔊</button>'+
    '<small>Echte Kuhaufnahme: <a href="https://commons.wikimedia.org/wiki/File:Mudchute_cow_1.ogg" target="_blank" rel="noopener noreferrer">Secretlondon / Wikimedia Commons</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 3.0</a>. Im Florimodus muhende Klicks.</small></div></section>'+
    '<section class="box"><h3>Portal-Design</h3>'+
    '<label for="designAkzent">Akzentfarbe</label><input id="designAkzent" type="color" value="'+esc(d.akzent)+'" style="width:110px;height:48px;padding:5px">'+
@@ -5283,9 +5317,9 @@ function florimodusMuh(test=false){
 }
 document.addEventListener('click',e=>{
  if(e.target.closest('#floriMuhTest')){florimodusMuh(true);return;}
-  if(e.target.closest('#schulziRuelpsTest')){schulziRuelps(true);return;}
+  if(e.target.closest('#schulziRetroTest')){schulziRetroSound(true);return;}
  if(e.target.closest('button,a,[role="button"],summary,select,input[type="checkbox"],input[type="radio"]'))
-  {florimodusMuh();schulziRuelps();}
+  {florimodusMuh();schulziRetroSound();}
 });
 
 /* Personalisierung und Rechteansicht – bestehende Module werden nur verlinkt. */
