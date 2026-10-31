@@ -85,6 +85,12 @@ CREATE TABLE IF NOT EXISTS personal (
 ALTER TABLE personal ADD COLUMN IF NOT EXISTS beschaeftigungsart text NOT NULL DEFAULT 'Hauptberuf';
 UPDATE personal SET beschaeftigungsart='Nebenberuf' WHERE gruppe='Nebenberuf';
 UPDATE personal SET gruppe='Nicht zugeordnet' WHERE gruppe IN ('Hauptberuf','Nebenberuf');
+-- Dienstnummernband ist für Haupt-/Nebenberuf verbindlich. Es werden
+-- keine Dienstnummern verändert, nur vorhandene Beschäftigungsarten angepasst.
+UPDATE personal SET beschaeftigungsart=
+ CASE WHEN personalnummer BETWEEN 50 AND 60 THEN 'Nebenberuf' ELSE 'Hauptberuf' END
+WHERE beschaeftigungsart IS DISTINCT FROM
+ CASE WHEN personalnummer BETWEEN 50 AND 60 THEN 'Nebenberuf' ELSE 'Hauptberuf' END;
 ALTER TABLE personal ADD COLUMN IF NOT EXISTS arbeitsvertrag_url text NOT NULL DEFAULT '';
 ALTER TABLE personal ADD COLUMN IF NOT EXISTS ernennungsurkunde_url text NOT NULL DEFAULT '';
 
