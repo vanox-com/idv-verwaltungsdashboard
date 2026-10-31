@@ -1486,7 +1486,11 @@ app.post('/api/rangantraege/:id/entscheidung',requireLogin,requireRight('por',2)
 /* Minimierte Liste regulärer wartender POR-Freigaben für orange Hinweise. */
 app.get('/api/por/offen',requireLogin,requireRight('por',2),async(req,res,next)=>{
  try{
-  const {rows}=await db.query("SELECT personalnummer,xmin::text AS revision FROM personal WHERE por_status='beantragt' AND status<>'Gekündigt' AND administrativ_geloescht_am IS NULL ORDER BY personalnummer");
+  const {rows}=await db.query(`SELECT p.personalnummer,
+      COALESCE((SELECT MAX(l.id)::text FROM log l
+       WHERE l.aktion='POR-Freigabe bei '||p.personalnummer::text||': beantragt'),'bestand') AS revision
+      FROM personal p WHERE p.por_status='beantragt' AND p.status<>'Gekündigt'
+        AND p.administrativ_geloescht_am IS NULL ORDER BY p.personalnummer`);
   res.json(rows.map(r=>({nr:Number(r.personalnummer),revision:String(r.revision)})));
  }catch(e){next(e)}
 });
