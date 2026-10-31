@@ -839,15 +839,27 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
 const beschaeftigungZuNummer=nr=>Number(nr)>=50&&Number(nr)<=60?'Nebenberuf':'Hauptberuf';
 app.get('/api/personal/freie-nummern',requireLogin,requireRight('pers',2),async(req,res,next)=>{
  try{
-  // Auch gekündigte und ausgeblendete Akten reservieren Nummern.
-  const {rows}=await db.query(`SELECT DISTINCT nummer FROM (
-    SELECT personalnummer AS nummer FROM personal WHERE personalnummer BETWEEN 1 AND 60
-    UNION ALL
-    SELECT CASE WHEN dienstnummer ~ '^[0-9]{1,8}$' THEN dienstnummer::int END AS nummer FROM users
-  ) x WHERE nummer BETWEEN 1 AND 60`);
-  const vergeben=new Set(rows.map(x=>Number(x.nummer)));
-  res.json({hauptberuf:Array.from({length:49},(_,i)=>i+1).filter(n=>!vergeben.has(n)),
-    nebenberuf:Array.from({length:11},(_,i)=>i+50).filter(n=>!vergeben.has(n))});
+  // Nur ausgeblendete leere Platzhalter mit Status 'frei' dürfen
+  // erneut besetzt werden. 'freihalten' bedeutet ausdrücklich reserviert.
+  const [akten,konten]=await Promise.all([
+    db.query('SELECT personalnummer,status,vorname,nachname,administrativ_geloescht_am IS NOT NULL AS ausgeblendet FROM personal WHERE personalnummer BETWEEN 1 AND 60'),
+    db.query("SELECT dienstnummer::int AS nr FROM users WHERE dienstnummer ~ '^[0-9]{1,8}$' AND dienstnummer::int BETWEEN 1 AND 60")
+  ]);
+  const personen=new Map(akten.rows.map(p=>[Number(p.personalnummer),p]));
+  const kontonummern=new Set(konten.rows.map(k=>Number(k.nr)));
+  const frei=[],reserviert=[];
+  for(let nr=1;nr<=60;nr++){
+    if(kontonummern.has(nr))continue;
+    const p=personen.get(nr);
+    if(!p){frei.push(nr);continue;}
+    const leer=[p.vorname,p.nachname].every(x=>!x||['','-'].includes(String(x).trim()));
+    if(!p.ausgeblendet||!leer)continue;
+    if(String(p.status||'').toLowerCase()==='frei')frei.push(nr);
+    else if(String(p.status||'').toLowerCase()==='freihalten')reserviert.push(nr);
+  }
+  res.json({hauptberuf:frei.filter(n=>n<50),nebenberuf:frei.filter(n=>n>=50),
+    reserviert_hauptberuf:reserviert.filter(n=>n<50),
+    reserviert_nebenberuf:reserviert.filter(n=>n>=50)});
  }catch(e){next(e)}
 });
 /* Dienstgrade vorhandener Mitarbeiter werden ausschließlich über den
@@ -1086,11 +1098,34 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
         waffenschein, spind, nebenjob, dienstgrad, eintrittsdatum, arbeitsvertrag, ernennungsurkunde,
         urlaub_von, urlaub_bis, urlaub_tage, bemerkung, rsa, arbeitsvertrag_url, ernennungsurkunde_url)
        VALUES ($1,$2,$3,$22,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+       ON CONFLICT (personalnummer) DO UPDATE SET
+         gruppe=EXCLUDED.gruppe,beschaeftigungsart=EXCLUDED.beschaeftigungsart,
+         status=EXCLUDED.status,vorname=EXCLUDED.vorname,nachname=EXCLUDED.nachname,
+         geburtsdatum=EXCLUDED.geburtsdatum,handy=EXCLUDED.handy,
+         waffenschein=EXCLUDED.waffenschein,spind=EXCLUDED.spind,
+         nebenjob=EXCLUDED.nebenjob,dienstgrad=EXCLUDED.dienstgrad,
+         eintrittsdatum=EXCLUDED.eintrittsdatum,arbeitsvertrag=EXCLUDED.arbeitsvertrag,
+         ernennungsurkunde=EXCLUDED.ernennungsurkunde,
+         urlaub_von=EXCLUDED.urlaub_von,urlaub_bis=EXCLUDED.urlaub_bis,
+         urlaub_tage=EXCLUDED.urlaub_tage,bemerkung=EXCLUDED.bemerkung,
+         rsa=EXCLUDED.rsa,arbeitsvertrag_url=EXCLUDED.arbeitsvertrag_url,
+         ernennungsurkunde_url=EXCLUDED.ernennungsurkunde_url,
+         letzte_befoerderung=NULL,naechste_befoerderung=NULL,
+         por_status='offen',por_notiz='',por_am=NULL,
+         administrativ_geloescht_am=NULL,administrativ_geloescht_von=NULL
+       WHERE personal.administrativ_geloescht_am IS NOT NULL
+         AND lower(trim(personal.status))='frei'
+         AND trim(COALESCE(personal.vorname,'')) IN ('','-')
+         AND trim(COALESCE(personal.nachname,'')) IN ('','-')
+         AND NOT EXISTS (SELECT 1 FROM users u
+           WHERE u.dienstnummer ~ '^[0-9]{1,8}$'
+             AND u.dienstnummer::int=personal.personalnummer)
        RETURNING personalnummer,vorname,nachname,gruppe,status,dienstgrad`,
       [nr, b.gruppe || 'Nicht zugeordnet', b.status || 'Aktiv', b.vorname, b.nachname, b.geburtsdatum || null,
         b.handy, !!b.waffenschein, !!b.spind, b.nebenjob, b.dienstgrad, b.eintrittsdatum || null,
         b.arbeitsvertrag, b.ernennungsurkunde, b.urlaub_von || null, b.urlaub_bis || null, b.urlaub_tage, b.bemerkung, b.rsa,
         b.arbeitsvertrag_url || '', b.ernennungsurkunde_url || '', beschaeftigungZuNummer(nr)]);
+    if(!rows.length) return res.status(409).json({error:'Diese Dienstnummer ist inzwischen belegt oder reserviert. Bitte freie Nummern neu laden.'});
     await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'add')`,
       [req.user.id, `Personal ${nr} angelegt`]);
     res.json(rows[0]);

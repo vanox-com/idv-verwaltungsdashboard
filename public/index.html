@@ -2417,9 +2417,11 @@ async function personalFreieNummernLaden(){
   const data=await api('/personal/freie-nummern');if(!box.isConnected)return;
   const gruppe=(title,nums)=>'<div class="dienstnummer-gruppe"><strong>'+title+'</strong><div class="dienstnummer-chips">'+
    (nums.length?nums.map(n=>'<button type="button" class="dienstnummer-chip" data-freie-dienstnummer="'+n+'">'+n+'</button>').join(''):'<span class="mut">Keine freie Nummer</span>')+'</div></div>';
-  box.innerHTML='<p class="mut">Freie Nummer anklicken. Gekündigte und ausgeblendete Akten behalten ihre Nummer.</p>'+
+  const reserviert=[...(data.reserviert_hauptberuf||[]),...(data.reserviert_nebenberuf||[])];
+  box.innerHTML='<p class="mut">Freie Dienstnummern aus dem Personalbestand. Leere Platzhalter mit Status „frei“ können wieder besetzt werden; „freihalten“ bleibt reserviert.</p>'+
    gruppe('Hauptberuf · 1–49',data.hauptberuf||[])+gruppe('Nebenberuf · 50–60',data.nebenberuf||[])+
-   '<small class="mut">Ab 61: Hauptberuf, Nummer oben manuell eingeben.</small>';
+   (reserviert.length?'<small class="mut">Reserviert („freihalten“), nicht auswählbar: '+reserviert.join(', ')+'</small>':'')+
+   '<small class="mut">Ab 61: Hauptberuf, Nummer oben manuell eingeben. Kündigungsakten und frühere Vorgänge bleiben historisch erhalten.</small>';
   const frei=[...(data.hauptberuf||[]),...(data.nebenberuf||[])];
   if(frei.length&&!frei.includes(Number(input.value)))input.value=frei[0];
   personalNummerAbgleichen();
