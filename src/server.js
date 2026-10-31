@@ -2146,8 +2146,11 @@ app.patch('/api/checklisten/:name/punkte/:index',requireLogin,requireRight('chk'
   }catch(err){await client.query('ROLLBACK').catch(()=>{});next(err);}
   finally{client.release();}
 });
-app.post('/api/checklisten/reset',requireLogin,requireRight('chk',2),async(req,res,next)=>{
+app.post('/api/checklisten/reset',requireLogin,requireRight('chk',1),async(req,res,next)=>{
   try{
+    const rechte=await effektiveRechte(req.user);
+    if((rechte.chk||0)<2&&!(req.user.rolle==='Polizeirat'&&(rechte.chk||0)>=1))
+      return res.status(403).json({error:'Kein Recht zum Zurücksetzen der Checklisten'});
     const result=await db.query('DELETE FROM checklisten_status');
     await db.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",
       [req.user.id,'Alle Checklisten-Häkchen zurückgesetzt ('+result.rowCount+')']);
