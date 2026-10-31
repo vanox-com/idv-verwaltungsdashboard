@@ -510,7 +510,7 @@ function valideDesign(d){
  Object.keys(d.extras).every(k=>[...DESIGN_KEYS,'modus','preset'].includes(k))&&
  DESIGN_KEYS.every(k=>d.extras[k]===undefined||HEX.test(d.extras[k]))&&
  (d.extras.modus===undefined||['dunkel','hell'].includes(d.extras.modus))&&
- (d.extras.preset===undefined||['flori'].includes(d.extras.preset))));
+ (d.extras.preset===undefined||['flori','schulzi'].includes(d.extras.preset))));
 }
 const THEME_DEFAULT={akzent:'#5b86ba',schleier:88,hintergrund:'wappen',extras:{}};
 app.get('/api/portal-design',requireLogin,async(req,res,next)=>{
@@ -835,6 +835,21 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
 
 /* ---------- Schreiben ---------- */
 
+/* Dienstnummern: 1-49 Hauptberuf, 50-60 Nebenberuf, ab 61 Hauptberuf. */
+const beschaeftigungZuNummer=nr=>Number(nr)>=50&&Number(nr)<=60?'Nebenberuf':'Hauptberuf';
+app.get('/api/personal/freie-nummern',requireLogin,requireRight('pers',2),async(req,res,next)=>{
+ try{
+  // Auch gekündigte und ausgeblendete Akten reservieren Nummern.
+  const {rows}=await db.query(`SELECT DISTINCT nummer FROM (
+    SELECT personalnummer AS nummer FROM personal WHERE personalnummer BETWEEN 1 AND 60
+    UNION ALL
+    SELECT CASE WHEN dienstnummer ~ '^[0-9]{1,8}$' THEN dienstnummer::int END AS nummer FROM users
+  ) x WHERE nummer BETWEEN 1 AND 60`);
+  const vergeben=new Set(rows.map(x=>Number(x.nummer)));
+  res.json({hauptberuf:Array.from({length:49},(_,i)=>i+1).filter(n=>!vergeben.has(n)),
+    nebenberuf:Array.from({length:11},(_,i)=>i+50).filter(n=>!vergeben.has(n))});
+ }catch(e){next(e)}
+});
 /* Dienstgrade vorhandener Mitarbeiter werden ausschließlich über den
    transaktional abgesicherten POR-Beförderungsablauf geändert. */
 const vertraulichePersonalFelder = new Set([
@@ -940,6 +955,8 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
     return res.status(403).json({error:'Kein Recht für vertrauliche Personalfelder'});
   const linkFehler=dokumentLinksValidieren(body);
   if(linkFehler)return res.status(400).json({error:linkFehler});
+  if(Object.hasOwn(body,'beschaeftigungsart')&&body.beschaeftigungsart!==beschaeftigungZuNummer(nr))
+    return res.status(400).json({error:'Beschäftigungsart muss zur Dienstnummer passen: 50–60 Nebenberuf, sonst Hauptberuf'});
   const grund=body.kuendigungsgrund;
   if(Object.hasOwn(body,'kuendigungsgrund')&&typeof grund!=='string')
     return res.status(400).json({error:'Kündigungsgrund muss Text sein'});
@@ -1058,6 +1075,8 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
     const nr=Number(b.personalnummer);
     if (!Number.isSafeInteger(nr) || nr < 1)
       return res.status(400).json({ error: 'Ungültige Personalnummer' });
+    if(b.beschaeftigungsart && b.beschaeftigungsart!==beschaeftigungZuNummer(nr))
+      return res.status(400).json({error:'Dienstnummer 50–60 ist Nebenberuf; alle anderen sind Hauptberuf'});
     if (!String(b.vorname || '').trim() || !String(b.nachname || '').trim())
       return res.status(400).json({ error: 'Vor- und Nachname nötig' });
     if(b.status==='Gekündigt')
@@ -1071,7 +1090,7 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
       [nr, b.gruppe || 'Nicht zugeordnet', b.status || 'Aktiv', b.vorname, b.nachname, b.geburtsdatum || null,
         b.handy, !!b.waffenschein, !!b.spind, b.nebenjob, b.dienstgrad, b.eintrittsdatum || null,
         b.arbeitsvertrag, b.ernennungsurkunde, b.urlaub_von || null, b.urlaub_bis || null, b.urlaub_tage, b.bemerkung, b.rsa,
-        b.arbeitsvertrag_url || '', b.ernennungsurkunde_url || '', b.beschaeftigungsart === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf']);
+        b.arbeitsvertrag_url || '', b.ernennungsurkunde_url || '', beschaeftigungZuNummer(nr)]);
     await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'add')`,
       [req.user.id, `Personal ${nr} angelegt`]);
     res.json(rows[0]);
@@ -1464,6 +1483,13 @@ app.post('/api/rangantraege/:id/entscheidung',requireLogin,requireRight('por',2)
   await client.query('COMMIT');res.json({ok:true});
  }catch(e){await client.query('ROLLBACK').catch(()=>{});next(e)}finally{client.release()}
 });
+/* Minimierte Liste regulärer wartender POR-Freigaben für orange Hinweise. */
+app.get('/api/por/offen',requireLogin,requireRight('por',2),async(req,res,next)=>{
+ try{
+  const {rows}=await db.query("SELECT personalnummer,xmin::text AS revision FROM personal WHERE por_status='beantragt' AND status<>'Gekündigt' AND administrativ_geloescht_am IS NULL ORDER BY personalnummer");
+  res.json(rows.map(r=>({nr:Number(r.personalnummer),revision:String(r.revision)})));
+ }catch(e){next(e)}
+});
 /* Freigabe durch den Polizeioberrat (POR) verwalten. */
 app.patch('/api/por/:nr', requireLogin, requireRight('bef', 1), async (req, res, next) => {
   try {
@@ -1479,7 +1505,10 @@ app.patch('/api/por/:nr', requireLogin, requireRight('bef', 1), async (req, res,
        Genehmigung/Ablehnung ausschließlich mit POR bearbeiten. */
     const rechte = await effektiveRechte(req.user);
     const darfPor = (rechte.por || 0) >= 2;
-    const darfAntrag = (rechte.bef || 0) >= 2;
+    const polizeiratAntrag=req.user.rolle==='Polizeirat'&&(rechte.bef||0)>=1;
+    const darfAntrag=(rechte.bef||0)>=2||polizeiratAntrag;
+    if(!darfPor&&polizeiratAntrag&&(rechte.bef||0)<2&&status!=='beantragt')
+      return res.status(403).json({error:'Mit Polizeirat-Leserecht kann nur eine Freigabe beantragt werden'});
     if (!darfPor && (!darfAntrag || ['genehmigt','abgelehnt'].includes(status)))
       return res.status(403).json({error:'Nur ein POR-Berechtigter darf genehmigen oder ablehnen'});
     const datum = status === 'genehmigt'
@@ -1960,7 +1989,10 @@ app.delete('/api/checklisten/:name',requireLogin,requireRight('chk',2),async(req
 });
 
 /* ---------- Checklisten: serverseitig berechtigtes Abhaken ---------- */
-app.patch('/api/checklisten/:name/punkte/:index',requireLogin,requireRight('chk',2),async(req,res,next)=>{
+app.patch('/api/checklisten/:name/punkte/:index',requireLogin,requireRight('chk',1),async(req,res,next)=>{
+  const rechte=await effektiveRechte(req.user);
+  if((rechte.chk||0)<2&&!(req.user.rolle==='Polizeirat'&&(rechte.chk||0)>=1))
+    return res.status(403).json({error:'Kein Recht zum Abhaken der Checkliste'});
   const name=String(req.params.name||''),index=Number(req.params.index);
   const erledigt=req.body?.erledigt,erwartet=req.body?.erwartet;
   if(!name||name.length>250||!Number.isSafeInteger(index)||index<0||
