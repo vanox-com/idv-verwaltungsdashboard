@@ -604,6 +604,10 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
     const rolle = req.user.rolle;
     const rechte = await effektiveRechte(req.user);
     const sensibel = (await db.query(`SELECT sensibel FROM roles WHERE name = $1`, [rolle])).rows[0]?.sensibel;
+    // Dieselbe Status-Definition gilt für alle Dashboard-Beamtenzahlen.
+    // 'frei', 'freihalten', 'Gekündigt' und sonstige Platzhalter sind keine aktuellen Beamten.
+    const aktuelleBeamte=personal.rows.filter(p=>
+      ['Aktiv','Abgemeldet','Inaktiv','Suspendiert'].includes(String(p.status||'').trim()));
 
     const daten = {
       personal: personal.rows, raenge: raenge.rows,
@@ -632,7 +636,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
 
     /* Das Dashboard erhält nur Statistikwerte, keine versteckten Modulinhalte. */
     daten.dashboard.summary = {
-      personal: personal.rows.length,
+      personal: aktuelleBeamte.length,
       kuendigungen: kuendigungen.rows.length,
       offeneRueckgaben: kuendigungen.rows.filter(k =>
         ['waffe', 'copnet', 'emd', 'ic', 'discord', 'dienstgegenstaende']
@@ -663,16 +667,16 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       : '';
     const dateDays = iso => Math.round((Date.parse(iso+'T00:00:00Z') - heuteMs)/86400000);
     const personenName = p => [p.vorname,p.nachname].filter(Boolean).join(' ');
-    const neu30=personal.rows.filter(p=>{
+    const neu30=aktuelleBeamte.filter(p=>{
       const datum=isoDatum(p.eintrittsdatum);
       if(!/^\d{4}-\d{2}-\d{2}$/.test(datum))return false;
       const d=dateDays(datum);
       return d<=0&&d>=-29;
     });
     const aktiveStatus=new Set(['Aktiv']);
-    daten.dashboard.summary.aktiv=personal.rows.filter(p=>aktiveStatus.has(p.status)).length;
+    daten.dashboard.summary.aktiv=aktuelleBeamte.filter(p=>aktiveStatus.has(p.status)).length;
     daten.dashboard.summary.neu30=berechtigt('pers')?neu30.length:null;
-    daten.dashboard.summary.urlaub=berechtigt('pers')?personal.rows.filter(p=>{
+    daten.dashboard.summary.urlaub=berechtigt('pers')?aktuelleBeamte.filter(p=>{
       const von=isoDatum(p.urlaub_von),bis=isoDatum(p.urlaub_bis);
       return /^\d{4}-\d{2}-\d{2}$/.test(von)&&/^\d{4}-\d{2}-\d{2}$/.test(bis)&&
         von<=isoDatum(heute)&&bis>=isoDatum(heute);
@@ -681,7 +685,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       .map(p=>({name:personenName(p),gruppe:p.gruppe||'',eintritt:isoDatum(p.eintrittsdatum)}))
       .sort((a,b)=>b.eintritt.localeCompare(a.eintritt)).slice(0,8):[];
     const statusCounts=new Map();
-    for(const p of personal.rows){
+    for(const p of aktuelleBeamte){
       const st=p.status||'Nicht zugeordnet';
       statusCounts.set(st,(statusCounts.get(st)||0)+1);
     }
@@ -689,7 +693,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       .sort((a,b)=>b.anzahl-a.anzahl||a.name.localeCompare(b.name,'de'));
 
     const gruppen = new Map();
-    for (const p of personal.rows) {
+    for (const p of aktuelleBeamte) {
       const key=p.gruppe||'Nicht zugeordnet';
       gruppen.set(key,(gruppen.get(key)||0)+1);
     }
@@ -701,22 +705,22 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
     const matrix=dienstgruppen.map(gruppe=>({gruppe,hauptberuf:0,nebenberuf:0,gesamt:0}));
     const nachGruppe=new Map(matrix.map(z=>[z.gruppe,z]));
     const summen={hauptberuf:0,nebenberuf:0,gesamt:0};
-    for(const p of personal.rows){
-      const art=p.beschaeftigungsart==='Nebenberuf'?'nebenberuf':'hauptberuf';
+    for(const p of aktuelleBeamte){
+      const art=p.beschaeftigungsart='Nebenberuf'?'nebenberuf':'hauptberuf';
       const gruppe=nachGruppe.has(p.gruppe)?p.gruppe:'Nicht zugeordnet';
       const zeile=nachGruppe.get(gruppe);
       zeile[art]++; zeile.gesamt++;
       summen[art]++; summen.gesamt++;
     }
     daten.dashboard.beschaeftigung={summen,gruppen:matrix};
-    daten.dashboard.inaktiv = berechtigt('pers') ? personal.rows
+    daten.dashboard.inaktiv = berechtigt('pers') ? aktuelleBeamte
       .filter(p=>['Abgemeldet','Suspendiert','Inaktiv'].includes(p.status))
       .map(p=>({nummer:p.personalnummer,name:personenName(p),status:p.status,dienstgrad:p.dienstgrad||''}))
       : [];
     daten.dashboard.faellige = [];
     if (berechtigt('bef')) {
       const raengeListe=raenge.rows;
-      const alleFaelligen=personal.rows.filter(p=>p.status!=='Gekündigt').flatMap(p=>{
+      const alleFaelligen=aktuelleBeamte.flatMap(p=>{
         const i=raengeListe.findIndex(r=>r.name===p.dienstgrad);
         const current=raengeListe[i],next=current?.naechster_rang?raengeListe.find(r=>r.name===current.naechster_rang):null;
         if (!current||!next) return [];
@@ -755,8 +759,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       if(rest<0||rest>30||jahre<minimum)return null;
       return {tage:rest,jahre};
     };
-    const vorschau=(feld,minimum)=>personal.rows
-      .filter(p=>p.status!=='Gekündigt')
+    const vorschau=(feld,minimum)=>aktuelleBeamte
       .flatMap(p=>{
         const j=kommenderJahrestag(p[feld],minimum);
         return j?[{nummer:p.personalnummer,name:personenName(p),dienstgrad:p.dienstgrad||'',...j}]:[];
