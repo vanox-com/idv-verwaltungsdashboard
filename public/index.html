@@ -1697,9 +1697,9 @@ function rangAbzeichen(rang,scale=1){
     const r=7.4,z=15;
     shapes=stern(xStart,cy-8,r)+stern(xStart,cy+8,r)+
       stern(xStart+z,cy,r)+stern(xStart+2*z,cy,r)+stern(xStart+3*z,cy,r);
-  } else if(art==='k1')shapes=rankKranz(f)+stern(49,cy,8.2);
-  else if(art==='k2')shapes=rankKranz(f)+stern(42,cy,7.1)+stern(61,cy,7.1);
-  else if(art==='k3')shapes=rankKranz(f)+stern(33,cy,6.3)+stern(49,cy,6.3)+stern(65,cy,6.3);
+  } else if(art==='k1')shapes='<g transform="translate(-6 0)">'+rankKranz(f)+stern(49,cy,8.2)+'</g>';
+  else if(art==='k2')shapes='<g transform="translate(-6 0)">'+rankKranz(f)+stern(42,cy,7.1)+stern(61,cy,7.1)+'</g>';
+  else if(art==='k3')shapes='<g transform="translate(-6 0)">'+rankKranz(f)+stern(33,cy,6.3)+stern(49,cy,6.3)+stern(65,cy,6.3)+'</g>';
   const w=Math.round(132*scale*.66),h=Math.round(44*scale*.66);
   const klappe='<rect x="1.2" y="2" width="129.6" height="40" rx="6" '+
     'fill="#111923" stroke="#526174" stroke-width="1.1"/>'+
