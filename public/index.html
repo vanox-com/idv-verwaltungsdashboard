@@ -2336,6 +2336,27 @@ function personalKuendigungButton(p){
     '">↗ '+label+'</button>';
 }
 
+function personalIstNebenberuf(nr){return Number(nr)>=50&&Number(nr)<=60;}
+function personalArt(nr){return personalIstNebenberuf(nr)?'Nebenberuf':'Hauptberuf';}
+function personalNummerAbgleichen(){
+ const f=document.getElementById('p_nr'),art=document.getElementById('p_beschaeftigungsart');if(!f||!art)return;
+ art.value=personalArt(f.value);
+ document.querySelectorAll('[data-freie-dienstnummer]').forEach(b=>b.classList.toggle('gewaehlt',Number(b.dataset.freieDienstnummer)===Number(f.value)));
+}
+async function personalFreieNummernLaden(){
+ const box=document.getElementById('freieDienstnummern'),input=document.getElementById('p_nr');if(!box||!input)return;
+ try{
+  const data=await api('/personal/freie-nummern');if(!box.isConnected)return;
+  const gruppe=(title,nums)=>'<div class="dienstnummer-gruppe"><strong>'+title+'</strong><div class="dienstnummer-chips">'+
+   (nums.length?nums.map(n=>'<button type="button" class="dienstnummer-chip" data-freie-dienstnummer="'+n+'">'+n+'</button>').join(''):'<span class="mut">Keine freie Nummer</span>')+'</div></div>';
+  box.innerHTML='<p class="mut">Freie Nummer anklicken. Gekündigte und ausgeblendete Akten behalten ihre Nummer.</p>'+
+   gruppe('Hauptberuf · 1–49',data.hauptberuf||[])+gruppe('Nebenberuf · 50–60',data.nebenberuf||[])+
+   '<small class="mut">Ab 61: Hauptberuf, Nummer oben manuell eingeben.</small>';
+  const frei=[...(data.hauptberuf||[]),...(data.nebenberuf||[])];
+  if(frei.length&&!frei.includes(Number(input.value)))input.value=frei[0];
+  personalNummerAbgleichen();
+ }catch(e){if(box.isConnected)box.textContent='Nummern konnten nicht geladen werden: '+e.message;}
+}
 function vPers() {
   // Ausgeschiedene bleiben in der Datenbank und ihrer Kündigungsakte, nicht in der aktiven Personalliste.
   const personen = (D.personal || []).filter(p=>p.status!=='Gekündigt');
@@ -2354,10 +2375,10 @@ function vPers() {
     const entfernen=ME.rolle==='Administrator'?
       '<button type="button" class="pers-admin-remove" data-pers-admin-remove="'+nummer+
         '" title="Administrativ ausblenden und im Papierkorb sichern">Entfernen</button>':'';
-    return '<tr class="pers-row" data-name="' + esc([p.personalnummer,p.vorname,p.nachname,p.dienstgrad,p.nebenjob].join(' ').toLowerCase()) + '" data-group="' + esc(p.gruppe || '') + '" data-status="' + esc(p.status || '') + '" data-art="' + esc(p.beschaeftigungsart || 'Hauptberuf') + '">' +
-      '<td>' + nummer + '</td>' +
+    return '<tr class="pers-row '+(personalIstNebenberuf(nummer)?'pers-row-neben':'pers-row-haupt')+'" data-name="' + esc([p.personalnummer,p.vorname,p.nachname,p.dienstgrad,p.nebenjob].join(' ').toLowerCase()) + '" data-group="' + esc(p.gruppe || '') + '" data-status="' + esc(p.status || '') + '" data-art="' + personalArt(nummer) + '">' +
+      '<td><span class="dienstnummer-pill '+(personalIstNebenberuf(nummer)?'neben':'haupt')+'" title="'+personalArt(nummer)+'">'+nummer+'</span></td>' +
       '<td><button class="pers-link" type="button" data-show-person="' + nummer + '">' + name + '</button></td>' +
-      '<td>' + rangMitAbzeichen(p.dienstgrad) + '</td><td>' + esc(p.gruppe || '–') + '</td><td>' + esc(p.beschaeftigungsart || (p.gruppe === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf')) + '</td>' +
+      '<td>' + rangMitAbzeichen(p.dienstgrad) + '</td><td>' + esc(p.gruppe || '–') + '</td><td>' + esc(personalArt(nummer)) + '</td>' +
       '<td>' + fd(p.eintrittsdatum) + '</td><td>' + handy + '</td>' +
       '<td>' + status + '</td><td class="pers-action-cell">' + bearbeitung + entfernen + personalKuendigungButton(p) + '</td></tr>';
   }).join('');
@@ -2489,7 +2510,7 @@ function personalAnzeigen(nr) {
   if (!p) return;
   const dialog = $('#personalDialog');
   const items = [
-    ['Personalnummer', p.personalnummer], ['Dienstgrad', p.dienstgrad], ['Mitarbeitergruppe', p.gruppe], ['Beschäftigungsart', p.beschaeftigungsart || 'Hauptberuf'],
+    ['Personalnummer', p.personalnummer], ['Dienstgrad', p.dienstgrad], ['Mitarbeitergruppe', p.gruppe], ['Beschäftigungsart', personalArt(p.personalnummer)],
     ['Status', p.status], ['Eintritt', fd(p.eintrittsdatum)], ['Nebenjob', p.nebenjob],
     ['Waffenschein', p.waffenschein ? 'Vorhanden' : 'Nicht vorhanden'],
     ['Spind', p.spind ? 'Vorhanden' : 'Nicht vorhanden'],
@@ -2513,9 +2534,9 @@ function personalAnzeigen(nr) {
     (can('pers',2)?'<section class="box pers-documents"><div class="pers-documents-head">'+
       '<div><h3>Dokumente & Vorlagen</h3><p class="mut">Neue Dokumente erstellen und vorhandene Unterlagen dieser Personalakte öffnen.</p></div></div>'+
       '<div class="pers-documents-actions">'+
-      '<button type="button" class="pers-document-action" data-dg-type="'+(p.dienstgrad==='Polizeimeisteranwärter'?'pmavertrag':p.beschaeftigungsart==='Nebenberuf'?'nebenvertrag':'hauptvertrag')+'" data-dg-nr="'+Number(nr)+'">'+
+      '<button type="button" class="pers-document-action" data-dg-type="'+(personalIstNebenberuf(nr)?'nebenvertrag':p.dienstgrad==='Polizeimeisteranwärter'?'pmavertrag':'hauptvertrag')+'" data-dg-nr="'+Number(nr)+'">'+
       '<span class="pers-document-icon"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg></span>'+
-      '<span><strong>Arbeitsvertrag</strong><small>Vertrag aus Vorlage erstellen</small></span>'+
+      '<span><strong>Arbeitsvertrag · '+personalArt(nr)+'</strong><small>Vertragsvorlage automatisch auswählen</small></span>'+
       '<span class="pers-document-arrow" aria-hidden="true">›</span></button>'+
       '<button type="button" class="pers-document-action" data-dg-type="nebenjob" data-dg-nr="'+Number(nr)+'">'+
       '<span class="pers-document-icon"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18M10 13v2h4v-2"/></svg></span>'+
@@ -2658,19 +2679,20 @@ function personalBearbeiten(nr) {
   const p = neu ? {} : (D.personal || []).find(x => Number(x.personalnummer) === Number(nr));
   if (!p) return;
   const used = (D.personal || []).map(x => Number(x.personalnummer));
-  const vorschlag = Math.max(0,...used) + 1;
+  const vorschlag = Array.from({length:60},(_,i)=>i+1).find(n=>!used.includes(n))||Math.max(61,...used)+1;
   const raenge = (D.raenge || []).map(r => r.name).filter(Boolean);
   const gruppen = [...new Set([...(D.systemOptionen?.mitarbeitergruppen||['Mittlerer Dienst','Gehobener Dienst','Polizeirat','Leitungsdienst','Nicht zugeordnet']),...(D.personal||[]).map(x=>x.gruppe).filter(Boolean)])];
   const statusAlle = ['Aktiv','Abgemeldet','Inaktiv','Suspendiert','Gekündigt','freihalten',...(D.personal || []).map(x => x.status).filter(Boolean)];
   const status = neu ? statusAlle.filter(x => x !== 'Gekündigt') : statusAlle;
   const datum = x => x ? String(x).slice(0,10) : '';
   const felder = [
-    personalFeld('Personalnummer','p_nr',neu?vorschlag:nr,'number',neu?'min="1" required':'readonly'),
+    personalFeld('Dienstnummer','p_nr',neu?vorschlag:nr,'number',neu?'min="1" required':'readonly'),
+    (neu?'<div class="full dienstnummer-auswahl" id="freieDienstnummern">Freie Nummern werden geladen …</div>':''),
     personalSelect('Status','p_status',status,p.status || 'Aktiv'),
     personalFeld('Vorname','p_vorname',p.vorname,'text','required maxlength="120"'),
     personalFeld('Nachname','p_nachname',p.nachname,'text','required maxlength="120"'),
     personalSelect('Mitarbeitergruppe (automatischer Vorschlag, manuell änderbar)','p_gruppe',gruppen,p.gruppe || 'Nicht zugeordnet'),
-    personalSelect('Beschäftigungsart','p_beschaeftigungsart',D.systemOptionen?.beschaeftigungsarten||['Hauptberuf','Nebenberuf'],p.beschaeftigungsart || (p.gruppe === 'Nebenberuf' ? 'Nebenberuf' : 'Hauptberuf')),
+    personalSelect('Beschäftigungsart (automatisch)','p_beschaeftigungsart',['Hauptberuf','Nebenberuf'],personalArt(neu?vorschlag:nr)),
     (neu ? personalSelect('Dienstgrad (Einstufung bei Eintritt)','p_dienstgrad',raenge.length?raenge:[''],p.dienstgrad || '') :
       personalSelect('Dienstgrad (Änderung nur nach POR-Freigabe)','p_dienstgrad',raenge,p.dienstgrad||'')),
     (!neu?personalFeld('Maßgebliches Beförderungsdatum (POR-Freigabe)','p_rang_datum',datum(p.letzte_befoerderung),'date'):'') ,
@@ -2720,6 +2742,8 @@ function personalBearbeiten(nr) {
     '<button id="persSpeichern" class="p" type="submit">Speichern</button></div></form>';
   dialog.dataset.revision=neu?'':String(p._revision||'');
   dialog.showModal();
+  const artFeld=$('#p_beschaeftigungsart');if(artFeld){artFeld.disabled=true;artFeld.title='50–60 = Nebenberuf, sonst Hauptberuf';}
+  if(neu)void personalFreieNummernLaden();
   if(!neu&&p.status!=='Gekündigt'){
     const wechselAktualisieren=()=>{
       const wirdGekuendigt=$('#p_status').value==='Gekündigt';
@@ -2732,6 +2756,11 @@ function personalBearbeiten(nr) {
     wechselAktualisieren();
   }
   $('#persAbbrechen').addEventListener('click',personalDialogSchliessen);
+  $('#p_nr')?.addEventListener('input',personalNummerAbgleichen);
+  $('#freieDienstnummern')?.addEventListener('click',event=>{
+   const b=event.target.closest('[data-freie-dienstnummer]');if(!b)return;
+   $('#p_nr').value=b.dataset.freieDienstnummer;personalNummerAbgleichen();
+  });
   $('#personalForm').addEventListener('submit',event => personalSpeichern(event, neu, nr));
 }
 
@@ -2770,7 +2799,7 @@ async function personalSpeichern(event, neu, nr) {
   const wert = id => $('#' + id).value.trim();
   const body = {
     vorname: wert('p_vorname'), nachname: wert('p_nachname'),
-    gruppe: wert('p_gruppe'), beschaeftigungsart: wert('p_beschaeftigungsart'), status: wert('p_status'),
+    gruppe: wert('p_gruppe'), beschaeftigungsart: personalArt(neu?Number(wert('p_nr')):nr), status: wert('p_status'),
     eintrittsdatum: wert('p_eintrittsdatum'),
     nebenjob: wert('p_nebenjob')
   };
@@ -2968,8 +2997,8 @@ function vBef() {
       '<span class="tag '+(pruefung?'ok':'warn')+'">'+esc(status)+'</span>'):
       '<span class="tag '+zeitKlasse+'">'+esc(status)+'</span>';
     const st = (p.por_status === 'genehmigt'?'ok':p.por_status === 'beantragt'?'warn':p.por_status === 'abgelehnt'?'bad':'');
-    const antragAendern=can('por',2) ||
-      (verwalten && !['genehmigt','abgelehnt'].includes(p.por_status));
+    const polizeiratAntrag=ME?.rolle==='Polizeirat'&&can('bef')&&!['beantragt','genehmigt','abgelehnt'].includes(p.por_status);
+    const antragAendern=can('por',2) || (verwalten && !['genehmigt','abgelehnt'].includes(p.por_status)) || polizeiratAntrag;
     const action =
       (antragAendern ? '<button type="button" data-por-person="'+nr+'">'+
         (can('por',2)?'POR-Freigabe':'POR beantragen')+'</button> ' : '') +
@@ -3037,10 +3066,11 @@ function vBef() {
 }
 function aktBem(name) { const r = (D.raenge||[]).find(x=>x.name===name); return r ? r.bemerkung||'' : ''; }
 function porBearbeiten(nr) {
-  if(!can('bef',1)||(!can('por',2)&&!can('bef',2)))return;
+  if(!can('bef',1)||(!can('por',2)&&!can('bef',2)&&ME?.rolle!=='Polizeirat'))return;
   const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nr);if(!p)return;
   const d=$('#porDialog');
-  const options=POR_STATUS.filter(([status])=>can('por',2)||['offen','beantragt'].includes(status)).map(([status,label])=>'<option value="'+status+'"'+((p.por_status||'offen')===status?' selected':'')+'>'+label+'</option>').join('');
+  const nurBeantragen=ME?.rolle==='Polizeirat'&&!can('por',2)&&!can('bef',2);
+  const options=POR_STATUS.filter(([status])=>can('por',2)||(nurBeantragen?status==='beantragt':['offen','beantragt'].includes(status))).map(([status,label])=>'<option value="'+status+'"'+((nurBeantragen?'beantragt':p.por_status||'offen')===status?' selected':'')+'>'+label+'</option>').join('');
   d.innerHTML='<h2>'+(can('por',2)?'POR-Genehmigung':'POR-Antrag')+'</h2><p class="mut">'+esc(p.vorname+' '+p.nachname)+' · Nr. '+nr+' · '+esc(p.dienstgrad||'')+'</p>' +
     '<label for="porStatus">Status</label><select id="porStatus">'+options+'</select>' +
     '<label for="porNotiz">Notiz zur Freigabe (optional)</label><input id="porNotiz" value="'+esc(p.por_notiz||'')+'">' +
@@ -3052,7 +3082,7 @@ function porBearbeiten(nr) {
   $('#porSave').onclick=porSpeichern;
 }
 async function porSpeichern() {
-  if(!can('bef',2))return;
+  if(!can('por',2)&&!can('bef',2)&&!(ME?.rolle==='Polizeirat'&&can('bef')))return;
   const d=$('#porDialog'),btn=$('#porSave'), nr=Number(d.dataset.person);
   btn.disabled=true;$('#porError').textContent='';
   try {
@@ -3997,8 +4027,9 @@ async function chkLoeschen(name){
   }catch(err){const out=$('#checkInfo');if(out)out.textContent='Entfernen fehlgeschlagen: '+err.message}
 }
 
+function chkDarfAbhaken(){return can('chk',2)||(ME?.rolle==='Polizeirat'&&can('chk',1));}
 function vChk(){
-  const schreiben=can('chk',2),blocks=(D.checklisten||[]).map(c=>{
+  const schreiben=can('chk',2),haken=chkDarfAbhaken(),blocks=(D.checklisten||[]).map(c=>{
     const items=Array.isArray(c.aufgaben)?c.aufgaben:[];
     const fertig=items.filter((_,i)=>chkIstErledigt(c.name,i)).length;
     const pct=items.length?Math.round(fertig/items.length*100):0;
@@ -4011,7 +4042,7 @@ function vChk(){
         '<a class="l" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">'+esc(text)+'</a>':esc(text);
       return '<li class="checklist-item '+(checked?'done':'')+'">'+
         '<input type="checkbox" aria-label="'+esc(text)+'" data-check-name="'+name+
-        '" data-check-index="'+i+'" '+(checked?'checked':'')+(schreiben?'':' disabled')+'>'+
+        '" data-check-index="'+i+'" '+(checked?'checked':'')+(haken?'':' disabled')+'>'+
         '<span>'+step+'</span></li>';
     }).join('');
     return '<section class="box checklist-box"><div class="checklist-head"><h3>'+esc(c.name)+'</h3>'+
@@ -4032,7 +4063,7 @@ function vChk(){
     '<div class="grid2">'+blocks+'</div>';
 }
 async function chkSetzen(input){
-  if(!can('chk',2))return;
+  if(!chkDarfAbhaken())return;
   const name=input.dataset.checkName,index=Number(input.dataset.checkIndex);
   const fertig=input.checked;input.disabled=true;
   try{
