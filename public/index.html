@@ -1669,7 +1669,7 @@ function rankKranz(farbe){
     'fill="none" stroke="#c78f27" stroke-width=".85" stroke-linecap="round"/>';
   for(let i=0;i<10;i++){
     const t=i/9,x=15+49*t;
-    const y=9.7+9*Math.exp(-((x-15)/9)**2)+.0018*(x-40)**2;
+    const y=9.7+9*Math.exp(-Math.pow((x-15)/9,2))+.0018*(x-40)**2;
     for(const seite of [-1,1]){
       const cy=seite===-1?y:44-y;
       const winkel=seite===-1?-35+31*t:35-31*t;
