@@ -1653,38 +1653,36 @@ function rankStern(cx,cy,r,farbe){
   }
   return '<polygon points="'+punkte.join(' ')+'" fill="'+farbe+'"/>';
 }
-/* Eichenlaub-Zweige, als feines SVG-Vektormotiv statt der drei
-   rechteckigen Balken. An realen hessischen goldenen Eichenlaubabzeichen
-   orientiert, für die IdentityValley-Rangfolge gestalterisch angepasst. */
-function rankKranz(farbe,anzahl=1){
-  const end=48+(anzahl-1)*18;
-  const top='M9 22 C17 15 26 11 '+end+' 11';
-  const bottom='M9 22 C17 29 26 33 '+end+' 33';
-  const aeste='<path d="'+top+' '+bottom+
-    '" fill="none" stroke="'+farbe+'" stroke-width="1.55" stroke-linecap="round" opacity=".95"/>';
-  /* Lappige Eichenblätter mit kleiner Mittelader. Die Zweige öffnen sich
-     nach rechts und rahmen die Sterne wie bei Polizeiführungsabzeichen. */
-  const blatt='M0 0 C-1.3 -1.7 -3.8 -1.8 -3.3 -4 C-5.7 -4.5 -5.4 -7 -3.1 -7.1 '+
-    'C-3.7 -9.5 -.8 -10.8 1 -8.5 C3.6 -9.8 5.2 -7.4 3.7 -5.5 '+
-    'C5.6 -3.6 2.5 -1.6 0 0Z';
-  const n=anzahl===1?5:anzahl===2?7:9;
-  let blätter='';
-  for(let i=0;i<n;i++){
-    const t=(i+.3)/(n+.35);
-    const x=13+(end-15)*t;
-    const y=22-11*Math.sin(Math.PI*.5*Math.min(1,(x-9)/(end-9)));
-    for(const side of [1,-1]){
-      const cy=side===1?y:44-y;
-      const angle=side===1?(-25+25*t):(155-25*t);
-      const transform='translate('+x.toFixed(2)+' '+cy.toFixed(2)+') rotate('+angle.toFixed(1)+')';
-      blätter+='<g transform="'+transform+'">'+
-        '<path d="'+blatt+'" fill="'+farbe+'" stroke="#fce5a3" stroke-width=".24" stroke-linejoin="round"/>'+
-        '<path d="M0 0 L-.2 -6.4" stroke="#fff1bc" stroke-width=".45" opacity=".65"/>'+
+/* Drei Führungsränge: einheitlicher, offener Gold-Eichenlaubkranz
+   nach dem Schulterklappen-Referenzbild. Oben/unten dicht geschwungene,
+   überlappende Eichenblätter und links drei kurze goldene Balken.
+   Das Motiv wird für alle drei Dienstgrade zentral wiederverwendet. */
+function rankKranz(farbe){
+  const blatt='M0 0 C.7 -.6 1.4 -.7 1.8 -1.4 '+
+    'C1.1 -2.9 2.3 -3.7 3.4 -2.4 C3.7 -4.2 5.2 -4.2 5.8 -2.6 '+
+    'C6.8 -3.9 8.2 -3.1 7.6 -1.9 C9.7 -2 9.9 -.3 8.2 0 '+
+    'C9.9 .3 9.7 2 7.6 1.9 C8.2 3.1 6.8 3.9 5.8 2.6 '+
+    'C5.2 4.2 3.7 4.2 3.4 2.4 C2.3 3.7 1.1 2.9 1.8 1.4 '+
+    'C1.4 .7 .7 .6 0 0Z';
+  let zweige='<path d="M15 22 C17 11 30 6.8 45 9.6 C56 9.8 64 11 72 12 '+
+    'M15 22 C17 33 30 37.2 45 34.4 C56 34.2 64 33 72 32" '+
+    'fill="none" stroke="#c78f27" stroke-width=".85" stroke-linecap="round"/>';
+  for(let i=0;i<10;i++){
+    const t=i/9,x=15+49*t;
+    const y=9.7+9*Math.exp(-((x-15)/9)**2)+.0018*(x-40)**2;
+    for(const seite of [-1,1]){
+      const cy=seite===-1?y:44-y;
+      const winkel=seite===-1?-35+31*t:35-31*t;
+      const transform='translate('+x.toFixed(2)+' '+cy.toFixed(2)+') rotate('+winkel.toFixed(1)+')';
+      zweige+='<g transform="'+transform+'">'+
+        '<path d="'+blatt+'" fill="'+farbe+'" stroke="#ac781d" stroke-width=".30" stroke-linejoin="round"/>'+
+        '<path d="M1 0 L7.9 0" stroke="#ffd363" stroke-width=".33" opacity=".7"/>'+
         '</g>';
     }
   }
-  return aeste+blätter+
-    '<circle cx="9" cy="22" r="1.9" fill="'+farbe+'" stroke="#ffe8a8" stroke-width=".5"/>';
+  return zweige+
+    '<path d="M13 20 h5 v1.35 h-5z M12.4 22 h5.6 v1.35 h-5.6z '+
+    'M13 24 h5 v1.35 h-5z" fill="'+farbe+'"/>';
 }
 function rangAbzeichen(rang,scale=1){
   const v=RANK_LITZEN[String(rang||'')];
@@ -1699,9 +1697,9 @@ function rangAbzeichen(rang,scale=1){
     const r=7.4,z=15;
     shapes=stern(xStart,cy-8,r)+stern(xStart,cy+8,r)+
       stern(xStart+z,cy,r)+stern(xStart+2*z,cy,r)+stern(xStart+3*z,cy,r);
-  } else if(art==='k1')shapes=rankKranz(f,1)+stern(33,cy,7.5);
-  else if(art==='k2')shapes=rankKranz(f,2)+stern(33,cy,7)+stern(51,cy,7);
-  else if(art==='k3')shapes=rankKranz(f,3)+stern(33,cy,6.8)+stern(51,cy,6.8)+stern(69,cy,6.8);
+  } else if(art==='k1')shapes=rankKranz(f)+stern(49,cy,8.2);
+  else if(art==='k2')shapes=rankKranz(f)+stern(42,cy,7.1)+stern(61,cy,7.1);
+  else if(art==='k3')shapes=rankKranz(f)+stern(33,cy,6.3)+stern(49,cy,6.3)+stern(65,cy,6.3);
   const w=Math.round(132*scale*.66),h=Math.round(44*scale*.66);
   const klappe='<rect x="1.2" y="2" width="129.6" height="40" rx="6" '+
     'fill="#111923" stroke="#526174" stroke-width="1.1"/>'+
