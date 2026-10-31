@@ -2,7 +2,7 @@
    Bekannte IDs werden pro Konto und Browser-Tab gemerkt, damit es kein
    erneutes Aufpoppen bei jedem Rendern oder Seitenwechsel gibt. */
 (()=>{
-  let inFlight=false,again=false,account='',seen=null,toast=null,lastChecked=0;
+  let inFlight=false,again=false,account='',seen=null,toast=null,lastChecked=0,regularIds=[],rankIds=[];
   const eligible=()=>Boolean(typeof can==='function'&&can('por',2));
   const key=()=> 'idv-por-bekannt-'+String(ME?.dienstnummer||'unbekannt');
   function loadSeen(){
@@ -11,7 +11,7 @@
     account=id;
     try{
       const raw=JSON.parse(sessionStorage.getItem(id)||'[]');
-      seen=new Set(Array.isArray(raw)?raw.filter(x=>Number.isSafeInteger(x)&&x>0):[]);
+      seen=new Set(Array.isArray(raw)?raw.map(x=>typeof x==='number'?'r:'+x:String(x)).filter(Boolean):[]);
     }catch{seen=new Set();}
     return seen;
   }
@@ -38,7 +38,7 @@
       else if(can('pers'))wechsleZuModul('pers');
       else return;
       close();
-      const ziel=document.getElementById(can('bef')?'rangantraegeBereich':'personalRangantraege');
+      const ziel=document.querySelector('#inhalt>.idv-warnung')||document.getElementById(can('bef')?'rangantraegeBereich':'personalRangantraege');
       ziel?.scrollIntoView({block:'start',behavior:'smooth'});
     });
     return toast;
@@ -48,8 +48,8 @@
     box.querySelector('#idvPorHinweisTitel').textContent=
       neu===1?'Neue POR-Freigabeanfrage':'Neue POR-Freigabeanfragen';
     box.querySelector('#idvPorHinweisText').textContent=
-      neu===1?'1 neuer Rangantrag wartet auf Entscheidung.':
-      neu+' neue Ranganträge warten auf Entscheidung.';
+      neu===1?'1 neue POR-Freigabeanfrage wartet auf Entscheidung.':
+      neu+' neue POR-Freigabeanfragen warten auf Entscheidung.';
     if(gesamt>neu)box.querySelector('#idvPorHinweisText').textContent+=' Insgesamt '+gesamt+' offen.';
     const open=box.querySelector('#idvPorHinweisOeffnen');
     open.hidden=!(can('bef')||can('pers'));
@@ -59,21 +59,31 @@
     if(!eligible()){close();return;}
     const known=loadSeen();
     const offen=Array.isArray(items)?items.filter(a=>a?.status==='beantragt'):[];
-    const ids=[...new Set(offen.map(x=>Number(x.id)).filter(x=>Number.isSafeInteger(x)&&x>0))];
-    const newer=ids.filter(id=>!known.has(id));
-    ids.forEach(id=>known.add(id));
-    if(newer.length){persist();notify(newer.length,ids.length);}
-    if(!ids.length)close();
+    rankIds=[...new Set(offen.map(x=>Number(x.id)).filter(x=>Number.isSafeInteger(x)&&x>0).map(id=>'r:'+id))];
+    const newer=rankIds.filter(id=>!known.has(id));
+    rankIds.forEach(id=>known.add(id));
+    if(newer.length){persist();notify(newer.length,rankIds.length+regularIds.length);}
+    if(!rankIds.length&&!regularIds.length)close();
     lastChecked=Date.now();
+  }
+  function observeRegular(items){
+    if(!eligible()){close();return;}
+    const known=loadSeen();
+    regularIds=[...new Set((Array.isArray(items)?items:[]).filter(x=>Number.isSafeInteger(x?.nr)&&x.nr>0)
+       .map(x=>'p:'+x.nr+':'+String(x.revision||'')))];
+    const newer=regularIds.filter(id=>!known.has(id));
+    regularIds.forEach(id=>known.add(id));
+    if(newer.length){persist();notify(newer.length,rankIds.length+regularIds.length);}
+    if(!rankIds.length&&!regularIds.length)close();
   }
   async function refresh(){
     if(!eligible()){close();return;}
     if(inFlight){again=true;return;}
     inFlight=true;again=false;
     try{
-      const list=await api('/rangantraege');
+      const [list,regular]=await Promise.all([api('/rangantraege'),api('/por/offen')]);
       if(!eligible())return;
-      observe(list);
+      observe(list);observeRegular(regular);
       // Nur den jeweiligen POR-Bereich auffrischen, nie die ganze Seite.
       if(tab==='pers'&&document.getElementById('personalRangantraege'))
         await ladePersonalRangantraege(list);
