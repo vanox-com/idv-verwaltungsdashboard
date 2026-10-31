@@ -124,7 +124,7 @@ async function dgShow(typ,nr=0,kontext=0){
  // Die Nummer führt die Vertragskategorie, auch bei älteren Akten.
  if(person&&['hauptvertrag','nebenvertrag','pmavertrag'].includes(typ)){
   const n=Number(person.personalnummer);
-  typ=n>=50&&n<=60?'nebenvertrag':person.dienstgrad==='Polizeimeisteranwärter'?'pmavertrag':'hauptvertrag';
+  typ=n>=51&&n<=60?'nebenvertrag':person.dienstgrad==='Polizeimeisteranwärter'?'pmavertrag':'hauptvertrag';
  }
  const name=person?[person.vorname,person.nachname].join(' '):'Externe Person';
  const defaults={datum:dgNow(),beginn:person?.eintrittsdatum?String(person.eintrittsdatum).slice(0,10):dgNow(),

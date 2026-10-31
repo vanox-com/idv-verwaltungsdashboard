@@ -2404,7 +2404,7 @@ function personalKuendigungButton(p){
     '">↗ '+label+'</button>';
 }
 
-function personalIstNebenberuf(nr){return Number(nr)>=50&&Number(nr)<=60;}
+function personalIstNebenberuf(nr){return Number(nr)>=51&&Number(nr)<=60;}
 function personalArt(nr){return personalIstNebenberuf(nr)?'Nebenberuf':'Hauptberuf';}
 function personalNummerAbgleichen(){
  const f=document.getElementById('p_nr'),art=document.getElementById('p_beschaeftigungsart');if(!f||!art)return;
@@ -2417,11 +2417,9 @@ async function personalFreieNummernLaden(){
   const data=await api('/personal/freie-nummern');if(!box.isConnected)return;
   const gruppe=(title,nums)=>'<div class="dienstnummer-gruppe"><strong>'+title+'</strong><div class="dienstnummer-chips">'+
    (nums.length?nums.map(n=>'<button type="button" class="dienstnummer-chip" data-freie-dienstnummer="'+n+'">'+n+'</button>').join(''):'<span class="mut">Keine freie Nummer</span>')+'</div></div>';
-  const reserviert=[...(data.reserviert_hauptberuf||[]),...(data.reserviert_nebenberuf||[])];
-  box.innerHTML='<p class="mut">Freie Dienstnummern aus dem Personalbestand. Leere Platzhalter mit Status „frei“ können wieder besetzt werden; „freihalten“ bleibt reserviert.</p>'+
-   gruppe('Hauptberuf · 1–49',data.hauptberuf||[])+gruppe('Nebenberuf · 50–60',data.nebenberuf||[])+
-   (reserviert.length?'<small class="mut">Reserviert („freihalten“), nicht auswählbar: '+reserviert.join(', ')+'</small>':'')+
-   '<small class="mut">Ab 61: Hauptberuf, Nummer oben manuell eingeben. Kündigungsakten und frühere Vorgänge bleiben historisch erhalten.</small>';
+  box.innerHTML='<p class="mut">Frei sind Dienstnummern ohne Status Aktiv, Abgemeldet, Inaktiv oder Suspendiert. Bei Gekündigt wird die Nummer nach Übernahme in die Kündigungsverwaltung wieder frei.</p>'+
+   gruppe('Hauptberuf · 1–50',data.hauptberuf||[])+gruppe('Nebenberuf · 51–60',data.nebenberuf||[])+
+   '<small class="mut">Ab 61: Hauptberuf, Nummer oben manuell eingeben. Vorherige Aktenstände werden bei einer Wiederbesetzung historisch gesichert.</small>';
   const frei=[...(data.hauptberuf||[]),...(data.nebenberuf||[])];
   if(frei.length&&!frei.includes(Number(input.value)))input.value=frei[0];
   personalNummerAbgleichen();
@@ -2453,7 +2451,7 @@ function vPers() {
       '<td>' + status + '</td><td class="pers-action-cell">' + bearbeitung + entfernen + personalKuendigungButton(p) + '</td></tr>';
   }).join('');
   const auswahl = (werte) => '<option value="">Alle</option>' + werte.map(v => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
-  return '<h1>Personalverwaltung</h1><p class="mut">Dienstnummern <span class="dienstnummer-pill haupt">1–49</span> Hauptberuf · <span class="dienstnummer-pill neben">50–60</span> Nebenberuf · ab 61 wieder Hauptberuf.</p>' + '<section id="personalRangantraege" class="box"><h3>Offene Rangänderungen – POR-Freigabe</h3><p class="mut">Lade …</p></section>' +
+  return '<h1>Personalverwaltung</h1><p class="mut">Dienstnummern <span class="dienstnummer-pill haupt">1–50</span> Hauptberuf · <span class="dienstnummer-pill neben">51–60</span> Nebenberuf · ab 61 wieder Hauptberuf.</p>' + '<section id="personalRangantraege" class="box"><h3>Offene Rangänderungen – POR-Freigabe</h3><p class="mut">Lade …</p></section>' +
     '<div class="pers-bar">' +
     '<input id="persSuche" aria-label="Personal durchsuchen" placeholder="Name, Dienstgrad oder Nummer suchen …" oninput="personalFiltern()">' +
     '<select id="persGruppe" aria-label="Gruppe filtern" onchange="personalFiltern()">' + auswahl(gruppen) + '</select>' +
@@ -2812,7 +2810,7 @@ function personalBearbeiten(nr) {
     '<button id="persSpeichern" class="p" type="submit">Speichern</button></div></form>';
   dialog.dataset.revision=neu?'':String(p._revision||'');
   dialog.showModal();
-  const artFeld=$('#p_beschaeftigungsart');if(artFeld){artFeld.disabled=true;artFeld.title='50–60 = Nebenberuf, sonst Hauptberuf';}
+  const artFeld=$('#p_beschaeftigungsart');if(artFeld){artFeld.disabled=true;artFeld.title='51–60 = Nebenberuf, sonst Hauptberuf';}
   if(neu)void personalFreieNummernLaden();
   if(!neu&&p.status!=='Gekündigt'){
     const wechselAktualisieren=()=>{
@@ -2886,8 +2884,9 @@ async function personalSpeichern(event, neu, nr) {
       personalFormFehler('Ungültige Personalnummer');
       return;
     }
-    if ((D.personal || []).some(p => Number(p.personalnummer) === body.personalnummer)) {
-      personalFormFehler('Diese Personalnummer ist bereits vergeben.');
+    if ((D.personal || []).some(p => Number(p.personalnummer) === body.personalnummer &&
+        ['aktiv','abgemeldet','inaktiv','suspendiert'].includes(String(p.status||'').trim().toLocaleLowerCase('de-DE')))) {
+      personalFormFehler('Diese Personalnummer ist durch den Personalstatus bereits belegt.');
       return;
     }
   }

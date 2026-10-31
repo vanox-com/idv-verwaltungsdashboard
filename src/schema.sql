@@ -88,9 +88,9 @@ UPDATE personal SET gruppe='Nicht zugeordnet' WHERE gruppe IN ('Hauptberuf','Neb
 -- Dienstnummernband ist für Haupt-/Nebenberuf verbindlich. Es werden
 -- keine Dienstnummern verändert, nur vorhandene Beschäftigungsarten angepasst.
 UPDATE personal SET beschaeftigungsart=
- CASE WHEN personalnummer BETWEEN 50 AND 60 THEN 'Nebenberuf' ELSE 'Hauptberuf' END
+ CASE WHEN personalnummer BETWEEN 51 AND 60 THEN 'Nebenberuf' ELSE 'Hauptberuf' END
 WHERE beschaeftigungsart IS DISTINCT FROM
- CASE WHEN personalnummer BETWEEN 50 AND 60 THEN 'Nebenberuf' ELSE 'Hauptberuf' END;
+ CASE WHEN personalnummer BETWEEN 51 AND 60 THEN 'Nebenberuf' ELSE 'Hauptberuf' END;
 ALTER TABLE personal ADD COLUMN IF NOT EXISTS arbeitsvertrag_url text NOT NULL DEFAULT '';
 ALTER TABLE personal ADD COLUMN IF NOT EXISTS ernennungsurkunde_url text NOT NULL DEFAULT '';
 
@@ -452,6 +452,20 @@ CREATE TABLE IF NOT EXISTS personal_audit (
  aenderungen jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 CREATE INDEX IF NOT EXISTS personal_audit_nr_zeit ON personal_audit(personalnummer,zeit DESC);
+
+/* Historischer Datenstand vor einer erneuten Belegung derselben Dienstnummer.
+   Keine Ausgabe über allgemeine API und keinerlei Löschung alter Dokumente. */
+CREATE TABLE IF NOT EXISTS personalnummer_neubelegungen (
+ id bigserial PRIMARY KEY,
+ personalnummer integer NOT NULL,
+ zeit timestamptz NOT NULL DEFAULT now(),
+ vergeben_von integer REFERENCES users(id) ON DELETE SET NULL,
+ vorher jsonb NOT NULL,
+ folgedaten jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+ALTER TABLE personalnummer_neubelegungen ADD COLUMN IF NOT EXISTS folgedaten jsonb NOT NULL DEFAULT '{}'::jsonb;
+CREATE INDEX IF NOT EXISTS personalnummer_neubelegungen_nr_zeit
+ ON personalnummer_neubelegungen(personalnummer,zeit DESC);
 
 /* Gezielte Mitteilungen: Empfänger bei Versand fixieren, keine Datenvermischung. */
 CREATE TABLE IF NOT EXISTS portal_meldungen (
@@ -937,6 +951,27 @@ UPDATE kuendigungen SET personal_snapshot=jsonb_build_object(
  'generierte_dokumente','[]'::jsonb)
  WHERE personal_snapshot IS NULL;
 
+
+/* Altbestand: Bereits als gekündigt erfasste Personen ohne zugeordneten
+   Kündigungsvorgang nachträglich ins Archiv übernehmen. Den ursprünglichen
+   Kündigungsgrund und das Datum ausdrücklich nicht erfinden. Der Trigger
+   sichert vor der Neubelegung die aktuelle Akte und die Dokumentlinks. */
+INSERT INTO kuendigungen(personalnummer,vorname,nachname,rang,grund,handy,
+  vertrag,eintritt,urkunde,erfasst_am,kuendigungsdatum)
+SELECT p.personalnummer,p.vorname,p.nachname,p.dienstgrad,
+  'Altbestand: Kündigungsgrund nicht dokumentiert',p.handy,
+  CASE WHEN NULLIF(TRIM(COALESCE(p.arbeitsvertrag_url,'')),'') IS NOT NULL
+    THEN jsonb_build_object('t',COALESCE(NULLIF(p.arbeitsvertrag,''),'Arbeitsvertrag'),
+      'u',p.arbeitsvertrag_url)::text ELSE COALESCE(p.arbeitsvertrag,'') END,
+  p.eintrittsdatum,
+  CASE WHEN NULLIF(TRIM(COALESCE(p.ernennungsurkunde_url,'')),'') IS NOT NULL
+    THEN jsonb_build_object('t',COALESCE(NULLIF(p.ernennungsurkunde,''),'Ernennungsurkunde'),
+      'u',p.ernennungsurkunde_url)::text ELSE COALESCE(p.ernennungsurkunde,'') END,
+  NULL,NULL
+FROM personal p
+WHERE p.personalnummer BETWEEN 1 AND 60
+  AND LOWER(TRIM(COALESCE(p.status,'')))='gekündigt'
+  AND NOT EXISTS(SELECT 1 FROM kuendigungen k WHERE k.personalnummer=p.personalnummer);
 
 /* Administrative Personalbereinigung: reversibles Entfernen aus allen
    aktiven Personalübersichten. Die Personalnummer, Dokumentverweise und

@@ -835,31 +835,35 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
 
 /* ---------- Schreiben ---------- */
 
-/* Dienstnummern: 1-49 Hauptberuf, 50-60 Nebenberuf, ab 61 Hauptberuf. */
-const beschaeftigungZuNummer=nr=>Number(nr)>=50&&Number(nr)<=60?'Nebenberuf':'Hauptberuf';
+/* Nur diese fünf Personalstatus blockieren eine Dienstnummer. */
+const PERSONAL_BELEGTE_STATUS=new Set(['aktiv','abgemeldet','inaktiv','suspendiert']);
+const personalStatusBelegt=status=>PERSONAL_BELEGTE_STATUS.has(String(status??'').trim().toLocaleLowerCase('de-DE'));
+/* Dienstnummern: 1-50 Hauptberuf, 51-60 Nebenberuf, ab 61 Hauptberuf. */
+const beschaeftigungZuNummer=nr=>Number(nr)>=51&&Number(nr)<=60?'Nebenberuf':'Hauptberuf';
 app.get('/api/personal/freie-nummern',requireLogin,requireRight('pers',2),async(req,res,next)=>{
  try{
-  // Nur ausgeblendete leere Platzhalter mit Status 'frei' dürfen
-  // erneut besetzt werden. 'freihalten' bedeutet ausdrücklich reserviert.
-  const [akten,konten]=await Promise.all([
-    db.query('SELECT personalnummer,status,vorname,nachname,administrativ_geloescht_am IS NOT NULL AS ausgeblendet FROM personal WHERE personalnummer BETWEEN 1 AND 60'),
-    db.query("SELECT dienstnummer::int AS nr FROM users WHERE dienstnummer ~ '^[0-9]{1,8}$' AND dienstnummer::int BETWEEN 1 AND 60")
+  const [akten,konten,kuendigungen]=await Promise.all([
+    db.query('SELECT personalnummer,status FROM personal WHERE personalnummer BETWEEN 1 AND 60'),
+    db.query("SELECT dienstnummer::int AS nr FROM users WHERE dienstnummer ~ '^[0-9]{1,8}$' AND dienstnummer::int BETWEEN 1 AND 60"),
+    db.query(`SELECT DISTINCT k.personalnummer FROM kuendigungen k
+      WHERE k.personalnummer BETWEEN 1 AND 60
+        AND (NOT EXISTS(SELECT 1 FROM personalnummer_neubelegungen a
+           WHERE a.personalnummer=k.personalnummer)
+         OR k.erfasst_am >= (SELECT MAX(a.zeit) FROM personalnummer_neubelegungen a
+           WHERE a.personalnummer=k.personalnummer))`)
   ]);
   const personen=new Map(akten.rows.map(p=>[Number(p.personalnummer),p]));
-  const kontonummern=new Set(konten.rows.map(k=>Number(k.nr)));
-  const frei=[],reserviert=[];
+  const loginNummern=new Set(konten.rows.map(k=>Number(k.nr)));
+  const imKuendigungsmodul=new Set(kuendigungen.rows.map(k=>Number(k.personalnummer)));
+  const frei=[];
   for(let nr=1;nr<=60;nr++){
-    if(kontonummern.has(nr))continue;
+    // Eine bereits verwendete Login-Dienstnummer nicht parallel vergeben.
+    if(loginNummern.has(nr))continue;
     const p=personen.get(nr);
-    if(!p){frei.push(nr);continue;}
-    const leer=[p.vorname,p.nachname].every(x=>!x||['','-'].includes(String(x).trim()));
-    if(!p.ausgeblendet||!leer)continue;
-    if(String(p.status||'').toLowerCase()==='frei')frei.push(nr);
-    else if(String(p.status||'').toLowerCase()==='freihalten')reserviert.push(nr);
+    if(!p||(!personalStatusBelegt(p.status) &&
+      (String(p.status||'').trim().toLowerCase()!=='gekündigt'||imKuendigungsmodul.has(nr))))frei.push(nr);
   }
-  res.json({hauptberuf:frei.filter(n=>n<50),nebenberuf:frei.filter(n=>n>=50),
-    reserviert_hauptberuf:reserviert.filter(n=>n<50),
-    reserviert_nebenberuf:reserviert.filter(n=>n>=50)});
+  res.json({hauptberuf:frei.filter(n=>n<=50),nebenberuf:frei.filter(n=>n>=51)});
  }catch(e){next(e)}
 });
 /* Dienstgrade vorhandener Mitarbeiter werden ausschließlich über den
@@ -919,7 +923,10 @@ app.post('/api/personal/:nr/kuendigung',requireLogin,requireRight('pers',1),requ
       await client.query('ROLLBACK');
       return res.status(409).json({error:'Die Person muss zuerst den Status „Gekündigt“ erhalten'});
     }
-    const existing=await client.query('SELECT id FROM kuendigungen WHERE personalnummer=$1 ORDER BY id DESC',[nr]);
+    const existing=await client.query(`SELECT id FROM kuendigungen k WHERE k.personalnummer=$1
+      AND (NOT EXISTS(SELECT 1 FROM personalnummer_neubelegungen a WHERE a.personalnummer=$1)
+       OR k.erfasst_am >= (SELECT MAX(a.zeit) FROM personalnummer_neubelegungen a
+         WHERE a.personalnummer=$1)) ORDER BY id DESC`,[nr]);
     if(existing.rows.length){
       await client.query('COMMIT');
       return res.json({ok:true,angelegt:false,id:existing.rows[0].id,anzahl:existing.rows.length});
@@ -968,7 +975,7 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
   const linkFehler=dokumentLinksValidieren(body);
   if(linkFehler)return res.status(400).json({error:linkFehler});
   if(Object.hasOwn(body,'beschaeftigungsart')&&body.beschaeftigungsart!==beschaeftigungZuNummer(nr))
-    return res.status(400).json({error:'Beschäftigungsart muss zur Dienstnummer passen: 50–60 Nebenberuf, sonst Hauptberuf'});
+    return res.status(400).json({error:'Beschäftigungsart muss zur Dienstnummer passen: 51–60 Nebenberuf, sonst Hauptberuf'});
   const grund=body.kuendigungsgrund;
   if(Object.hasOwn(body,'kuendigungsgrund')&&typeof grund!=='string')
     return res.status(400).json({error:'Kündigungsgrund muss Text sein'});
@@ -1038,7 +1045,11 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
     let kuendigungAngelegt=false,kuendigungVorhanden=false;
     if(wechsel){
       const {rows:vorhanden}=await client.query(
-        'SELECT id FROM kuendigungen WHERE personalnummer=$1 ORDER BY id DESC LIMIT 1',[nr]);
+        `SELECT id FROM kuendigungen k WHERE k.personalnummer=$1
+           AND (NOT EXISTS(SELECT 1 FROM personalnummer_neubelegungen a WHERE a.personalnummer=$1)
+             OR k.erfasst_am >= (SELECT MAX(a.zeit) FROM personalnummer_neubelegungen a
+               WHERE a.personalnummer=$1))
+           ORDER BY id DESC LIMIT 1`,[nr]);
       kuendigungVorhanden=vorhanden.length>0;
       if(!kuendigungVorhanden){
         const p=aktualisiert[0];
@@ -1088,12 +1099,78 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
     if (!Number.isSafeInteger(nr) || nr < 1)
       return res.status(400).json({ error: 'Ungültige Personalnummer' });
     if(b.beschaeftigungsart && b.beschaeftigungsart!==beschaeftigungZuNummer(nr))
-      return res.status(400).json({error:'Dienstnummer 50–60 ist Nebenberuf; alle anderen sind Hauptberuf'});
+      return res.status(400).json({error:'Dienstnummer 51–60 ist Nebenberuf; alle anderen sind Hauptberuf'});
     if (!String(b.vorname || '').trim() || !String(b.nachname || '').trim())
       return res.status(400).json({ error: 'Vor- und Nachname nötig' });
     if(b.status==='Gekündigt')
       return res.status(400).json({error:'Bitte erst die Personalakte anlegen und anschließend über „Bearbeiten“ kündigen'});
-    const { rows } = await db.query(
+    const client=await db.connect().catch(next);if(!client)return;
+    try{
+      await client.query('BEGIN');
+      const {rows:vorher}=await client.query('SELECT * FROM personal WHERE personalnummer=$1 FOR UPDATE',[nr]);
+      if(vorher.length){
+        const bisher=String(vorher[0].status||'').trim().toLocaleLowerCase('de-DE');
+        const gekuendigt=bisher==='gekündigt';
+        if(personalStatusBelegt(vorher[0].status)){
+          await client.query('ROLLBACK');
+          return res.status(409).json({error:'Diese Dienstnummer ist durch ihren Personalstatus belegt.'});
+        }
+        if(gekuendigt){
+          const inKue=await client.query(`SELECT 1 FROM kuendigungen k
+            WHERE k.personalnummer=$1 AND (NOT EXISTS(
+              SELECT 1 FROM personalnummer_neubelegungen a WHERE a.personalnummer=$1)
+              OR k.erfasst_am >= (SELECT MAX(a.zeit) FROM personalnummer_neubelegungen a
+                WHERE a.personalnummer=$1)) LIMIT 1`,[nr]);
+          if(!inKue.rowCount){
+            await client.query('ROLLBACK');
+            return res.status(409).json({error:'Die Kündigung muss zuerst in die Kündigungsverwaltung übernommen werden.'});
+          }
+        }
+      }
+      const konto=await client.query("SELECT 1 FROM users WHERE dienstnummer ~ '^[0-9]{1,8}$' AND dienstnummer::int=$1 LIMIT 1",[nr]);
+      if(konto.rowCount){
+        await client.query('ROLLBACK');
+        return res.status(409).json({error:'Zu dieser Dienstnummer existiert bereits ein Benutzerzugang.'});
+      }
+      await client.query("SELECT set_config('idv.benutzer',$1,true)",[String(req.user.id)]);
+      // Vor der Neubelegung eine unveränderliche Kopie der alten Akte samt
+      // Dokumentlinks und abhängigen Vorgängen sichern. Alte Vorgänge dürfen
+      // anschließend NICHT mit der neuen Person dieser Nummer vermischt werden.
+      if(vorher.length){
+        const folgedaten={};
+        const tabellen=['sonderfunktionen','disziplin','copnet_zugaenge','personal_fristen',
+          'personal_rangantraege','generierte_dokumente','befoerderungen','personal_audit'];
+        for(const tabelle of tabellen){
+          const {rows:alt}=await client.query('SELECT * FROM '+tabelle+' WHERE personalnummer=$1 FOR UPDATE',[nr]);
+          folgedaten[tabelle]=alt;
+        }
+        const alteRoutine=await client.query(
+          `SELECT id,tage,personen FROM routine
+           WHERE jsonb_typeof(personen)='array'
+             AND EXISTS(SELECT 1 FROM jsonb_array_elements(personen) eintrag
+                WHERE eintrag->>'nr'=$1) FOR UPDATE`,[String(nr)]);
+        folgedaten.routine=alteRoutine.rows.map(r=>({
+          id:r.id,tage:r.tage,
+          teilnehmer:r.personen.filter(p=>p&&Number(p.nr)===nr)
+        }));
+        await client.query(
+          'INSERT INTO personalnummer_neubelegungen(personalnummer,vergeben_von,vorher,folgedaten) VALUES($1,$2,$3::jsonb,$4::jsonb)',
+          [nr,req.user.id,JSON.stringify(vorher[0]),JSON.stringify(folgedaten)]);
+        for(const tabelle of ['sonderfunktionen','disziplin','copnet_zugaenge',
+          'personal_fristen','personal_rangantraege','personal_audit'])
+          await client.query('DELETE FROM '+tabelle+' WHERE personalnummer=$1',[nr]);
+        // Bestehende Dokumente und Beförderungen behalten ihre Originaldaten
+        // und Namen, lösen aber die alte Nummern-Verknüpfung.
+        await client.query('UPDATE generierte_dokumente SET personalnummer=NULL WHERE personalnummer=$1',[nr]);
+        await client.query('UPDATE befoerderungen SET personalnummer=NULL WHERE personalnummer=$1',[nr]);
+        // Eine neue Person darf keine alten Anwesenheitshäkchen erben.
+        for(const r of alteRoutine.rows){
+          const neueTeilnehmer=r.personen.filter(p=>!p||Number(p.nr)!==nr);
+          await client.query('UPDATE routine SET personen=$1::jsonb WHERE id=$2',
+            [JSON.stringify(neueTeilnehmer),r.id]);
+        }
+      }
+    const { rows } = await client.query(
       `INSERT INTO personal (personalnummer, gruppe, beschaeftigungsart, status, vorname, nachname, geburtsdatum, handy,
         waffenschein, spind, nebenjob, dienstgrad, eintrittsdatum, arbeitsvertrag, ernennungsurkunde,
         urlaub_von, urlaub_bis, urlaub_tage, bemerkung, rsa, arbeitsvertrag_url, ernennungsurkunde_url)
@@ -1113,10 +1190,10 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
          letzte_befoerderung=NULL,naechste_befoerderung=NULL,
          por_status='offen',por_notiz='',por_am=NULL,
          administrativ_geloescht_am=NULL,administrativ_geloescht_von=NULL
-       WHERE personal.administrativ_geloescht_am IS NOT NULL
-         AND lower(trim(personal.status))='frei'
-         AND trim(COALESCE(personal.vorname,'')) IN ('','-')
-         AND trim(COALESCE(personal.nachname,'')) IN ('','-')
+       WHERE lower(trim(COALESCE(personal.status,''))) NOT IN
+         ('aktiv','abgemeldet','inaktiv','suspendiert')
+         -- Kündigungen werden zuvor unter FOR UPDATE geprüft; die
+         -- Historienzeile dieser neuen Belegung wurde bereits gesichert.
          AND NOT EXISTS (SELECT 1 FROM users u
            WHERE u.dienstnummer ~ '^[0-9]{1,8}$'
              AND u.dienstnummer::int=personal.personalnummer)
@@ -1125,14 +1202,20 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
         b.handy, !!b.waffenschein, !!b.spind, b.nebenjob, b.dienstgrad, b.eintrittsdatum || null,
         b.arbeitsvertrag, b.ernennungsurkunde, b.urlaub_von || null, b.urlaub_bis || null, b.urlaub_tage, b.bemerkung, b.rsa,
         b.arbeitsvertrag_url || '', b.ernennungsurkunde_url || '', beschaeftigungZuNummer(nr)]);
-    if(!rows.length) return res.status(409).json({error:'Diese Dienstnummer ist inzwischen belegt oder reserviert. Bitte freie Nummern neu laden.'});
-    await db.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'add')`,
-      [req.user.id, `Personal ${nr} angelegt`]);
+    if(!rows.length){
+      await client.query('ROLLBACK');
+      return res.status(409).json({error:'Dienstnummer inzwischen belegt. Bitte freie Nummern neu laden.'});
+    }
+    await client.query(`INSERT INTO log (user_id, aktion, art) VALUES ($1, $2, 'add')`,
+      [req.user.id, `Personal ${nr} angelegt${vorher.length?' (Dienstnummer neu belegt)':''}`]);
+    await client.query('COMMIT');
     res.json(rows[0]);
-  } catch (e) {
-    if (e.code === '23505') return res.status(409).json({ error: 'Diese Personalnummer gibt es bereits' });
-    next(e);
-  }
+    }catch(e){
+      await client.query('ROLLBACK').catch(()=>{});
+      if(e.code==='23505')return res.status(409).json({error:'Diese Personalnummer gibt es bereits'});
+      next(e);
+    }finally{client.release();}
+  }catch(e){next(e)}
 });
 
 /* Geschützter CopNet-Zugang: AES-256-GCM, eigener Schlüssel aus Render-
