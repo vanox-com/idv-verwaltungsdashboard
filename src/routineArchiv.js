@@ -81,7 +81,7 @@ export function registerRoutineArchive(app,db,requireLogin,requireRight){
       Alte gespeicherte Namen haben Vorrang – eine spätere Neubelegung der
       Dienstnummer darf niemals rückwirkend Personen austauschen. */
    const {rows:personal}=await client.query(
-    "SELECT personalnummer,vorname,nachname,status,eintrittsdatum FROM personal WHERE administrativ_geloescht_am IS NULL AND status IN ('Aktiv','Abgemeldet','Inaktiv','Suspendiert')");
+    "SELECT personalnummer,vorname,nachname,status,eintrittsdatum FROM personal WHERE administrativ_geloescht_am IS NULL AND status IN ('Aktiv','Abgemeldet','Inaktiv','Suspendiert','Gekündigt')");
    const personalNachNummer=new Map(personal.map(p=>[Number(p.personalnummer),p]));
    const nummern=new Set();
    const snapshot=[];
@@ -105,7 +105,7 @@ export function registerRoutineArchive(app,db,requireLogin,requireRight){
    // Für vor ihrem Dienstantritt liegende Termine wird keine Anwesenheit erfunden.
    for(const p of personal){
     const nr=Number(p.personalnummer);
-    if(nummern.has(nr))continue;
+    if(nummern.has(nr)||p.status==='Gekündigt')continue;
     if(p.eintrittsdatum&&String(p.eintrittsdatum instanceof Date
       ?p.eintrittsdatum.toISOString().slice(0,10):p.eintrittsdatum).slice(0,10)>datum)continue;
     snapshot.push({nr,vorname:p.vorname||'',nachname:p.nachname||'',
