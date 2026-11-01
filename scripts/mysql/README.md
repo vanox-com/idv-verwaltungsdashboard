@@ -1,73 +1,110 @@
-# IDV – Migration PostgreSQL auf MySQL
+# MySQL-8-Migration für das IDV-Verwaltungsdashboard
 
-**Arbeitsbranch:** migration/mysql
-**Produktiv:** main mit PostgreSQL – bleibt unverändert.
-**Status:** Vorbereitungswerkzeuge angelegt; Dashboard/Backend sind noch NICHT MySQL-kompatibel.
+**Ziel:** Oracle MySQL **8.0.16 oder höher**, InnoDB, `utf8mb4`, Import via phpMyAdmin.  
+**Arbeitsbranch:** `migration/mysql` (nicht produktiv).  
+**Live-System:** GitHub `main` mit PostgreSQL auf Render. Bleibt vorerst unverändert.
 
-## Technische Ausgangslage
+## 1. SQL-Struktur für phpMyAdmin
 
-Die Live-PostgreSQL-Datenbank hat 47 Tabellen, 31 Fremdschlüssel und
-PostgreSQL-spezifische Funktionen, darunter JSONB, ::-Casts,
-ON CONFLICT, RETURNING, xmin-Revisionskonflikte, Array-Ausdrücke,
-Teilmengen-Indizes und Trigger. Die App führt aktuell bei jedem Start
-src/schema.sql aus: Dieses Schema darf niemals gegen MySQL ausgeführt werden.
+Die SQL-Datei `scripts/mysql/mysql8-schema.sql` enthält die Struktur
+der 47 Tabellen, 31 Fremdschlüssel, 11 CHECK-Bedingungen und den
+Sonderfall „maximal ein offener Rangantrag pro Person“.
 
-## Vorbereitete Befehle (ausschließlich im separaten Migrationsbranch)
+Der neue Hoster legt eine **vollständig leere MySQL-8-Datenbank** an.
+Danach die Datei in **phpMyAdmin → Datenbank auswählen → Importieren**
+einspielen. Nicht über eine bestehende Datenbank importieren.
 
-- npm run mysql:prepare: liest nur die PostgreSQL-Struktur und erzeugt
-  einen MySQL-8.0.13+-Schemaentwurf mit Prüfbericht in migration-output.
-  Noch nicht zur produktiven Verwendung freigegeben.
-- npm run mysql:copy: direkte Datenübertragung in eine bereits mit dem
-  geprüften Schema vorbereitete, völlig LEERE MySQL-Testdatenbank;
-  verweigert ohne explizites Bestätigungskennwort den Start.
-  Die Quelle bleibt in einer READ-ONLY-Transaktion und wird nicht geändert.
-- Sitzungen sollen nach der Umstellung ablaufen. Benutzer müssen sich
-  erneut anmelden, während ihre bcrypt-Hashes und Rechte erhalten bleiben.
+Das SQL enthält **keine** personenbezogenen Daten, Passwörter, Benutzerkonten
+oder sonstigen Inhalte; lediglich die Struktur. Diese Datei kann daher im
+Migrationsbranch liegen.
 
-## Vorbereitung auf sicherem Entwicklerrechner
+### Struktur gegen PostgreSQL abgleichen
 
-Voraussetzung MySQL 8.0.13+ mit InnoDB und utf8mb4.
-MariaDB ist bislang nicht getestet. Die MySQL-Verbindung sollte TLS verwenden.
+Auf einem sicheren Entwicklerrechner mit Leserechten zur Quelle:
 
-Umgebungsvariablen (nur im Secret Store, nicht in Git oder Chat):
+```bash
+npm install
+SOURCE_DATABASE_URL="..." npm run mysql:prepare
+```
 
-SOURCE_DATABASE_URL = PostgreSQL-Lesezugang zur bisherigen DB.
-MYSQL_DESTINATION_URL = mysql://... zur neuen LEEREN Testdatenbank.
-MYSQL_SSL = required (falls TLS vom neuen Anbieter verlangt wird).
-MYSQL_COPY_CONFIRM = EMPTY_NEW_DATABASE (explizite Bestätigung).
+Der Preflight verweigert den Export, wenn Anzahl/Namen der Tabellen,
+Fremdschlüssel oder CHECK-Constraints vom vorbereiteten MySQL-Schema
+abweichen. Die Kopie der SQL-Datei und der Bericht werden lokal unter
+`migration-output/` erzeugt.
 
-Ablauf:
+## 2. Historische Daten übernehmen
 
-1. npm install, dann npm run mysql:prepare mit SOURCE_DATABASE_URL.
-2. Lokalen Bericht migration-output/mysql-report.json prüfen.
-3. PostgreSQL-Trigger, CHECK-Regeln und Partial-Unique-Indizes manuell
-   auf MySQL portieren und generiertes Schema entsprechend korrigieren.
-4. MySQL-Schema ausschließlich in eine neue, vollständig leere DB laden.
-5. npm run mysql:copy mit beiden Datenbankverbindungen und bestätigtem
-   MYSQL_COPY_CONFIRM ausführen.
-6. Zeilenzahlen, Beziehungen, Daten, Rollen, Personalsnapshots,
-   Kündigungen, Routinearchive und Dokumentverknüpfungen vergleichen.
+**Privat und vertraulich:** Das Personal- und Auditarchiv enthält
+personenbezogene Daten und die Benutzerliste enthält bcrypt-Passworthashes.
+Deshalb werden diese Inhalte **niemals nach GitHub committed**.
 
-Niemals persönliche Daten, Zugangsdaten oder Exportdateien committen.
-Das Skript erzeugt keine Exporte mit Daten im Dateisystem.
+### Möglichkeit A: Import über phpMyAdmin
 
-## Was noch vor dem Produktivwechsel fehlt
+Auf einem berechtigten Rechner mit PostgreSQL-Lesezugang:
 
-1. DB-Adapter und sämtliche PostgreSQL-spezifischen Backend-Abfragen
-   zu MySQL-8-kompatiblen SQL-Anweisungen umschreiben.
-2. PostgreSQL-Trigger für Änderungsjournal, Gruppen- und
-   Kündigungssnapshots durch geprüfte MySQL-Äquivalente ersetzen.
-3. Optimistic-Locking statt xmin in SQL und API mit echten Revisionen
-   implementieren und parallele Bearbeitungen testen.
-4. Einzelrechte, POR-Freigaben, Beförderungen, Urkunden, Routinetermine,
-   historische Namen und Personalakten vollständig abnehmen.
-5. Vor der endgültigen Umschaltung alte Schreibzugriffe pausieren,
-   frische konsistente Kopie erstellen, Hashes und Zeilenzahlen validieren,
-   MySQL-Backend testen und erst danach DNS/Hosting umschalten.
-6. Rollback auf PostgreSQL bis zur erfolgreichen Freigabe vorhalten.
+```bash
+SOURCE_DATABASE_URL="..." npm run mysql:export
+```
 
-## Angaben zum Zielhoster
+Danach entsteht lokal `migration-output/mysql8-data-PRIVATE.sql`.
+Diese vertrauliche Datei ausschließlich den berechtigten Administratoren
+über einen gesicherten Kanal zur Verfügung stellen, in der neu angelegten
+MySQL-Datenbank **nach** dem Struktur-SQL importieren und danach die lokale
+Exportdatei sicher verwahren oder löschen. Vor dem tatsächlichen Cutover
+müssen alle bisherigen Schreibzugriffe gestoppt werden, damit keine
+Änderungen nach dem Export verloren gehen.
 
-Benötigt werden Anbieter, MySQL-/MariaDB-Version, SSL- und Portvorgaben
-sowie die Node.js-Start-/Deploymentmöglichkeiten. Passwörter bitte
-ausschließlich in die Secret-/Environment-Verwaltung des Hosters eintragen.
+Die Datei exportiert **keine Session-Tokens**: Alle Benutzer müssen sich
+nach dem Umzug erneut anmelden. Die Passworthashes bleiben erhalten.
+
+### Möglichkeit B: Direkter Datenbanktransfer
+
+```bash
+SOURCE_DATABASE_URL="..." \
+MYSQL_DESTINATION_URL="mysql://..." \
+MYSQL_COPY_CONFIRM=EMPTY_NEW_DATABASE \
+npm run mysql:copy
+```
+
+Der Transfer funktioniert nur mit bereits vorbereitetem MySQL-Schema
+und **vollständig leerer** Zieldatenbank. Sobald irgendeine Zieltabelle
+Daten enthält, bricht das Werkzeug ab. Persönliche Daten werden nicht
+als SQL-Datei abgelegt.
+
+## 3. Wichtige noch offene Entwicklungsarbeiten
+
+**Die MySQL-8-Struktur und der Datenexport sind vorbereitet.
+Das Dashboard ist noch nicht mit MySQL betriebsbereit.**
+
+Insbesondere müssen vor dem Umzug noch erledigt werden:
+
+1. `src/db.js`, `src/server.js` und sämtliche API-Module von
+   PostgreSQL-/`pg`-SQL auf `mysql2` umbauen.
+2. `$1`-Platzhalter, `ON CONFLICT`, `RETURNING`, `JSONB`,
+   PostgreSQL-Arrays und Datumsoperationen einzeln umsetzen.
+3. Die PostgreSQL-Trigger für Personalgruppen, Kündigungssnapshots und
+   Änderungsvergleich als MySQL-Trigger oder transaktionale Backend-
+   Operationen rekonstruieren, inkl. Benutzerzuordnung im Audit.
+4. `xmin` durch MySQL-Revisionsspalten ersetzen, gleichzeitige
+   Änderungen testen und Überschreibschutz gewährleisten.
+5. Module vollständig funktional und sicherheitstechnisch testen:
+   Login, Benutzerrechte, Personal, Kündigungen, POR, Beförderungen,
+   Urkunden, Routinen, Archive, Dokumente, Historie.
+6. Erst dann die Schreibzugriffe auf PostgreSQL pausieren,
+   frischen Datenstand konsistent kopieren, Zeilenzahlen/Dokumente/
+   Beziehungen vergleichen, MySQL-8-System deployen und Live-Traffic
+   freigeben. Rollback auf PostgreSQL vorhalten.
+
+Das zusätzliche `npm run mysql:audit` schreibt eine reine
+SQL-Kompatibilitätsanalyse des Quellcodes nach
+`migration-output/mysql-sql-audit.json`.
+
+## 4. Was wir vom Hoster benötigen
+
+Ein Webserver, der eine **Node.js-/Express-Anwendung** aus dem
+GitHub-Repository automatisch baut und startet, und eine erreichbare
+MySQL-8-Datenbank. Verbindungseinstellungen wie Host, Port,
+Datenbankname, Benutzer und TLS kommen **nur** in den Secret-Store
+des Hosters; **keine** Passwörter in Chat oder GitHub.
+
+Eine phpMyAdmin-Oberfläche allein führt Node.js nicht aus.
