@@ -1377,6 +1377,10 @@ font-size:11px;font-weight:650;white-space:nowrap}
   color:#dceafa;background:rgba(55,101,147,.2);font-size:11px;font-weight:650;white-space:nowrap}
 .pers-kue-btn:hover{border-color:#9cc1e9;background:rgba(60,116,173,.3)}
 .kue-group-detail[hidden]{display:none!important}
+.kue-vorgang-index{display:block;margin-top:6px;color:var(--mut);font-size:10px;white-space:nowrap}
+.kue-group-jumps{display:inline-flex;align-items:center;flex-wrap:wrap;gap:5px;margin-left:8px;vertical-align:middle}
+.kue-group-jumps button{font-size:10px;padding:4px 7px;min-height:26px;border-color:#576e87;color:#dceaff;background:#243b50}
+.kue-group-jumps button:hover{border-color:#9bc4ef;background:#304f70}
 .kue-group-heading{background:rgba(55,90,125,.13)}
 .kue-group-heading button{border-color:#6c8db4;color:#dceaff}
 .kue-archive-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0 16px}
@@ -3414,7 +3418,7 @@ function vKue() {
     (archiv?'<button type="button" data-kue-refresh>Archiv aktualisieren</button>':'')+'</div>';
   const hinweis=archiv?'Historische Kündigungen und Vorgänge ohne belegtes Datum. Vorhandene Unterlagen und die gesicherte Personalakte bleiben über „Akte & Dokumente“ abrufbar.':
     'Aktuelle Kündigungen aus den letzten 60 Kalendertagen. Ältere Vorgänge und undatierte Altbestände findest du im berechtigungsgeschützten Archiv.';
-  const detailRow=k=>{
+  const detailRow=(k,index=0,gesamt=1)=>{
     const offen=KUE_STATUS.filter(x=>x[0]!=='anzeige'&&/^(offen)?$/i.test(kueWert(k,x[0]))).length;
     const badges=KUE_STATUS.map(([feld,label])=>{
       const wert=kueWert(k,feld),istOffen=wert==='Offen',cls=istOffen?'warn':wert==='Nein'?'':'ok';
@@ -3430,7 +3434,7 @@ function vKue() {
     const date=k.kuendigungsdatum?fd(k.kuendigungsdatum):
       k.erfasst_am?'Erfasst: '+fd(k.erfasst_am):
       k.statuswechsel_am?'Statuswechsel: '+fd(k.statuswechsel_am):'Unbekannt';
-    return '<td>'+esc(k.personalnummer)+'</td><td><strong>'+esc([k.vorname,k.nachname].filter(Boolean).join(' '))+'</strong> '+
+    return '<td>'+esc(k.personalnummer)+(gesamt>1?'<small class="kue-vorgang-index">Vorgang '+(index+1)+'/'+gesamt+' · #'+Number(k.id)+'</small>':'')+'</td><td><strong>'+esc([k.vorname,k.nachname].filter(Boolean).join(' '))+'</strong> '
       '<span class="tag '+(offen?'warn':'ok')+'">'+(offen?offen+' offen':'erledigt')+'</span></td>'+
       '<td>'+esc(k.rang||'–')+'</td><td>'+esc(k.grund||'–')+'</td><td>'+esc(date)+'</td>'+
       '<td>'+docs+'</td><td class="kue-statuscell">'+badges+'</td>'+
@@ -3454,8 +3458,9 @@ function vKue() {
       '<td><strong>'+esc(name)+'</strong> <span class="tag">'+vorgaenge.length+' Vorgänge</span></td>'+
       '<td colspan="6"><button type="button" data-kue-group-toggle="'+safeKey+'" aria-expanded="'+KUE_OFFENE_GRUPPEN.has(key)+'">'+
         (KUE_OFFENE_GRUPPEN.has(key)?'Vorgänge ausblenden ▴':'Vorgänge anzeigen ('+vorgaenge.length+') ▾')+'</button>'+
-      ' <span class="mut">Alle einzelnen Dokumente und Status bleiben erhalten.</span></td></tr>';
-    return summary+vorgaenge.map(k=>'<tr class="kue-group-detail" data-kue-group="'+safeKey+'"'+(KUE_OFFENE_GRUPPEN.has(key)?'':' hidden')+'>'+detailRow(k)+'</tr>').join('');
+      ' <span class="mut">Alle '+vorgaenge.length+' Einträge stehen untereinander. Direkt zu:</span>'+ 
+      '<span class="kue-group-jumps">'+vorgaenge.map((k,i)=>'<button type="button" data-kue-jump-id="'+Number(k.id)+'" data-kue-jump-group="'+safeKey+'" title="Kündigungsvorgang #'+Number(k.id)+' anzeigen">'+(i+1)+'/'+vorgaenge.length+' · #'+Number(k.id)+'</button>').join('')+'</span></td></tr>';
+    return summary+vorgaenge.map((k,i)=>'<tr class="kue-group-detail" data-kue-group="'+safeKey+'" data-kue-record-id="'+Number(k.id)+'"'+(KUE_OFFENE_GRUPPEN.has(key)?'':' hidden')+'>'+detailRow(k,i,vorgaenge.length)+'</tr>').join('');
   }).join('');
   return '<h1>Kündigungen</h1>'+tabs+'<p class="kue-archive-notice">'+esc(hinweis)+'</p>'+
     '<div class="pers-bar"><span class="mut">Rückgaben, Sperrungen und gesicherte Personalakten.</span>'+
@@ -3580,6 +3585,20 @@ document.addEventListener('click',event=>{
     return;
   }
   if(event.target.closest('[data-kue-refresh]')&&can('kuearchiv')){KUE_ARCHIV_DATEN=null;zeichne();return;}
+  const jump=event.target.closest('[data-kue-jump-id]');
+  if(jump){
+    const key=jump.dataset.kueJumpGroup;
+    const id=jump.dataset.kueJumpId;
+    const zeilen=[...document.querySelectorAll('tr[data-kue-group]')].filter(row=>row.dataset.kueGroup===key);
+    const ziel=zeilen.find(row=>row.dataset.kueRecordId===id);
+    if(!ziel)return;
+    KUE_OFFENE_GRUPPEN.add(key);
+    zeilen.forEach(row=>{row.hidden=false;});
+    const toggle=[...document.querySelectorAll('[data-kue-group-toggle]')].find(button=>button.dataset.kueGroupToggle===key);
+    if(toggle){toggle.setAttribute('aria-expanded','true');toggle.textContent='Vorgänge ausblenden ▴';}
+    ziel.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
   const group=event.target.closest('[data-kue-group-toggle]');
   if(group){
     const key=group.dataset.kueGroupToggle;
