@@ -3,15 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Verwaltungsportal Polizeirat – Server mit Anmeldung und PostgreSQL",
+  "description": "IDV Police Panel – PHP 8 + MySQL 8 runtime migration; Node tools only for data transfer",
   "scripts": {
-    "start": "node src/server.js",
     "migrate": "node src/migrate.js",
     "mysql:prepare": "node scripts/mysql/prepare.mjs",
     "mysql:copy": "node scripts/mysql/copy.mjs",
     "mysql:audit": "node scripts/mysql/audit-sql.mjs",
     "mysql:export": "node scripts/mysql/export-phpmyadmin.mjs",
-    "mysql:verify": "node scripts/mysql/verify.mjs"
+    "mysql:verify": "node scripts/mysql/verify.mjs",
+    "php:lint": "php -l php/Api.php"
   },
   "engines": {
     "node": ">=20"
