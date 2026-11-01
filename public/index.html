@@ -3739,6 +3739,9 @@ document.addEventListener('click',e=>{
 /* Routine: Anwesenheit, Termine und Sonderzahlungen aus gemeinsamem Datenbestand. */
 let routineBereich='anwesenheit';
 let routineEhemaligeSichtbar=false; // Standard: nur aktuell beschäftigte Beamte
+function routineDarfTerminAnlegen(){
+ return can('rout',2)||(ME?.rolle==='Polizeirat'&&can('rout',1));
+}
 function routinePlan(){return (D.routine||[])[0]||null;}
 /* Jede Routine-Änderung sendet den Stand, den der Nutzer tatsächlich gesehen hat. */
 function routineSchreibOptionen(plan,method,body){
@@ -3753,7 +3756,7 @@ function routineTagIso(t){
 }
 function routineSwitch(name){routineBereich=name;zeichne();}
 function vRout(){
-  const r=routinePlan(),w=can('rout',2),archivLesen=can('routarchiv',1),archivSchreiben=can('routarchiv',2);
+  const r=routinePlan(),w=can('rout',2),darfTermin=routineDarfTerminAnlegen(),archivLesen=can('routarchiv',1),archivSchreiben=can('routarchiv',2);
   if(!r)return '<h1>Routine</h1><p>Kein Routineplan vorhanden.</p>';
   if(routineBereich==='archiv'&&!archivLesen)routineBereich='anwesenheit';
   const nav='<div class="routine-tabs">'+
@@ -3778,7 +3781,7 @@ function vRout(){
     (ehemaligeAnzahl?'<button type="button" id="routineEhemaligeToggle" aria-pressed="'+routineEhemaligeSichtbar+'">'+
       (routineEhemaligeSichtbar?'Ehemalige ausblenden':'Ehemalige einblenden')+' ('+ehemaligeAnzahl+')</button>':'')+
     '<span class="spacer"></span>'+
-    (w?'<form id="routineDateForm" class="routine-inline"><input type="date" id="routineNewDate" aria-label="Neues Routinedatum" required>'+
+    (darfTermin?'<form id="routineDateForm" class="routine-inline"><input type="date" id="routineNewDate" aria-label="Neues Routinedatum" required>'+
       '<button type="submit" class="p">+ Termin</button></form>':'')+
     (w&&opts?'<form id="routinePersonForm" class="routine-inline"><select id="routineNewPerson" aria-label="Person zur Routine hinzufügen" required>'+
       '<option value="">Person hinzufügen …</option>'+opts+'</select><button type="submit">+ Person</button></form>':'')+
@@ -3933,7 +3936,7 @@ async function routineStatus(btn){
   finally{btn.disabled=false;}
 }
 async function routineDatumHinzufuegen(event){
-  event.preventDefault();const r=routinePlan();if(!r||!can('rout',2))return;
+  event.preventDefault();const r=routinePlan();if(!r||!routineDarfTerminAnlegen())return;
   const datum=$('#routineNewDate')?.value,btn=event.target.querySelector('button[type="submit"]');
   if(!datum)return;btn.disabled=true;routineNachricht('Termin wird gespeichert …');
   try{
