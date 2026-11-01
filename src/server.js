@@ -624,6 +624,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
         const nr=Number(p.personalnummer),alt=gespeichert.get(nr);
         return {
           nr,vorname:p.vorname||'',nachname:p.nachname||'',status:p.status,
+          eintrittsdatum:p.eintrittsdatum instanceof Date?p.eintrittsdatum.toISOString().slice(0,10):String(p.eintrittsdatum||'').slice(0,10),
           abgemeldet:alt?alt.abgemeldet===true:p.status==='Abgemeldet',
           anwesend:Array.isArray(alt?.anwesend)&&alt.anwesend.length===tage.length
             ?alt.anwesend:Array.from({length:tage.length},()=>null),
@@ -1458,6 +1459,15 @@ app.post('/api/routine/:id/anwesenheit',requireLogin,requireRight('rout',2),
     if(!Number.isSafeInteger(nr)||nr<1||!Number.isSafeInteger(i)||i<0||i>=tage.length||
        typeof anwesend!=='boolean')
       throw routineFehler(400,'Ungültige Person, Termin oder Anwesenheit');
+    const {rows:stammdaten}=await client.query(
+      "SELECT status,eintrittsdatum FROM personal WHERE personalnummer=$1 AND administrativ_geloescht_am IS NULL",[nr]);
+    const person=stammdaten[0];
+    if(person&&['Aktiv','Abgemeldet','Inaktiv','Suspendiert'].includes(person.status)&&person.eintrittsdatum){
+      const eintritt=person.eintrittsdatum instanceof Date
+        ?person.eintrittsdatum.toISOString().slice(0,10):String(person.eintrittsdatum).slice(0,10);
+      if(routineIsoDatum(tage[i])<eintritt)
+        throw routineFehler(409,'Anwesenheit vor Dienstantritt ist nicht zulässig');
+    }
     let p=personen.find(x=>Number(x.nr)===nr);
     if(!p){
       // Auch neu eingestellte Beamte können ohne manuellen Abgleich abhaken.
