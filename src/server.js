@@ -1495,7 +1495,17 @@ function routineIsoDatum(tag){
   const m=/^(\d{2})\.(\d{2})\.(\d{4})$/.exec(tag);
   return m?m[3]+'-'+m[2]+'-'+m[1]:null;
 }
-app.post('/api/routine/:id/termin',requireLogin,requireRight('rout',2),
+/* Der Polizeirat darf neue Routinetermine bereits mit Routine-Leserecht
+   anlegen. Allgemeine Bearbeitungsaktionen bleiben an Stufe 2 gebunden.
+   Individuelle ausdrückliche Sperren (Stufe 0) haben weiterhin Vorrang. */
+async function requireRoutineTerminAnlegen(req,res,next){
+ try{
+  const rechte=await effektiveRechte(req.user),stufe=Number(rechte.rout||0);
+  if(stufe>=2||(req.user.rolle==='Polizeirat'&&stufe>=1))return next();
+  return res.status(403).json({error:'Keine Berechtigung zum Anlegen von Routineterminen'});
+ }catch(err){next(err)}
+}
+app.post('/api/routine/:id/termin',requireLogin,requireRight('rout',1),requireRoutineTerminAnlegen,
   async(req,res,next)=>routineAendern(req,res,next,async({tage,personen,client})=>{
     const iso=req.body?.datum, d=routineDatum(iso);
     if(!d)throw routineFehler(400,'Ungültiges Termindatum');
