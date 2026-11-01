@@ -1515,12 +1515,20 @@ app.post('/api/routine/:id/teilnehmer',requireLogin,requireRight('rout',2),
     return 'Routine '+req.params.id+': Person '+nr+' aufgenommen';
   }));
 app.patch('/api/routine/:id/teilnehmer/:nr',requireLogin,requireRight('rout',2),
-  async(req,res,next)=>routineAendern(req,res,next,async({personen})=>{
+  async(req,res,next)=>routineAendern(req,res,next,async({tage,personen,client})=>{
     const nr=Number(req.params.nr),abgemeldet=req.body?.abgemeldet;
     if(!Number.isSafeInteger(nr)||nr<1||typeof abgemeldet!=='boolean')
       throw routineFehler(400,'Ungültiger Teilnehmerstatus');
-    const p=personen.find(x=>Number(x.nr)===nr);
-    if(!p)throw routineFehler(404,'Person nicht in dieser Routine');
+    let p=personen.find(x=>Number(x.nr)===nr);
+    if(!p){
+      const {rows}=await client.query(
+        "SELECT vorname,nachname,status FROM personal WHERE personalnummer=$1 AND administrativ_geloescht_am IS NULL AND status IN ('Aktiv','Abgemeldet','Inaktiv','Suspendiert')",[nr]);
+      if(!rows.length)throw routineFehler(404,'Person nicht mehr in der Personalverwaltung');
+      p={nr,vorname:rows[0].vorname||'',nachname:rows[0].nachname||'',
+        abgemeldet:rows[0].status==='Abgemeldet',
+        anwesend:Array.from({length:tage.length},()=>null)};
+      personen.push(p);
+    }
     p.abgemeldet=abgemeldet;
     return 'Routine '+req.params.id+': Person '+nr+
       (abgemeldet?' als abgemeldet markiert':' wieder aktiviert');
