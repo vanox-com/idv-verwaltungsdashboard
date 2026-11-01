@@ -609,6 +609,33 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
     const aktuelleBeamte=personal.rows.filter(p=>
       ['Aktiv','Abgemeldet','Inaktiv','Suspendiert'].includes(String(p.status||'').trim()));
 
+    /* Aktuelle Routineansicht direkt aus der Personalverwaltung aufbauen.
+       Bestehende Anwesenheiten bleiben unverändert gespeichert. Ehemalige
+       Personen mit dokumentierter Teilnahme bleiben separat nachvollziehbar. */
+    const routineTeilnehmerAktuell = plan => {
+      const ursprung=Array.isArray(plan.personen)?plan.personen:[];
+      const tage=Array.isArray(plan.tage)?plan.tage:[];
+      const aktuell=new Map(aktuelleBeamte.map(p=>[Number(p.personalnummer),p]));
+      const gespeichert=new Map(ursprung.map(p=>[Number(p?.nr),p]));
+      const anzeigen=aktuelleBeamte.map(p=>{
+        const nr=Number(p.personalnummer),alt=gespeichert.get(nr);
+        return {
+          nr,vorname:p.vorname||'',nachname:p.nachname||'',status:p.status,
+          abgemeldet:alt?alt.abgemeldet===true:p.status==='Abgemeldet',
+          anwesend:Array.isArray(alt?.anwesend)&&alt.anwesend.length===tage.length
+            ?alt.anwesend:Array.from({length:tage.length},()=>null),
+          _aktuell:true
+        };
+      });
+      const ehemalig=ursprung.filter(p=>{
+        if(!p||aktuell.has(Number(p.nr)))return false;
+        const name=[p.vorname,p.nachname].map(x=>String(x||'').trim()).filter(x=>x&&x!=='-').join(' ');
+        return !!name || (Array.isArray(p.anwesend)&&p.anwesend.some(x=>x===true));
+      }).map(p=>({...p,_aktuell:false,status:'Ehemalig'}));
+      return [...anzeigen,...ehemalig].sort((a,b)=>Number(a.nr)-Number(b.nr)||
+        Number(b._aktuell)-Number(a._aktuell));
+    };
+
     const daten = {
       personal: personal.rows, raenge: raenge.rows,
       funktionsspalten: funktionsspalten.rows.map(r => r.name),
@@ -628,7 +655,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
         info: dashboard.rows.filter(r => r.art === 'info').map(r => ({ text: r.text, url: r.url })),
         links: dashboard.rows.filter(r => r.art === 'link').map(r => ({ text: r.text, url: r.url }))
       },
-      routine: routine.rows.map(r => ({ id: r.id, nr: r.personalnummer, tage: r.tage, personen: r.personen, _revision: r._revision })),
+      routine: routine.rows.map(r => ({ id: r.id, nr: r.personalnummer, tage: r.tage, personen: routineTeilnehmerAktuell(r), _revision: r._revision })),
       sonderzahlungen: sonderzahlungen.rows,
       organigramm: organigramm.rows,
       befoerderungen: befoerderungen.rows
@@ -1414,14 +1441,23 @@ async function routineAendern(req, res, next, bearbeiten) {
   }finally{ if(client)client.release(); }
 }
 app.post('/api/routine/:id/anwesenheit',requireLogin,requireRight('rout',2),
-  async(req,res,next)=>routineAendern(req,res,next,async({tage,personen})=>{
+  async(req,res,next)=>routineAendern(req,res,next,async({tage,personen,client})=>{
     const nr=Number(req.body?.nr),i=Number(req.body?.tagIndex),
       anwesend=req.body?.anwesend;
     if(!Number.isSafeInteger(nr)||nr<1||!Number.isSafeInteger(i)||i<0||i>=tage.length||
        typeof anwesend!=='boolean')
       throw routineFehler(400,'Ungültige Person, Termin oder Anwesenheit');
-    const p=personen.find(x=>Number(x.nr)===nr);
-    if(!p)throw routineFehler(404,'Person nicht im Routineplan');
+    let p=personen.find(x=>Number(x.nr)===nr);
+    if(!p){
+      // Auch neu eingestellte Beamte können ohne manuellen Abgleich abhaken.
+      const {rows}=await client.query(
+        "SELECT vorname,nachname,status FROM personal WHERE personalnummer=$1 AND administrativ_geloescht_am IS NULL AND status IN ('Aktiv','Abgemeldet','Inaktiv','Suspendiert')",[nr]);
+      if(!rows.length)throw routineFehler(404,'Person nicht mehr in der Personalverwaltung');
+      p={nr,vorname:rows[0].vorname||'',nachname:rows[0].nachname||'',
+        abgemeldet:rows[0].status==='Abgemeldet',
+        anwesend:Array.from({length:tage.length},()=>null)};
+      personen.push(p);
+    }
     if(!Array.isArray(p.anwesend)||p.anwesend.length!==tage.length)
       throw routineFehler(409,'Anwesenheitsliste ist nicht synchron mit den Terminen');
     p.anwesend[i]=anwesend;
