@@ -195,6 +195,8 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .att-button.is-unknown,.att-display.is-unknown{background:#38392f;border-color:#777052;color:#f1daa9;font-weight:700}
 .routine-ab{min-width:94px;font-size:12px;padding:6px}.routine-ab.off{color:#ffcc85;background:#40352e}
 .routine-sum{font-weight:650}.routine-person[hidden]{display:none}
+.routine-historisch{background:rgba(170,147,104,.06)}
+.routine-historisch td strong{color:var(--mut)}
 #zahlungDialog{background:#182433;color:var(--txt);border:1px solid #536781;border-radius:12px;width:min(560px,96vw);max-height:90vh;overflow:auto;padding:26px}
 #zahlungDialog::backdrop{background:#050a18bb}
 #zahlungDialog h2{margin:0 0 7px}
@@ -3756,14 +3758,16 @@ function vRout(){
     '<p id="routineArchivStatus" role="status" class="mut"></p>'+
     '<div id="routineArchivListe">Lade Archiv …</div>';
   const personen=r.personen||[],tage=r.tage||[];
-  const opts=(D.personal||[]).filter(p=>p.personalnummer!=null&&!personen.some(x=>Number(x.nr)===Number(p.personalnummer)))
+  const opts=(D.personal||[]).filter(p=>p.personalnummer!=null&&
+    ['Aktiv','Abgemeldet','Inaktiv','Suspendiert'].includes(p.status)&&
+    !personen.some(x=>Number(x.nr)===Number(p.personalnummer)))
     .map(p=>'<option value="'+Number(p.personalnummer)+'">'+esc(p.personalnummer+' · '+[p.vorname,p.nachname].filter(Boolean).join(' '))+'</option>').join('');
   const steuerung='<div class="pers-bar routine-toolbar">'+
     '<input id="routineSuche" placeholder="Teilnehmende suchen …" aria-label="Teilnehmende suchen" oninput="routineFiltern()">'+
     '<span class="spacer"></span>'+
     (w?'<form id="routineDateForm" class="routine-inline"><input type="date" id="routineNewDate" aria-label="Neues Routinedatum" required>'+
       '<button type="submit" class="p">+ Termin</button></form>':'')+
-    (w?'<form id="routinePersonForm" class="routine-inline"><select id="routineNewPerson" aria-label="Person zur Routine hinzufügen" required>'+
+    (w&&opts?'<form id="routinePersonForm" class="routine-inline"><select id="routineNewPerson" aria-label="Person zur Routine hinzufügen" required>'+
       '<option value="">Person hinzufügen …</option>'+opts+'</select><button type="submit">+ Person</button></form>':'')+
     '</div>';
   const th=tage.map((tag,i)=>'<th title="'+esc(routineDatumAnzeigen(tag))+'">'+
@@ -3782,16 +3786,19 @@ function vRout(){
         '<span class="att-display '+(anwesend?'is-here':unbekannt?'is-unknown':'')+'" title="'+
           (unbekannt?'Frühere Anwesenheit nicht erfasst':'')+'">'+(anwesend?'✓':unbekannt?'?':'–')+'</span>')+'</td>';
     }).join('');
-    const name=[p.vorname,p.nachname].filter(Boolean).join(' ');
-    return '<tr class="routine-person" data-routine-search="'+esc((nr+' '+name).toLowerCase())+'">'+
-      '<td>'+nr+'</td><td><strong>'+esc(name||'–')+'</strong></td><td>'+
+    const name=[p.vorname,p.nachname].map(x=>String(x||'').trim()).filter(x=>x&&x!=='-').join(' ');
+    const ehemalig=p._aktuell===false;
+    return '<tr class="routine-person'+(ehemalig?' routine-historisch':'')+'" data-routine-search="'+esc((nr+' '+name).toLowerCase())+'">'+
+      '<td>'+nr+'</td><td><strong>'+esc(name||'Name nicht dokumentiert')+'</strong>'+(ehemalig?'<small class="mut" style="display:block">Historischer Teilnehmer</small>':'')+'</td><td>'+ 
+      (ehemalig?'<span class="tag warn">Ehemalig</span>':'<span class="tag '+(p.status==='Aktiv'?'ok':'warn')+'">'+esc(p.status||'–')+'</span> ')+
+      (!ehemalig?
       (w?'<button type="button" class="routine-ab '+(p.abgemeldet?'off':'')+'" data-routine-status="'+nr+'" '+
        'aria-pressed="'+!!p.abgemeldet+'">'+(p.abgemeldet?'Abgemeldet':'Aktiv')+'</button>':
        '<span class="tag '+(p.abgemeldet?'warn':'ok')+'">'+(p.abgemeldet?'Abgemeldet':'Aktiv')+'</span>')+
-      '</td>'+cells+'<td class="routine-sum">'+anzahl+' / '+tage.length+'</td></tr>';
+      :'')+'</td>'+cells+'<td class="routine-sum">'+anzahl+' / '+tage.length+'</td></tr>';
   }).join('');
   return '<h1>Routineverwaltung</h1>'+nav+
-    '<p class="mut">Kästchen anklicken = anwesend. Änderungen werden direkt gespeichert. Abmeldungen bleiben mit ihrer bisherigen Anwesenheit dokumentiert. Ein ? bedeutet: frühere Anwesenheit nicht erfasst.</p>'+
+    '<p class="mut">Die Teilnehmenden und Namen kommen automatisch aus der aktuellen Personalverwaltung. Ehemalige Kollegen mit gespeicherten Anwesenheiten bleiben als historische Teilnehmer erkennbar. Ein ? bedeutet: frühere Anwesenheit nicht erfasst.</p>'+ 
     steuerung+'<p id="routineInfo" role="status" class="mut"></p>'+
     '<div class="tw"><table class="routine-table"><thead><tr><th>Nr.</th><th>Person</th><th>Status</th>'+th+
       '<th>Summe</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
@@ -3808,7 +3815,7 @@ async function routineArchivLaden(){
   target.innerHTML=data.length?'<div class="routine-archive-list">'+data.map(a=>{
    const entries=Array.isArray(a.teilnehmer)?a.teilnehmer:[];
    const present=entries.filter(p=>p.anwesend===true).length;
-   const rows=entries.map(p=>'<tr><td>'+Number(p.nr)+'</td><td>'+esc([p.vorname,p.nachname].filter(Boolean).join(' '))+
+   const rows=entries.map(p=>'<tr><td>'+Number(p.nr)+'</td><td>'+esc([p.vorname,p.nachname].map(x=>String(x||'').trim()).filter(x=>x&&x!=='-').join(' ')||'Name nicht dokumentiert')+
     '</td><td><span class="tag '+(p.anwesend===true?'ok':p.anwesend===null?'':'warn')+'">'+
     (p.anwesend===true?'Anwesend':p.anwesend===null?'Nicht erfasst':'Abwesend')+'</span></td>'+
     '<td>'+esc(p.abgemeldet?'Abgemeldet':'Aktiv')+'</td></tr>').join('');
