@@ -16,6 +16,8 @@ const quote=n=>{
 };
 const literal=s=>"'"+String(s).replace(/'/g,"''")+"'";
 const actions={a:'RESTRICT',r:'RESTRICT',c:'CASCADE',n:'SET NULL'};
+// PostgreSQL catalog char fields may be delivered as ASCII codes.
+const pgChar=x=>typeof x==='number'?String.fromCharCode(x):String(x);
 const type=(c,indexed)=>{
  const raw=c.udt_name;
  if(raw==='text')return indexed?'VARCHAR(191)':'LONGTEXT';
@@ -85,7 +87,7 @@ try{
    (c.is_nullable==='NO'?' NOT NULL':'')+def(c));
   for(const k of keys.filter(k=>k.table_name===table)){
    const fields=k.columns.map(quote).join(', ');
-   lines.push('  '+(k.kind==='p'?'PRIMARY KEY ('+fields+')':
+   lines.push('  '+(pgChar(k.kind)==='p'?'PRIMARY KEY ('+fields+')':
       'UNIQUE KEY '+quote(k.name.slice(0,64))+' ('+fields+')'));
   }
   ddl.push('CREATE TABLE '+quote(table)+' (\n'+lines.join(',\n')+
@@ -106,11 +108,11 @@ try{
  }
  ddl.push('','-- Apply these foreign keys only AFTER all tables have been copied:');
  for(const fk of fks){
-  if(!actions[fk.on_delete]||!actions[fk.on_update])throw Error('FK braucht manuelle Übersetzung: '+fk.name);
+  if(!actions[pgChar(fk.on_delete)]||!actions[pgChar(fk.on_update)])throw Error('FK braucht manuelle Übersetzung: '+fk.name);
   ddl.push('ALTER TABLE '+quote(fk.table_name)+' ADD CONSTRAINT '+quote(fk.name.slice(0,64))+
    ' FOREIGN KEY ('+fk.columns.map(quote).join(', ')+') REFERENCES '+quote(fk.ref_table)+
-   ' ('+fk.ref_columns.map(quote).join(', ')+') ON DELETE '+actions[fk.on_delete]+
-   ' ON UPDATE '+actions[fk.on_update]+';');
+   ' ('+fk.ref_columns.map(quote).join(', ')+') ON DELETE '+actions[pgChar(fk.on_delete)]+
+   ' ON UPDATE '+actions[pgChar(fk.on_update)]+';');
  }
  ddl.push('SET FOREIGN_KEY_CHECKS = 1;');
  const report={tables:tables.length,columns:cols.length,keys:keys.length,foreignKeys:fks.length,
