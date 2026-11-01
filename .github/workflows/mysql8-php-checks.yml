@@ -1,0 +1,25 @@
+name: MySQL 8 / PHP backend syntax checks
+on:
+  push:
+    branches:
+      - migration/mysql
+  pull_request:
+    branches:
+      - main
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check PHP version and syntax
+        run: |
+          php -v
+          for f in public/api.php php/*.php; do
+            php -l "$f" || exit 1
+          done
+      - name: Confirm reviewed MySQL schema structure
+        run: |
+          test "$(grep -c '^CREATE TABLE ' scripts/mysql/mysql8-schema.sql)" -eq 47
+          test "$(grep -c ' FOREIGN KEY (' scripts/mysql/mysql8-schema.sql)" -eq 31
+          test "$(grep -c ' CHECK (' scripts/mysql/mysql8-schema.sql)" -eq 11
+          test "$(grep -c '^CREATE TRIGGER ' scripts/mysql/mysql8-revisions.sql)" -eq 8
