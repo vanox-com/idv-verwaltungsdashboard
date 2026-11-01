@@ -3794,7 +3794,7 @@ function vRout(){
       (!ehemalig?
       (w?'<button type="button" class="routine-ab '+(p.abgemeldet?'off':'')+'" data-routine-status="'+nr+'" '+
        'aria-pressed="'+!!p.abgemeldet+'">'+(p.abgemeldet?'Abgemeldet':'Aktiv')+'</button>':
-       '<span class="tag '+(p.abgemeldet?'warn':'ok')+'">'+(p.abgemeldet?'Abgemeldet':'Aktiv')+'</span>')+
+       '<span class="tag '+(p.abgemeldet?'warn':'ok')+'">'+(p.abgemeldet?'Abgemeldet':'Aktiv')+'</span>')
       :'')+'</td>'+cells+'<td class="routine-sum">'+anzahl+' / '+tage.length+'</td></tr>';
   }).join('');
   return '<h1>Routineverwaltung</h1>'+nav+
