@@ -2622,20 +2622,38 @@ app.delete('/api/textbausteine/:schluessel',requireLogin,requireRight('texte',2)
  finally{client.release();}
 });
 
+/* Protokoll: die letzten 72 Stunden sind aktuell, alles davor liegt im
+   lesbaren Archiv. Der Zeitfilter verschiebt oder löscht keine Auditdaten.
+   Seiten liefern 100 Einträge + einen Überhang als Weiterblätter-Signal. */
+function protokollAnsicht(query){
+ const ansicht=query.ansicht;
+ if(ansicht===undefined)return null; // Bestehende Aufrufer bleiben kompatibel.
+ if(!['aktuell','archiv'].includes(ansicht))
+  throw Object.assign(new Error('Ungültige Protokollansicht'),{httpStatus:400});
+ const seite=Number(query.seite||1);
+ if(!Number.isSafeInteger(seite)||seite<1||seite>100000)
+  throw Object.assign(new Error('Ungültige Protokollseite'),{httpStatus:400});
+ return {ansicht,offset:(seite-1)*100};
+}
 app.get('/api/personal-audit',requireLogin,requireRight('log',1),async(req,res,next)=>{
  try{
-  const {rows}=await db.query("SELECT a.personalnummer,a.zeit,a.aenderungen,COALESCE(u.anzeigename,'–') AS benutzer FROM personal_audit a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.zeit DESC LIMIT 200");
+  const view=protokollAnsicht(req.query);
+  const sql="SELECT a.personalnummer,a.zeit,a.aenderungen,COALESCE(u.anzeigename,'–') AS benutzer FROM personal_audit a LEFT JOIN users u ON u.id=a.user_id";
+  const where=view?" WHERE a.zeit "+(view.ansicht==='archiv'?'<':'>=')+" now() - INTERVAL '3 days'":"";
+  const pagination=view?' ORDER BY a.zeit DESC,a.id DESC LIMIT 101 OFFSET $1':' ORDER BY a.zeit DESC LIMIT 200';
+  const {rows}=await db.query(sql+where+pagination,view?[view.offset]:[]);
   res.json(rows);
- }catch(e){next(e)}
+ }catch(e){if(e.httpStatus)return res.status(e.httpStatus).json({error:e.message});next(e)}
 });
 app.get('/api/log', requireLogin, requireRight('log', 1), async (req, res, next) => {
   try {
-    const { rows } = await db.query(
-      `SELECT l.zeit, l.aktion, l.art, COALESCE(u.anzeigename, '–') AS benutzer
-         FROM log l LEFT JOIN users u ON u.id = l.user_id
-        ORDER BY l.zeit DESC LIMIT 500`);
+    const view=protokollAnsicht(req.query);
+    const sql="SELECT l.zeit,l.aktion,l.art,COALESCE(u.anzeigename,'–') AS benutzer FROM log l LEFT JOIN users u ON u.id=l.user_id";
+    const where=view?" WHERE l.zeit "+(view.ansicht==='archiv'?'<':'>=')+" now() - INTERVAL '3 days'":"";
+    const pagination=view?' ORDER BY l.zeit DESC,l.id DESC LIMIT 101 OFFSET $1':' ORDER BY l.zeit DESC LIMIT 500';
+    const {rows}=await db.query(sql+where+pagination,view?[view.offset]:[]);
     res.json(rows);
-  } catch (e) { next(e); }
+  } catch (e) {if(e.httpStatus)return res.status(e.httpStatus).json({error:e.message});next(e);}
 });
 
 /* ---------- Fehler ---------- */
