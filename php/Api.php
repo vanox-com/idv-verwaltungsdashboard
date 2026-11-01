@@ -145,10 +145,14 @@ function handleLogin(): never {
     $password=(string)($data['passwort']??'');
     if ($number===''||$password==='') fail(400,'Dienstnummer und Passwort nötig');
     if(strlen($number)>32||strlen($password)>4096) fail(400,'Ungültige Zugangsdaten');
+    checkLoginRate();
     $list=sql("SELECT id,passwort_hash,muss_passwort_aendern,gesperrt FROM users WHERE dienstnummer=? LIMIT 1",[$number]);
     $u=$list[0]??null;
     // Same generic error to avoid user enumeration.
-    if(!$u||!password_verify($password,(string)$u['passwort_hash']))fail(401,'Dienstnummer oder Passwort stimmt nicht');
+    if(!$u||!password_verify($password,(string)$u['passwort_hash'])){
+        recordLoginFailure();
+        fail(401,'Dienstnummer oder Passwort stimmt nicht');
+    }
     if((int)$u['gesperrt']===1)fail(403,'Dieser Zugang ist gesperrt');
     $token=bin2hex(random_bytes(32));
     $purpose=(int)$u['muss_passwort_aendern']===1?'passwortwechsel':'voll';
@@ -195,25 +199,29 @@ function handlePassword(): never {
     respond(200,['ok'=>true]);
 }
 function run(): void {
+    ini_set('display_errors', '0');
     header('X-Content-Type-Options: nosniff');
     header('Cache-Control: no-store');
-    $uri=(string)(parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH)??'/');
-    $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
-    if(!str_starts_with($uri,'/api/')) fail(404,'Nicht gefunden');
-    csrfCheck();
-    try{
+    try {
+        $uri=(string)(parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH)??'/');
+        $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
+        if(!str_starts_with($uri,'/api/')) fail(404,'Nicht gefunden');
+        csrfCheck();
+        require_once __DIR__.'/RateLimit.php';
         if($method==='POST'&&$uri==='/api/login')handleLogin();
         if($method==='POST'&&$uri==='/api/logout')handleLogout();
         if($method==='GET'&&$uri==='/api/me'){
             $u=requireLogin();respond(200,sessionApiUser($u));
         }
         if($method==='POST'&&$uri==='/api/passwort')handlePassword();
-        // Ported modules are registered explicitly. Unported ones are denied,
-        // not redirected to PostgreSQL, and never bypass authorization.
+        // Unknown routes must fail closed, and no PHP code may delegate to PostgreSQL.
         $u=requireLogin();
         require_once __DIR__.'/Bootstrap.php';
         if($method==='GET'&&$uri==='/api/bootstrap')handleBootstrap($u);
         if($method==='GET'&&$uri==='/api/system-optionen')handleSystemOptions($u);
+        require_once __DIR__.'/Routine.php';
+        if($method==='POST'&&preg_match('#^/api/routine/([1-9][0-9]*)/termin$#D',$uri,$match))
+            handleRoutineDate($u,(int)$match[1]);
         fail(501,'Diese Funktion wurde noch nicht auf die MySQL/PHP-Version umgestellt');
     }catch(PDOException $e){
         error_log('[IDV PHP] Database failure: '.$e->getCode());
