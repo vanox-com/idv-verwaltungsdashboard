@@ -219,6 +219,10 @@ function run(): void {
         require_once __DIR__.'/Bootstrap.php';
         if($method==='GET'&&$uri==='/api/bootstrap')handleBootstrap($u);
         if($method==='GET'&&$uri==='/api/system-optionen')handleSystemOptions($u);
+        require_once __DIR__.'/ReadOnly.php';
+        if($method==='GET'&&$uri==='/api/portal-design')handlePortalDesign($u);
+        if($method==='GET'&&$uri==='/api/log')handleProtocol($u,'log');
+        if($method==='GET'&&$uri==='/api/personal-audit')handleProtocol($u,'personal-audit');
         require_once __DIR__.'/Routine.php';
         if($method==='POST'&&preg_match('#^/api/routine/([1-9][0-9]*)/termin$#D',$uri,$match))
             handleRoutineDate($u,(int)$match[1]);
