@@ -510,6 +510,19 @@ CREATE INDEX `personal_audit_nr_zeit` ON `personal_audit` (`personalnummer`, `ze
 CREATE INDEX `personalnummer_neubelegungen_nr_zeit` ON `personalnummer_neubelegungen` (`personalnummer`, `zeit` DESC);
 CREATE INDEX `routine_archiv_routine_datum_idx` ON `routine_archiv` (`routine_id`, `datum` DESC);
 
+-- Constraints translated from the original PostgreSQL CHECK conditions.
+ALTER TABLE `checklisten_status` ADD CONSTRAINT `checklisten_status_punkt_check` CHECK (`punkt` >= 0);
+ALTER TABLE `dashboard_layout` ADD CONSTRAINT `dashboard_layout_id_check` CHECK (`id` = 1);
+ALTER TABLE `generierte_dokumente` ADD CONSTRAINT `generierte_dokumente_url_check` CHECK (`url` LIKE 'https://docs.google.com/document/d/%');
+ALTER TABLE `idv_papierkorb` ADD CONSTRAINT `idv_papierkorb_bereich_check` CHECK (`bereich` IN ('kuendigungen','checklisten','textbausteine','personal'));
+ALTER TABLE `organigramm_layout` ADD CONSTRAINT `organigramm_layout_id_check` CHECK (`id` = 1);
+ALTER TABLE `personal_fristen` ADD CONSTRAINT `personal_fristen_vorwarn_tage_check` CHECK (`vorwarn_tage` BETWEEN 0 AND 365);
+ALTER TABLE `personal_rangantraege` ADD CONSTRAINT `personal_rangantraege_status_check` CHECK (`status` IN ('beantragt','genehmigt','abgelehnt'));
+ALTER TABLE `portal_design` ADD CONSTRAINT `portal_design_id_check` CHECK (`id` = 1);
+ALTER TABLE `portal_design` ADD CONSTRAINT `portal_design_schleier_check` CHECK (`schleier` BETWEEN 65 AND 97);
+ALTER TABLE `sperrfristen` ADD CONSTRAINT `sperrfristen_art_check` CHECK (`art` IN ('Bewerber','Praktikant'));
+ALTER TABLE `user_perms` ADD CONSTRAINT `user_perms_stufe_check` CHECK (`stufe` IN (0,1,2));
+
 -- PostgreSQL has a unique partial index to allow only one pending rank application per person.
 -- MySQL generated NULLs make all non-pending rows exempt from this unique constraint.
 ALTER TABLE `personal_rangantraege` ADD COLUMN `beantragt_personalnummer` INT GENERATED ALWAYS AS (CASE WHEN `status` = 'beantragt' THEN `personalnummer` ELSE NULL END) STORED;
