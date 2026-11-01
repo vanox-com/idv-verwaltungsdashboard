@@ -3046,6 +3046,14 @@ function befTermin(p, rang) {
   d.setUTCDate(d.getUTCDate() + Number(rang.tage));
   return d.toISOString().slice(0,10);
 }
+/* Polizeirat hat in der Live-Konfiguration Beförderungen auf Lesen (Stufe 1).
+   POR-Freigaben entscheidet weiterhin nur die Rolle mit 'por' Bearbeiten. */
+function befDarfDurchfuehren(){
+ return can('bef',2)||(ME?.rolle==='Polizeirat'&&can('bef',1));
+}
+function befDarfUrkunde(){
+ return can('bef',2)||(ME?.rolle==='Polizeirat'&&can('bef',1)&&can('urkunden',2));
+}
 function vBef() {
   const heute = new Date().toISOString().slice(0,10);
   const raenge = D.raenge || [];
@@ -3082,7 +3090,7 @@ function vBef() {
     const action =
       (antragAendern ? '<button type="button" data-por-person="'+nr+'">'+
         (can('por',2)?'POR-Freigabe':'POR beantragen')+'</button> ' : '') +
-      (verwalten && (anwaerter?pruefung:days<=0) && p.por_status === 'genehmigt' ?
+      (befDarfDurchfuehren() && (anwaerter?pruefung:days<=0) && p.por_status === 'genehmigt' ?
         '<button type="button" class="p" data-promote-person="'+nr+'">Befördern</button>' : '');
     return '<tr><td>'+esc(p.vorname+' '+p.nachname)+'</td><td>'+rangMitAbzeichen(p.dienstgrad)+'</td>' +
       '<td>'+rangMitAbzeichen(next.name)+'</td><td>'+fd(p.letzte_befoerderung)+'</td><td>'+(anwaerter?'Keine Frist':fd(termin))+'</td>' +
@@ -3128,7 +3136,7 @@ function vBef() {
     (wartet ? '<div class="box idv-warnung"><b>'+wartet+'</b> POR-Anträge warten auf eine Entscheidung.</div>' : '') +
     '<div id="rangantraegeBereich" class="box"><h3>Offene Rangänderungsanträge</h3><p class="mut">Lade Anträge …</p></div>'+ 
     ((can('por',1)||can('ranghistorie',1))?'<section class="box" id="ranghistorieBereich"><div class="ranghist-top"><div><h3>Rangänderungs-Historie</h3><p class="mut">Abgeschlossene POR-Entscheidungen – nur für Berechtigte einsehbar.</p></div><button type="button" data-ranghistorie-toggle aria-expanded="false">Historie anzeigen</button></div><div id="ranghistorieListe" hidden></div></section>':'')+ 
-    (verwalten?'<section class="box"><h3>Ernennungsurkunden · Polizeimeister <span class="tag '+(offeneUrkunden.length?'warn':'ok')+'">'+offeneUrkunden.length+' offen</span></h3>'+
+    (befDarfUrkunde()?'<section class="box"><h3>Ernennungsurkunden · Polizeimeister <span class="tag '+(offeneUrkunden.length?'warn':'ok')+'">'+offeneUrkunden.length+' offen</span></h3>'+
       '<p class="mut">Nur noch nicht erstellte Urkunden nach einer Beförderung von PMA zu PM. Die Dokumente werden im Google Drive des erstellenden Nutzers gespeichert.</p>'+
       (offeneUrkunden.length?'<p class="mut" id="urkundenGoogleStatus">Prüfe Google-Anmeldung …</p>':'')+
       (urkundenRows||'<p class="mut">Alle ausstehenden Ernennungsurkunden sind erstellt oder es liegen keine entsprechenden Beförderungen vor.</p>')+
@@ -3188,7 +3196,7 @@ async function anwaerterPruefungWechsel(nr,button){
   }
 }
 async function befAusfuehren(nr){
-  if(!can('bef',2))return;
+  if(!befDarfDurchfuehren())return;
   const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nr);if(!p||p.por_status!=='genehmigt')return;
   const raenge=D.raenge||[],current=raenge.find(r=>r.name===p.dienstgrad),next=current?.naechster_rang?raenge.find(r=>r.name===current.naechster_rang):null;
   if(!next)return;
@@ -3206,7 +3214,7 @@ async function befAusfuehren(nr){
    Access/Refresh-Tokens werden nicht dauerhaft im Browser oder Backend gespeichert. */
 let urkundenCodeClient=null,urkundenGoogleScript=null,urkundenPending=null;
 async function urkundenAuthVorbereiten(){
- if(!can('bef',2))return;
+ if(!befDarfUrkunde())return;
  const status=$('#urkundenGoogleStatus');
  try{
   const config=await api('/urkunden/status');
@@ -3267,7 +3275,7 @@ async function urkundenAuthVorbereiten(){
 document.addEventListener('click',e=>{
   const urkunde=e.target.closest('[data-urkunde-generate]');
   if(urkunde){
-    if(!can('bef',2))return;
+    if(!befDarfUrkunde())return;
     if(!urkundenCodeClient){
      alert('Google-Anmeldung noch nicht bereit. Bitte den Hinweis im Urkundenbereich prüfen.');
      void urkundenAuthVorbereiten();return;
