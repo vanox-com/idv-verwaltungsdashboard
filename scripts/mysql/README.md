@@ -71,6 +71,26 @@ und **vollständig leerer** Zieldatenbank. Sobald irgendeine Zieltabelle
 Daten enthält, bricht das Werkzeug ab. Persönliche Daten werden nicht
 als SQL-Datei abgelegt.
 
+## 2b. Revisions-/Konfliktschutz und Datenprüfung
+
+Die Datei `scripts/mysql/mysql8-revisions.sql` wird **nach dem Datenimport**
+in phpMyAdmin eingespielt. Sie legt in den acht bisher mit PostgreSQL-`xmin`
+geschützten Datenbereichen MySQL-Revisionsfelder und UPDATE-Trigger an.
+Sie ist ein notwendiger **Backend-Migrationsbaustein**, keine alleinige
+Fertigstellung des Konfliktschutzes.
+
+Mit `npm run mysql:verify` können Quelle und MySQL-Ziel anschließend
+nur lesend auf übereinstimmende Datensatzanzahlen und Inhalte geprüft werden:
+
+```bash
+SOURCE_DATABASE_URL="..." MYSQL_DESTINATION_URL="mysql://..." npm run mysql:verify
+```
+
+Der Vergleich protokolliert **keine personenbezogenen Inhalte** und
+bricht bei Abweichungen mit Fehlercode ab. Quell-Datenbank und Zieldatenbank
+werden von diesem Test nicht verändert. Für den Produktivwechsel ist nach
+dem letzten Schreibstopp noch einmal ein frischer Export und Vergleich nötig.
+
 ## 3. Wichtige noch offene Entwicklungsarbeiten
 
 **Die MySQL-8-Struktur und der Datenexport sind vorbereitet.
