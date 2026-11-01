@@ -48,8 +48,18 @@ try{
  pgClient=await source.connect();
  await pgClient.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
  await pgClient.query("SET LOCAL TIME ZONE 'UTC'");
- mysqlConn=await mysql.createConnection({uri:mysqlUrl,timezone:'Z',charset:'utf8mb4',
-  ssl:process.env.MYSQL_SSL==='required'?{}:undefined,multipleStatements:false});
+ const destination=new URL(mysqlUrl);
+ if(!destination.hostname||!destination.pathname||destination.pathname==='/')
+  throw Error('MySQL-Hostname und Datenbankname erforderlich');
+ mysqlConn=await mysql.createConnection({
+  host:destination.hostname,port:Number(destination.port||3306),
+  user:decodeURIComponent(destination.username),
+  password:decodeURIComponent(destination.password),
+  database:decodeURIComponent(destination.pathname.slice(1)),
+  timezone:'Z',charset:'utf8mb4',
+  ssl:process.env.MYSQL_SSL==='required'?{rejectUnauthorized:true,minVersion:'TLSv1.2'}:undefined,
+  multipleStatements:false
+ });
  const [version]=await mysqlConn.query('SELECT VERSION() AS v, DATABASE() AS db');
  const serverVersion=String(version[0]?.v||'');
  if(!/^8\.|^9\./.test(serverVersion)||!version[0]?.db)
