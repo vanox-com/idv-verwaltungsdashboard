@@ -617,6 +617,9 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       const tage=Array.isArray(plan.tage)?plan.tage:[];
       const aktuell=new Map(aktuelleBeamte.map(p=>[Number(p.personalnummer),p]));
       const gespeichert=new Map(ursprung.map(p=>[Number(p?.nr),p]));
+      const ehemaligeAkten=new Map(personal.rows.filter(p=>
+        p.status==='Gekündigt'&&p.administrativ_geloescht_am===null)
+        .map(p=>[Number(p.personalnummer),p]));
       const anzeigen=aktuelleBeamte.map(p=>{
         const nr=Number(p.personalnummer),alt=gespeichert.get(nr);
         return {
@@ -627,11 +630,19 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
           _aktuell:true
         };
       });
+      const ehemaligePerson = p => {
+        const akte=ehemaligeAkten.get(Number(p.nr));
+        const name=x=>{const wert=String(x||'').trim();return wert==='-'?'':wert;};
+        const vorname=name(p.vorname)||name(akte?.vorname);
+        const nachname=name(p.nachname)||name(akte?.nachname);
+        return {...p,vorname,nachname,_aktuell:false,status:'Ehemalig'};
+      };
       const ehemalig=ursprung.filter(p=>{
         if(!p||aktuell.has(Number(p.nr)))return false;
-        const name=[p.vorname,p.nachname].map(x=>String(x||'').trim()).filter(x=>x&&x!=='-').join(' ');
-        return !!name || (Array.isArray(p.anwesend)&&p.anwesend.some(x=>x===true));
-      }).map(p=>({...p,_aktuell:false,status:'Ehemalig'}));
+        const person=ehemaligePerson(p);
+        return !![person.vorname,person.nachname].filter(Boolean).length ||
+          (Array.isArray(p.anwesend)&&p.anwesend.some(x=>x===true));
+      }).map(ehemaligePerson);
       return [...anzeigen,...ehemalig].sort((a,b)=>Number(a.nr)-Number(b.nr)||
         Number(b._aktuell)-Number(a._aktuell));
     };
