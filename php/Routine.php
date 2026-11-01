@@ -61,6 +61,8 @@ function handleRoutineDate(array $user,int $id): never {
             fail(409,'Termin liegt bereits im Archiv. Bitte dort wiederherstellen.');
         }
         $oldSize=count($tage);
+        $oldDays=$tage;
+        $oldPeople=$personen;
         foreach($personen as &$person){
             if(!is_array($person)||!isset($person['nr'])||
                !isset($person['anwesend'])||!is_array($person['anwesend'])||
@@ -85,6 +87,16 @@ function handleRoutineDate(array $user,int $id): never {
         $rev=(string)$newRevision->fetchColumn();
         $stmt=$pdo->prepare("INSERT INTO log (user_id,aktion,art) VALUES (?,?,'edit')");
         $stmt->execute([$user['id'],'Routine '.$id.': Termin '.$german.' angelegt']);
+        // Preserve the old PostgreSQL audit semantics until MySQL triggers are ported.
+        $diff=[
+            'tage'=>['alt'=>$oldDays,'neu'=>$tage],
+            'personen'=>['alt'=>$oldPeople,'neu'=>$personen]
+        ];
+        $stmt=$pdo->prepare(
+            "INSERT INTO idv_aenderungen(bereich,schluessel,personalnummer,vorgang,felder,user_id)
+             VALUES('routine',?,NULL,'Bearbeitet',?,?)"
+        );
+        $stmt->execute([(string)$id,json_encode($diff,JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE),$user['id']]);
         $pdo->commit();
         respond(200,['ok'=>true,'_revision'=>$rev]);
     }catch(Throwable $e){
