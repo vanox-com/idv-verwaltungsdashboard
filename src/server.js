@@ -1724,9 +1724,33 @@ app.patch('/api/por/:nr', requireLogin, requireRight('bef', 1), async (req, res,
   } catch (e) { next(e); }
 });
 
+/* Polizeirat: nach einer extern erteilten POR-Freigabe darf er auch bei
+   'Beförderungen: Lesen' den Vollzug durchführen. POR-Entscheidungen bleiben
+   vollständig über das separate 'por'-Recht geschützt. Für Urkunden ist
+   zusätzlich das explizite Urkunden-Bearbeitungsrecht erforderlich. */
+function darfBefFoerdern(user,rechte){
+ return Number(rechte.bef||0)>=2||
+   (user.rolle==='Polizeirat'&&Number(rechte.bef||0)>=1);
+}
+function darfPmaUrkunde(user,rechte){
+ return Number(rechte.bef||0)>=2||
+   (user.rolle==='Polizeirat'&&Number(rechte.bef||0)>=1&&Number(rechte.urkunden||0)>=2);
+}
+function requireBefVollzug(art){
+ return async(req,res,next)=>{
+  try{
+   const rechte=await effektiveRechte(req.user);
+   const erlaubt=art==='urkunde'
+     ?darfPmaUrkunde(req.user,rechte):darfBefFoerdern(req.user,rechte);
+   if(!erlaubt)return res.status(403).json({error:'Kein Recht für diese Beförderungsaktion'});
+   next();
+  }catch(e){next(e)}
+ };
+}
+
 /* Beförderung: Frist und POR-Status innerhalb einer DB-Transaktion prüfen.
    Ein Client darf weder einen Rang überspringen noch den POR-Status umgehen. */
-app.post('/api/befoerdern', requireLogin, requireRight('bef', 2), async (req, res, next) => {
+app.post('/api/befoerdern', requireLogin, requireRight('bef', 1),requireBefVollzug('befoerdern'), async (req, res, next) => {
   const nr = Number(req.body.nr);
   if (!Number.isSafeInteger(nr) || nr < 1) return res.status(400).json({ error: 'Ungültige Personalnummer' });
   const fail = (status, message) => Object.assign(new Error(message), { httpStatus: status });
@@ -1837,10 +1861,10 @@ async function zertGoogle(token,url,method='GET',data,type='application/json'){
  }
  return res.status===204?{}:res.json();
 }
-app.get('/api/urkunden/status',requireLogin,requireRight('bef',2),(req,res)=>{
+app.get('/api/urkunden/status',requireLogin,requireRight('bef',1),requireBefVollzug('urkunde'),(req,res)=>{
  const c=zertGoogleOAuth();res.json({eingerichtet:!!c,clientId:c?.id||null,modus:'persoenlich'});
 });
-app.post('/api/urkunden/polizeimeister/:nr',requireLogin,requireRight('bef',2),async(req,res,next)=>{
+app.post('/api/urkunden/polizeimeister/:nr',requireLogin,requireRight('bef',1),requireBefVollzug('urkunde'),async(req,res,next)=>{
  const nr=Number(req.params.nr),eid=req.body?.eid_datum,code=req.body?.google_code,c=zertGoogleOAuth();
  const origin=req.get('origin')||'',host=req.get('x-forwarded-host')||req.get('host')||'';
  if(!Number.isSafeInteger(nr)||nr<1||!zertDatum(eid))
