@@ -63,10 +63,18 @@ export function registerAktenFeatures(app,db,requireLogin,requireRight,effektive
       if(!bereiche.length)return res.json([]);
       const gefiltert=String(req.query.bereich||'');
       if(gefiltert&&!bereiche.includes(gefiltert))return res.status(403).json({error:'Kein Zugriff auf diesen Bereich'});
-      const limit=Math.min(150,Math.max(1,Number(req.query.limit)||80));
+      const ansicht=req.query.ansicht;
+      if(ansicht!==undefined&&!['aktuell','archiv'].includes(ansicht))
+        return res.status(400).json({error:'Ungültige Protokollansicht'});
+      const seite=Number(req.query.seite||1);
+      if(!Number.isSafeInteger(seite)||seite<1||seite>100000)
+        return res.status(400).json({error:'Ungültige Protokollseite'});
+      const limit=ansicht?101:Math.min(150,Math.max(1,Number(req.query.limit)||80));
+      const zeitfilter=ansicht?" AND a.zeit "+(ansicht==='archiv'?'<':'>=')+" now() - INTERVAL '3 days'":"";
+      const pagination=ansicht?' ORDER BY a.zeit DESC,a.id DESC LIMIT $2 OFFSET $3':' ORDER BY a.id DESC LIMIT $2';
       const {rows}=await db.query(
-        "SELECT a.id,a.zeit,a.bereich,a.schluessel,a.personalnummer,a.vorgang,a.felder,u.anzeigename AS benutzer FROM idv_aenderungen a LEFT JOIN users u ON u.id=a.user_id WHERE a.bereich=ANY($1::text[]) ORDER BY a.id DESC LIMIT $2",
-        [gefiltert?[gefiltert]:bereiche,limit]);
+        "SELECT a.id,a.zeit,a.bereich,a.schluessel,a.personalnummer,a.vorgang,a.felder,u.anzeigename AS benutzer FROM idv_aenderungen a LEFT JOIN users u ON u.id=a.user_id WHERE a.bereich=ANY($1::text[])"+zeitfilter+pagination,
+        ansicht?[gefiltert?[gefiltert]:bereiche,limit,(seite-1)*100]:[gefiltert?[gefiltert]:bereiche,limit]);
       res.json(rows.map(({felder,...x})=>({...x,details:zusammenfassung(felder)})));
     }catch(err){next(err);}
   });
