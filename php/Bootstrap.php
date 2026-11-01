@@ -157,8 +157,14 @@ function handleBootstrap(array $user): never {
     }
     if(allow($rights,'kue')){
         // Latest termination records; date interpretation is provisional.
+        // Never expose personal_snapshot or confidential document metadata through list views.
         $d['kuendigungen']=normalizedRows(
-            'SELECT * FROM kuendigungen WHERE COALESCE(kuendigungsdatum,DATE(erfasst_am)) >= DATE_SUB(UTC_DATE(),INTERVAL 59 DAY) ORDER BY nachname,id DESC'
+            'SELECT id,personalnummer,vorname,nachname,rang,grund,handy,vertrag,eintritt,urkunde,
+                    zeugnis,kuendigung,waffe,copnet,emd,ic,discord,dienstgegenstaende,anzeige,
+                    kuendigungsdatum,erfasst_am
+             FROM kuendigungen
+             WHERE COALESCE(kuendigungsdatum,DATE(erfasst_am)) >= DATE_SUB(UTC_DATE(),INTERVAL 59 DAY)
+             ORDER BY nachname,id DESC'
         );
         $d['dashboard']['summary']['kuendigungen']=count($d['kuendigungen']);
         $d['dashboard']['summary']['offeneRueckgaben']=count(array_filter($d['kuendigungen'],function($p){
