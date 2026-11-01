@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "migrate": "node src/migrate.js",
     "mysql:prepare": "node scripts/mysql/prepare.mjs",
-    "mysql:copy": "node scripts/mysql/copy.mjs"
+    "mysql:copy": "node scripts/mysql/copy.mjs",
+    "mysql:audit": "node scripts/mysql/audit-sql.mjs"
   },
   "engines": {
     "node": ">=20"
