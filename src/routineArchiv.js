@@ -77,11 +77,41 @@ export function registerRoutineArchive(app,db,requireLogin,requireRight){
     'SELECT id FROM routine_archiv WHERE routine_id=$1 AND datum=$2 FOR UPDATE',
     [plan.id,datum]);
    if(exists.rowCount)throw err(409,'Termin befindet sich bereits im Archiv');
-   // Vor dem Entfernen aller Spaltenwerte den vollständigen Stand sichern.
-   const snapshot=plan.personen.map(p=>({
-    nr:Number(p.nr),vorname:String(p.vorname||''),nachname:String(p.nachname||''),
-    abgemeldet:p.abgemeldet===true,anwesend:p.anwesend[index]===null?null:p.anwesend[index]===true
-   }));
+   /* Namen werden beim Archivieren als historische Momentaufnahme fixiert.
+      Alte gespeicherte Namen haben Vorrang – eine spätere Neubelegung der
+      Dienstnummer darf niemals rückwirkend Personen austauschen. */
+   const {rows:personal}=await client.query(
+    "SELECT personalnummer,vorname,nachname,status,eintrittsdatum FROM personal WHERE administrativ_geloescht_am IS NULL AND status IN ('Aktiv','Abgemeldet','Inaktiv','Suspendiert')");
+   const personalNachNummer=new Map(personal.map(p=>[Number(p.personalnummer),p]));
+   const nummern=new Set();
+   const snapshot=[];
+   for(const p of plan.personen){
+    const nr=Number(p.nr),aktuell=personalNachNummer.get(nr);
+    nummern.add(nr);
+    const altName=[p.vorname,p.nachname].some(x=>String(x||'').trim()&&String(x||'').trim()!=='-');
+    const datumPassend=aktuell&&(!aktuell.eintrittsdatum||
+      String(aktuell.eintrittsdatum instanceof Date?aktuell.eintrittsdatum.toISOString().slice(0,10):aktuell.eintrittsdatum).slice(0,10)<=datum);
+    const wert=p.anwesend[index]===null?null:p.anwesend[index]===true;
+    // Leere Platzhalter, die erst nach diesem Termin eingestellt wurden, nicht nachträglich einfügen.
+    if(!altName&&!datumPassend&&wert!==true)continue;
+    snapshot.push({
+      nr,vorname:altName?String(p.vorname||''):(datumPassend?String(aktuell.vorname||''):''),
+      nachname:altName?String(p.nachname||''):(datumPassend?String(aktuell.nachname||''):''),
+      abgemeldet:p.abgemeldet===true,
+      anwesend:wert
+    });
+   }
+   // Auch neu eingestellte, noch nicht manuell abgehakte Beamte korrekt erfassen.
+   // Für vor ihrem Dienstantritt liegende Termine wird keine Anwesenheit erfunden.
+   for(const p of personal){
+    const nr=Number(p.personalnummer);
+    if(nummern.has(nr))continue;
+    if(p.eintrittsdatum&&String(p.eintrittsdatum instanceof Date
+      ?p.eintrittsdatum.toISOString().slice(0,10):p.eintrittsdatum).slice(0,10)>datum)continue;
+    snapshot.push({nr,vorname:p.vorname||'',nachname:p.nachname||'',
+      abgemeldet:p.status==='Abgemeldet',anwesend:null});
+   }
+   snapshot.sort((a,b)=>a.nr-b.nr);
    await client.query(
     'INSERT INTO routine_archiv(routine_id,datum,teilnehmer,archiviert_von) VALUES($1,$2,$3::jsonb,$4)',
     [plan.id,datum,JSON.stringify(snapshot),req.user.id]);
