@@ -9,7 +9,8 @@
     "migrate": "node src/migrate.js",
     "mysql:prepare": "node scripts/mysql/prepare.mjs",
     "mysql:copy": "node scripts/mysql/copy.mjs",
-    "mysql:audit": "node scripts/mysql/audit-sql.mjs"
+    "mysql:audit": "node scripts/mysql/audit-sql.mjs",
+    "mysql:export": "node scripts/mysql/export-phpmyadmin.mjs"
   },
   "engines": {
     "node": ">=20"
