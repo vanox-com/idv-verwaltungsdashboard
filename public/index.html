@@ -3738,6 +3738,7 @@ document.addEventListener('click',e=>{
 
 /* Routine: Anwesenheit, Termine und Sonderzahlungen aus gemeinsamem Datenbestand. */
 let routineBereich='anwesenheit';
+let routineEhemaligeSichtbar=false; // Standard: nur aktuell beschäftigte Beamte
 function routinePlan(){return (D.routine||[])[0]||null;}
 /* Jede Routine-Änderung sendet den Stand, den der Nutzer tatsächlich gesehen hat. */
 function routineSchreibOptionen(plan,method,body){
@@ -3766,12 +3767,16 @@ function vRout(){
     '<p id="routineArchivStatus" role="status" class="mut"></p>'+
     '<div id="routineArchivListe">Lade Archiv …</div>';
   const personen=r.personen||[],tage=r.tage||[];
+  const ehemaligeAnzahl=personen.filter(p=>p._aktuell===false).length;
+  const angezeigteAnzahl=personen.length-(routineEhemaligeSichtbar?0:ehemaligeAnzahl);
   const opts=(D.personal||[]).filter(p=>p.personalnummer!=null&&
     ['Aktiv','Abgemeldet','Inaktiv','Suspendiert'].includes(p.status)&&
     !personen.some(x=>Number(x.nr)===Number(p.personalnummer)))
     .map(p=>'<option value="'+Number(p.personalnummer)+'">'+esc(p.personalnummer+' · '+[p.vorname,p.nachname].filter(Boolean).join(' '))+'</option>').join('');
   const steuerung='<div class="pers-bar routine-toolbar">'+
     '<input id="routineSuche" placeholder="Teilnehmende suchen …" aria-label="Teilnehmende suchen" oninput="routineFiltern()">'+
+    (ehemaligeAnzahl?'<button type="button" id="routineEhemaligeToggle" aria-pressed="'+routineEhemaligeSichtbar+'">'+
+      (routineEhemaligeSichtbar?'Ehemalige ausblenden':'Ehemalige einblenden')+' ('+ehemaligeAnzahl+')</button>':'')+
     '<span class="spacer"></span>'+
     (w?'<form id="routineDateForm" class="routine-inline"><input type="date" id="routineNewDate" aria-label="Neues Routinedatum" required>'+
       '<button type="submit" class="p">+ Termin</button></form>':'')+
@@ -3801,7 +3806,8 @@ function vRout(){
     }).join('');
     const name=[p.vorname,p.nachname].map(x=>String(x||'').trim()).filter(x=>x&&x!=='-').join(' ');
     const ehemalig=p._aktuell===false;
-    return '<tr class="routine-person'+(ehemalig?' routine-historisch':'')+'" data-routine-search="'+esc((nr+' '+name).toLowerCase())+'">'+
+    return '<tr class="routine-person'+(ehemalig?' routine-historisch':'')+'" data-routine-search="'+esc((nr+' '+name).toLowerCase())+'"'+
+      (ehemalig?' data-routine-ehemalig="true"'+(routineEhemaligeSichtbar?'':' hidden'):'')+'>'+ 
       '<td>'+nr+'</td><td><strong>'+esc(name||'Name nicht dokumentiert')+'</strong>'+(ehemalig?'<small class="mut" style="display:block">Historischer Teilnehmer</small>':'')+'</td><td>'+ 
       (ehemalig?'<span class="tag warn">Ehemalig</span>':'<span class="tag '+(p.status==='Aktiv'?'ok':'warn')+'">'+esc(p.status||'–')+'</span> ')+
       (!ehemalig?
@@ -3815,7 +3821,7 @@ function vRout(){
     steuerung+'<p id="routineInfo" role="status" class="mut"></p>'+
     '<div class="tw"><table class="routine-table"><thead><tr><th>Nr.</th><th>Person</th><th>Status</th>'+th+
       '<th>Summe</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
-    '<p class="mut" id="routineAnzahl">'+personen.length+' Teilnehmende · '+tage.length+' Routinetermine</p>';
+    '<p class="mut" id="routineAnzahl">'+angezeigteAnzahl+' Teilnehmende angezeigt · '+tage.length+' Routinetermine</p>';
 }
 
 async function routineArchivLaden(){
@@ -3878,7 +3884,8 @@ async function routineArchivWiederherstellen(button){
 function routineFiltern(){
   const q=($('#routineSuche')?.value||'').trim().toLowerCase();let count=0;
   document.querySelectorAll('.routine-person').forEach(x=>{
-    x.hidden=!!q&&!x.dataset.routineSearch.includes(q);
+    x.hidden=(!routineEhemaligeSichtbar&&x.dataset.routineEhemalig==='true')||
+      (!!q&&!x.dataset.routineSearch.includes(q));
     if(!x.hidden)count++;
   });
   const r=routinePlan();if($('#routineAnzahl')&&r)$('#routineAnzahl').textContent=
@@ -3991,6 +3998,15 @@ function sonderzahlungDialog(id){
   };
 }
 document.addEventListener('click',e=>{
+  if(e.target.closest('#routineEhemaligeToggle')){
+    routineEhemaligeSichtbar=!routineEhemaligeSichtbar;
+    const button=e.target.closest('#routineEhemaligeToggle');
+    const ehemalige=(routinePlan()?.personen||[]).filter(p=>p._aktuell===false).length;
+    button.setAttribute('aria-pressed',String(routineEhemaligeSichtbar));
+    button.textContent=(routineEhemaligeSichtbar?'Ehemalige ausblenden':'Ehemalige einblenden')+' ('+ehemalige+')';
+    routineFiltern();
+    return;
+  }
   const archivieren=e.target.closest('[data-routine-archive-date]');
   if(archivieren){void routineArchivieren(archivieren);return;}
   const restore=e.target.closest('[data-routine-restore]');
