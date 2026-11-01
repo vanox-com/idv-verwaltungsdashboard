@@ -3776,8 +3776,13 @@ function vRout(){
       esc(routineTagIso(tag))+'" title="Termin '+esc(routineDatumAnzeigen(tag))+' archivieren">Archivieren</button>':'')+
     '</th>').join('');
   const body=personen.map(p=>{
-    const nr=Number(p.nr),a=Array.isArray(p.anwesend)?p.anwesend:[],anzahl=a.filter(Boolean).length;
+    const nr=Number(p.nr),a=Array.isArray(p.anwesend)?p.anwesend:[];
+    const eintritt=String(p.eintrittsdatum||'').slice(0,10);
+    const vorEintritt=tag=>p._aktuell!==false&&/^\d{4}-\d{2}-\d{2}$/.test(eintritt)&&
+      !!routineTagIso(tag)&&routineTagIso(tag)<eintritt;
+    const anzahl=tage.filter((tag,i)=>!vorEintritt(tag)&&a[i]===true).length;
     const cells=tage.map((tag,i)=>{
+      if(vorEintritt(tag))return '<td class="routine-mark"><span class="att-display" title="Vor Dienstantritt">·</span></td>';
       const anwesend=a[i]===true,unbekannt=a[i]===null;
       return '<td class="routine-mark">'+(w?
         '<button type="button" class="att-button '+(anwesend?'is-here':unbekannt?'is-unknown':'')+'" data-routine-nr="'+nr+
