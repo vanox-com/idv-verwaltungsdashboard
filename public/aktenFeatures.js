@@ -57,29 +57,33 @@ async function laufbahn(nr,el){
    '<p class="mut">Noch keine Laufbahneinträge vorhanden.</p>')+'</div>';
  }catch(err){if(el.isConnected)el.textContent='Laufbahn konnte nicht geladen werden: '+err.message;}
 }
-async function vergleich(){
+async function vergleich({ansicht='aktuell',seite=1}={}){
  styles();
  const el=document.getElementById('idvVergleich');if(!el)return;
  el.innerHTML='<h3>Änderungsvergleich</h3><p class="mut">Lade Änderungen …</p>';
  try{
-  const list=await api('/aenderungsvergleich?limit=120');
-  if(!el.isConnected||tab!=='log')return;
+  const results=await api('/aenderungsvergleich?ansicht='+encodeURIComponent(ansicht)+'&seite='+seite);
+  if(!el.isConnected||tab!=='log'||!window.IDVProtokollSeiten?.istAktuell(ansicht))return;
+  const limit=window.IDVProtokollSeiten.limit;
+  const weitere=results.length>limit,list=results.slice(0,limit);
   const bereiche=[...new Set(list.map(x=>x.bereich))];
   el.innerHTML='<h3>Änderungshistorie mit Vergleich</h3>'+
-   '<p class="mut">Neue Änderungen ab Aktivierung des Journals; bisherige Personal-Auditeinträge bleiben oben erhalten. Fehlt die Zuordnung zu einem Benutzer, steht „Automatisch erfasst“.</p>'+
+   '<p class="mut">Feldänderungen nach dem gewählten Zeitraum. Der Bereichsfilter gilt für diese Seite; weitere ältere Änderungen erreichst du über die Seitennavigation.</p>'+
    '<label for="idvDiffFilter">Bereich</label><select id="idvDiffFilter"><option value="">Alle berechtigten Bereiche</option>'+
    bereiche.map(x=>'<option value="'+esc(x)+'">'+esc(labels[x]||x)+'</option>').join('')+'</select>'+
-   '<div class="idv-history" id="idvDiffRows"></div>';
+   '<div class="idv-history" id="idvDiffRows"></div>'+
+   window.IDVProtokollSeiten.pager('vergleich',seite,weitere);
   const render=()=>{
-   const filter=document.getElementById('idvDiffFilter')?.value;
+   if(!el.isConnected)return;
+   const filter=el.querySelector('#idvDiffFilter')?.value;
    const rows=list.filter(x=>!filter||x.bereich===filter);
-   const dest=document.getElementById('idvDiffRows');
+   const dest=el.querySelector('#idvDiffRows');
    if(dest)dest.innerHTML=rows.length?rows.map(x=>eventCard({...x,titel:(labels[x.bereich]||x.bereich)+' · '+x.vorgang},'Datensatz '+x.schluessel+' · '+(x.benutzer||'Automatisch erfasst'))).join(''):
-    '<p class="mut">Keine Änderungen vorhanden.</p>';
+    '<p class="mut">Keine Änderungen in dieser Auswahl vorhanden.</p>';
   };
-  document.getElementById('idvDiffFilter')?.addEventListener('change',render);
+  el.querySelector('#idvDiffFilter')?.addEventListener('change',render);
   render();
- }catch(err){if(el.isConnected)el.innerHTML='<h3>Änderungsvergleich</h3><p class="fehler">'+esc(err.message)+'</p>';}
+ }catch(err){if(el.isConnected&&window.IDVProtokollSeiten?.istAktuell(ansicht))el.innerHTML='<h3>Änderungsvergleich</h3><p class="fehler">'+esc(err.message)+'</p>';}
 }
 async function papierkorb(){
  styles();const el=document.getElementById('inhalt');
