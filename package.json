@@ -10,7 +10,8 @@
     "mysql:prepare": "node scripts/mysql/prepare.mjs",
     "mysql:copy": "node scripts/mysql/copy.mjs",
     "mysql:audit": "node scripts/mysql/audit-sql.mjs",
-    "mysql:export": "node scripts/mysql/export-phpmyadmin.mjs"
+    "mysql:export": "node scripts/mysql/export-phpmyadmin.mjs",
+    "mysql:verify": "node scripts/mysql/verify.mjs"
   },
   "engines": {
     "node": ">=20"
