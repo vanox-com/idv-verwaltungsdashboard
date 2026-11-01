@@ -90,6 +90,12 @@ try{
  await mysqlConn.beginTransaction();
  try{
   for(const t of tables){
+   if(t==='sessions'){
+    const sourceCount=Number((await pgClient.query('SELECT COUNT(*)::int AS n FROM '+quotePg(t))).rows[0].n);
+    totals[t]={source:sourceCount,imported:0,forcedRelogin:true};
+    console.log('Übersprungen: sessions (Sicherheitsmaßnahme, Anmeldung danach erneut erforderlich)');
+    continue;
+   }
    const cs=types.get(t);
    if(!cs?.length||!pk.get(t)?.length)throw Error('Tabelle ohne Spalten oder PK: '+t);
    const colnames=cs.map(c=>c.column_name);
@@ -108,17 +114,11 @@ try{
    const sourceCount=Number((await pgClient.query('SELECT COUNT(*)::int AS n FROM '+quotePg(t))).rows[0].n);
    const [targetCount]=await mysqlConn.query('SELECT COUNT(*) AS n FROM '+q(t));
    const actual=Number(targetCount[0].n);
-   if(t==='sessions'){
-    // Sessions cannot cross deployments; copied sessions are removed below.
-    totals[t]={source:sourceCount,imported:actual,final:0,forcedRelogin:true};
-   }else{
-    if(sourceCount!==actual)throw Error('Datenanzahl abweichend in '+t+': '+sourceCount+' / '+actual);
-    totals[t]={source:sourceCount,imported:actual};
-   }
+   if(sourceCount!==actual)throw Error('Datenanzahl abweichend in '+t+': '+sourceCount+' / '+actual);
+   totals[t]={source:sourceCount,imported:actual};
    console.log('Übertragen:',t,actual,'Datensätze');
   }
-  // Old sessions are not valid on the new domain and must not be reused.
-  await mysqlConn.query('DELETE FROM '+q('sessions'));
+  // Old sessions are never transferred across hosts.
   const [sessionCount]=await mysqlConn.query('SELECT COUNT(*) AS n FROM '+q('sessions'));
   if(Number(sessionCount[0].n)!==0)throw Error('Sessions konnten nicht geleert werden');
   await mysqlConn.commit();
