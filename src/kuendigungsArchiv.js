@@ -5,9 +5,15 @@
 /* Bei Altvorgängen ohne Datum gilt der nachweisbare Statuswechsel auf
    "Gekündigt" als Erfassungsereignis für die 60-Tage-Ansicht.
    Die tatsächlichen historischen Kündigungsdaten bleiben unbekannt. */
+/* Ein alter Statuswechsel darf NICHT auf Kündigungen anderer Kollegen mit
+   später erneut vergebener Personalnummer übertragen werden. Die Zuordnung
+   muss auch Vor-/Nachname und Eintrittsdatum bestätigen. */
 const KUE_STATUSWECHSEL=
   "(SELECT MAX(a.zeit) FROM personal_audit a JOIN personal p ON p.personalnummer=a.personalnummer "+
   "WHERE a.personalnummer=kuendigungen.personalnummer AND p.status='Gekündigt' "+
+  "AND lower(btrim(coalesce(p.vorname,'')))=lower(btrim(coalesce(kuendigungen.vorname,''))) "+
+  "AND lower(btrim(coalesce(p.nachname,'')))=lower(btrim(coalesce(kuendigungen.nachname,''))) "+
+  "AND p.eintrittsdatum IS NOT DISTINCT FROM kuendigungen.eintritt "+
   "AND a.aenderungen->'status'->>'neu'='Gekündigt')";
 export const KUE_AKTUELL_BEDINGUNG=
   "(COALESCE(kuendigungsdatum,(erfasst_am AT TIME ZONE 'Europe/Berlin')::date,"+
