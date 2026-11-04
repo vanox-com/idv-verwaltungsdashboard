@@ -1,0 +1,16 @@
+name: Kündigungen – Regressionstests
+on:
+  push:
+    branches: [main, migration/mysql]
+  pull_request:
+    branches: [main]
+jobs:
+  termination-regressions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check termination render and historical identity rules
+        run: node --test tests/kuendigungen-regression.test.mjs
