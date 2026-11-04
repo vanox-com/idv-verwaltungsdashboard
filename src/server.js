@@ -938,6 +938,31 @@ function dokumentLinksValidieren(body) {
   }
   return null;
 }
+/* Dienstnummern werden wiedervergeben; deshalb nur Kündigungen derselben
+   Person als schon vorhanden werten. Eintrittsdatum grenzt erneute
+   Einstellungen gleicher Namen ab. Bei undatierten Alteinträgen wird nur
+   ein belegtes Erfassungsdatum nach dem Dienstantritt akzeptiert. */
+async function kuendigungenDieserPerson(client,p){
+  const nummer=Number(p.personalnummer);
+  const vorname=String(p.vorname||'').trim(),nachname=String(p.nachname||'').trim();
+  const eintritt=p.eintrittsdatum||null;
+  if(!Number.isSafeInteger(nummer)||nummer<1||!vorname||!nachname)return [];
+  const {rows}=await client.query(
+    `SELECT k.id FROM kuendigungen k
+      WHERE k.personalnummer=$1
+        AND lower(btrim(coalesce(k.vorname,'')))=lower($2)
+        AND lower(btrim(coalesce(k.nachname,'')))=lower($3)
+        AND (k.eintritt IS NOT DISTINCT FROM $4::date
+          OR (k.eintritt IS NULL AND $4::date IS NOT NULL
+              AND k.erfasst_am >= $4::date))
+        AND (NOT EXISTS(SELECT 1 FROM personalnummer_neubelegungen a WHERE a.personalnummer=$1)
+          OR k.erfasst_am >= (SELECT MAX(a.zeit) FROM personalnummer_neubelegungen a
+             WHERE a.personalnummer=$1))
+      ORDER BY k.id DESC`,
+    [nummer,vorname,nachname,eintritt]);
+  return rows;
+}
+
 /* Bereits gekündigte Personalakten können nachträglich in das Kündigungsmodul
    übernommen werden. Bestehende Vorgänge (auch historische Mehrfacheinträge)
    bleiben unverändert; die Personalakte selbst wird nicht gelöscht. */
@@ -965,13 +990,10 @@ app.post('/api/personal/:nr/kuendigung',requireLogin,requireRight('pers',1),requ
       await client.query('ROLLBACK');
       return res.status(409).json({error:'Die Person muss zuerst den Status „Gekündigt“ erhalten'});
     }
-    const existing=await client.query(`SELECT id FROM kuendigungen k WHERE k.personalnummer=$1
-      AND (NOT EXISTS(SELECT 1 FROM personalnummer_neubelegungen a WHERE a.personalnummer=$1)
-       OR k.erfasst_am >= (SELECT MAX(a.zeit) FROM personalnummer_neubelegungen a
-         WHERE a.personalnummer=$1)) ORDER BY id DESC`,[nr]);
-    if(existing.rows.length){
+    const existing=await kuendigungenDieserPerson(client,p);
+    if(existing.length){
       await client.query('COMMIT');
-      return res.json({ok:true,angelegt:false,id:existing.rows[0].id,anzahl:existing.rows.length});
+      return res.json({ok:true,angelegt:false,id:existing[0].id,anzahl:existing.length});
     }
     if(!grund){
       await client.query('ROLLBACK');
@@ -1086,15 +1108,10 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
     }
     let kuendigungAngelegt=false,kuendigungVorhanden=false;
     if(wechsel){
-      const {rows:vorhanden}=await client.query(
-        `SELECT id FROM kuendigungen k WHERE k.personalnummer=$1
-           AND (NOT EXISTS(SELECT 1 FROM personalnummer_neubelegungen a WHERE a.personalnummer=$1)
-             OR k.erfasst_am >= (SELECT MAX(a.zeit) FROM personalnummer_neubelegungen a
-               WHERE a.personalnummer=$1))
-           ORDER BY id DESC LIMIT 1`,[nr]);
+      const p=aktualisiert[0];
+      const vorhanden=await kuendigungenDieserPerson(client,p);
       kuendigungVorhanden=vorhanden.length>0;
       if(!kuendigungVorhanden){
-        const p=aktualisiert[0];
         const dokument=(titel,url)=>url?JSON.stringify({t:String(titel||'Dokument'),u:String(url)}):
           String(titel||'');
         await client.query(
