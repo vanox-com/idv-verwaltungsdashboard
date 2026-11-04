@@ -3457,13 +3457,18 @@ function vKue() {
       '<td>'+docs+'</td><td class="kue-statuscell">'+badges+'</td>'+
       '<td>'+(schreiben?'<button class="kue-delete" type="button" data-kue-delete="'+Number(k.id)+'" title="Kündigung in Papierkorb verschieben">Löschen</button>':'')+'</td>';
   };
-  /* Nach eindeutiger Personalnummer gruppieren, damit namensgleiche Personen
-     niemals fälschlich miteinander vermischt werden. */
+  /* Dienstnummern können nach einer Kündigung neu vergeben werden. Die
+     Übersicht gruppiert deshalb nach Person (Nr. + Name + Dienstantritt),
+     niemals nur nach der wiederverwendeten Nummer. Alte Kollegen bleiben
+     mit ihren eigenen Dokumenten und Rückgabe-Ständen nachvollziehbar. */
   const gruppen=new Map();
   for(const k of eintraege){
     const nummer=Number(k.personalnummer);
-    const key=Number.isSafeInteger(nummer)&&nummer>0?'nr-'+nummer:
-      'name-'+String(k.vorname||'').trim().toLocaleLowerCase('de')+'-'+String(k.nachname||'').trim().toLocaleLowerCase('de');
+    const vorname=String(k.vorname||'').trim().toLocaleLowerCase('de');
+    const nachname=String(k.nachname||'').trim().toLocaleLowerCase('de');
+    const eintritt=k.eintritt?String(k.eintritt).slice(0,10):'ohne-eintritt';
+    const key=(Number.isSafeInteger(nummer)&&nummer>0?'nr-'+nummer:'unbekannte-nr')+
+      '|'+vorname+'|'+nachname+'|'+eintritt;
     if(!gruppen.has(key))gruppen.set(key,[]);
     gruppen.get(key).push(k);
   }
