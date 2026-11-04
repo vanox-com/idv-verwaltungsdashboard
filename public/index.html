@@ -3451,7 +3451,7 @@ function vKue() {
     const date=k.kuendigungsdatum?fd(k.kuendigungsdatum):
       k.erfasst_am?'Erfasst: '+fd(k.erfasst_am):
       k.statuswechsel_am?'Statuswechsel: '+fd(k.statuswechsel_am):'Unbekannt';
-    return '<td>'+esc(k.personalnummer)+(gesamt>1?'<small class="kue-vorgang-index">Vorgang '+(index+1)+'/'+gesamt+' · #'+Number(k.id)+'</small>':'')+'</td><td><strong>'+esc([k.vorname,k.nachname].filter(Boolean).join(' '))+'</strong> '
+    return '<td>'+esc(k.personalnummer)+(gesamt>1?'<small class="kue-vorgang-index">Vorgang '+(index+1)+'/'+gesamt+' · #'+Number(k.id)+'</small>':'')+'</td><td><strong>'+esc([k.vorname,k.nachname].filter(Boolean).join(' '))+'</strong> '+
       '<span class="tag '+(offen?'warn':'ok')+'">'+(offen?offen+' offen':'erledigt')+'</span></td>'+
       '<td>'+esc(k.rang||'–')+'</td><td>'+esc(k.grund||'–')+'</td><td>'+esc(date)+'</td>'+
       '<td>'+docs+'</td><td class="kue-statuscell">'+badges+'</td>'+
