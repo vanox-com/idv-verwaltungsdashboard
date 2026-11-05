@@ -82,8 +82,16 @@ function harness({differentIdentity=false,ownApproval=false,deletedTarget=false,
   }
   if(sql.startsWith('UPDATE users SET dienstnummer=')){
    const u=accounts.find(x=>x.id===p[1]&&x.dienstnummer===p[2]);
-   if(u){u.dienstnummer=p[0];mutations.push('account');}
+   if(u){
+    u.dienstnummer=p[0];
+    if(sql.includes('gesperrt=true')){u.gesperrt=true;mutations.push('archiveAccount');}
+    else mutations.push('account');
+   }
    return {rows:[],rowCount:u?1:0};
+  }
+  if(sql.startsWith('DELETE FROM sessions WHERE user_id=')){
+   mutations.push('invalidateSessions');
+   return {rows:[],rowCount:1};
   }
   if(sql.startsWith('UPDATE personal SET administrativ_geloescht_am=')){
    const a=personal.get(p[0]);
@@ -205,7 +213,9 @@ test('admin-gelöschte DN 13 ist nach POR-Freigabe wiederverwendbar, ohne die al
  assert.equal(h.personal.get(13).dienstgrad,'Polizeihauptkommissar A12');
  assert.equal(h.personal.get(13).administrativ_geloescht_am,null);
  assert.equal(h.personal.has(2),false);
- assert.equal(h.accounts[0].dienstnummer,'13');
+ assert.equal(h.accounts[0].dienstnummer,'archiv-2-4');
+ assert.equal(h.accounts[0].gesperrt,true,'Rücktritt beendet die bisherige Panel-Berechtigung');
+ assert.ok(h.mutations.includes('invalidateSessions'));
 });
 test('Personal-Dienstnummernwechsel ohne Login legt ausdrücklich keinen neuen Login an',async()=>{
  const h=harness({deletedTarget:true,noSourceLogin:true});
@@ -225,6 +235,14 @@ test('eine weiterhin aktiv belegte Nummer bleibt auch beim Vollwechsel gesperrt'
  const h=harness();
  const r=await h.call('POST','/api/dienstnummer-antraege',
  {body:{...submit,art:'personal'}});
+ assert.equal(r.statusCode,409);
+ assert.equal(h.applications.length,0);
+});
+
+test('nur Polizeirat, Leitungsdienst oder Administrator dürfen Login auf eine bestehende Akte umziehen',async()=>{
+ const h=harness();
+ h.accounts[0].rolle='Mitarbeiter';
+ const r=await h.call('POST','/api/dienstnummer-antraege',{body:submit});
  assert.equal(r.statusCode,409);
  assert.equal(h.applications.length,0);
 });
