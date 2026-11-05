@@ -2534,7 +2534,7 @@ function dienstnummerAntragOeffnen(nr){
   '<label for="dnArt">Was soll geändert werden?</label>'+
   '<select id="dnArt">'+
   '<option value="zugang">Panel-Zugang auf bestehende Akte derselben Person übernehmen</option>'+
-  '<option value="personal">Personalakte samt aktuellen Verknüpfungen auf freie Nummer umnummerieren</option>'+
+  '<option value="personal">Personalakte auf freie Nummer umnummerieren (bisherigen Login beenden)</option>'+ 
   '</select>'+
   '<p class="mut" id="dnArtInfo">Bei einer bereits vorhandenen Personalakte derselben Person bleibt die Zielakte bestehen. Die doppelte alte Personalakte wird bei Genehmigung archiviert. Der Dienstgrad und die Benutzerrolle ändern sich dadurch nicht.</p>'+
   '<label for="dnBegruendung">Begründung</label><textarea id="dnBegruendung" maxlength="1000" rows="3" required placeholder="Warum wird die Dienstnummer gewechselt?"></textarea>'+
@@ -2550,7 +2550,7 @@ function dienstnummerAntragOeffnen(nr){
   else if(newNr.value)type.value='personal';
   dlg.querySelector('#dnArtInfo').textContent=type.value==='zugang'?
    'Beide Personalakten müssen nachweislich derselben Person gehören. Nur der Login wechselt; die alte doppelte Personalakte wird archiviert. Rang und Benutzerrolle bleiben unverändert.':
-   'Die Zielnummer muss vollständig frei sein. Die aktuelle Personalakte und aktive Verknüpfungen wechseln; alte Dokumentations-/Anwesenheitsstände behalten ihre historische Nummer.';
+   'Die Zielnummer darf noch keine aktive Personalakte enthalten. Die aktuelle Personalakte und aktive Verknüpfungen wechseln; alte Dokumentations-/Anwesenheitsstände behalten ihre historische Nummer. Ein bisheriger Panel-Zugang wird beim Rücktritt gesperrt und seine Sitzungen werden beendet.';
  };
  newNr.addEventListener('change',help);
  type.addEventListener('change',help);
@@ -2580,7 +2580,7 @@ async function dienstnummerEntscheiden(id,status,button){
   const result=await api('/dienstnummer-antraege/'+id+'/entscheidung',
     {method:'POST',body:JSON.stringify({status,notiz:grund||''})});
   await starten();
-  alert(result.umgesetzt?'POR-Genehmigung gespeichert und Dienstnummer erfolgreich geändert. Benutzerrolle und Dienstgrad bei Bedarf gesondert anpassen.':'Dienstnummern-Antrag wurde abgelehnt.');
+  alert(result.umgesetzt?'POR-Genehmigung gespeichert und Dienstnummer erfolgreich geändert. Bei einer vollständigen Umnummerierung wurde der bisherige Panel-Login beendet; nur ein ausdrücklich beantragter Zugangswechsel übernimmt einen Login.':'Dienstnummern-Antrag wurde abgelehnt.');
  }catch(e){
   alert('POR-Entscheidung fehlgeschlagen: '+e.message);
  }finally{button.disabled=false;}
