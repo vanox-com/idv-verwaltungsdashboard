@@ -13,4 +13,4 @@ jobs:
         with:
           node-version: '22'
       - name: Test safe service-number applications and approvals
-        run: node --test tests/dienstnummer-antraege.test.mjs
+        run: node --test tests/dienstnummer-antraege.test.mjs tests/dienstnummer-refresh.test.mjs
