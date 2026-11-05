@@ -32,7 +32,9 @@ function harness({differentIdentity=false,ownApproval=false,deletedTarget=false,
   }
   if(sql.startsWith('INSERT INTO dienstnummer_antraege(')){
    const a={id:applications.length+1,alt_nr:p[0],ziel_nr:p[1],art:p[2],begruendung:p[3],
-    quell_name:p[4],ziel_name:p[5],pruefstand:JSON.parse(p[6]),antragsteller_id:p[7],status:'beantragt'};
+    quell_name:p[4],ziel_name:p[5],
+    pruefstand:Object.fromEntries(Object.entries(JSON.parse(p[6])).sort(([a],[b])=>a.localeCompare(b))),
+    antragsteller_id:p[7],status:'beantragt'};
    applications.push(a);
    return {rows:[{id:a.id}],rowCount:1};
   }
@@ -245,4 +247,18 @@ test('nur Polizeirat, Leitungsdienst oder Administrator dürfen Login auf eine b
  const r=await h.call('POST','/api/dienstnummer-antraege',{body:submit});
  assert.equal(r.statusCode,409);
  assert.equal(h.applications.length,0);
+});
+
+test('echter Versionskonflikt wird mit dem abweichenden Feld gemeldet',async()=>{
+ const h=harness();
+ await h.call('POST','/api/dienstnummer-antraege',{body:submit});
+ h.personal.get(2).rev='200';
+ const answer=await h.call('POST','/api/dienstnummer-antraege/:id/entscheidung',{
+  user:{id:6,rolle:'Polizeirat',roleRights:{por:2}},
+  params:{id:'1'},body:{status:'genehmigt',notiz:''}
+ });
+ assert.equal(answer.statusCode,409);
+ assert.match(answer.response.error,/oldRevision/);
+ assert.equal(h.accounts[0].dienstnummer,'02');
+ assert.equal(h.applications[0].status,'beantragt');
 });
