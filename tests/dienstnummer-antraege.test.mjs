@@ -2,16 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {registerDienstnummerAntraege} from '../src/dienstnummerAntraege.js';
 
-function harness({differentIdentity=false,ownApproval=false}={}){
+function harness({differentIdentity=false,ownApproval=false,deletedTarget=false,noSourceLogin=false}={}){
  const personal=new Map([
   [2,{personalnummer:2,vorname:'Dr. Florian',nachname:'Mayer',
        eintrittsdatum:'2025-12-22',geburtsdatum:'2000-02-01',
        status:'Aktiv',administrativ_geloescht_am:null,rev:'100',dienstgrad:'Polizeihauptkommissar A12'}],
   [13,{personalnummer:13,vorname:differentIdentity?'Fremde':'Dr. Florian',
        nachname:'Mayer',eintrittsdatum:'2025-12-22',geburtsdatum:'2000-02-01',
-       status:'Aktiv',administrativ_geloescht_am:null,rev:'101',dienstgrad:'Erster Polizeihauptkommissar'}]
+       status:'Aktiv',administrativ_geloescht_am:deletedTarget?'2026-11-05T19:57:42Z':null,rev:'101',dienstgrad:'Erster Polizeihauptkommissar'}]
  ]);
- const accounts=[{id:4,dienstnummer:'02',rolle:'Leitungsdienst'}];
+ const accounts=noSourceLogin?[]:[{id:4,dienstnummer:'02',rolle:'Leitungsdienst'}];
  const applications=[];
  const mutations=[];
  const routes=new Map();
@@ -38,6 +38,47 @@ function harness({differentIdentity=false,ownApproval=false}={}){
   }
   if(sql.startsWith('SELECT * FROM dienstnummer_antraege WHERE id=')){
    const a=applications.find(x=>x.id===p[0]);return {rows:a?[{...a}]:[],rowCount:a?1:0};
+  }
+  if(sql.startsWith('SELECT c.relname AS tablename,')){
+   return {rows:[{tablename:'personal_rangantraege',columns:['personalnummer']}],rowCount:1};
+  }
+  if(sql.startsWith('SELECT column_name FROM information_schema.columns')){
+   return {rows:Object.keys(personal.get(2)).filter(x=>x!=='rev').map(column_name=>({column_name})),rowCount:10};
+  }
+  if(sql.startsWith('SELECT * FROM ')&&sql.includes(' WHERE personalnummer=$1 FOR UPDATE')){
+   return {rows:[],rowCount:0};
+  }
+  if(sql.startsWith('SELECT id,tage,personen FROM routine WHERE jsonb_typeof(')){
+   return {rows:[],rowCount:0};
+  }
+  if(sql.startsWith('INSERT INTO personalnummer_neubelegungen(')){
+   mutations.push('snapshot13');return {rows:[],rowCount:1};
+  }
+  if(sql.startsWith('DELETE FROM ')&&sql.includes(' WHERE personalnummer=$1')&&
+     !sql.startsWith('DELETE FROM personal WHERE')){
+   return {rows:[],rowCount:0};
+  }
+  if(sql.startsWith('UPDATE generierte_dokumente SET personalnummer=NULL')||
+     sql.startsWith('UPDATE befoerderungen SET personalnummer=NULL')||
+     sql.startsWith('UPDATE routine SET personen=')||
+     sql.startsWith('UPDATE routine SET personalnummer=')||
+     sql.startsWith('UPDATE "personal_rangantraege" SET personalnummer=')){
+   return {rows:[],rowCount:0};
+  }
+  if(sql.startsWith('UPDATE personal AS destination SET')){
+   const source=personal.get(p[0]),target=personal.get(p[1]);
+   if(!source||!target?.administrativ_geloescht_am)return {rows:[],rowCount:0};
+   personal.set(p[1],{...source,personalnummer:p[1]});
+   mutations.push('reuse13');
+   return {rows:[{personalnummer:p[1]}],rowCount:1};
+  }
+  if(sql.startsWith('UPDATE personal SET beschaeftigungsart=')){
+   const target=personal.get(p[0]);if(target)target.beschaeftigungsart=p[1];
+   return {rows:[],rowCount:target?1:0};
+  }
+  if(sql.startsWith('DELETE FROM personal WHERE personalnummer=')){
+   const removed=personal.delete(p[0]);if(removed)mutations.push('delete02');
+   return {rows:[],rowCount:removed?1:0};
   }
   if(sql.startsWith('UPDATE users SET dienstnummer=')){
    const u=accounts.find(x=>x.id===p[1]&&x.dienstnummer===p[2]);
@@ -144,4 +185,46 @@ test('mit Personal-Leserecht ist nur ein eigener Antrag möglich',async()=>{
  const other=await h.call('POST','/api/dienstnummer-antraege',{user,
   body:{...submit,alt_nr:7}});
  assert.equal(other.statusCode,403);
+});
+
+
+test('admin-gelöschte DN 13 ist nach POR-Freigabe wiederverwendbar, ohne die alte Historie zu verlieren',async()=>{
+ const h=harness({deletedTarget:true});
+ const applied=await h.call('POST','/api/dienstnummer-antraege',
+  {body:{...submit,art:'personal'}});
+ assert.equal(applied.statusCode,201);
+ assert.equal(h.accounts[0].dienstnummer,'02','Antrag verändert keinen Login');
+ assert.ok(h.personal.get(13).administrativ_geloescht_am,'altes Archiv bleibt bis zur Entscheidung bestehen');
+ const approved=await h.call('POST','/api/dienstnummer-antraege/:id/entscheidung',{
+  user:{id:6,rolle:'Polizeirat',dienstnummer:'06',roleRights:{pers:1,por:2}},
+  params:{id:'1'},body:{status:'genehmigt',notiz:'Rücktritt'}
+ });
+ assert.equal(approved.statusCode,200);
+ assert.deepEqual(h.mutations.slice(0,2),['snapshot13','reuse13'],
+  'vor dem Wiederverwenden muss die alte Akte gesichert werden');
+ assert.equal(h.personal.get(13).dienstgrad,'Polizeihauptkommissar A12');
+ assert.equal(h.personal.get(13).administrativ_geloescht_am,null);
+ assert.equal(h.personal.has(2),false);
+ assert.equal(h.accounts[0].dienstnummer,'13');
+});
+test('Personal-Dienstnummernwechsel ohne Login legt ausdrücklich keinen neuen Login an',async()=>{
+ const h=harness({deletedTarget:true,noSourceLogin:true});
+ const submitted=await h.call('POST','/api/dienstnummer-antraege',
+  {body:{...submit,art:'personal'}});
+ assert.equal(submitted.statusCode,201);
+ const approved=await h.call('POST','/api/dienstnummer-antraege/:id/entscheidung',{
+  user:{id:6,rolle:'Polizeirat',dienstnummer:'06',roleRights:{pers:1,por:2}},
+  params:{id:'1'},body:{status:'genehmigt',notiz:''}
+ });
+ assert.equal(approved.statusCode,200);
+ assert.equal(h.accounts.length,0,'kein Benutzerkonto ohne vorherigen Login');
+ assert.ok(h.personal.has(13));
+ assert.equal(h.personal.has(2),false);
+});
+test('eine weiterhin aktiv belegte Nummer bleibt auch beim Vollwechsel gesperrt',async()=>{
+ const h=harness();
+ const r=await h.call('POST','/api/dienstnummer-antraege',
+ {body:{...submit,art:'personal'}});
+ assert.equal(r.statusCode,409);
+ assert.equal(h.applications.length,0);
 });
