@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 /* POR-genehmigte Dienstnummernwechsel.
  * Bestehende Zielakten werden nie überschrieben. Vergangene Vorgänge und
  * Anwesenheiten behalten die alte historische Dienstnummer. */
@@ -211,7 +212,7 @@ export function registerDienstnummerAntraege(app,db,requireLogin,effektiveRechte
     if(Number(application.antragsteller_id)===Number(req.user.id)&&req.user.rolle!=='Administrator')
      throw error(403,'Eigene Anträge dürfen nur durch einen anderen POR-Berechtigten entschieden werden');
     const context=await checkNumbers(client,Number(application.alt_nr),Number(application.ziel_nr),application.art,true);
-    if(JSON.stringify(context.stamp)!==JSON.stringify(application.pruefstand))
+    if(!isDeepStrictEqual(context.stamp,application.pruefstand))
      throw error(409,'Personal- oder Kontodaten haben sich verändert. Bitte neuen Antrag stellen');
     await executeApproved(client,application,context,req.user.id);
    }
