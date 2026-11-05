@@ -92,6 +92,11 @@
     if(tab==='bef'){
       void ladeRangantraege();
     }
+    // Die DOM-Angleichung setzt den POR-Dienstnummernbereich auf "Lade …".
+    // Auch nach einem Live-Abgleich / "Ansicht aktualisieren" neu nachladen.
+    if((tab==='pers'||tab==='bef')&&typeof ladeDienstnummerAntraege==='function'){
+      void ladeDienstnummerAntraege();
+    }
     if(tab==='dash'&&can('mitteilungen'))void ladeDashboardMeldungen();
     if(tab==='users')void ladeBenutzer().catch(()=>{});
     return true;
