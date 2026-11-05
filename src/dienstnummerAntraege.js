@@ -101,14 +101,15 @@ export function registerDienstnummerAntraege(app,db,requireLogin,effektiveRechte
     "FROM dienstnummer_antraege a LEFT JOIN users u ON u.id=a.antragsteller_id "+
     "LEFT JOIN users e ON e.id=a.entscheider_id "+where+
     " ORDER BY (a.status='beantragt') DESC,a.erstellt DESC,a.id DESC LIMIT 200",all?[]:[req.user.id]);
-   res.json({antraege:result.rows,darfGenehmigen:(rights.por||0)>=2,darfBeantragen:(rights.pers||0)>=2});
+   res.json({antraege:result.rows,darfGenehmigen:(rights.por||0)>=2,darfBeantragen:(rights.pers||0)>=1});
   }catch(e){next(e)}
  });
  app.post('/api/dienstnummer-antraege',requireLogin,async(req,res,next)=>{
   let rights;
   try{rights=await effektiveRechte(req.user)}catch(e){return next(e)}
-  if((rights.pers||0)<2)return res.status(403).json({error:'Zum Beantragen ist Personal → Bearbeiten erforderlich'});
   const from=num(req.body?.alt_nr),to=num(req.body?.ziel_nr);
+  if((rights.pers||0)<1||((rights.pers||0)<2&&Number(req.user.dienstnummer)!==from))
+   return res.status(403).json({error:'Mit Personal-Leserecht darfst du nur für deine eigene Dienstnummer einen Antrag stellen'});
   const kind=String(req.body?.art||''),reason=String(req.body?.begruendung||'').trim();
   if(!from||!to||from===to||!['zugang','personal'].includes(kind)||reason.length<8||reason.length>1000)
    return res.status(400).json({error:'Gültige Nummern, Antragsart und Begründung (8–1000 Zeichen) erforderlich'});
