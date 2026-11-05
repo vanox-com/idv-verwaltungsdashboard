@@ -96,10 +96,10 @@ async function executeApproved(client,request,context,approver){
  }else{
   // PostgreSQL FK relationships must be reparented before deleting source.
   const fks=(await client.query(
-   "SELECT c.relname AS tablename,ARRAY(SELECT a.attname FROM unnest(f.conkey) x(n) JOIN pg_attribute a ON a.attrelid=f.conrelid AND a.attnum=x.n) AS columns"+
+   "SELECT c.relname AS tablename,ARRAY(SELECT a.attname::text FROM unnest(f.conkey) x(n) JOIN pg_attribute a ON a.attrelid=f.conrelid AND a.attnum=x.n) AS columns"+
    " FROM pg_constraint f JOIN pg_class c ON c.oid=f.conrelid WHERE f.contype='f' AND f.confrelid='personal'::regclass")).rows;
   for(const fk of fks){
-   if(!FK_TABLES.has(fk.tablename)||fk.columns.length!==1||fk.columns[0]!=='personalnummer')
+   if(!FK_TABLES.has(fk.tablename)||!Array.isArray(fk.columns)||fk.columns.length!==1||fk.columns[0]!=='personalnummer')
     throw error(409,'Unbekannte Personal-Fremdschlüsselreferenz. Änderung abgebrochen');
   }
   const cols=(await client.query("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='personal' ORDER BY ordinal_position")).rows.map(x=>x.column_name);
