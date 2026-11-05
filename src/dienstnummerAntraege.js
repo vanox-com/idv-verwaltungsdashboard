@@ -33,7 +33,8 @@ async function checkNumbers(client,oldNr,newNr,kind,locked=false){
      date(old.eintrittsdatum)!==date(target.eintrittsdatum))
    throw error(409,'Ziel-Personalakte gehört nicht eindeutig derselben Person');
  }else if(kind==='personal'){
-  if(target)throw error(409,'Eine vollständige Umnummerierung ist nur auf eine bislang nicht angelegte Dienstnummer möglich');
+  if(target&&!target.administrativ_geloescht_am)
+   throw error(409,'Die Zielnummer ist noch aktiv belegt. Nur freie oder administrativ gelöschte Nummern können umnummeriert werden');
  }else throw error(400,'Ungültige Art der Dienstnummernänderung');
  return {old,target,account,stamp:{
    oldRevision:old.rev,targetRevision:target?.rev??null,
@@ -42,6 +43,42 @@ async function checkNumbers(client,oldNr,newNr,kind,locked=false){
    oldEntry:date(old.eintrittsdatum),targetEntry:date(target?.eintrittsdatum)
  }};
 }
+/* Erneute Belegung einer aus dem Papierkorb freigegebenen Dienstnummer.
+ * Historische Akte und Beziehungen vor dem Wiederverwenden unveränderlich
+ * sichern; alte Zuordnungen nicht an den neuen Stelleninhaber vererben.
+ * Aufgerufen ausschließlich innerhalb der POR-Genehmigungstransaktion. */
+async function archivierteZielnummerVorbereiten(client,target,approver){
+ if(!target?.administrativ_geloescht_am)
+  throw error(409,'Die Zielnummer ist nicht mehr im Papierkorb');
+ const nr=Number(target.personalnummer);
+ const tabellen=['sonderfunktionen','disziplin','copnet_zugaenge','personal_fristen',
+   'personal_rangantraege','generierte_dokumente','befoerderungen','personal_audit'];
+ const folgedaten={};
+ for(const table of tabellen){
+  const result=await client.query('SELECT * FROM '+table+' WHERE personalnummer=$1 FOR UPDATE',[nr]);
+  folgedaten[table]=result.rows;
+ }
+ const routine=await client.query(
+  "SELECT id,tage,personen FROM routine WHERE jsonb_typeof(personen)='array' "+
+  "AND EXISTS(SELECT 1 FROM jsonb_array_elements(personen) x WHERE x->>'nr'=$1) FOR UPDATE",[String(nr)]);
+ folgedaten.routine=routine.rows.map(r=>({
+  id:r.id,tage:r.tage,teilnehmer:r.personen.filter(p=>p&&Number(p.nr)===nr)
+ }));
+ const {rev,...original}=target;
+ await client.query(
+  'INSERT INTO personalnummer_neubelegungen(personalnummer,vergeben_von,vorher,folgedaten) VALUES($1,$2,$3::jsonb,$4::jsonb)',
+  [nr,approver,JSON.stringify(original),JSON.stringify(folgedaten)]);
+ for(const table of ['sonderfunktionen','disziplin','copnet_zugaenge','personal_fristen',
+   'personal_rangantraege','personal_audit'])
+  await client.query('DELETE FROM '+table+' WHERE personalnummer=$1',[nr]);
+ await client.query('UPDATE generierte_dokumente SET personalnummer=NULL WHERE personalnummer=$1',[nr]);
+ await client.query('UPDATE befoerderungen SET personalnummer=NULL WHERE personalnummer=$1',[nr]);
+ for(const r of routine.rows){
+  await client.query('UPDATE routine SET personen=$1::jsonb WHERE id=$2',
+   [JSON.stringify(r.personen.filter(p=>!p||Number(p.nr)!==nr)),r.id]);
+ }
+}
+
 async function executeApproved(client,request,context,approver){
  const from=Number(request.alt_nr),to=Number(request.ziel_nr);
  await client.query("SELECT set_config('idv.benutzer',$1,true)",[String(approver)]);
@@ -66,9 +103,22 @@ async function executeApproved(client,request,context,approver){
   }
   const cols=(await client.query("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='personal' ORDER BY ordinal_position")).rows.map(x=>x.column_name);
   const attrs=cols.filter(x=>x!=='personalnummer');
-  await client.query(
-   'INSERT INTO personal ("personalnummer",'+attrs.map(safeIdentifier).join(',')+') SELECT $2,'+
-   attrs.map(safeIdentifier).join(',')+' FROM personal WHERE personalnummer=$1',[from,to]);
+  if(context.target){
+   // Einträge im Papierkorb gelten als frei; der alte DN-13-Datenstand
+   // wandert vor der POR-Umnummerierung in die Neubelegungshistorie.
+   await archivierteZielnummerVorbereiten(client,context.target,approver);
+   const assignments=attrs.map(col=>safeIdentifier(col)+'=source.'+safeIdentifier(col)).join(',');
+   const changed=await client.query(
+    'UPDATE personal AS destination SET '+assignments+
+    ' FROM personal AS source WHERE source.personalnummer=$1 AND '+
+    'destination.personalnummer=$2 AND destination.administrativ_geloescht_am IS NOT NULL '+
+    'RETURNING destination.personalnummer',[from,to]);
+   if(changed.rowCount!==1)throw error(409,'Archivierte Zielakte konnte nicht übernommen werden');
+  }else{
+   await client.query(
+    'INSERT INTO personal ("personalnummer",'+attrs.map(safeIdentifier).join(',')+') SELECT $2,'+
+    attrs.map(safeIdentifier).join(',')+' FROM personal WHERE personalnummer=$1',[from,to]);
+  }
   await client.query('UPDATE personal SET beschaeftigungsart=$2 WHERE personalnummer=$1',[to,employment(to)]);
   for(const fk of fks){
    await client.query('UPDATE '+safeIdentifier(fk.tablename)+' SET personalnummer=$2 WHERE personalnummer=$1',[from,to]);
