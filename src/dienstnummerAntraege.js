@@ -1,4 +1,3 @@
-import { isDeepStrictEqual } from 'node:util';
 /* POR-genehmigte Dienstnummernwechsel.
  * Bestehende Zielakten werden nie überschrieben. Vergangene Vorgänge und
  * Anwesenheiten behalten die alte historische Dienstnummer. */
@@ -212,8 +211,15 @@ export function registerDienstnummerAntraege(app,db,requireLogin,effektiveRechte
     if(Number(application.antragsteller_id)===Number(req.user.id)&&req.user.rolle!=='Administrator')
      throw error(403,'Eigene Anträge dürfen nur durch einen anderen POR-Berechtigten entschieden werden');
     const context=await checkNumbers(client,Number(application.alt_nr),Number(application.ziel_nr),application.art,true);
-    if(!isDeepStrictEqual(context.stamp,application.pruefstand))
-     throw error(409,'Personal- oder Kontodaten haben sich verändert. Bitte neuen Antrag stellen');
+    // PostgreSQL serialisiert jsonb-Objekte in eigener Schlüsselfolge.
+    // Nur die tatsächlichen, typnormalisierten Prüfwerte vergleichen.
+    const pruefstand=typeof application.pruefstand==='string'
+      ?JSON.parse(application.pruefstand):application.pruefstand;
+    const prueffelder=['oldRevision','targetRevision','accountId','accountNumber',
+      'oldName','targetName','oldEntry','targetEntry'];
+    const differenzen=prueffelder.filter(k=>String(context.stamp[k])!==String(pruefstand?.[k]));
+    if(differenzen.length)
+     throw error(409,'Prüfstand geändert ('+differenzen.join(', ')+'). Bitte Antrag erneut prüfen.');
     await executeApproved(client,application,context,req.user.id);
    }
    await client.query('UPDATE dienstnummer_antraege SET status=$2,entscheider_id=$3,entscheidungsnotiz=$4,entschieden_am=now() WHERE id=$1',
