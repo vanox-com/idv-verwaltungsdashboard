@@ -2451,7 +2451,7 @@ function vPers() {
     const bearbeitung = schreiben ? '<button type="button" class="pers-edit-btn" data-edit-person="'+nummer+'" aria-label="Personalakte von '+name+' bearbeiten" title="Personalakte bearbeiten">'+
       '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16 5 3 3M4 20l4.5-1 10.8-10.8a2.12 2.12 0 0 0-3-3L5.5 16 4 20z"/><path d="M4 20h16"/></svg>'+
       '<span>Bearbeiten</span></button>' : '';
-    const nummernAntrag=can('pers',2)?'<button type="button" data-dn-request="'+nummer+'" title="Dienstnummernwechsel beim POR beantragen">DN beantragen</button> ':'';
+    const nummernAntrag=(can('pers',2)||(can('pers')&&Number(ME.dienstnummer)===nummer))?'<button type="button" data-dn-request="'+nummer+'" title="Dienstnummernwechsel beim POR beantragen">DN beantragen</button> ':'';
     const entfernen=ME.rolle==='Administrator'?
       '<button type="button" class="pers-admin-remove" data-pers-admin-remove="'+nummer+
         '" title="Administrativ ausblenden und im Papierkorb sichern">Entfernen</button>':'';
@@ -2518,7 +2518,8 @@ async function ladeDienstnummerAntraege(){
  }
 }
 function dienstnummerAntragOeffnen(nr){
- if(!can('pers',2))return;
+ if(!can('pers'))return;
+ if(!can('pers',2)&&Number(nr)!==Number(ME.dienstnummer))nr=Number(ME.dienstnummer);
  const p=(D.personal||[]).find(x=>Number(x.personalnummer)===Number(nr))||null;
  let dlg=document.getElementById('dnAntragDialog');
  if(!dlg){dlg=document.createElement('dialog');dlg.id='dnAntragDialog';document.body.appendChild(dlg);}
