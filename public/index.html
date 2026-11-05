@@ -2480,6 +2480,117 @@ function vPers() {
 }
 
 
+/* Dienstnummernanträge: reguläre Antragstellung, POR entscheidet.
+   Ein Antrag ändert weder Personal noch Login, bevor er genehmigt wird. */
+async function ladeDienstnummerAntraege(){
+ const root=document.getElementById('dnAntraegeBereich');
+ if(!root)return;
+ try{
+  const antwort=await api('/dienstnummer-antraege');
+  if(!root.isConnected)return;
+  const alle=antwort.antraege||[];
+  const offen=alle.filter(x=>x.status==='beantragt'),erledigt=alle.filter(x=>x.status!=='beantragt');
+  const zeile=(a,entscheidbar)=>{
+   const typ=a.art==='zugang'?'Panel-Zugang wechseln':'Personalakte umnummerieren';
+   const ursprung=esc(a.quell_name||'–')+' · '+esc(a.alt_nr)+' → '+esc(a.ziel_nr);
+   const ziel=a.ziel_name?' (Zielakte: '+esc(a.ziel_name)+')':'';
+   const actions=entscheidbar?
+    '<button type="button" class="p" data-dn-decision="'+Number(a.id)+'" data-dn-status="genehmigt">POR genehmigen</button> '+
+    '<button type="button" data-dn-decision="'+Number(a.id)+'" data-dn-status="abgelehnt">Ablehnen</button>':'';
+   return [ursprung,esc(typ)+ziel,esc(a.begruendung),esc(a.antragsteller||'–'),fd(a.erstellt),
+      actions||'<span class="tag warn">'+(a.status==='beantragt'?'Wartet auf POR':esc(a.status))+'</span>'];
+  };
+  root.innerHTML='<h3>Dienstnummernänderungen · POR <span class="tag '+(offen.length?'warn':'ok')+'">'+offen.length+' offen</span></h3>'+
+   '<p class="mut">Anträge ändern keine Daten, bis ein POR-Berechtigter sie genehmigt. Die Genehmigung prüft Belegung, Identität und Datenversion erneut. Die bisherige Historie bleibt erhalten.</p>'+
+   (antwort.darfBeantragen?'<button type="button" data-dn-request="" class="p">+ Dienstnummernänderung beantragen</button>':'')+
+   tabelle(['Person und Dienstnummer','Art','Begründung','Antragsteller','Erstellt','Entscheidung'],
+     offen.map(x=>zeile(x,antwort.darfGenehmigen&&(ME.rolle==='Administrator'||Number(x.antragsteller_id)!==Number(ME.id)))))+
+   '<details><summary>Abgeschlossene Anträge ('+erledigt.length+')</summary>'+
+   tabelle(['Person und Dienstnummer','Art','Begründung','Antragsteller','Erstellt','Entscheidung'],
+     erledigt.slice(0,40).map(x=>[esc(x.quell_name)+' · '+esc(x.alt_nr)+' → '+esc(x.ziel_nr),
+       x.art==='zugang'?'Panel-Zugang':'Personalakte',esc(x.begruendung),
+       esc(x.antragsteller||'–'),fd(x.erstellt),
+       '<span class="tag '+(x.status==='genehmigt'?'ok':'warn')+'">'+esc(x.status)+'</span> '+
+       esc(x.entscheider||'')+(x.entscheidungsnotiz?' · '+esc(x.entscheidungsnotiz):'')]))+
+   '</details>';
+ }catch(e){
+  if(root.isConnected)root.innerHTML='<h3>Dienstnummernänderungen · POR</h3><p class="fehler">'+esc(e.message)+'</p>';
+ }
+}
+function dienstnummerAntragOeffnen(nr){
+ if(!can('pers',2))return;
+ const p=(D.personal||[]).find(x=>Number(x.personalnummer)===Number(nr))||null;
+ let dlg=document.getElementById('dnAntragDialog');
+ if(!dlg){dlg=document.createElement('dialog');dlg.id='dnAntragDialog';document.body.appendChild(dlg);}
+ const vorwahl=nr?Number(nr):'';
+ dlg.innerHTML='<h2>Dienstnummernwechsel beim POR beantragen</h2>'+
+  '<p class="mut">Noch keine Änderung: Nach dem Antrag entscheidet der POR. Eine belegte Nummer darf ausschließlich beim nachgewiesenen Wechsel des eigenen Panel-Zugangs verwendet werden.</p>'+
+  '<form id="dnAntragForm">'+
+  '<label for="dnAlt">Bisherige Dienstnummer</label>'+
+  '<input id="dnAlt" type="number" min="1" max="999999" required value="'+esc(vorwahl)+'">'+
+  (p?'<p class="mut">'+esc([p.vorname,p.nachname].filter(Boolean).join(' '))+'</p>':'')+
+  '<label for="dnZiel">Neue Dienstnummer</label><input id="dnZiel" type="number" min="1" max="999999" required>'+
+  '<label for="dnArt">Was soll geändert werden?</label>'+
+  '<select id="dnArt">'+
+  '<option value="zugang">Panel-Zugang auf bestehende Akte derselben Person übernehmen</option>'+
+  '<option value="personal">Personalakte samt aktuellen Verknüpfungen auf freie Nummer umnummerieren</option>'+
+  '</select>'+
+  '<p class="mut" id="dnArtInfo">Bei einer bereits vorhandenen Personalakte derselben Person bleibt die Zielakte bestehen. Die doppelte alte Personalakte wird bei Genehmigung archiviert. Der Dienstgrad und die Benutzerrolle ändern sich dadurch nicht.</p>'+
+  '<label for="dnBegruendung">Begründung</label><textarea id="dnBegruendung" maxlength="1000" rows="3" required placeholder="Warum wird die Dienstnummer gewechselt?"></textarea>'+
+  '<p id="dnFormFehler" class="fehler" role="alert"></p>'+
+  '<div class="actions"><button type="button" id="dnAbbrechen">Abbrechen</button>'+
+  '<button class="p" id="dnBeantragen" type="submit">Beim POR einreichen</button></div></form>';
+ dlg.showModal();
+ dlg.querySelector('#dnAbbrechen').onclick=()=>dlg.close();
+ const type=dlg.querySelector('#dnArt'),newNr=dlg.querySelector('#dnZiel');
+ const help=()=>{
+  const occupied=(D.personal||[]).some(x=>Number(x.personalnummer)===Number(newNr.value));
+  if(occupied)type.value='zugang';
+  else if(newNr.value)type.value='personal';
+  dlg.querySelector('#dnArtInfo').textContent=type.value==='zugang'?
+   'Beide Personalakten müssen nachweislich derselben Person gehören. Nur der Login wechselt; die alte doppelte Personalakte wird archiviert. Rang und Benutzerrolle bleiben unverändert.':
+   'Die Zielnummer muss vollständig frei sein. Die aktuelle Personalakte und aktive Verknüpfungen wechseln; alte Dokumentations-/Anwesenheitsstände behalten ihre historische Nummer.';
+ };
+ newNr.addEventListener('change',help);
+ type.addEventListener('change',help);
+ dlg.querySelector('#dnAntragForm').onsubmit=async event=>{
+  event.preventDefault();
+  const data={alt_nr:Number(dlg.querySelector('#dnAlt').value),ziel_nr:Number(newNr.value),
+   art:type.value,begruendung:dlg.querySelector('#dnBegruendung').value.trim()};
+  const btn=dlg.querySelector('#dnBeantragen');
+  btn.disabled=true;dlg.querySelector('#dnFormFehler').textContent='';
+  try{
+   await api('/dienstnummer-antraege',{method:'POST',body:JSON.stringify(data)});
+   dlg.close();
+   await ladeDienstnummerAntraege();
+   alert('Dienstnummernänderung wurde beim POR zur Freigabe eingereicht. Noch keine Nummer wurde geändert.');
+  }catch(e){
+   dlg.querySelector('#dnFormFehler').textContent='Antrag fehlgeschlagen: '+e.message;
+  }finally{btn.disabled=false;}
+ };
+}
+async function dienstnummerEntscheiden(id,status,button){
+ if(!can('por',2))return;
+ const grund=status==='abgelehnt'?prompt('Ablehnungsgrund (mindestens 5 Zeichen):'):'';
+ if(status==='abgelehnt'&&(grund===null||grund.trim().length<5))return;
+ if(status==='genehmigt'&&!confirm('Dienstnummernwechsel genehmigen und SOFORT durchführen? Bitte die bisherige und neue Dienstnummer im Antrag prüfen. Eine belegte fremde Personalakte wird niemals überschrieben.'))return;
+ button.disabled=true;
+ try{
+  const result=await api('/dienstnummer-antraege/'+id+'/entscheidung',
+    {method:'POST',body:JSON.stringify({status,notiz:grund||''})});
+  await starten();
+  alert(result.umgesetzt?'POR-Genehmigung gespeichert und Dienstnummer erfolgreich geändert. Benutzerrolle und Dienstgrad bei Bedarf gesondert anpassen.':'Dienstnummern-Antrag wurde abgelehnt.');
+ }catch(e){
+  alert('POR-Entscheidung fehlgeschlagen: '+e.message);
+ }finally{button.disabled=false;}
+}
+document.addEventListener('click',event=>{
+ const request=event.target.closest('[data-dn-request]');
+ if(request){dienstnummerAntragOeffnen(request.dataset.dnRequest);return;}
+ const decision=event.target.closest('[data-dn-decision]');
+ if(decision)void dienstnummerEntscheiden(Number(decision.dataset.dnDecision),decision.dataset.dnStatus,decision);
+});
+
 /* Administratives Bereinigen der Personalübersicht.
    Die Personalakte bleibt mit allen Verknüpfungen im Papierkorb erhalten. */
 async function personalAdminEntfernen(nr,button){
