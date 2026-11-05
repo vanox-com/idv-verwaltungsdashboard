@@ -11,6 +11,7 @@ import { registerBefRichtRoutes } from './befRichtApi.js';
 import { ANWAERTER_PRUEFUNGEN } from './befPruefungMap.js';
 import { registerRoutineArchive } from './routineArchiv.js';
 import { registerAktenFeatures } from './aktenFeatures.js';
+import { registerDienstnummerAntraege } from './dienstnummerAntraege.js';
 import { registerKueArchivRoutes,KUE_AKTUELL_BEDINGUNG,KUE_LIST_COLUMNS } from './kuendigungsArchiv.js';
 import { hashPassword, verifyPassword, newSessionToken, SESSION_HOURS } from './auth.js';
 
@@ -2777,6 +2778,7 @@ app.get('/api/log', requireLogin, requireRight('log', 1), async (req, res, next)
 /* Neue Dokumentgeneratoren, mit bestehenden Benutzerrechten. */
 dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAuth,nameFuerDienstnummer);
 registerBefRichtRoutes(app,db,requireLogin,requireRight);
+registerDienstnummerAntraege(app,db,requireLogin,effektiveRechte);
 registerAktenFeatures(app,db,requireLogin,requireRight,effektiveRechte);
 registerKueArchivRoutes(app,db,requireLogin,requireRight,effektiveRechte);
 
