@@ -24,6 +24,7 @@ function makeHarness(tab){
     personalFiltern:()=>{},
     ladePersonalRangantraege:()=>{counts.persRanks++;},
     ladeRangantraege:()=>{counts.rank++;},
+    ladeDashboardMeldungen:()=>{},
     ladeDienstnummerAntraege:()=>{counts.dn++;},
     ...Object.fromEntries(['vDash','vPers','vBef','vSonder','vKue','vDis',
        'vRout','vChk','vRl','vUsers'].map(n=>[n,()=>'<section>Lade …</section>'])),
