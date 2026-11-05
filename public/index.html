@@ -2056,9 +2056,9 @@ function zeichne() {
     if(tab === 'backup') ladeBackup();
     if(tab === 'rechtesimulator') ladeRechteSimulator();
     if(tab === 'design') ladeDesign();
-    if(tab === 'bef') { ladeRangantraege(); void urkundenAuthVorbereiten(); }
+    if(tab === 'bef') { ladeRangantraege(); void urkundenAuthVorbereiten(); void ladeDienstnummerAntraege(); }
     if(tab === 'befricht') void befRichtLaden();
-    if(tab === 'pers') ladePersonalRangantraege();
+    if(tab === 'pers') { ladePersonalRangantraege(); void ladeDienstnummerAntraege(); }
     if(tab === 'praktika') void dgArchivLaden(0,'dgPraktikaArchiv');
     if(tab === 'rout'&&routineBereich==='archiv') void routineArchivLaden();
     if(tab === 'users') ladeBenutzer().catch(err => { if($('#benutzerBereich')) $('#benutzerBereich').textContent = 'Benutzerverwaltung konnte nicht geladen werden: ' + err.message; });
@@ -2451,6 +2451,7 @@ function vPers() {
     const bearbeitung = schreiben ? '<button type="button" class="pers-edit-btn" data-edit-person="'+nummer+'" aria-label="Personalakte von '+name+' bearbeiten" title="Personalakte bearbeiten">'+
       '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16 5 3 3M4 20l4.5-1 10.8-10.8a2.12 2.12 0 0 0-3-3L5.5 16 4 20z"/><path d="M4 20h16"/></svg>'+
       '<span>Bearbeiten</span></button>' : '';
+    const nummernAntrag=can('pers',2)?'<button type="button" data-dn-request="'+nummer+'" title="Dienstnummernwechsel beim POR beantragen">DN beantragen</button> ':'';
     const entfernen=ME.rolle==='Administrator'?
       '<button type="button" class="pers-admin-remove" data-pers-admin-remove="'+nummer+
         '" title="Administrativ ausblenden und im Papierkorb sichern">Entfernen</button>':'';
@@ -2459,10 +2460,11 @@ function vPers() {
       '<td><button class="pers-link" type="button" data-show-person="' + nummer + '">' + name + '</button></td>' +
       '<td>' + rangMitAbzeichen(p.dienstgrad) + '</td><td>' + esc(p.gruppe || '–') + '</td><td>' + esc(personalArt(nummer)) + '</td>' +
       '<td>' + fd(p.eintrittsdatum) + '</td><td>' + handy + '</td>' +
-      '<td>' + status + '</td><td class="pers-action-cell">' + bearbeitung + entfernen + personalKuendigungButton(p) + '</td></tr>';
+      '<td>' + status + '</td><td class="pers-action-cell">' + bearbeitung + nummernAntrag + entfernen + personalKuendigungButton(p) + '</td></tr>';
   }).join('');
   const auswahl = (werte) => '<option value="">Alle</option>' + werte.map(v => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
   return '<h1>Personalverwaltung</h1><p class="mut">Dienstnummern <span class="dienstnummer-pill haupt">1–50</span> Hauptberuf · <span class="dienstnummer-pill neben">51–60</span> Nebenberuf · ab 61 wieder Hauptberuf.</p>' + '<section id="personalRangantraege" class="box"><h3>Offene Rangänderungen – POR-Freigabe</h3><p class="mut">Lade …</p></section>' +
+    '<section id="dnAntraegeBereich" class="box"><h3>Dienstnummern-Anträge · POR</h3><p class="mut">Lade …</p></section>' +
     '<div class="pers-bar">' +
     '<input id="persSuche" aria-label="Personal durchsuchen" placeholder="Name, Dienstgrad oder Nummer suchen …" oninput="personalFiltern()">' +
     '<select id="persGruppe" aria-label="Gruppe filtern" onchange="personalFiltern()">' + auswahl(gruppen) + '</select>' +
@@ -3135,6 +3137,7 @@ function vBef() {
   return '<h1>Beförderungen</h1><p class="mut">PM-, PK- und KK-Anwärter haben keine Mindestzeit. Nach bestandener jeweiliger Prüfung ist eine Beförderung mit POR-Freigabe sofort möglich. Für die übrigen Dienstgrade gelten die festgelegten Fristen.</p>' +
     (wartet ? '<div class="box idv-warnung"><b>'+wartet+'</b> POR-Anträge warten auf eine Entscheidung.</div>' : '') +
     '<div id="rangantraegeBereich" class="box"><h3>Offene Rangänderungsanträge</h3><p class="mut">Lade Anträge …</p></div>'+ 
+    ((can('por')||can('pers'))?'<section id="dnAntraegeBereich" class="box"><h3>Dienstnummern-Anträge · POR</h3><p class="mut">Lade …</p></section>':'')+ 
     ((can('por',1)||can('ranghistorie',1))?'<section class="box" id="ranghistorieBereich"><div class="ranghist-top"><div><h3>Rangänderungs-Historie</h3><p class="mut">Abgeschlossene POR-Entscheidungen – nur für Berechtigte einsehbar.</p></div><button type="button" data-ranghistorie-toggle aria-expanded="false">Historie anzeigen</button></div><div id="ranghistorieListe" hidden></div></section>':'')+ 
     (befDarfUrkunde()?'<section class="box"><h3>Ernennungsurkunden · Polizeimeister <span class="tag '+(offeneUrkunden.length?'warn':'ok')+'">'+offeneUrkunden.length+' offen</span></h3>'+
       '<p class="mut">Nur noch nicht erstellte Urkunden nach einer Beförderung von PMA zu PM. Die Dokumente werden im Google Drive des erstellenden Nutzers gespeichert.</p>'+
