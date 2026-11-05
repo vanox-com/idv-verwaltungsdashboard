@@ -611,6 +611,32 @@ ALTER TABLE personal_rangantraege ADD COLUMN IF NOT EXISTS korrigiertes_befoerde
 ALTER TABLE portal_design ADD COLUMN IF NOT EXISTS extras jsonb NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE portal_design_personal ADD COLUMN IF NOT EXISTS extras jsonb NOT NULL DEFAULT '{}'::jsonb;
 
+/* Dienstnummernwechsel als gesonderter POR-Antrag.
+   Die neue Nummer wird erst NACH einer genehmigten, transaktional
+   ausgeführten Entscheidung wirksam. Die Historie bleibt fest erhalten. */
+CREATE TABLE IF NOT EXISTS dienstnummer_antraege (
+ id bigserial PRIMARY KEY,
+ alt_nr integer NOT NULL,
+ ziel_nr integer NOT NULL,
+ art text NOT NULL CHECK(art IN ('zugang','personal')),
+ begruendung text NOT NULL,
+ status text NOT NULL DEFAULT 'beantragt'
+   CHECK(status IN ('beantragt','genehmigt','abgelehnt')),
+ quell_name text NOT NULL,
+ ziel_name text NOT NULL DEFAULT '',
+ pruefstand jsonb NOT NULL,
+ antragsteller_id integer REFERENCES users(id) ON DELETE SET NULL,
+ entscheider_id integer REFERENCES users(id) ON DELETE SET NULL,
+ entscheidungsnotiz text NOT NULL DEFAULT '',
+ erstellt timestamptz NOT NULL DEFAULT now(),
+ entschieden_am timestamptz,
+ CHECK(alt_nr>0 AND ziel_nr>0 AND alt_nr<>ziel_nr)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS dienstnummer_antraege_ein_offener_idx
+ ON dienstnummer_antraege(alt_nr) WHERE status='beantragt';
+CREATE INDEX IF NOT EXISTS dienstnummer_antraege_status_erstellt_idx
+ ON dienstnummer_antraege(status,erstellt DESC);
+
 /* Historische Kündigungen ohne belegtes Datum bleiben unbekannt; neue Vorgänge werden datiert. */
 ALTER TABLE kuendigungen ADD COLUMN IF NOT EXISTS kuendigungsdatum date;
 ALTER TABLE kuendigungen ALTER COLUMN kuendigungsdatum SET DEFAULT CURRENT_DATE;
