@@ -26,7 +26,8 @@ async function checkNumbers(client,oldNr,newNr,kind,locked=false){
  if(users.rows.some(u=>Number(u.dienstnummer)===newNr))
   throw error(409,'Ziel-Dienstnummer hat bereits einen Panel-Zugang');
  if(kind==='zugang'){
-  if(!target||target.administrativ_geloescht_am||!CURRENT.has(target.status)||!account)
+  if(!target||target.administrativ_geloescht_am||!CURRENT.has(target.status)||!account||
+     !['Polizeirat','Leitungsdienst','Administrator'].includes(account.rolle))
    throw error(409,'Zugangswechsel benötigt zwei aktuelle Personalakten und einen Quell-Login');
   if(lower(old.vorname)!==lower(target.vorname)||lower(old.nachname)!==lower(target.nachname)||
      date(old.geburtsdatum)!==date(target.geburtsdatum)||
@@ -125,9 +126,17 @@ async function executeApproved(client,request,context,approver){
   }
   await client.query('UPDATE routine SET personalnummer=$2 WHERE personalnummer=$1',[from,to]);
   if(context.account){
-   const moved=await client.query('UPDATE users SET dienstnummer=$1 WHERE id=$2 AND dienstnummer=$3',
-    [String(to).padStart(2,'0'),context.account.id,context.account.dienstnummer]);
-   if(moved.rowCount!==1)throw error(409,'Panel-Zugang wurde zwischenzeitlich geändert');
+   // Vollständige Personalumstellung ist KEIN neuer/fortlaufender Panel-Zugang.
+   // Nach einem Rücktritt entfallen die vorherigen Leitungsrechte. Das alte
+   // Benutzerkonto bleibt für die Audit-Historie erhalten, wird aber gesperrt
+   // und unter einer NICHT numerischen Archivkennung abgelegt. Dadurch sind
+   // beide Dienstnummern für spätere berechtigte Zuordnungen frei.
+   const archivLogin='archiv-'+from+'-'+context.account.id;
+   const locked=await client.query(
+    'UPDATE users SET dienstnummer=$1,gesperrt=true WHERE id=$2 AND dienstnummer=$3',
+    [archivLogin,context.account.id,context.account.dienstnummer]);
+   if(locked.rowCount!==1)throw error(409,'Panel-Zugang wurde zwischenzeitlich geändert');
+   await client.query('DELETE FROM sessions WHERE user_id=$1',[context.account.id]);
   }
   await client.query('DELETE FROM personal WHERE personalnummer=$1',[from]);
  }
