@@ -18,7 +18,7 @@ function harness({differentIdentity=false,ownApproval=false}={}){
  const app={get(path,...m){routes.set('GET '+path,m.at(-1))},
             post(path,...m){routes.set('POST '+path,m.at(-1))}};
  const db={
-  async connect(){return {query}},
+  async connect(){return {query,release(){}}},
   async query(...args){return query(...args)}
  };
  async function query(s,p=[]){
