@@ -886,7 +886,7 @@ const beschaeftigungZuNummer=nr=>Number(nr)>=51&&Number(nr)<=60?'Nebenberuf':'Ha
 app.get('/api/personal/freie-nummern',requireLogin,requireRight('pers',2),async(req,res,next)=>{
  try{
   const [akten,konten,kuendigungen]=await Promise.all([
-    db.query('SELECT personalnummer,status FROM personal WHERE personalnummer BETWEEN 1 AND 60'),
+    db.query('SELECT personalnummer,status,administrativ_geloescht_am FROM personal WHERE personalnummer BETWEEN 1 AND 60'),
     db.query("SELECT dienstnummer::int AS nr FROM users WHERE dienstnummer ~ '^[0-9]{1,8}$' AND dienstnummer::int BETWEEN 1 AND 60"),
     db.query(`SELECT DISTINCT k.personalnummer FROM kuendigungen k
       WHERE k.personalnummer BETWEEN 1 AND 60
@@ -903,7 +903,7 @@ app.get('/api/personal/freie-nummern',requireLogin,requireRight('pers',2),async(
     // Eine bereits verwendete Login-Dienstnummer nicht parallel vergeben.
     if(loginNummern.has(nr))continue;
     const p=personen.get(nr);
-    if(!p||(!personalStatusBelegt(p.status) &&
+    if(!p||p.administrativ_geloescht_am||(!personalStatusBelegt(p.status) &&
       (String(p.status||'').trim().toLowerCase()!=='gekündigt'||imKuendigungsmodul.has(nr))))frei.push(nr);
   }
   res.json({hauptberuf:frei.filter(n=>n<=50),nebenberuf:frei.filter(n=>n>=51)});
@@ -1171,11 +1171,13 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
       if(vorher.length){
         const bisher=String(vorher[0].status||'').trim().toLocaleLowerCase('de-DE');
         const gekuendigt=bisher==='gekündigt';
-        if(personalStatusBelegt(vorher[0].status)){
+        // Administrativ gelöschte Akten liegen im Papierkorb: der dort
+        // gespeicherte alte Status darf eine neue Belegung nicht blockieren.
+        if(!vorher[0].administrativ_geloescht_am&&personalStatusBelegt(vorher[0].status)){
           await client.query('ROLLBACK');
           return res.status(409).json({error:'Diese Dienstnummer ist durch ihren Personalstatus belegt.'});
         }
-        if(gekuendigt){
+        if(gekuendigt&&!vorher[0].administrativ_geloescht_am){
           const inKue=await client.query(`SELECT 1 FROM kuendigungen k
             WHERE k.personalnummer=$1 AND (NOT EXISTS(
               SELECT 1 FROM personalnummer_neubelegungen a WHERE a.personalnummer=$1)
@@ -1250,8 +1252,8 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
          letzte_befoerderung=NULL,naechste_befoerderung=NULL,
          por_status='offen',por_notiz='',por_am=NULL,
          administrativ_geloescht_am=NULL,administrativ_geloescht_von=NULL
-       WHERE lower(trim(COALESCE(personal.status,''))) NOT IN
-         ('aktiv','abgemeldet','inaktiv','suspendiert')
+       WHERE (personal.administrativ_geloescht_am IS NOT NULL OR lower(trim(COALESCE(personal.status,''))) NOT IN
+         ('aktiv','abgemeldet','inaktiv','suspendiert'))
          -- Kündigungen werden zuvor unter FOR UPDATE geprüft; die
          -- Historienzeile dieser neuen Belegung wurde bereits gesichert.
          AND NOT EXISTS (SELECT 1 FROM users u
