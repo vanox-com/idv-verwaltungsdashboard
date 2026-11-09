@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 
 const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
 const documentApi=readFileSync(new URL('../src/dokumentApi.js',import.meta.url),'utf8');
-const start=html.indexOf('function disAkte(nr){');
+const start=html.indexOf('const DIS_TITEL=');
 const end=html.indexOf('\nfunction disFiltern(){',start);
 assert.ok(start>=0&&end>start,'Disziplinarakten-Renderer not found');
 const source=html.slice(start,end);
@@ -15,7 +15,6 @@ const case1={
 };
 function make(data){
  const fn=new Function('D','can','esc','fd','rangMitAbzeichen',
-  "const DIS_TITEL=['Mündliche Verwarnung','1. Abmahnung','2. Abmahnung','3. Abmahnung','Sonstige Maßnahme 1','Sonstige Maßnahme 2'];\n"+
   source+'\nreturn {disAkte,vDis};');
  return fn(data,()=>true,x=>String(x??'').replaceAll('&','&amp;').replaceAll('<','&lt;'),
   x=>x,String);
