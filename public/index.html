@@ -3761,11 +3761,11 @@ document.addEventListener('click',event=>{
 
 const DIS_TITEL=['Mündliche Verwarnung','1. Abmahnung','2. Abmahnung','3. Abmahnung','Sonstige Maßnahme 1','Sonstige Maßnahme 2'];
 function disEintragText(eintrag){
+  // Nur die Dokumentbezeichnung anzeigen, wie bei den historischen Abmahnungen.
+  // Sachverhalt bleibt im Datensatz/Dokument, erscheint aber nicht als zweite Zeile.
   const titel=String(eintrag?.titel||'').trim();
-  const grund=String(eintrag?.t||'').trim();
-  if(!titel||titel===grund)return esc(grund||'Keine Bezeichnung hinterlegt');
-  return '<strong class="dis-document-title">'+esc(titel)+'</strong>'+
-    (grund?'<span class="dis-reason">Grund: '+esc(grund)+'</span>':'');
+  const bisherigeBezeichnung=String(eintrag?.t||'').trim();
+  return esc(titel||bisherigeBezeichnung||'Keine Bezeichnung hinterlegt');
 }
 
 function disAkte(nr){
