@@ -180,6 +180,7 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .dis-check input{width:auto}.dis-three{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 160px;gap:10px}
 #disBem{width:100%;min-height:90px;padding:10px;background:#101a28;color:var(--txt);border:1px solid var(--line);border-radius:5px}
 .dis-buttons{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}.dis-record{margin-bottom:10px}
+.dis-document-title{display:block;font-weight:650}.dis-reason{display:block;color:var(--mut);margin-top:3px}
 @media(max-width:700px){.dis-three{grid-template-columns:1fr}}
 
 /* Routine & Sonderzahlungen */
@@ -2743,7 +2744,7 @@ function personalAnzeigen(nr) {
       const massnahmen=akte.slots.map((eintrag,i)=>eintrag?.done ?
         '<div class="dis-record"><span class="tag bad">'+esc(DIS_TITEL[i])+'</span> '+
         (eintrag.d ? esc(fd(eintrag.d)) : '')+
-        '<div>'+esc(eintrag.t||'Keine Bezeichnung hinterlegt')+
+        '<div>'+disEintragText(eintrag)+
         (eintrag.u ? ' <a class="l" href="'+esc(eintrag.u)+'" target="_blank" rel="noopener noreferrer">Dokument öffnen</a>' : '')+
         '</div></div>' : '').filter(Boolean);
       return '<section class="box"><h3>Disziplinarmaßnahmen</h3>'+
@@ -3759,6 +3760,14 @@ document.addEventListener('click',event=>{
 });
 
 const DIS_TITEL=['Mündliche Verwarnung','1. Abmahnung','2. Abmahnung','3. Abmahnung','Sonstige Maßnahme 1','Sonstige Maßnahme 2'];
+function disEintragText(eintrag){
+  const titel=String(eintrag?.titel||'').trim();
+  const grund=String(eintrag?.t||'').trim();
+  if(!titel||titel===grund)return esc(grund||'Keine Bezeichnung hinterlegt');
+  return '<strong class="dis-document-title">'+esc(titel)+'</strong>'+
+    (grund?'<span class="dis-reason">Grund: '+esc(grund)+'</span>':'');
+}
+
 function disAkte(nr){
   const e=(D.disziplin||[]).find(x=>Number(x.nr)===nr)||{};
   // Bisherige Importwerte kommen aus einer älteren Tabelle (3 Felder pro
@@ -3794,7 +3803,7 @@ function vDis(){
     const nr=Number(p.personalnummer),akte=disAkte(nr);
     const ms=akte.slots.map((s,i)=>s?.done?
       '<div class="dis-record"><span class="tag bad">'+esc(DIS_TITEL[i])+'</span> '+esc(fd(s.d)||'')+
-      '<div>'+esc(s.t||'')+(s.u?
+      '<div>'+disEintragText(s)+(s.u?
         ' <a class="l" href="'+esc(s.u)+'" target="_blank" rel="noopener noreferrer">Dokument</a>':'')+
       '</div></div>':'').join('');
     const name=[p.vorname,p.nachname].filter(Boolean).join(' ');
