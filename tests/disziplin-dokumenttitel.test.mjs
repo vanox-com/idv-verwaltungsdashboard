@@ -27,7 +27,7 @@ test('unrelated types and stale document URLs are ignored',()=>{
  ]);
  assert.equal(enriched[0].slots[1].titel,undefined);
 });
-test('management and personnel views display document title and keep the reason',()=>{
+test('management displays only document title and does not append the underlying reason',()=>{
  const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
  const begin=html.indexOf('const DIS_TITEL='),end=html.indexOf('\nfunction disFiltern(){',begin);
  assert.ok(begin>=0&&end>begin);
@@ -40,12 +40,13 @@ test('management and personnel views display document title and keep the reason'
  const {vDis,disAkte,disEintragText}=fn(D,()=>true,escape,x=>String(x),x=>x);
  const rendered=vDis();
  assert.match(rendered,/Abmahnung – Beispiel Person/);
- assert.match(rendered,/Grund: Mehrfache Abwesenheit ohne Abmeldung/);
+ assert.doesNotMatch(rendered,/Grund: Mehrfache Abwesenheit ohne Abmeldung/);
  assert.match(rendered,/class="tag bad">1\. Abmahnung/);
  assert.match(rendered,/Dokument<\/a>/);
- assert.match(disEintragText(disAkte(40).slots[1]),/dis-document-title/);
+ assert.equal(disEintragText(disAkte(40).slots[1]),titel);
+ assert.equal(disAkte(40).slots[1].t,grund,'Sachverhalt bleibt gespeichert');
 });
 test('legacy manual warning labels are not changed',()=>{
  const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
- assert.match(html,/if\(!titel\|\|titel===grund\)return esc\(grund\|\|'Keine Bezeichnung hinterlegt'\)/);
+ assert.match(html,/return esc\(titel\|\|bisherigeBezeichnung\|\|'Keine Bezeichnung hinterlegt'\)/);
 });
