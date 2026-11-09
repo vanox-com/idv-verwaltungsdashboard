@@ -1,0 +1,19 @@
+name: Ernennungsurkunden – Datumsprüfung
+on:
+  push:
+    branches: [main, migration/mysql]
+  pull_request:
+    branches: [main]
+jobs:
+  urkunden-datum:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test date validation and source compatibility
+        run: |
+          node --check src/urkundenDatum.js
+          node --check src/server.js
+          node --test tests/urkunden-datum.test.mjs
