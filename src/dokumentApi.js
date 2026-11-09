@@ -131,7 +131,11 @@ export function dokumentRoutes(app,db,requireLogin,effektiveRechte,zertGoogleOAu
     await client.query('BEGIN');
     if(type==='abmahnung'){
      const record=await client.query('SELECT slots FROM disziplin WHERE personalnummer=$1 FOR UPDATE',[nr]);
-     const slots=Array.isArray(record.rows[0]?.slots)?record.rows[0].slots.slice():Array(6).fill(null);
+     const slots=Array.isArray(record.rows[0]?.slots)?record.rows[0].slots.slice():[];
+     // Alle sechs Slots speichern; verkürzte JSON-Arrays würden sonst
+     // in der Disziplinarübersicht als fehlende Maßnahmen erscheinen.
+     if(slots.length>6)throw fail(409,'Disziplinarakte enthält zu viele Maßnahmenslots');
+     while(slots.length<6)slots.push(null);
      const index=Number(f.stufe);
      if(slots[index]?.u)throw fail(409,'Für diese Abmahnung ist bereits ein Dokument hinterlegt');
      slots[index]={done:true,t:f.sachverhalt.slice(0,1500),u:link,d:f.datum};
