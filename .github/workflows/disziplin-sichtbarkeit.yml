@@ -15,4 +15,4 @@ jobs:
       - name: Test six-slot disciplinary archive and document generation
         run: |
           node --check src/dokumentApi.js
-          node --test tests/disziplin-sichtbarkeit.test.mjs
+          node --test tests/disziplin-sichtbarkeit.test.mjs tests/disziplin-dokumenttitel.test.mjs
