@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db, initDb } from './db.js';
 import { fillCertificateDocx } from './urkundenDocx.js';
+import { zertDatum, pruefeUrkundenDaten } from './urkundenDatum.js';
 import { dokumentRoutes } from './dokumentApi.js';
 import { registerBefRichtRoutes } from './befRichtApi.js';
 import { ANWAERTER_PRUEFUNGEN } from './befPruefungMap.js';
@@ -1849,11 +1850,6 @@ function zertGoogleOAuth(){
  const secret=String(process.env.GOOGLE_OAUTH_CLIENT_SECRET||'').trim();
  return /^[\w-]+\.apps\.googleusercontent\.com$/.test(id)&&secret.length>=10?{id,secret}:null;
 }
-function zertDatum(d){
- return typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)
-  &&!Number.isNaN(Date.parse(d+'T00:00:00Z'))
-  &&new Date(d+'T00:00:00Z').toISOString().slice(0,10)===d;
-}
 function zertDD(d){return d.slice(8,10)+'.'+d.slice(5,7)+'.'+d.slice(0,4);}
 /* Immer die echte IDV-Blankourkunde verwenden: Layout, Logo,
    Originalunterschriften und fiktiver Hinweis bleiben unverändert.
@@ -1927,8 +1923,8 @@ app.post('/api/urkunden/polizeimeister/:nr',requireLogin,requireRight('bef',1),r
   if(person.status==='Gekündigt')return res.status(409).json({error:'Personal ist ausgeschieden'});
   const iso=x=>x instanceof Date?x.toISOString().slice(0,10):String(x).slice(0,10);
   const ernannt=iso(person.ernennungsdatum);person.geburtsdatum=iso(person.geburtsdatum);
-  if(!zertDatum(ernannt)||!zertDatum(person.geburtsdatum)||eid>ernannt)
-   return res.status(400).json({error:'Ernennungs-/Amtseid-Datum unplausibel'});
+  const datumFehler=pruefeUrkundenDaten({eid,ernannt,geburt:person.geburtsdatum});
+  if(datumFehler)return res.status(400).json({error:datumFehler});
   const name=[person.vorname,person.nachname].filter(Boolean).join(' ').trim();
   if(!name||name.length>160)return res.status(409).json({error:'Name der Person fehlt'});
   const oauth=await fetch('https://oauth2.googleapis.com/token',{
