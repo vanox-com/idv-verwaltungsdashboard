@@ -12,6 +12,7 @@ import { registerBefRichtRoutes } from './befRichtApi.js';
 import { ANWAERTER_PRUEFUNGEN } from './befPruefungMap.js';
 import { registerRoutineArchive } from './routineArchiv.js';
 import { registerAktenFeatures } from './aktenFeatures.js';
+import { disziplinTitelErgaenzen } from './disziplinTitel.js';
 import { registerDienstnummerAntraege } from './dienstnummerAntraege.js';
 import { registerKueArchivRoutes,KUE_AKTUELL_BEDINGUNG,KUE_LIST_COLUMNS } from './kuendigungsArchiv.js';
 import { hashPassword, verifyPassword, newSessionToken, SESSION_HOURS } from './auth.js';
@@ -821,6 +822,17 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       daten.funktionsspalten = [];
     }
     if (!berechtigt('kue')) {daten.kuendigungen=[];daten.kuendigungsVerknuepfungen={};}
+    if (berechtigt('dis')) {
+      // Der Dokumentgenerator speichert den Sachverhalt im Disziplinarslot
+      // und den sprechenden Dokumenttitel separat im Generator-Archiv.
+      // Beides für die Ansicht zusammenführen; gespeicherte Disziplinardaten
+      // bleiben dabei unangetastet. Nur passende Personalnummer + URL
+      // dürfen einen Dokumenttitel zuordnen.
+      const {rows:abmahnungsDokumente}=await db.query(
+        "SELECT personalnummer,typ,titel,url FROM generierte_dokumente WHERE typ='abmahnung'"
+      );
+      daten.disziplin=disziplinTitelErgaenzen(daten.disziplin,abmahnungsDokumente);
+    }
     if (!berechtigt('dis')) {
       daten.disziplin = [];
       daten.disziplinSpalten = [];
