@@ -3780,8 +3780,13 @@ function disAkte(nr){
     const check=alt[i*3],t=alt[i*3+1]||'',d=datum(alt[i*3+2]||'');
     return check!=null||t||d?{done:check==='true',t,u:'',d}:null;
   });
-  return {slots:Array.isArray(e.slots)&&e.slots.length===6
-    ?e.slots.map(x=>x||null):legacy,bemerkung:e.bemerkung||'',_revision:e._revision||'0'};
+  /* Der Dokumentgenerator kann historisch ein verkürztes Slot-Array
+     angelegt haben (z. B. [null, {1. Abmahnung}]). Diese Einträge dürfen
+     nicht verworfen werden: auf sechs Plätze ergänzen, ohne sie zu ändern.
+     Nur bei vollständig leerem Array auf importierte Altdaten zurückfallen. */
+  const vorhanden=Array.isArray(e.slots)&&e.slots.length>0
+    ?Array.from({length:6},(_,i)=>e.slots[i]||null):legacy;
+  return {slots:vorhanden,bemerkung:e.bemerkung||'',_revision:e._revision||'0'};
 }
 function vDis(){
   const personen=D.personal||[], schreiben=can('dis',2);
