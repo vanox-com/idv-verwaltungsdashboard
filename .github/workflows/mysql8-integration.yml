@@ -139,10 +139,12 @@ jobs:
           IDV_FORCE_HTTPS: '0'
         run: |
           mkdir -p "$RUNNER_TEMP/idv-staging-artifact"
+          unzip -tq migration-output/IDV-PHP-MySQL8-STAGING.zip
           unzip -q migration-output/IDV-PHP-MySQL8-STAGING.zip -d "$RUNNER_TEMP/idv-staging-artifact"
           test -f "$RUNNER_TEMP/idv-staging-artifact/public/index.html"
           test -f "$RUNNER_TEMP/idv-staging-artifact/php/Api.php"
           test -f "$RUNNER_TEMP/idv-staging-artifact/scripts/hosting/preflight.php"
+          test -f "$RUNNER_TEMP/idv-staging-artifact/HOSTING-SETUP.md"
           test ! -e "$RUNNER_TEMP/idv-staging-artifact/src"
           test ! -e "$RUNNER_TEMP/idv-staging-artifact/node_modules"
           test ! -e "$RUNNER_TEMP/idv-staging-artifact/.env"
