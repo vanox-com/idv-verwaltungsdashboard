@@ -63,7 +63,7 @@ function dnReqApply(array $req,array $context,array $u): void {
         $stmt->execute([$u['id'],$from]);
         if($stmt->rowCount()!==1)fail(409,'Quell-Personalakte nicht mehr aktuell');
     }else{
-        $refs=sql("SELECT table_name,column_name FROM information_schema.key_column_usage
+        $refs=sql("SELECT table_name AS tablename,column_name AS fieldname FROM information_schema.key_column_usage
             WHERE table_schema=DATABASE() AND referenced_table_name='personal'
               AND referenced_column_name='personalnummer'");
         $allowed=['copnet_zugaenge','disziplin','generierte_dokumente',
