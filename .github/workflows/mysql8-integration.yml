@@ -1,0 +1,49 @@
+name: MySQL8 real database integration
+on:
+  push:
+    branches:
+      - migration/mysql8-php-cutover-2026-11-10
+  workflow_dispatch:
+jobs:
+  mysql8-schema:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test-root-password
+          MYSQL_DATABASE: idv_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptest-root-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql, json, openssl
+          coverage: none
+      - name: PHP syntax
+        run: |
+          for f in public/api.php php/*.php; do php -l "$f" || exit 1; done
+      - name: Import complete reviewed phpMyAdmin SQL into real MySQL 8
+        run: |
+          mysql --host=127.0.0.1 --port=3306 --user=root --password=test-root-password idv_ci < scripts/mysql/IDV-MySQL8-phpMyAdmin-SETUP.sql
+      - name: Confirm live-schema contract and row revision triggers
+        run: |
+          test "$(mysql --batch --skip-column-names -h127.0.0.1 -uroot -ptest-root-password -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='idv_ci' AND table_type='BASE TABLE'")" -eq 49
+          test "$(mysql --batch --skip-column-names -h127.0.0.1 -uroot -ptest-root-password -e "SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema='idv_ci'")" -eq 33
+          test "$(mysql --batch --skip-column-names -h127.0.0.1 -uroot -ptest-root-password -e "SELECT COUNT(*) FROM information_schema.check_constraints WHERE constraint_schema='idv_ci'")" -eq 14
+          test "$(mysql --batch --skip-column-names -h127.0.0.1 -uroot -ptest-root-password -e "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema='idv_ci'")" -eq 8
+      - name: Run PHP/PDO database smoke test with artificial nonpersonal records
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_DATABASE: idv_ci
+          MYSQL_USER: root
+          MYSQL_PASSWORD: test-root-password
+        run: php tests/mysql8-smoke.php
