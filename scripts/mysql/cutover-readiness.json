@@ -1,0 +1,15 @@
+{
+  "schema_import_real_mysql8": true,
+  "smoke_pdo_mysql8": true,
+  "releases": {
+    "critical_feature_parity": false,
+    "all_102_plus_api_routes": false,
+    "complete_bootstrap_contract": false,
+    "audit_and_archive_parity": false,
+    "sse_concurrency_and_conflict_tests": false,
+    "all_roles_security_tests": false,
+    "document_oauth_copnet_tests": false,
+    "real_data_cryptographic_comparison": false,
+    "staging_acceptance": false
+  }
+}
