@@ -52,7 +52,8 @@ check GET /api/mitteilungen/empfaenger 200
 check GET /api/mitteilungen/verwaltung 200
 check GET /api/textbausteine 200
 check GET /api/organigramm 200
-check POST /api/personal 200 '{"personalnummer":2,"vorname":"HTTP","nachname":"Fixture","gruppe":"Mittlerer Dienst","status":"Aktiv","beschaeftigungsart":"Hauptberuf"}'
+longurl="https://example.test/$(printf 'a%.0s' {1..380})"
+check POST /api/personal 200 '{"personalnummer":2,"vorname":"HTTP","nachname":"Fixture","gruppe":"Mittlerer Dienst","status":"Aktiv","beschaeftigungsart":"Hauptberuf","arbeitsvertrag_url":"'"$longurl"'"}'
 check PATCH /api/personal/2 200 '{"nachname":"Fixture2"}' 1
 check PATCH /api/personal/2 409 '{"nachname":"Stale update"}' 1
 check POST /api/checklisten 201 '{"name":"API test list","aufgaben":[{"t":"First","u":""}]}'
@@ -60,8 +61,13 @@ check PUT /api/organigramm 200 '{"version":0,"inhalt":{"leitung":"Test","raete":
 check PUT /api/organigramm 409 '{"version":0,"inhalt":{"leitung":"Wrong","raete":[],"bereiche":[]}}'
 check POST /api/textbausteine 201 '{"kategorie":"Test","titel":"Test template","inhalt":"Only CI data"}'
 check POST /api/mitteilungen 200 '{"titel":"CI news","inhalt":"Only test","userIds":[1]}'
-check PUT /api/copnet/1 200 '{"dienstnummer":"CIN-1","passwort":"OnlyTesting"}'
+longsecret="$(printf 'X%.0s' {1..480})"
+check PUT /api/copnet/1 200 '{"dienstnummer":"CIN-1","passwort":"'"$longsecret"'"}'
 check GET /api/copnet/1 200
+if ! jq -e --arg p "$longsecret" '.passwort==$p' "$tmp/body" >/dev/null; then
+  echo "CopNet ciphertext failed 480-byte encryption roundtrip" >&2
+  exit 1
+fi
 check POST /api/logout 200
 check GET /api/me 401
 echo "Real MySQL 8 + PHP HTTP integration smoke succeeded."
