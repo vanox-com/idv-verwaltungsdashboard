@@ -76,7 +76,7 @@ try{
  const tables=[...new Set(cols.map(c=>c.table_name))].sort().filter(t=>t!=='sessions');
  if(tables.length<40)throw Error('Unvollständiger PostgreSQL-Tabellenbestand');
  const pk=(await pgConn.query(
-  "SELECT cl.relname table_name,ARRAY(SELECT a.attname FROM unnest(con.conkey) WITH ORDINALITY u(n,ord) JOIN pg_attribute a ON a.attrelid=con.conrelid AND a.attnum=u.n ORDER BY u.ord) columns"+
+  "SELECT cl.relname table_name,ARRAY(SELECT a.attname::text FROM unnest(con.conkey) WITH ORDINALITY u(n,ord) JOIN pg_attribute a ON a.attrelid=con.conrelid AND a.attnum=u.n ORDER BY u.ord) columns"+
   " FROM pg_constraint con JOIN pg_class cl ON cl.oid=con.conrelid WHERE con.connamespace='public'::regnamespace AND con.contype='p'")).rows;
  const keys=new Map(pk.map(x=>[x.table_name,x.columns]));
  let failed=0,validated=0,total=0;
