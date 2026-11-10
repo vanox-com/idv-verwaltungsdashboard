@@ -181,6 +181,9 @@ if [[ "$notified" != true ]]; then
 fi
 echo "Cross-session MySQL SSE update received"
 
+# Additional security matrix for three login roles, session revocation and
+# same-checklist multi-role concurrency in disposable MySQL CI only.
+bash tests/mysql8-security-flows.sh "$tmp/cookies" "http://127.0.0.1:8777"
 # Replace admin session with the restricted PoliceRat account.
 check POST /api/logout 200
 check POST /api/login 200 '{"dienstnummer":"04","passwort":"rat-ci-example-not-live"}'
