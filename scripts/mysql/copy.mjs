@@ -97,7 +97,7 @@ try{
   types.get(c.table_name).push(c);
  }
  const primary=(await pgClient.query(
-  "SELECT cl.relname AS table_name, ARRAY(SELECT att.attname FROM unnest(con.conkey) WITH ORDINALITY u(n,ord)"+
+  "SELECT cl.relname AS table_name, ARRAY(SELECT att.attname::text FROM unnest(con.conkey) WITH ORDINALITY u(n,ord)"+
   " JOIN pg_attribute att ON att.attrelid=con.conrelid AND att.attnum=u.n ORDER BY u.ord) AS cols"+
   " FROM pg_constraint con JOIN pg_class cl ON cl.oid=con.conrelid"+
   " WHERE con.connamespace='public'::regnamespace AND con.contype='p'")).rows;
