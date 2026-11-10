@@ -128,7 +128,7 @@ jq -e '.user.rolle=="Polizeirat" and
 }
 revision="$(jq -r '.daten.routine[0]._revision' "$tmp/body")"
 check POST /api/routine/1/termin 200 '{"datum":"2026-11-09"}' "$revision"
-check POST /api/por/3 200 '{"status":"beantragt","notiz":"Antrag vom Rat"}'
+check PATCH /api/por/3 200 '{"status":"beantragt","notiz":"Antrag vom Rat"}'
 check PATCH /api/por/3 403 '{"status":"genehmigt","notiz":"Nicht erlaubt"}'
 check GET /api/personal/freie-nummern 403
 check POST /api/rangantraege 403 '{"personalnummer":3,"beantragter_rang":"Polizeimeister","begruendung":"Unzulässig"}'
