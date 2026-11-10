@@ -25,7 +25,8 @@ if(!execute){
  const expected={
   IDV_WRITES_STOPPED:'YES',
   IDV_CUTOVER_CONFIRMED:'I_AUTHORIZE_DATA_MIGRATION',
-  MYSQL_COPY_CONFIRM:'EMPTY_NEW_DATABASE'
+  MYSQL_COPY_CONFIRM:'EMPTY_NEW_DATABASE',
+  MYSQL_SCHEMA_CONFIRM:'EMPTY_NEW_DATABASE'
  };
  for(const [name,value] of Object.entries(expected))
   if(process.env[name]!==value)throw Error('Abbruch: '+name+' wurde nicht explizit bestätigt');
@@ -33,6 +34,7 @@ if(!execute){
   if(!process.env[key])throw Error('Abbruch: geschütztes Environment '+key+' fehlt');
  const steps=[
   ['Schema-Preflight','prepare.mjs'],
+  ['MySQL-8-Schema in NEUER LEERER Datenbank aufbauen','install-schema.mjs'],
   ['Kopieren in vollständig leere MySQL-Zieltabellen','copy.mjs'],
   ['Quell-/Zielinhalt prüfen','verify.mjs']
  ];
