@@ -260,6 +260,8 @@ function run(): void {
         if(dispatchPromotion($u,$method,$uri)) return;
         require_once __DIR__.'/RoutineEditing.php';
         if(dispatchRoutineEditing($u,$method,$uri)) return;
+        require_once __DIR__.'/TerminationEditing.php';
+        if(dispatchTerminationEditing($u,$method,$uri)) return;
         fail(501,'Diese Funktion wurde noch nicht auf die MySQL/PHP-Version umgestellt');
     }catch(PDOException $e){
         error_log('[IDV PHP] Database failure: '.$e->getCode());
