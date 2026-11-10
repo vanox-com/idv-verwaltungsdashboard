@@ -158,14 +158,11 @@ function handleBootstrap(array $user): never {
     if(allow($rights,'kue')){
         // Latest termination records; date interpretation is provisional.
         // Never expose personal_snapshot or confidential document metadata through list views.
-        $d['kuendigungen']=normalizedRows(
-            'SELECT id,personalnummer,vorname,nachname,rang,grund,handy,vertrag,eintritt,urkunde,
-                    zeugnis,kuendigung,waffe,copnet,emd,ic,discord,dienstgegenstaende,anzeige,
-                    kuendigungsdatum,erfasst_am
-             FROM kuendigungen
-             WHERE COALESCE(kuendigungsdatum,DATE(erfasst_am)) >= DATE_SUB(UTC_DATE(),INTERVAL 59 DAY)
-             ORDER BY nachname,id DESC'
-        );
+        require_once __DIR__.'/TerminationArchive.php';
+        $d['kuendigungen']=sql(terminationListQuery('WHERE '.terminationCurrentExpr('k').
+            ' ORDER BY k.nachname,k.id DESC'));
+        foreach($d['kuendigungen'] as &$k)$k['_revision']=(string)$k['_revision'];
+        unset($k);
         $d['dashboard']['summary']['kuendigungen']=count($d['kuendigungen']);
         $d['dashboard']['summary']['offeneRueckgaben']=count(array_filter($d['kuendigungen'],function($p){
             foreach(['waffe','copnet','emd','ic','discord','dienstgegenstaende'] as $field)
@@ -181,6 +178,9 @@ function handleBootstrap(array $user): never {
             '_revision'=>(string)($r['row_revision']??'1')
         ],$raw);
         $d['sonderzahlungen']=normalizedRows('SELECT * FROM sonderzahlungen ORDER BY nachname');
+        foreach($d['sonderzahlungen'] as &$entry){
+            $entry['_revision']=(string)($entry['row_revision']??'1');
+        }unset($entry);
     }
     if(allow($rights,'chk')){
         $rows=normalizedRows('SELECT * FROM checklisten ORDER BY sortierung',[],['aufgaben']);
@@ -261,6 +261,8 @@ function handleBootstrap(array $user): never {
         $d['personal']=$people;
     }
 
+    require_once __DIR__.'/BootstrapMetrics.php';
+    bootstrapMetrics($d,$people,$present,$rights);
     $responseUser=sessionApiUser($user);
     $responseUser['sensibel']=$isSensitive;
     respond(200,['user'=>$responseUser,'daten'=>$d]);
