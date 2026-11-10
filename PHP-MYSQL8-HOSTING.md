@@ -29,10 +29,32 @@ Im Secret-Store des Hosters (nicht in GitHub) konfigurieren:
 | `IDV_LOGIN_RATE_SECRET` | sicheres Secret für Login-Drosselung |
 | `IDV_FORCE_HTTPS` | Nur bei HTTPS-Terminierung vor PHP (Reverse Proxy) auf `1` setzen, damit Session-Cookies und Origin-Prüfung zuverlässig HTTPS erzwingen; niemals ungeprüfte `X-Forwarded-Proto`-Header vertrauen |
 | `COPNET_ENCRYPTION_KEY` | derselbe 64-stellige Hex-Schlüssel wie im bisherigen System; erforderlich für bestehende CopNet-Zugänge |
+| `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | Google-Webanwendungsclient; Zugangsdaten ausschließlich im Hostersecret speichern |
+| `IDV_GOOGLE_ORIGIN` | Exakte HTTPS-Origin des neuen Staging-/Produktivportals (ohne Pfad/abschließenden Slash), zusätzlich in Google Cloud als autorisierten JavaScript-Ursprung hinterlegen |
 
 Die bestehende Google-OAuth-Konfiguration und neue Redirect-URI müssen
 vor dem Go-Live ebenfalls geprüft werden. Insbesondere Dokumentgeneratoren
 dürfen nicht heimlich von bisherigen Google-Drive-Verknüpfungen abweichen.
+
+## Vorbereitete Hosterübergabe (Schritt 4)
+
+`docs/MIGRATION-SCHRITT-4.md` enthält die komplette Staging-Checkliste.
+Nach grünem MySQL-8-GitHub-Action-Lauf steht ein
+`idv-php-mysql8-staging`-Artefakt bereit.
+Das ZIP enthält nur PHP-Anwendung, öffentliche Webdateien und den
+**privaten** `scripts/hosting/preflight.php`-Check; kein Node-Webserver,
+keine Datenbankexporte, keine Zugangsdaten.
+
+```bash
+php scripts/hosting/preflight.php --json
+bash scripts/hosting/staging-http-check.sh https://DEINE-STAGING-DOMAIN
+```
+
+Letzterer Test ist ausschließlich für eine **separate HTTPS-Testdomain**,
+nicht für das Produktivportal vorgesehen.
+Google-Pop-up, echte Word-Vorlagen, Dokumenterstellung und
+CopNet-Bestandsdaten müssen beim neuen Hoster mit autorisiertem Testkonto
+bzw. nach kontrollierter Datenkopie separat überprüft werden.
 
 ## Anmelde- und Sitzungs-Sicherheit
 
