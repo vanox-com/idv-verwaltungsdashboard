@@ -216,6 +216,10 @@ function run(): void {
         if($method==='POST'&&$uri==='/api/passwort')handlePassword();
         // Unknown routes must fail closed, and no PHP code may delegate to PostgreSQL.
         $u=requireLogin();
+        if($method==='GET'&&$uri==='/api/changes') {
+            require_once __DIR__.'/Changes.php';
+            streamChanges($u);
+        }
         require_once __DIR__.'/Bootstrap.php';
         if($method==='GET'&&$uri==='/api/bootstrap')handleBootstrap($u);
         if($method==='GET'&&$uri==='/api/system-optionen')handleSystemOptions($u);
