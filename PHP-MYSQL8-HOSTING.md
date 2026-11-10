@@ -30,8 +30,8 @@ Die MySQL-/PHP-Version ist derzeit **nicht funktionsgleich**.
 In einer **neu angelegten, leeren** MySQL-8-Datenbank:
 
 1. Die Struktur `scripts/mysql/IDV-MySQL8-phpMyAdmin-SETUP.sql`
-   importieren. Sie erstellt die 47 ursprünglichen Tabellen sowie die
-   zusätzliche Tabelle für Anmeldeversuche, 31 Fremdschlüssel,
+   importieren. Sie erstellt die 48 ursprünglichen Tabellen sowie die
+   zusätzliche Tabelle für Anmeldeversuche, 33 Fremdschlüssel,
    Revisionsspalten und MySQL-Constraints.
 2. **Wichtig:** In der neuen DB sind dann noch keine Benutzer,
    Personalakten, Routine- oder Kündigungsdaten.

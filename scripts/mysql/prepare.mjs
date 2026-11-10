@@ -1,5 +1,5 @@
 /* IDV/MySQL8: read-only compatibility preflight against the current PostgreSQL
- * catalog. Copies the reviewed 47-table MySQL 8 schema into migration-output
+ * catalog. Copies the reviewed 48-table MySQL 8 schema into migration-output
  * only if it still matches the PostgreSQL catalog. Never exports user data.
  *
  * SOURCE_DATABASE_URL=... npm run mysql:prepare

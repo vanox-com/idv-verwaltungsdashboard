@@ -7,7 +7,7 @@
 ## 1. SQL-Struktur für phpMyAdmin
 
 Die SQL-Datei `scripts/mysql/mysql8-schema.sql` enthält die Struktur
-der 47 Tabellen, 31 Fremdschlüssel, 11 CHECK-Bedingungen und den
+der 48 Tabellen, 33 Fremdschlüssel, 14 CHECK-Bedingungen und den
 Sonderfall „maximal ein offener Rangantrag pro Person“.
 
 Der neue Hoster legt eine **vollständig leere MySQL-8-Datenbank** an.

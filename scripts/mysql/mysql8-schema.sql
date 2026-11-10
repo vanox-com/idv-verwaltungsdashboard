@@ -104,6 +104,25 @@ CREATE TABLE `daten24` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE `dienstnummer_antraege` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `alt_nr` INT NOT NULL,
+  `ziel_nr` INT NOT NULL,
+  `art` VARCHAR(191) NOT NULL,
+  `begruendung` LONGTEXT NOT NULL,
+  `status` VARCHAR(191) NOT NULL DEFAULT 'beantragt',
+  `quell_name` LONGTEXT NOT NULL,
+  `ziel_name` LONGTEXT NOT NULL,
+  `pruefstand` JSON NOT NULL,
+  `antragsteller_id` INT,
+  `entscheider_id` INT,
+  `entscheidungsnotiz` LONGTEXT NOT NULL,
+  `erstellt` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `entschieden_am` DATETIME(6),
+  PRIMARY KEY (`id`),
+  KEY `dienstnummer_antraege_status_erstellt_idx` (`status`,`erstellt` DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE `dienststellen` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `name` VARCHAR(191) NOT NULL,
@@ -523,11 +542,21 @@ ALTER TABLE `portal_design` ADD CONSTRAINT `portal_design_schleier_check` CHECK 
 ALTER TABLE `sperrfristen` ADD CONSTRAINT `sperrfristen_art_check` CHECK (`art` IN ('Bewerber','Praktikant'));
 ALTER TABLE `user_perms` ADD CONSTRAINT `user_perms_stufe_check` CHECK (`stufe` IN (0,1,2));
 
+ALTER TABLE `dienstnummer_antraege` ADD CONSTRAINT `dienstnummer_antraege_art_check` CHECK (`art` IN ('zugang','personal'));
+ALTER TABLE `dienstnummer_antraege` ADD CONSTRAINT `dienstnummer_antraege_status_check` CHECK (`status` IN ('beantragt','genehmigt','abgelehnt'));
+ALTER TABLE `dienstnummer_antraege` ADD CONSTRAINT `dienstnummer_antraege_nummern_check` CHECK (`alt_nr` > 0 AND `ziel_nr` > 0 AND `alt_nr` <> `ziel_nr`);
+
 -- PostgreSQL has a unique partial index to allow only one pending rank application per person.
 -- MySQL generated NULLs make all non-pending rows exempt from this unique constraint.
 ALTER TABLE `personal_rangantraege` ADD COLUMN `beantragt_personalnummer` INT GENERATED ALWAYS AS (CASE WHEN `status` = 'beantragt' THEN `personalnummer` ELSE NULL END) STORED;
 CREATE UNIQUE INDEX `personal_rangantraege_ein_offener_idx` ON `personal_rangantraege` (`beantragt_personalnummer`);
 
+-- Only one pending DN-change request per source number; closed requests remain historical.
+ALTER TABLE `dienstnummer_antraege` ADD COLUMN `offene_alt_nr` INT GENERATED ALWAYS AS (CASE WHEN `status` = 'beantragt' THEN `alt_nr` ELSE NULL END) STORED;
+CREATE UNIQUE INDEX `dienstnummer_antraege_ein_offener_idx` ON `dienstnummer_antraege` (`offene_alt_nr`);
+
+ALTER TABLE `dienstnummer_antraege` ADD CONSTRAINT `dienstnummer_antraege_antragsteller_id_fkey` FOREIGN KEY (`antragsteller_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE RESTRICT;
+ALTER TABLE `dienstnummer_antraege` ADD CONSTRAINT `dienstnummer_antraege_entscheider_id_fkey` FOREIGN KEY (`entscheider_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE RESTRICT;
 ALTER TABLE `benachrichtigungen_gelesen` ADD CONSTRAINT `benachrichtigungen_gelesen_meldung_id_fkey` FOREIGN KEY (`meldung_id`) REFERENCES `log` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT;
 ALTER TABLE `benachrichtigungen_gelesen` ADD CONSTRAINT `benachrichtigungen_gelesen_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT;
 ALTER TABLE `checklisten_status` ADD CONSTRAINT `checklisten_status_name_fkey` FOREIGN KEY (`name`) REFERENCES `checklisten` (`name`) ON DELETE CASCADE ON UPDATE RESTRICT;

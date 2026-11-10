@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - migration/mysql
+      - migration/mysql8-php-cutover-2026-11-10
   pull_request:
     branches:
       - main
@@ -19,7 +20,7 @@ jobs:
           done
       - name: Confirm reviewed MySQL schema structure
         run: |
-          test "$(grep -c '^CREATE TABLE ' scripts/mysql/mysql8-schema.sql)" -eq 47
-          test "$(grep -c ' FOREIGN KEY (' scripts/mysql/mysql8-schema.sql)" -eq 31
-          test "$(grep -c ' CHECK (' scripts/mysql/mysql8-schema.sql)" -eq 11
+          test "$(grep -c '^CREATE TABLE ' scripts/mysql/mysql8-schema.sql)" -eq 48
+          test "$(grep -c ' FOREIGN KEY (' scripts/mysql/mysql8-schema.sql)" -eq 33
+          test "$(grep -c ' CHECK (' scripts/mysql/mysql8-schema.sql)" -eq 14
           test "$(grep -c '^CREATE TRIGGER ' scripts/mysql/mysql8-revisions.sql)" -eq 8

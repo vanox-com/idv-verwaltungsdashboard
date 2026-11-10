@@ -97,7 +97,7 @@ try{
   '',
   'COMMIT;',
   'SET FOREIGN_KEY_CHECKS = 1;',
-  '-- Nach Import alle 47 Tabellen, Zeilenanzahlen und Funktionen pruefen.',
+  '-- Nach Import alle 48 Tabellen, Zeilenanzahlen und Funktionen pruefen.',
   '-- MySQL-Backend muss separat vollstaendig portiert und getestet werden.',
   ''
  ].join('\n'));
