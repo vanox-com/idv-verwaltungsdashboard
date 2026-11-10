@@ -23,13 +23,29 @@ function googleCredentials(): ?array {
     if(!preg_match('/^[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/D',$id)||strlen($secret)<10)return null;
     return ['id'=>$id,'secret'=>$secret];
 }
+function googlePortalOrigin(): ?string {
+    $value=trim((string)(getenv('IDV_GOOGLE_ORIGIN')?:''));
+    if($value===''||strlen($value)>253)return null;
+    $url=parse_url($value);
+    if(!is_array($url)||($url['scheme']??null)!=='https'||
+       !is_string($url['host']??null)||$url['host']===''||
+       isset($url['user'])||isset($url['pass'])||isset($url['path'])||
+       isset($url['query'])||isset($url['fragment']))
+       return null;
+    $host=strtolower((string)$url['host']);
+    if($host!=='localhost'&&!str_contains($host,'.'))return null;
+    return $value;
+}
 function googleOrigin(): string {
+    $expected=googlePortalOrigin();
+    if($expected===null)fail(503,'Google-OAuth-Portalursprung fehlt oder ist ungültig');
     $origin=(string)($_SERVER['HTTP_ORIGIN']??'');
     $host=(string)($_SERVER['HTTP_HOST']??'');
     $parsed=parse_url($origin);
     $originHost=strtolower((string)($parsed['host']??'')).(isset($parsed['port'])?':'.$parsed['port']:'');
     if(!is_array($parsed)||($parsed['scheme']??'')!=='https'||$originHost!==strtolower($host)||
-        $origin!==('https://'.$host)||($_SERVER['HTTP_X_REQUESTED_WITH']??'')!=='XMLHttpRequest')
+        $origin!==('https://'.$host)||$origin!==$expected||
+        ($_SERVER['HTTP_X_REQUESTED_WITH']??'')!=='XMLHttpRequest')
         fail(403,'Ungültiger Anmeldeursprung');
     return $origin;
 }
