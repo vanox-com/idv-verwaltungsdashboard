@@ -51,7 +51,7 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
         needAdmin($u);$b=body();
         $num=trim((string)($b['dienstnummer']??''));$name=trim((string)($b['anzeigename']??''));
         $role=(string)($b['rolle']??'');$pass=(string)($b['startpasswort']??'');
-        if($num===''||strlen($num)>32||$name===''||mb_strlen($name)>200||!sql('SELECT 1 FROM roles WHERE name=?',[$role]))
+        if($num===''||strlen($num)>32||$name===''||strlen($name)>200||!sql('SELECT 1 FROM roles WHERE name=?',[$role]))
             fail(400,'Dienstnummer, gültiger Name und Rolle nötig');
         if(strlen($pass)<8||strlen($pass)>4096)fail(400,'Startpasswort min. 8 Zeichen');
         if(sql('SELECT 1 FROM users WHERE dienstnummer=?',[$num]))fail(409,'Diese Dienstnummer gibt es schon');
@@ -71,7 +71,7 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
                 if(!is_string($b['rolle'])||!sql('SELECT 1 FROM roles WHERE name=?',[$b['rolle']]))fail(400,'Unbekannte Rolle');
                 $fields[]='rolle=?';$args[]=$b['rolle'];
             }
-            if(isset($b['anzeigename'])){if(!is_string($b['anzeigename'])||mb_strlen($b['anzeigename'])>200)fail(400,'Ungültiger Name');$fields[]='anzeigename=?';$args[]=$b['anzeigename'];}
+            if(isset($b['anzeigename'])){if(!is_string($b['anzeigename'])||strlen($b['anzeigename'])>200)fail(400,'Ungültiger Name');$fields[]='anzeigename=?';$args[]=$b['anzeigename'];}
             if(isset($b['gesperrt'])){$fields[]='gesperrt=?';$args[]=(bool)$b['gesperrt']?1:0;}
             if(!empty($b['neues_passwort'])){
                 if(!is_string($b['neues_passwort'])||strlen($b['neues_passwort'])<8||strlen($b['neues_passwort'])>4096)fail(400,'Passwort min. 8 Zeichen');
@@ -119,7 +119,7 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
         if(!in_array($key,['mitarbeitergruppen','beschaeftigungsarten'],true))fail(400,'Unbekanntes Feld');
         if(!is_array($items)||count($items)<1||count($items)>40||count(array_unique($items))!==count($items))
             fail(400,'Ungültige Auswahlwerte');
-        foreach($items as $item)if(!is_string($item)||trim($item)===''||mb_strlen($item)>80)fail(400,'Ungültige Auswahlwerte');
+        foreach($items as $item)if(!is_string($item)||trim($item)===''||strlen($item)>80)fail(400,'Ungültige Auswahlwerte');
         $req=$key==='beschaeftigungsarten'?['Hauptberuf','Nebenberuf']:['Mittlerer Dienst','Gehobener Dienst','Polizeirat','Leitungsdienst','Nicht zugeordnet'];
         foreach($req as $item)if(!in_array($item,$items,true))fail(400,'Basiswerte dürfen nicht entfernt werden');
         if($key==='beschaeftigungsarten'&&count($items)!==2)fail(400,'Beschäftigungsarten bleiben Hauptberuf und Nebenberuf');
@@ -151,16 +151,18 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
             $seen[$item['id']]=1;
         }
         $json=json_encode($items,JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
-        if($version===0)sql('INSERT IGNORE INTO dashboard_layout(id,items,version) VALUES(1,?,1)',[$json]);
-        else sql('UPDATE dashboard_layout SET items=?,version=version+1,aktualisiert=UTC_TIMESTAMP(6) WHERE id=1 AND version=?',[$json,$version]);
+        $stmt=db()->prepare($version===0
+            ?'INSERT IGNORE INTO dashboard_layout(id,items,version) VALUES(1,?,1)'
+            :'UPDATE dashboard_layout SET items=?,version=version+1,aktualisiert=UTC_TIMESTAMP(6) WHERE id=1 AND version=?');
+        $stmt->execute($version===0?[$json]:[$json,$version]);
+        if($stmt->rowCount()!==1)fail(409,'Das Dashboard wurde bereits geändert. Bitte die Seite neu laden.');
         $r=normalizedRows('SELECT items,version FROM dashboard_layout WHERE id=1',[],['items']);
-        if(!$r||(int)$r[0]['version']!==$version+1)fail(409,'Das Dashboard wurde bereits geändert. Bitte die Seite neu laden.');
         auditAction($u,'Dashboard-Kacheln und Anordnung angepasst');
         respond(200,$r[0]);
     }
     if($uri==='/api/bekanntmachungen'&&$method==='POST'){
         needAdmin($u);$b=body();$title=trim((string)($b['titel']??''));$content=trim((string)($b['inhalt']??''));
-        if($title===''||$content===''||mb_strlen($title)>140||mb_strlen($content)>3000)fail(400,'Titel und Inhalt erforderlich');
+        if($title===''||$content===''||strlen($title)>140||strlen($content)>3000)fail(400,'Titel und Inhalt erforderlich');
         sql('INSERT INTO bekanntmachungen(titel,inhalt) VALUES(?,?)',[$title,$content]);
         auditAction($u,'Bekanntmachung angelegt','add');respond(200,['id'=>(int)db()->lastInsertId()]);
     }
@@ -168,7 +170,7 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
         needAdmin($u);$id=cleanId($m[1]);
         if($method==='PUT'){
             $b=body();$title=trim((string)($b['titel']??''));$content=trim((string)($b['inhalt']??''));
-            if($title===''||$content===''||mb_strlen($title)>140||mb_strlen($content)>3000)fail(400,'Ungültige Bekanntmachung');
+            if($title===''||$content===''||strlen($title)>140||strlen($content)>3000)fail(400,'Ungültige Bekanntmachung');
             sql('UPDATE bekanntmachungen SET titel=?,inhalt=? WHERE id=?',[$title,$content,$id]);
             if(db()->query('SELECT ROW_COUNT()')->fetchColumn()==0)fail(404,'Nicht gefunden');
         }else sql('DELETE FROM bekanntmachungen WHERE id=?',[$id]);
