@@ -4,8 +4,8 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 if [[ $# -ge 1 ]];then out="$1";else out="migration-output/IDV-PHP-MySQL8-STAGING.zip";fi
 mkdir -p "$(dirname "$out")"
-git archive --format=zip --output="$out" HEAD public php scripts/hosting/preflight.php
-for path in public/index.html public/.htaccess public/api.php php/Api.php php/GoogleDocuments.php php/CopNet.php scripts/hosting/preflight.php;do
+git archive --format=zip --output="$out" HEAD public php scripts/hosting/preflight.php HOSTING-SETUP.md
+for path in public/index.html public/.htaccess public/api.php php/Api.php php/GoogleDocuments.php php/CopNet.php scripts/hosting/preflight.php HOSTING-SETUP.md;do
  if ! unzip -Z -1 "$out" | grep -Fqx "$path";then
    echo "Required staged file is missing: $path" >&2
    exit 1
