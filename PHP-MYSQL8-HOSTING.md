@@ -10,7 +10,7 @@ Portal bleibt für den normalen Betrieb unverändert.
 ## Zielhoster
 
 Benötigt: MySQL 8.0.16+ (InnoDB/utf8mb4), PHP 8.2+
-(`pdo_mysql`, `openssl`, `json`), Apache 2.4 mit `mod_rewrite`
+(`pdo_mysql`, `openssl`, `json`, `curl`, `zip`), Apache 2.4 mit `mod_rewrite`
 oder gleichwertiges Rewrite-Routing, HTTPS, Zugriff auf phpMyAdmin.
 
 **DocumentRoot muss `public/` sein**, niemals das Repository-Root.
@@ -41,16 +41,18 @@ Die PostgreSQL-Live-Datenbank wurde **nur lesend** auf 48 Fachtabellen,
 `scripts/mysql/IDV-MySQL8-phpMyAdmin-SETUP.sql` baut in einer neuen
 leeren MySQL-Datenbank 48 Fachtabellen plus die zusätzliche
 `idv_login_attempts`-Sicherheitstabelle, die 33 FKs, 14 CHECK-Regeln
-und acht Revisions-Trigger auf. Der Import und grundlegende PDO-
+und 35 Trigger (acht Revisionstrigger sowie 27 Audit-, Gruppen- und Snapshot-Trigger) auf. Der Import und grundlegende PDO-
 Funktionstests wurden in GitHub Actions gegen echtes MySQL 8 getestet.
 
 Die Bestandsdaten müssen später separat und **vertraulich** übertragen
 werden. Dafür gibt es:
 
 - `npm run mysql:prepare` – PostgreSQL-Schema nur lesend vergleichen
+- `npm run mysql:install-schema` – Schema in absolut leere MySQL-Datenbank installieren, mit `MYSQL_SCHEMA_CONFIRM=EMPTY_NEW_DATABASE`
 - `npm run mysql:export` – lokaler privater SQL-Export für phpMyAdmin
 - `npm run mysql:copy` – direkter PostgreSQL→leere-MySQL-Transfer
 - `npm run mysql:verify` – Datenbestand Zeile für Zeile vergleichen
+- `npm run mysql:cutover` – nach nachgewiesener Freigabe Preflight + Installation + Kopie + Vergleich automatisch
 
 Quell- und Zieldatenbank-Zugangsdaten ausschließlich auf einem berechtigten,
 geschützten Rechner als Umgebungsvariablen setzen. Session-Cookies/Tokens
@@ -59,8 +61,8 @@ werden nicht migriert, Nutzer melden sich neu an.
 ## Auf PHP bereits portierte Bereiche
 
 Login (bcrypt), Sitzungen/Passwortwechsel, Drosselung, differenzierte
-Berechtigungen und Datenausgabe, zentrale Bootstrap-Leseansicht (noch
-nicht identisch zum Node-Bootstrap), Routintermin-Erstellung, Benutzer-
+Berechtigungen und Datenausgabe, zentrale Bootstrap-Leseansicht mit
+Dashboard-Kennzahlen (Gleichwertigkeit wird weiter geprüft), Routintermin-Erstellung, Benutzer-
 und Rollenrechte, Systemoptionen, Dashboard-Layout, Portaldesign,
 Bekanntmachungen, Personalbearbeitung und freie Nummern, Kündigung
 aus Personalstatus mit Snapshot, administrative Personallöschung,
@@ -73,20 +75,30 @@ eine kurze SSE-Verbindung für Mehrbenutzer-Benachrichtigungen.
 und mit sämtlichen Rechteszenarien getestet.** Die MySQL-/
 PHP-Version ist noch nicht funktionsgleich zur Node-Version.
 
-## Kritische Restarbeiten
+## Weiterhin verbindliche Freigabeprüfungen
 
-Insbesondere müssen die noch fehlenden API-Endpunkte und die
-vollständige Ausgabe-/Schreiblogik für Rang/POR, Beförderungen,
-Urkunden, Kündigungs- und Routinearchive, Disziplinarakten,
-Sonderfunktionen, Routine-Anwesenheit, Dokumentenlinks und
-Google-OAuth einschließlich automatischer Audits und
-konfliktgeschützter gleichzeitiger Bearbeitung fertiggestellt werden.
+Die 103 erfassten Original-API-Routen haben inzwischen PHP-Implementierungen
+einschließlich Rang/POR, Beförderungen, Routine- und Kündigungsarchiv, Disziplin,
+Dienstnummernwechsel, Dokumentgenerator, Google-OAuth und Ernennungsurkunden.
+**Implementierung bedeutet noch keine bestätigte 1:1-Funktionsgleichheit.**
+Die MySQL-8-PDO- und HTTP-Integrationstests mit synthetischen Daten bestehen,
+aber alle Rechtekombinationen, konkurrierenden Nutzer, historische Sonderfälle
+und der echte Google-OAuth-Dokumentenlauf müssen separat abgenommen werden.
 
-Nicht implementierte Routen geben absichtlich HTTP 501 zurück;
-**das ist eine Freigabesperre, keine Funktion**.
+Die PHP-Router-Fehlersperre HTTP 501 bleibt für nicht erfasste Routen bestehen.
+Ein erfolgreicher Datenimport hebt die Freigabesperre nicht auf.
 
-Die vollständige, verbindliche Prüfreihenfolge steht in
-`docs/UMZUG-STARTSIGNAL.md`. Erst nach grünem Funktionstest
-und finaler Datenprüfung wird der Anbieter gewechselt; bis dahin
-keine DNS-Änderung, keine Umstellung von `main` und keine Veränderung
-der produktiven PostgreSQL-Datenbank.
+Es gibt im Repository keine `package-lock.json`; für die einmaligen
+lokalen Migrationswerkzeuge ist vorerst `npm install --ignore-scripts --no-package-lock`
+vorgesehen. Dies ist weniger reproduzierbar als `npm ci`; eine geprüfte
+Sperrdatei wäre für einen produktiven Cutover vorzuziehen.
+
+Für den automatischen Ablauf wird die Ziel-Datenbank **leer ohne Tabellen**
+bereitgestellt und **nicht vorher manuell** mit der SQL-Setupdatei befüllt.
+MySQL-DDL ist nicht vollständig transaktional: bei einem fehlerhaften
+Teilimport die gesamte neue Ziel-Datenbank neu anlegen.
+
+Die verbindliche Prüfreihenfolge und der Rückfallplan stehen in
+`docs/UMZUG-STARTSIGNAL.md`. Bis zur Freigabe keine DNS-Änderung,
+keine Umstellung von `main` und keine Veränderung der produktiven
+PostgreSQL-Datenbank.
