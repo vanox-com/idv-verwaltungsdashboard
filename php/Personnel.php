@@ -2,9 +2,9 @@
 declare(strict_types=1);
 namespace IDV;
 
-function dnEmployment(int $n): string { return $n>=51&&$n<=60?'Nebenberuf':'Hauptberuf'; }
+function dnEmployment(int $n): string { return $n>=50&&$n<=60?'Nebenberuf':'Hauptberuf'; }
 function dnOccupied(string $s): bool {
-    return in_array(strtolower(trim($s)),['aktiv','abgemeldet','inaktiv','suspendiert'],true);
+    return in_array(strtolower(trim($s)),['aktiv','abgemeldet','inaktiv','suspendiert','gekündigt'],true);
 }
 function sensitiveFields(array $u,array $fields): void {
     $confidential=['geburtsdatum','handy','arbeitsvertrag','ernennungsurkunde',
@@ -102,8 +102,8 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
             if(isset($logins[$n]))continue;
             $p=$people[$n]??null;
             $free=!$p||$p['administrativ_geloescht_am']!==null||
-                (!dnOccupied((string)$p['status'])&&(trim((string)$p['status'])!=='Gekündigt'||isset($terminations[$n])));
-            if($free){if($n<=50)$main[]=$n;else $side[]=$n;}
+                !dnOccupied((string)$p['status']);
+            if($free){if($n<50)$main[]=$n;else $side[]=$n;}
         }
         respond(200,['hauptberuf'=>$main,'nebenberuf'=>$side]);
     }
