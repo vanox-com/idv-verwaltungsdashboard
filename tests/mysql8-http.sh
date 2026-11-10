@@ -68,6 +68,39 @@ if ! jq -e --arg p "$longsecret" '.passwort==$p' "$tmp/body" >/dev/null; then
   echo "CopNet ciphertext failed 480-byte encryption roundtrip" >&2
   exit 1
 fi
+# Full feature smoke on disposable synthetic MySQL data.
+check GET /api/akten/1/laufbahn 200
+check GET /api/aenderungsvergleich 200
+check GET /api/papierkorb 200
+check GET /api/kuendigungen/archiv 200
+check GET /api/routine/1/archiv 200
+check GET /api/rangantraege 200
+check GET /api/rangantraege/historie 200
+check GET /api/por/offen 200
+check GET /api/befricht 200
+check GET /api/dienstnummer-antraege 200
+check GET /api/dokumentgenerator/status 200
+check GET /api/dokumentgenerator/archiv 200
+check GET /api/urkunden/status 200
+check PATCH /api/befricht/Polizeimeisteranw%C3%A4rter 200 '{"tage":null,"bemerkung":"Testregel","grund":"Prüfungsbasiert"}'
+check PATCH /api/disziplin/1 200 '{"slots":[null,null,null,null,null,null],"bemerkung":"Test only"}' 0
+check PATCH /api/sonder/1 200 '{"werte":{},"leitung":"Tester","sonstige":""}' 0
+check PATCH /api/bef/pruefung/1 200 '{"bestanden":true}'
+check POST /api/rangantraege 200 '{"personalnummer":1,"beantragter_rang":"Polizeimeister","begruendung":"Testantrag"}'
+check POST /api/rangantraege/1/entscheidung 200 '{"genehmigt":false}'
+check PATCH /api/por/1 200 '{"status":"genehmigt","datum":"2026-11-10","notiz":"Geprüft"}'
+check POST /api/befoerdern 200 '{"nr":1}'
+check POST /api/routine/1/anwesenheit 200 '{"nr":1,"tagIndex":0,"anwesend":true}' 1
+check POST /api/routine/1/archiv 200 '{"datum":"2026-11-04"}'
+check GET /api/routine/1/archiv 200
+check POST /api/routine/1/archiv/1/wiederherstellen 200 '{}'
+check POST /api/kuendigung 200 '{"nr":1,"vorname":"Test","nachname":"Person","rang":"PM","grund":"CI Test"}'
+check GET /api/kuendigungen/1/akte 200
+check PATCH /api/kuendigung/1 200 '{"waffe":"Informiert"}' 1
+check POST /api/dienstnummer-antraege 201 '{"alt_nr":1,"ziel_nr":3,"art":"personal","begruendung":"Test ordnungsgemaesser Wechsel"}'
+check GET /api/dienstnummer-antraege 200
+check POST /api/dienstnummer-antraege/1/entscheidung 200 '{"status":"genehmigt","notiz":"Freigabe zum Test"}'
+check GET /api/akten/3/laufbahn 200
 check POST /api/logout 200
 check GET /api/me 401
 echo "Real MySQL 8 + PHP HTTP integration smoke succeeded."
