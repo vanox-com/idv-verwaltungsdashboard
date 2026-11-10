@@ -120,6 +120,8 @@ jq -e 'any(.[]; .bereich=="personal" and .benutzer=="Test admin" and
 # Method/path contract for all 103 original Node APIs, including protected routes.
 # This runs only against this disposable MySQL CI fixture.
 bash tests/mysql8-api-routes.sh "$tmp/cookies" "http://127.0.0.1:8777"
+# Stateful workflows catch bugs that route-only probes do not.
+bash tests/mysql8-functional-flows.sh "$tmp/cookies" "http://127.0.0.1:8777"
 # Two independent authenticated sessions racing on the same personnel revision.
 # One update must commit; the other must receive 409 without overwriting.
 check GET /api/bootstrap 200
