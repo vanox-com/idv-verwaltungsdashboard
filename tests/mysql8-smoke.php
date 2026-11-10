@@ -18,10 +18,17 @@ IDV\sql("INSERT INTO roles(name,farbe,sensibel) VALUES('Polizeirat','#112233',0)
 foreach(['pers','chk','backup','rechtesimulator','geb','jub','org','texte','mitteilungen','kue','sonder','dis','bef','design','por','ranghistorie','rout','routarchiv','kuearchiv','befricht','papierkorb','persverlauf','log','urkunden','praktika'] as $module)
     IDV\sql('INSERT INTO role_perms(rolle,modul,stufe) VALUES(?,?,2)',['Administrator',$module]);
 IDV\sql("INSERT INTO role_perms(rolle,modul,stufe) VALUES('Polizeirat','chk',1)");
+IDV\sql("INSERT INTO role_perms(rolle,modul,stufe) VALUES('Polizeirat','bef',1)");
+IDV\sql("INSERT INTO role_perms(rolle,modul,stufe) VALUES('Polizeirat','rout',1)");
+IDV\sql("INSERT INTO role_perms(rolle,modul,stufe) VALUES('Polizeirat','pers',1)");
+IDV\sql("INSERT INTO role_perms(rolle,modul,stufe) VALUES('Polizeirat','por',1)");
 $password=password_hash('only-ci-example-not-live',PASSWORD_BCRYPT,['cost'=>4]);
 IDV\sql("INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern)
          VALUES('00','Test admin','Administrator',?,0)",[$password]);
 $uid=(int)$pdo->lastInsertId();
+$councilPass=password_hash('rat-ci-example-not-live',PASSWORD_BCRYPT,['cost'=>4]);
+IDV\sql("INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern)
+         VALUES('04','Test Council','Polizeirat',?,0)",[$councilPass]);
 assertThat(password_verify('only-ci-example-not-live',$password),'bcrypt compatibility');
 IDV\sql("INSERT INTO personal(personalnummer,vorname,nachname,status,dienstgrad) VALUES(1,'Test','Person','Aktiv','Polizeimeisteranwärter')");
 IDV\sql("INSERT INTO raenge(name,abk,tage,sortierung,naechster_rang) VALUES('Polizeimeisteranwärter','PMA',NULL,1,'Polizeimeister')");
