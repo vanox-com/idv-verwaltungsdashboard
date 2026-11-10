@@ -11,8 +11,8 @@ $pdo=IDV\db();
 assertThat($pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql','PDO is not using MySQL');
 IDV\sql("INSERT INTO roles(name,farbe,sensibel) VALUES('Administrator','#000000',1)");
 IDV\sql("INSERT INTO roles(name,farbe,sensibel) VALUES('Polizeirat','#112233',0)");
-IDV\sql("INSERT INTO role_perms(rolle,modul,stufe) VALUES('Administrator','pers',2)");
-IDV\sql("INSERT INTO role_perms(rolle,modul,stufe) VALUES('Administrator','chk',2)");
+foreach(['pers','chk','backup','rechtesimulator','geb','jub','org','texte','mitteilungen','kue','sonder','dis','bef','design'] as $module)
+    IDV\sql('INSERT INTO role_perms(rolle,modul,stufe) VALUES(?,?,2)',['Administrator',$module]);
 IDV\sql("INSERT INTO role_perms(rolle,modul,stufe) VALUES('Polizeirat','chk',1)");
 $password=password_hash('only-ci-example-not-live',PASSWORD_BCRYPT,['cost'=>4]);
 IDV\sql("INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern)
