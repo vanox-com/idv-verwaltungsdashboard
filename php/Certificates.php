@@ -26,7 +26,9 @@ function dispatchCertificates(array $u,string $method,string $uri): bool {
         needRight($u,'bef');
         if(!canIssueCertificate($u))fail(403,'Kein Recht für diese Beförderungsaktion');
         $google=googleCredentials();
-        respond(200,['eingerichtet'=>$google!==null,'clientId'=>$google['id']??null,'modus'=>'persoenlich']);
+        $origin=googlePortalOrigin();
+        respond(200,['eingerichtet'=>$google!==null&&$origin!==null,
+            'clientId'=>$google['id']??null,'origin'=>$origin,'modus'=>'persoenlich']);
     }
     if($method==='POST'&&preg_match('#^/api/urkunden/polizeimeister/([1-9][0-9]*)$#D',$uri,$m)){
         needRight($u,'bef');if(!canIssueCertificate($u))fail(403,'Kein Recht für diese Beförderungsaktion');
