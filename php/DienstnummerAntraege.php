@@ -69,11 +69,11 @@ function dnReqApply(array $req,array $context,array $u): void {
         $allowed=['copnet_zugaenge','disziplin','generierte_dokumente',
             'personal_fristen','personal_rangantraege','sonderfunktionen'];
         foreach($refs as $fk)
-            if(!in_array($fk['table_name'],$allowed,true)||$fk['column_name']!=='personalnummer')
+            if(!in_array($fk['tablename'],$allowed,true)||$fk['fieldname']!=='personalnummer')
                 fail(409,'Unbekannte Personal-Fremdschlüsselreferenz. Änderung abgebrochen');
         if($context['target'])archivePreviousNumber($to,$context['target'],(int)$u['id']);
-        $columns=array_column(sql("SELECT column_name FROM information_schema.columns
-            WHERE table_schema=DATABASE() AND table_name='personal' ORDER BY ordinal_position"),'column_name');
+        $columns=array_column(sql("SELECT column_name AS fieldname FROM information_schema.columns
+            WHERE table_schema=DATABASE() AND table_name='personal' ORDER BY ordinal_position"),'fieldname');
         $columns=array_values(array_filter($columns,
             fn($c)=>!in_array($c,['personalnummer','row_revision'],true)));
         foreach($columns as $c)if(!preg_match('/^[a-z_]+$/D',$c))
@@ -95,7 +95,7 @@ function dnReqApply(array $req,array $context,array $u): void {
         }
         sql('UPDATE personal SET beschaeftigungsart=? WHERE personalnummer=?',[dnEmployment($to),$to]);
         foreach($refs as $fk) {
-            $table=$fk['table_name'];
+            $table=$fk['tablename'];
             if(!in_array($table,$allowed,true))throw new \LogicException('Unknown FK table');
             sql('UPDATE '.chr(96).$table.chr(96).' SET personalnummer=? WHERE personalnummer=?',[$to,$from]);
         }
