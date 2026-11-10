@@ -1,0 +1,529 @@
+{
+  "original_route_count": 103,
+  "source_paths": [
+    "src/server.js",
+    "src/aktenFeatures.js",
+    "src/befRichtApi.js",
+    "src/dienstnummerAntraege.js",
+    "src/dokumentApi.js",
+    "src/kuendigungsArchiv.js",
+    "src/routineArchiv.js"
+  ],
+  "routes": [
+    {
+      "method": "GET",
+      "url": "/api/changes",
+      "skip": true
+    },
+    {
+      "method": "POST",
+      "url": "/api/login",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/logout",
+      "skip": true
+    },
+    {
+      "method": "GET",
+      "url": "/api/me",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/passwort",
+      "skip": false
+    },
+    {
+      "method": "PUT",
+      "url": "/api/dashboard-layout",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/bekanntmachungen",
+      "skip": false
+    },
+    {
+      "method": "PUT",
+      "url": "/api/bekanntmachungen/2147483647",
+      "skip": false
+    },
+    {
+      "method": "DELETE",
+      "url": "/api/bekanntmachungen/2147483647",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/system-optionen",
+      "skip": false
+    },
+    {
+      "method": "PUT",
+      "url": "/api/system-optionen/__unknown__",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/personal/2147483647/verlauf",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/mitteilungen",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/mitteilungen/empfaenger",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/mitteilungen",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/mitteilungen/verwaltung",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/mitteilungen/2147483647",
+      "skip": false
+    },
+    {
+      "method": "DELETE",
+      "url": "/api/mitteilungen/2147483647",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/mitteilungen/2147483647/ausblenden",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/personalstatistik",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/backup-status",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/portal-design",
+      "skip": false
+    },
+    {
+      "method": "PUT",
+      "url": "/api/portal-design",
+      "skip": false
+    },
+    {
+      "method": "PUT",
+      "url": "/api/portal-design/personal",
+      "skip": false
+    },
+    {
+      "method": "DELETE",
+      "url": "/api/portal-design/personal",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/rechtesimulator",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/rechtesimulator/2147483647",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/personalentwicklung",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/bootstrap",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/personal/freie-nummern",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/personal/2147483647/kuendigung",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/personal/2147483647",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/personal",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/copnet/2147483647",
+      "skip": false
+    },
+    {
+      "method": "PUT",
+      "url": "/api/copnet/2147483647",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/funktion",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/sonder/2147483647",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/disziplin/2147483647",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/routine/2147483647/anwesenheit",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/routine/2147483647/termin",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/routine/2147483647/teilnehmer",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/routine/2147483647/teilnehmer/2147483647",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/sonderzahlung/2147483647",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/rangantraege",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/rangantraege/historie",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/rangantraege",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/rangantraege/2147483647/entscheidung",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/por/offen",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/por/2147483647",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/befoerdern",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/urkunden/status",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/urkunden/polizeimeister/2147483647",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/kuendigung",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/kuendigung/2147483647/dokumente",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/kuendigung/2147483647/dokument",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/kuendigung/2147483647",
+      "skip": false
+    },
+    {
+      "method": "DELETE",
+      "url": "/api/kuendigung/2147483647",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/checklisten",
+      "skip": false
+    },
+    {
+      "method": "PUT",
+      "url": "/api/checklisten/__unknown__",
+      "skip": false
+    },
+    {
+      "method": "DELETE",
+      "url": "/api/checklisten/__unknown__",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/checklisten/__unknown__/punkte/2147483647",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/checklisten/reset",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/sperrfristen",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/sperrfristen",
+      "skip": false
+    },
+    {
+      "method": "DELETE",
+      "url": "/api/sperrfristen/2147483647",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/blacklist",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/blacklist",
+      "skip": false
+    },
+    {
+      "method": "DELETE",
+      "url": "/api/blacklist/2147483647",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/geburtstage",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/dienstjubilaeen",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/personal/2147483647/administrativ-loeschen",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/users",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/users",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/users/2147483647",
+      "skip": false
+    },
+    {
+      "method": "DELETE",
+      "url": "/api/users/2147483647",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/rollen/__unknown__/recht/pers",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/users/2147483647/recht/pers",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/organigramm",
+      "skip": false
+    },
+    {
+      "method": "PUT",
+      "url": "/api/organigramm",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/textbausteine",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/textbausteine",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/textbausteine/__unknown__",
+      "skip": false
+    },
+    {
+      "method": "DELETE",
+      "url": "/api/textbausteine/__unknown__",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/personal-audit",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/log",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/akten/2147483647/laufbahn",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/aenderungsvergleich",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/papierkorb",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/papierkorb/2147483647/wiederherstellen",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/bef/pruefung/2147483647",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/befricht",
+      "skip": false
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/befricht/__unknown__",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/dienstnummer-antraege",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/dienstnummer-antraege",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/dienstnummer-antraege/2147483647/entscheidung",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/dokumentgenerator/status",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/dokumentgenerator/archiv",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/dokumentgenerator/erstellen",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/kuendigungen/archiv",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/kuendigungen/2147483647/akte",
+      "skip": false
+    },
+    {
+      "method": "GET",
+      "url": "/api/routine/2147483647/archiv",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/routine/2147483647/archiv",
+      "skip": false
+    },
+    {
+      "method": "POST",
+      "url": "/api/routine/2147483647/archiv/2147483647/wiederherstellen",
+      "skip": false
+    }
+  ]
+}
