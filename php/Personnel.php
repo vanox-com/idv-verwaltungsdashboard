@@ -159,7 +159,8 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
             db()->commit();
         }catch(\PDOException $e){
             if(db()->inTransaction())db()->rollBack();
-            if($e->getCode()==='23000')fail(409,'Dienstnummer inzwischen belegt. Bitte freie Nummern neu laden.');
+            if($e->getCode()==='23000' && (int)($e->errorInfo[1]??0)===1062)
+                fail(409,'Dienstnummer inzwischen belegt. Bitte freie Nummern neu laden.');
             throw $e;
         }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
         $result=sql('SELECT personalnummer,vorname,nachname,gruppe,status,dienstgrad FROM personal WHERE personalnummer=?',[$n]);
