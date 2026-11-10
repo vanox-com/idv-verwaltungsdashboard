@@ -27,11 +27,29 @@ Im Secret-Store des Hosters (nicht in GitHub) konfigurieren:
 | `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` | neue DB, eingeschränkter Nutzer |
 | `MYSQL_SSL_CA` | optional Pfad zur vertrauenswürdigen TLS-CA |
 | `IDV_LOGIN_RATE_SECRET` | sicheres Secret für Login-Drosselung |
+| `IDV_FORCE_HTTPS` | Nur bei HTTPS-Terminierung vor PHP (Reverse Proxy) auf `1` setzen, damit Session-Cookies und Origin-Prüfung zuverlässig HTTPS erzwingen; niemals ungeprüfte `X-Forwarded-Proto`-Header vertrauen |
 | `COPNET_ENCRYPTION_KEY` | derselbe 64-stellige Hex-Schlüssel wie im bisherigen System; erforderlich für bestehende CopNet-Zugänge |
 
 Die bestehende Google-OAuth-Konfiguration und neue Redirect-URI müssen
 vor dem Go-Live ebenfalls geprüft werden. Insbesondere Dokumentgeneratoren
 dürfen nicht heimlich von bisherigen Google-Drive-Verknüpfungen abweichen.
+
+## Anmelde- und Sitzungs-Sicherheit
+
+Nur **Administrator**, **Leitungsdienst** und **Polizeirat** können sich
+am Panel anmelden. Ein Konto mit einer anderen Rolle kann auch mit
+korrektem Kennwort keine Sitzung eröffnen; nach einer Rollenänderung
+wird eine bestehende Sitzung beim nächsten Zugriff verweigert.
+
+Bei direktem HTTPS erkennt PHP den sicheren Aufruf automatisch.
+Wenn ein vertrauenswürdiger Proxy TLS terminiert und PHP intern nur HTTP
+sieht, **serverseitig** `IDV_FORCE_HTTPS=1` setzen. Öffentliche Requests
+müssen am Proxy selbst durchgängig HTTPS nutzen; die Einstellung darf
+nicht aus eingehenden HTTP-Headers abgeleitet werden.
+
+Vor dem produktiven Umzug auch die PHP-Sitzungseinstellungen,
+HTTPS-Weiterleitungen und die nur für den Hoster geltenden Datenbankrechte
+im tatsächlichen Staging prüfen.
 
 ## Datenbank
 
