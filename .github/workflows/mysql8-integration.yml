@@ -39,6 +39,24 @@ jobs:
           test "$(mysql --batch --skip-column-names -h127.0.0.1 -uroot -ptest-root-password -e "SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema='idv_ci'")" -eq 33
           test "$(mysql --batch --skip-column-names -h127.0.0.1 -uroot -ptest-root-password -e "SELECT COUNT(*) FROM information_schema.check_constraints WHERE constraint_schema='idv_ci'")" -eq 14
           test "$(mysql --batch --skip-column-names -h127.0.0.1 -uroot -ptest-root-password -e "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema='idv_ci'")" -eq 35
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install migration-only dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify one-command installer on new empty MySQL 8 schema
+        env:
+          MYSQL_DESTINATION_URL: mysql://root:test-root-password@127.0.0.1:3306/idv_setup_ci
+          MYSQL_SCHEMA_CONFIRM: EMPTY_NEW_DATABASE
+        run: |
+          mysql -h127.0.0.1 -uroot -ptest-root-password -e "CREATE DATABASE idv_setup_ci CHARACTER SET utf8mb4 COLLATE utf8mb4_bin"
+          npm run mysql:install-schema
+          if npm run mysql:install-schema; then
+            echo "Installer must refuse to touch a populated schema" >&2
+            exit 1
+          fi
+          test "$(mysql -h127.0.0.1 -uroot -ptest-root-password --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema='idv_setup_ci'")" -eq 35
       - name: Run PHP/PDO database smoke test with artificial nonpersonal records
         env:
           MYSQL_HOST: 127.0.0.1
