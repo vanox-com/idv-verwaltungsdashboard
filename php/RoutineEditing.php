@@ -36,7 +36,8 @@ function dispatchRoutineEditing(array $u,string $method,string $uri): bool {
     if($method==='POST'&&preg_match('#^/api/routine/([1-9][0-9]*)/(anwesenheit|teilnehmer)$#D',$uri,$m)||
        $method==='PATCH'&&preg_match('#^/api/routine/([1-9][0-9]*)/teilnehmer/([1-9][0-9]*)$#D',$uri,$m)){
         needRight($u,'rout',2);$id=cleanId($m[1]);$revision=expectedRevision();$b=body();
-        $action=$m[2];$routeNr=$method==='PATCH'?cleanId($m[3]):null;
+        $action=$method==='PATCH'?'teilnehmer':$m[2];
+        $routeNr=$method==='PATCH'?cleanId($m[2]):null;
         $result=routineMutation($u,$id,$revision,function(array &$days,array &$people) use($id,$b,$action,$routeNr):string {
             $n=$routeNr??filter_var($b['nr']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
             if(!$n)fail(400,'Ungültige Personalnummer');
