@@ -4,15 +4,15 @@ Stand: 10. November 2026. **Noch keine Freigabe zur produktiven Umschaltung.**
 
 ## Ziel
 - Heute weiterhin produktiv: `main` → Render / Node.js / PostgreSQL / `idv-ppverwaltung.de`.
-- Neuer Hoster: PHP 8.2+ (PDO-MySQL, OpenSSL) und MySQL 8.0.16+, Apache-Rewrite.
+- Neuer Hoster: PHP 8.2+ (PDO-MySQL, OpenSSL, cURL, ZIP) und MySQL 8.0.16+, Apache-Rewrite.
 - Vorbereitung ausschließlich im Branch `migration/mysql8-php-cutover-2026-11-10`; bei Push keine Änderungen auf Render.
 - Während Entwicklung bleibt die alte Datenbank unverändert. **Keine personenbezogenen Daten, Passworthashes oder Geheimnisse nach GitHub committen.**
-- MySQL-Struktur der Quelle: 48 Fachtabellen. Zusätzliches `idv_login_attempts` macht 49 MySQL-Tabellen; 33 Fremdschlüssel, 14 CHECK-Constraints, 8 Revisions-Trigger.
+- MySQL-Struktur der Quelle: 48 Fachtabellen. Zusätzliches `idv_login_attempts` macht 49 MySQL-Tabellen; 33 Fremdschlüssel, 14 CHECK-Constraints und 35 Trigger (8 Revisions- und 27 Geschäfts-/Historien-Trigger).
 
 ## Schritt 0 – Verbindliche Freigabesperre
 
 Das GitHub-Repository ist **nicht allein durch einen erfolgreichen Datenbankimport bereit zum Umzug**.
-Vor einem produktiven Wechsel müssen alle 102+ Node-API-Endpunkte und ihre Rechte,
+Vor einem produktiven Wechsel müssen alle 103 erfassten Node-API-Endpunkte und ihre Rechte,
 Transaktionen, Rückgabewerte und Sicherheit im PHP-Backend funktional abgedeckt sein;
 samt Rollen, Dienstnummern, Checklisten, Personal, Rang/POR, Kündigungen,
 Kündigungsarchiv, Routinen, Routinearchiv, Disziplinar, CopNet, Protokoll,
@@ -20,8 +20,8 @@ Papierkorb, Dokumentengenerator/Google-OAuth, Design, Livestream und Login.
 
 Aktuell liefert der PHP-Router bei fehlenden Endpunkten absichtlich HTTP 501. Die
 PHP-Bootstrap-Daten sind noch nicht 1:1 mit dem Node-Bootstrap identisch.
-PostgreSQL-Trigger für Audits und besondere Geschäftsregeln sind noch nicht
-vollständig umgesetzt. **Deshalb noch kein Go-Live.**
+Die MySQL-Trigger sind implementiert; ihre vollständige Gleichwertigkeit mit den
+bisherigen PostgreSQL-Geschäftsregeln ist noch nicht abschließend nachgewiesen. **Deshalb noch kein Go-Live.**
 
 Eine Freigabe erfolgt erst nach vollständigem grünen Funktions-, Security-
 und Mehrbenutzertest und einem bestätigten Rückfallplan.
@@ -34,7 +34,7 @@ nachgewiesener Testabdeckung angepasst werden.
 
 ## Schritt 1 – Anforderungen vom neuen Hoster (später)
 
-- PHP 8.2+, Extensions `pdo_mysql`, `openssl`, `json`; Apache 2.4
+- PHP 8.2+, Extensions `pdo_mysql`, `openssl`, `json`, `curl`, `zip`; Apache 2.4
   mit `mod_rewrite`/aktivierter `.htaccess`; HTTPS und TLS-Zertifikat.
 - DocumentRoot auf **`public/`**, niemals auf das Repository-Root.
 - MySQL 8.0.16+, leere neue Datenbank `utf8mb4`/`InnoDB`, phpMyAdmin.
@@ -74,28 +74,42 @@ nachgewiesener Testabdeckung angepasst werden.
    und alle laufenden Schreibtransaktionen auslaufen lassen.
    Vorher vollständiges PostgreSQL-Backup inkl. Zeitpunkt aufbewahren.
 2. Auf einem berechtigten lokalen Rechner das Repository auf den
-   freigegebenen Migrationsstand auschecken und `npm ci` ausführen.
+   freigegebenen Migrationsstand auschecken und `npm install --ignore-scripts --no-package-lock` ausführen.
    Node wird nur für den einmaligen Datenbanktransfer am Rechner benötigt,
    nicht auf dem neuen PHP-Webserver.
-3. In **eine neue, leere** MySQL-DB die Datei
-   `scripts/mysql/IDV-MySQL8-phpMyAdmin-SETUP.sql`
-   importieren (48 Quelltabellen + Login-Sicherheitstabelle).
-4. Die vertraulichen Daten mit einem der vorhandenen Wege übertragen:
-   - `SOURCE_DATABASE_URL=… MYSQL_DESTINATION_URL=… MYSQL_COPY_CONFIRM=EMPTY_NEW_DATABASE npm run mysql:copy`
-     (direkt, nur in vollständig leere Tabellen)
-   - oder `SOURCE_DATABASE_URL=… npm run mysql:export`, die lokale private
-     SQL-Datei geschützt über phpMyAdmin importieren.
-     Die Datei ist **streng vertraulich** und wird nicht in Git gespeichert.
-5. Alternativ zu den einzelnen Befehlen gibt es nach vollständiger Freigabe
-   **einen** gesteuerten Lauf:
-   `SOURCE_DATABASE_URL=… MYSQL_DESTINATION_URL=… MYSQL_COPY_CONFIRM=EMPTY_NEW_DATABASE IDV_WRITES_STOPPED=YES IDV_CUTOVER_CONFIRMED=I_AUTHORIZE_DATA_MIGRATION npm run mysql:cutover`.
-   Dieser bricht bei jedem Fehler ab, prüft zuerst das Quellschema,
-   kopiert nur in eine vollständig leere Zieldatenbank und vergleicht
-   die Daten anschließend automatisch.
-   `SOURCE_DATABASE_URL=… MYSQL_DESTINATION_URL=… npm run mysql:verify`
-   muss ohne Abweichung abschließen. Alle Daten einschließlich
-   Sonderrechte, Historien und Dokumentlinks vergleichen.
-   Sitzungen werden absichtlich **nicht übernommen**: erneuter Login nötig.
+3. **Bevorzugt: einmaliger freigegebener Automatik-Lauf in eine völlig leere MySQL-Datenbank.**
+   Die Ziel-Datenbank muss **existieren, aber noch keine Tabellen enthalten**.
+   **Nicht vorher manuell die SQL-Setupdatei importieren.** Der Befehl
+   prüft die PostgreSQL-Struktur, installiert das MySQL-8-Schema mit allen
+   Triggern, kopiert die vertraulichen Daten und prüft anschließend jeden
+   Datensatz auf Übereinstimmung:
+
+   ```bash
+   SOURCE_DATABASE_URL="postgresql://..." \
+   MYSQL_DESTINATION_URL="mysql://..." \
+   MYSQL_SCHEMA_CONFIRM=EMPTY_NEW_DATABASE \
+   MYSQL_COPY_CONFIRM=EMPTY_NEW_DATABASE \
+   IDV_WRITES_STOPPED=YES \
+   IDV_CUTOVER_CONFIRMED=I_AUTHORIZE_DATA_MIGRATION \
+   npm run mysql:cutover
+   ```
+
+   Solange `cutover-readiness.json` offene Prüfpunkte meldet, verweigert
+   das Skript den Lauf. Zugangsdaten nur im geschützten Terminal bzw.
+   Secret-Store verwenden, **niemals in GitHub speichern**.
+
+4. **Alternativ: manueller phpMyAdmin-Weg** – jedoch nicht mit Schritt 3
+   kombinieren: `IDV-MySQL8-phpMyAdmin-SETUP.sql` einmalig in eine leere
+   Datenbank importieren; danach entweder `npm run mysql:copy` oder
+   `npm run mysql:export` und den lokalen, vertraulichen Datenexport
+   über phpMyAdmin importieren. Im Anschluss zwingend
+   `npm run mysql:verify` ausführen.
+
+5. Alle Daten einschließlich Sonderrechte, Historien und Dokumentlinks
+   müssen ohne Abweichungen verglichen sein. Sitzungen werden absichtlich
+   **nicht übernommen**: Alle Benutzer müssen sich erneut anmelden.
+   Nach einem fehlerhaften **Teilimport** die Ziel-Datenbank vollständig
+   neu erstellen; MySQL-DDL kann nicht transaktional zurückgerollt werden.
 6. Staging auf den finalen Datenstand setzen, alle kritischen Schreib-/Lesefälle,
    Login, CopNet-Entschlüsselung, personenbezogene Ansichten und Live-Updates testen.
 7. Erst danach HTTPS-Zertifikat und DNS der Domain auf den neuen Hoster
