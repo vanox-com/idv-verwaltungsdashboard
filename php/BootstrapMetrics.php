@@ -109,6 +109,7 @@ function bootstrapMetrics(array &$d,array $people,array $current,array $rights):
     $d['dashboard']['summary']['disziplinFaelle']=$disciplinary;
     $due=[];$ranks=[];
     if($has('bef')){
+        require_once __DIR__.'/PromotionGuidelines.php';
         foreach($d['raenge'] as $rank)$ranks[$rank['name']]=$rank;
         foreach($current as $p){
             $rank=$ranks[$p['dienstgrad']??'']??null;
