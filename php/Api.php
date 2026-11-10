@@ -230,6 +230,8 @@ function run(): void {
         if(dispatchSettings($u,$method,$uri)) return;
         require_once __DIR__.'/Checklists.php';
         if(dispatchChecklists($u,$method,$uri)) return;
+        require_once __DIR__.'/Personnel.php';
+        if(dispatchPersonnel($u,$method,$uri)) return;
         fail(501,'Diese Funktion wurde noch nicht auf die MySQL/PHP-Version umgestellt');
     }catch(PDOException $e){
         error_log('[IDV PHP] Database failure: '.$e->getCode());
