@@ -45,6 +45,10 @@ jobs:
           for f in public/api.php php/*.php; do php -l "$f" || exit 1; done
       - name: Test Word template editing and Google client host restrictions
         run: php tests/mysql8-docx.php
+      - name: Validate staging Google origin security
+        run: php tests/mysql8-google-origin.php
+      - name: Shell-check hosting deployment tools
+        run: bash -n scripts/hosting/*.sh
       - name: Verify HTTPS session security on direct and proxy PHP hosts
         run: php tests/mysql8-https.php
       - name: Import complete reviewed phpMyAdmin SQL into real MySQL 8
@@ -61,6 +65,10 @@ jobs:
           node-version: '20'
       - name: Install migration-only dependencies
         run: npm install --ignore-scripts --no-audit --no-fund --no-package-lock
+      - name: Verify legacy Node CopNet ciphertext decrypts in PHP
+        env:
+          COPNET_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
+        run: node tests/mysql8-copnet-node-vector.mjs | php tests/mysql8-copnet-compat.php
       - name: Validate migration script syntax before any data movement
         run: |
           for f in scripts/mysql/*.mjs; do node --check "$f" || exit 1; done
@@ -107,3 +115,27 @@ jobs:
           COPNET_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
           IDV_LOGIN_RATE_SECRET: 'ci-fixture-secret-not-for-production-1234'
         run: bash tests/mysql8-http.sh
+      - name: Read-only PHP/MySQL/OAuth/CopNet staging preflight
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_DATABASE: idv_ci
+          MYSQL_USER: root
+          MYSQL_PASSWORD: test-root-password
+          COPNET_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
+          GOOGLE_OAUTH_CLIENT_ID: ci-example.apps.googleusercontent.com
+          GOOGLE_OAUTH_CLIENT_SECRET: ci-only-fake-google-secret-no-auth
+          IDV_GOOGLE_ORIGIN: https://staging.example.test
+          IDV_LOGIN_RATE_SECRET: ci-fixture-secret-not-for-production-1234
+          IDV_FORCE_HTTPS: '0'
+        run: php scripts/hosting/preflight.php --json
+      - name: Assemble sanitized PHP staging package
+        run: bash scripts/hosting/build-package.sh
+      - name: Keep staging code package as a GitHub Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: idv-php-mysql8-staging
+          path: migration-output/IDV-PHP-MySQL8-STAGING.zip
+          if-no-files-found: error
+          retention-days: 7
+
