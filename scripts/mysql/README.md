@@ -1,7 +1,7 @@
 # MySQL-8-Migration für das IDV-Verwaltungsdashboard
 
 **Ziel:** Oracle MySQL **8.0.16 oder höher**, InnoDB, `utf8mb4`, Import via phpMyAdmin.  
-**Arbeitsbranch:** `migration/mysql` (nicht produktiv).  
+**Arbeitsbranch:** `migration/mysql8-php-cutover-2026-11-10` (nicht produktiv).  
 **Live-System:** GitHub `main` mit PostgreSQL auf Render. Bleibt vorerst unverändert.
 
 ## 1. SQL-Struktur für phpMyAdmin
@@ -91,29 +91,31 @@ bricht bei Abweichungen mit Fehlercode ab. Quell-Datenbank und Zieldatenbank
 werden von diesem Test nicht verändert. Für den Produktivwechsel ist nach
 dem letzten Schreibstopp noch einmal ein frischer Export und Vergleich nötig.
 
-## 3. Wichtige noch offene Entwicklungsarbeiten
+## 3. Wichtige noch offene Entwicklungsarbeiten (PHP statt Node-Webserver)
 
 **Die MySQL-8-Struktur und der Datenexport sind vorbereitet.
 Das Dashboard ist noch nicht mit MySQL betriebsbereit.**
 
 Insbesondere müssen vor dem Umzug noch erledigt werden:
 
-1. `src/db.js`, `src/server.js` und sämtliche API-Module von
-   PostgreSQL-/`pg`-SQL auf `mysql2` umbauen.
-2. `$1`-Platzhalter, `ON CONFLICT`, `RETURNING`, `JSONB`,
-   PostgreSQL-Arrays und Datumsoperationen einzeln umsetzen.
-3. Die PostgreSQL-Trigger für Personalgruppen, Kündigungssnapshots und
-   Änderungsvergleich als MySQL-Trigger oder transaktionale Backend-
-   Operationen rekonstruieren, inkl. Benutzerzuordnung im Audit.
-4. `xmin` durch MySQL-Revisionsspalten ersetzen, gleichzeitige
-   Änderungen testen und Überschreibschutz gewährleisten.
-5. Module vollständig funktional und sicherheitstechnisch testen:
-   Login, Benutzerrechte, Personal, Kündigungen, POR, Beförderungen,
-   Urkunden, Routinen, Archive, Dokumente, Historie.
-6. Erst dann die Schreibzugriffe auf PostgreSQL pausieren,
-   frischen Datenstand konsistent kopieren, Zeilenzahlen/Dokumente/
-   Beziehungen vergleichen, MySQL-8-System deployen und Live-Traffic
-   freigeben. Rollback auf PostgreSQL vorhalten.
+1. Alle registrierten Node-API-Routen in **PHP 8.2+ / PDO MySQL** funktions-
+   und berechtigungsgleich implementieren. Der vorhandene PHP-Router
+   liefert für unvollständig portierte Routen absichtlich HTTP 501.
+2. Originale PostgreSQL-Audit-, Snapshot- und Gruppenregeln im
+   transaktionalen PHP-Code oder als äquivalente MySQL-Trigger abbilden.
+3. `xmin` durch revisionsgesicherte InnoDB-Transaktionen ersetzen und
+   alle konkurrierenden Schreibfälle testen.
+4. Live-Synchronisierung, Personal/Routine/Kündigungen, POR, Beförderung,
+   Archivierung, Disziplinar, Dokumentgenerator und Google-OAuth mit
+   allen Rollen durchtesten.
+5. Die neue gemeinsame `IDV-MySQL8-phpMyAdmin-SETUP.sql` erzeugt
+   neben 48 Fachtabellen noch eine Sicherheitstabelle für Anmeldeversuche.
+   GitHub Actions importiert diese Datei gegen echtes MySQL 8.
+6. Erst nach vollständiger Funktionsgleichheit und Freigabe die
+   Schreibzugriffe auf PostgreSQL pausieren, konsistent kopieren,
+   Inhalte vergleichen, PHP-Version deployen und Live-Traffic freigeben.
+
+Der verbindliche Ablauf steht unter `docs/UMZUG-STARTSIGNAL.md`.
 
 Das zusätzliche `npm run mysql:audit` schreibt eine reine
 SQL-Kompatibilitätsanalyse des Quellcodes nach
@@ -121,10 +123,9 @@ SQL-Kompatibilitätsanalyse des Quellcodes nach
 
 ## 4. Was wir vom Hoster benötigen
 
-Ein Webserver, der eine **Node.js-/Express-Anwendung** aus dem
-GitHub-Repository automatisch baut und startet, und eine erreichbare
-MySQL-8-Datenbank. Verbindungseinstellungen wie Host, Port,
-Datenbankname, Benutzer und TLS kommen **nur** in den Secret-Store
-des Hosters; **keine** Passwörter in Chat oder GitHub.
-
-Eine phpMyAdmin-Oberfläche allein führt Node.js nicht aus.
+**Keinen Node.js-Webserver.** Benötigt werden PHP 8.2+ mit `pdo_mysql`,
+`openssl`, `json`, MySQL 8+, phpMyAdmin und HTTPS.
+Webroot muss `public/` sein. Konfiguration, Datenexport und Secrets
+dürfen niemals öffentlich liegen. Die genauen Hosting-Variablen
+und Go-/No-Go-Prüfungen stehen in `PHP-MYSQL8-HOSTING.md` und
+`docs/UMZUG-STARTSIGNAL.md`.
