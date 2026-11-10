@@ -39,8 +39,18 @@ check GET /api/me 401
 check POST /api/login 200 '{"dienstnummer":"00","passwort":"only-ci-example-not-live"}'
 check GET /api/me 200
 check GET /api/bootstrap 200
+jq -e '.daten.dashboard.beschaeftigung.summen.gesamt >= 1 and
+  (.daten.dashboard.beschaeftigung.gruppen | type=="array") and
+  (.daten.dashboard.statusverteilung | type=="array") and
+  (.daten.dashboard.kuendigungen | not)' "$tmp/body" >/dev/null || {
+    echo "Bootstrap dashboard contract incomplete" >&2; cat "$tmp/body" >&2; exit 1;
+  }
 check GET /api/users 200
 check GET /api/personal/freie-nummern 200
+jq -e '(.nebenberuf | index(50)) != null and (.hauptberuf | index(49)) != null
+      and (.hauptberuf | index(50)) == null' "$tmp/body" >/dev/null || {
+   echo "Service number 50–60 employment mapping invalid" >&2; cat "$tmp/body" >&2; exit 1;
+}
 check GET /api/personalstatistik 200
 check GET /api/backup-status 200
 check GET /api/personalentwicklung 200
@@ -102,6 +112,28 @@ dn_request_id="$(jq -r '.id' "$tmp/body")"
 check GET /api/dienstnummer-antraege 200
 check POST "/api/dienstnummer-antraege/$dn_request_id/entscheidung" 200 '{"status":"genehmigt","notiz":"Freigabe zum Test"}'
 check GET /api/akten/3/laufbahn 200
+check GET /api/aenderungsvergleich 200
+jq -e 'any(.[]; .bereich=="personal" and .benutzer=="Test admin" and
+   (.details | type=="array"))' "$tmp/body" >/dev/null || {
+   echo "Authenticated actor not recorded in MySQL audit journal" >&2;cat "$tmp/body" >&2;exit 1;
+}
+# Replace admin session with the restricted PoliceRat account.
+check POST /api/logout 200
+check POST /api/login 200 '{"dienstnummer":"04","passwort":"rat-ci-example-not-live"}'
+check GET /api/bootstrap 200
+jq -e '.user.rolle=="Polizeirat" and
+    (.daten.personal | all(.[]; (has("geburtsdatum")|not) and (has("handy")|not)
+       and (has("ernennungsurkunde_url")|not)))' "$tmp/body" >/dev/null || {
+   echo "Restricted bootstrap leaked confidential personnel data" >&2;cat "$tmp/body" >&2;exit 1;
+}
+revision="$(jq -r '.daten.routine[0]._revision' "$tmp/body")"
+check POST /api/routine/1/termin 200 '{"datum":"2026-11-09"}' "$revision"
+check POST /api/por/3 200 '{"status":"beantragt","notiz":"Antrag vom Rat"}'
+check PATCH /api/por/3 403 '{"status":"genehmigt","notiz":"Nicht erlaubt"}'
+check GET /api/personal/freie-nummern 403
+check POST /api/rangantraege 403 '{"personalnummer":3,"beantragter_rang":"Polizeimeister","begruendung":"Unzulässig"}'
+check GET /api/urkunden/status 403
+check GET /api/kuendigungen/1/akte 403
 check POST /api/logout 200
 check GET /api/me 401
 echo "Real MySQL 8 + PHP HTTP integration smoke succeeded."
