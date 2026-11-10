@@ -9,10 +9,11 @@ import {readFile} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
+import {readinessErrors,executionErrors} from './cutover-policy.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const gates=JSON.parse(await readFile(path.join(here,'cutover-readiness.json'),'utf8'));
-const pending=Object.entries(gates.releases).filter(([,v])=>v!==true).map(([k])=>k);
+const pending=readinessErrors(gates);
 const execute=process.argv.includes('--execute');
 console.log('IDV / PHP-MySQL8 Anbieterwechsel:',execute?'FINALER DATENTRANSFER':'FREIGABEPRÜFUNG');
 console.log('Quelländerungen:', 'NIEMALS durch dieses Skript; PostgreSQL bleibt read-only');
@@ -22,16 +23,13 @@ if(!execute){
  process.exitCode=pending.length?2:0;
 }else{
  if(pending.length)throw Error('CUTOVER GESPERRT. Zuerst vollständige Funktionsgleichheit und alle Freigabepunkte herstellen.');
- const expected={
-  IDV_WRITES_STOPPED:'YES',
-  IDV_CUTOVER_CONFIRMED:'I_AUTHORIZE_DATA_MIGRATION',
-  MYSQL_COPY_CONFIRM:'EMPTY_NEW_DATABASE',
-  MYSQL_SCHEMA_CONFIRM:'EMPTY_NEW_DATABASE'
- };
- for(const [name,value] of Object.entries(expected))
-  if(process.env[name]!==value)throw Error('Abbruch: '+name+' wurde nicht explizit bestätigt');
- for(const key of ['SOURCE_DATABASE_URL','MYSQL_DESTINATION_URL'])
-  if(!process.env[key])throw Error('Abbruch: geschütztes Environment '+key+' fehlt');
+ const validation=executionErrors(process.env);
+ if(validation.length){
+  for(const reason of validation)console.error('START GESPERRT:',reason);
+  throw Error('Finale Voraussetzungen unvollständig – es wurden keine Daten geschrieben.');
+ }
+ console.log('Finale Bestätigungen vorhanden (Backup, Schreibstopp, Rückfallplan und Zielidentität).');
+ console.log('Die Bestätigungen ersetzen keine technische Schreibsperre des alten Portals.');
  const steps=[
   ['Schema-Preflight','prepare.mjs'],
   ['MySQL-8-Schema in NEUER LEERER Datenbank aufbauen','install-schema.mjs'],
@@ -44,6 +42,7 @@ if(!execute){
   if(run.error||run.status!==0)throw Error(name+' fehlgeschlagen. KEINE DNS-UMSCHALTUNG. Bitte Fehler prüfen und ggf. neue leere Zieldatenbank bereitstellen.');
  }
  console.log('Der Datenimport und Datenvergleich waren erfolgreich.');
- console.log('Noch nicht erledigt: PHP-Anwendung und alle Berechtigungen auf finalen Daten testen, SSL und DNS bewusst umstellen.');
+ console.log('STOPP: Noch keine DNS-Umschaltung! Erst PHP-Anwendung auf dem importierten Datenstand endgültig abnehmen.');
+ console.log('Quell-PostgreSQL und das geprüfte Restore-Backup unverändert behalten.');
  console.log('Alte PostgreSQL-Datenbank und Backups aufbewahren – nach ersten MySQL-Schreibvorgängen KEIN blindes DNS-Rollback.');
 }
