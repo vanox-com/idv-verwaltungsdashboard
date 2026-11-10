@@ -53,7 +53,7 @@ CREATE TABLE `blacklist` (
   `datum` DATE,
   `ablauf` DATE,
   `handy` VARCHAR(191) NOT NULL DEFAULT '',
-  `bemerkung` VARCHAR(191) NOT NULL DEFAULT '',
+  `bemerkung` VARCHAR(2048) NOT NULL DEFAULT '',
   `erstellt` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -76,7 +76,7 @@ CREATE TABLE `checklisten_status` (
 CREATE TABLE `copnet_zugaenge` (
   `personalnummer` INT NOT NULL,
   `dienstnummer` VARCHAR(191) NOT NULL DEFAULT '',
-  `passwort_verschluesselt` VARCHAR(191) NOT NULL DEFAULT '',
+  `passwort_verschluesselt` VARCHAR(2048) NOT NULL DEFAULT '',
   `aktualisiert` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`personalnummer`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -134,7 +134,7 @@ CREATE TABLE `dienstnummer_antraege` (
 CREATE TABLE `dienststellen` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `name` VARCHAR(191) NOT NULL,
-  `beschreibung` VARCHAR(191) NOT NULL DEFAULT '',
+  `beschreibung` VARCHAR(2048) NOT NULL DEFAULT '',
   `aktiv` TINYINT(1) NOT NULL DEFAULT 1,
   UNIQUE KEY `dienststellen_name_key` (`name`),
   PRIMARY KEY (`id`)
@@ -144,7 +144,7 @@ CREATE TABLE `disziplin` (
   `personalnummer` INT NOT NULL,
   `massnahmen` JSON NOT NULL DEFAULT ('[]'),
   `slots` JSON NOT NULL DEFAULT ('[]'),
-  `bemerkung` VARCHAR(191) NOT NULL DEFAULT '',
+  `bemerkung` VARCHAR(2048) NOT NULL DEFAULT '',
   `aktualisiert` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`personalnummer`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -207,13 +207,13 @@ CREATE TABLE `kuendigungen` (
   `urkunde` LONGTEXT,
   `zeugnis` LONGTEXT,
   `kuendigung` LONGTEXT,
-  `waffe` VARCHAR(191) DEFAULT 'Offen',
-  `copnet` VARCHAR(191) DEFAULT 'Offen',
-  `emd` VARCHAR(191) DEFAULT 'Offen',
-  `ic` VARCHAR(191) DEFAULT 'Offen',
-  `discord` VARCHAR(191) DEFAULT 'Offen',
-  `dienstgegenstaende` VARCHAR(191) DEFAULT 'Offen',
-  `anzeige` VARCHAR(191) DEFAULT 'Nein',
+  `waffe` VARCHAR(2048) DEFAULT 'Offen',
+  `copnet` VARCHAR(2048) DEFAULT 'Offen',
+  `emd` VARCHAR(2048) DEFAULT 'Offen',
+  `ic` VARCHAR(2048) DEFAULT 'Offen',
+  `discord` VARCHAR(2048) DEFAULT 'Offen',
+  `dienstgegenstaende` VARCHAR(2048) DEFAULT 'Offen',
+  `anzeige` VARCHAR(2048) DEFAULT 'Nein',
   `kuendigungsdatum` DATE DEFAULT (CURRENT_DATE),
   `erfasst_am` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
   `personal_snapshot` JSON,
@@ -273,10 +273,10 @@ CREATE TABLE `personal` (
   `letzte_befoerderung` DATE,
   `naechste_befoerderung` DATE,
   `por_status` VARCHAR(191) NOT NULL DEFAULT 'offen',
-  `por_notiz` VARCHAR(191) NOT NULL DEFAULT '',
+  `por_notiz` VARCHAR(2048) NOT NULL DEFAULT '',
   `por_am` DATE,
-  `arbeitsvertrag_url` VARCHAR(191) NOT NULL DEFAULT '',
-  `ernennungsurkunde_url` VARCHAR(191) NOT NULL DEFAULT '',
+  `arbeitsvertrag_url` VARCHAR(2048) NOT NULL DEFAULT '',
+  `ernennungsurkunde_url` VARCHAR(2048) NOT NULL DEFAULT '',
   `beschaeftigungsart` VARCHAR(191) NOT NULL DEFAULT 'Hauptberuf',
   `dienststelle_id` BIGINT,
   `administrativ_geloescht_am` DATETIME(6),
@@ -309,7 +309,7 @@ CREATE TABLE `personal_rangantraege` (
   `personalnummer` INT NOT NULL,
   `alter_rang` LONGTEXT NOT NULL,
   `beantragter_rang` LONGTEXT NOT NULL,
-  `begruendung` VARCHAR(191) NOT NULL DEFAULT '',
+  `begruendung` VARCHAR(2048) NOT NULL DEFAULT '',
   `status` VARCHAR(191) NOT NULL DEFAULT 'beantragt',
   `antragsteller_id` INT,
   `entscheider_id` INT,
@@ -466,10 +466,10 @@ CREATE TABLE `sperrfristen` (
   `vorname` VARCHAR(191) NOT NULL DEFAULT '',
   `nachname` LONGTEXT NOT NULL,
   `art` LONGTEXT NOT NULL,
-  `grund` VARCHAR(191) NOT NULL DEFAULT '',
+  `grund` VARCHAR(2048) NOT NULL DEFAULT '',
   `von` DATE,
   `bis` DATE,
-  `bemerkung` VARCHAR(191) NOT NULL DEFAULT '',
+  `bemerkung` VARCHAR(2048) NOT NULL DEFAULT '',
   `erstellt` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
