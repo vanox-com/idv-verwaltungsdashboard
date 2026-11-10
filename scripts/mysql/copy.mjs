@@ -67,11 +67,19 @@ try{
  const tables=(await pgClient.query(
   "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' ORDER BY table_name"))
   .rows.map(x=>x.table_name);
- if(tables.length<40)throw Error('Weniger als 40 Quelltabellen: '+tables.length);
+ if(tables.length!==48)throw Error('Quellschema geändert: 48 Tabellen erwartet, gefunden '+tables.length);
  const [existing]=await mysqlConn.query("SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE()");
  const targetTables=new Set(existing.map(x=>x.TABLE_NAME||x.table_name));
+ if(targetTables.size!==49)
+  throw Error('MySQL-Ziel muss exakt 49 geprüfte Tabellen enthalten (48 Fachtabellen und eine Sicherheitstabelle).');
+ const [guard]=await mysqlConn.query(
+  "SELECT (SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema=DATABASE()) AS fk,"+
+  "(SELECT COUNT(*) FROM information_schema.check_constraints WHERE constraint_schema=DATABASE()) AS checks,"+
+  "(SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema=DATABASE()) AS triggers");
+ if(Number(guard[0].fk)!==33||Number(guard[0].checks)!==14||Number(guard[0].triggers)!==35)
+  throw Error('Zieldatenbank ist unvollständig: FK, CHECK- oder Triggeranzahl stimmt nicht.');
  if(tables.some(t=>!targetTables.has(t)))
-  throw Error('MySQL-Schema ist unvollständig. Zuerst mysql-schema.sql auf einer neuen Datenbank einrichten.');
+  throw Error('MySQL-Schema ist unvollständig. Zuerst den vollständigen geprüften Schema-Installer auf einer neuen Datenbank ausführen.');
  const [alreadyPopulated]=await mysqlConn.query(
   "SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_type='BASE TABLE'");
  // Count every table, not only expected sources. This prevents accidental writes
@@ -135,7 +143,7 @@ try{
   await mysqlConn.commit();
   console.log('DATENKOPIE ABGESCHLOSSEN: '+tables.length+' Tabellen kopiert.');
   console.log('Alte Sessions nicht übernommen. Keine Quelldaten gelöscht.');
-  console.log('Warnung: Backend und DB-Trigger sind NOCH NICHT MySQL-kompatibel. NICHT LIVE SCHALTEN.');
+  console.log('Warnung: Trotz erfolgreichem Datenimport ist die Live-Umschaltung erst nach vollständiger Funktionsabnahme erlaubt.');
   console.log('Anzahl validierter Tabellen:',Object.keys(totals).length);
  }catch(e){await mysqlConn.rollback();throw e;}
 } catch(e){
