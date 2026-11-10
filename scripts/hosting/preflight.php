@@ -21,8 +21,10 @@ foreach(['pdo_mysql','openssl','json','curl','zip'] as $ext)
 $root=dirname(__DIR__,2);
 $test('document_root_layout',is_file($root.'/public/api.php')&&
     is_file($root.'/public/.htaccess')&&is_file($root.'/public/index.html')&&
-    is_dir($root.'/php')&&is_dir($root.'/src'),
-    'Webserver DocumentRoot must point to public/, not the repository root');
+    is_dir($root.'/php')&&is_file($root.'/php/Api.php'),
+    'Webserver DocumentRoot must point to public/; PHP code stays outside the web root');
+$test('legacy_node_files_not_needed',!is_dir($root.'/src')||is_file($root.'/public/api.php'),
+    'Source files from the old Node host are not needed by the PHP deployment');
 $test('apache_rewrites',str_contains((string)@file_get_contents($root.'/public/.htaccess'),
     'RewriteRule ^api'),'API rewrite into public/api.php');
 $temporary=@tempnam(sys_get_temp_dir(),'idv_preflight_');
