@@ -64,10 +64,10 @@ function body(): array {
     if ($len > MAX_BODY_BYTES) fail(413, 'Anfrage zu groß');
     $raw = file_get_contents('php://input', false, null, 0, MAX_BODY_BYTES+1);
     if ($raw === false || strlen($raw) > MAX_BODY_BYTES) fail(413,'Anfrage zu groß');
-    try{$data=json_decode($raw, true, 64, JSON_THROW_ON_ERROR);}
+    try{$value=json_decode($raw, false, 64, JSON_THROW_ON_ERROR);}
     catch(Throwable $e){fail(400,'Ungültige JSON-Anfrage');}
-    if (!is_array($data) || array_is_list($data)) fail(400,'JSON-Objekt erforderlich');
-    return $data;
+    if (!$value instanceof \stdClass) fail(400,'JSON-Objekt erforderlich');
+    return json_decode($raw, true, 64, JSON_THROW_ON_ERROR);
 }
 function secureRequest(): bool {
     return ($_SERVER['HTTPS'] ?? '') === 'on' || ($_SERVER['SERVER_PORT'] ?? '') === '443';
@@ -226,6 +226,10 @@ function run(): void {
         require_once __DIR__.'/Routine.php';
         if($method==='POST'&&preg_match('#^/api/routine/([1-9][0-9]*)/termin$#D',$uri,$match))
             handleRoutineDate($u,(int)$match[1]);
+        require_once __DIR__.'/Settings.php';
+        if(dispatchSettings($u,$method,$uri)) return;
+        require_once __DIR__.'/Checklists.php';
+        if(dispatchChecklists($u,$method,$uri)) return;
         fail(501,'Diese Funktion wurde noch nicht auf die MySQL/PHP-Version umgestellt');
     }catch(PDOException $e){
         error_log('[IDV PHP] Database failure: '.$e->getCode());
