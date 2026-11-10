@@ -9,7 +9,7 @@ cleanup() {
   rm -rf "$tmp"
 }
 trap cleanup EXIT
-php -S 127.0.0.1:8777 -t public public/api.php >"$tmp/php-server.log" 2>&1 &
+PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8777 -t public public/api.php >"$tmp/php-server.log" 2>&1 &
 server=$!
 for i in {1..50}; do
   if curl -s -o /dev/null http://127.0.0.1:8777/api/me; then break; fi
@@ -120,6 +120,36 @@ jq -e 'any(.[]; .bereich=="personal" and .benutzer=="Test admin" and
 # Method/path contract for all 103 original Node APIs, including protected routes.
 # This runs only against this disposable MySQL CI fixture.
 bash tests/mysql8-api-routes.sh "$tmp/cookies" "http://127.0.0.1:8777"
+# Two independent authenticated sessions racing on the same personnel revision.
+# One update must commit; the other must receive 409 without overwriting.
+check GET /api/bootstrap 200
+person_revision="$(jq -r '.daten.personal[] | select(.personalnummer==2) | ._revision' "$tmp/body")"
+if [[ ! "$person_revision" =~ ^[0-9]+$ ]]; then echo "Missing person revision for race" >&2;exit 1;fi
+curl -sS -c "$tmp/cookie2" -o "$tmp/login2" -X POST -H "Content-Type: application/json" \
+  -d '{"dienstnummer":"00","passwort":"only-ci-example-not-live"}' http://127.0.0.1:8777/api/login
+if ! jq -e '.ok==true' "$tmp/login2" >/dev/null; then echo "Second session login failed" >&2;exit 1;fi
+curl -sS -b "$tmp/cookies" -X PATCH -H "Content-Type: application/json" -H "If-Match: $person_revision" \
+  -d '{"nachname":"Race-A"}' -o "$tmp/bodyA" -w '%{http_code}' \
+  http://127.0.0.1:8777/api/personal/2 >"$tmp/statusA" &
+pidA=$!
+curl -sS -b "$tmp/cookie2" -X PATCH -H "Content-Type: application/json" -H "If-Match: $person_revision" \
+  -d '{"nachname":"Race-B"}' -o "$tmp/bodyB" -w '%{http_code}' \
+  http://127.0.0.1:8777/api/personal/2 >"$tmp/statusB" &
+pidB=$!
+wait "$pidA";wait "$pidB"
+statusA="$(cat "$tmp/statusA")";statusB="$(cat "$tmp/statusB")"
+if [[ ! ( "$statusA" == "200" && "$statusB" == "409" ) &&
+      ! ( "$statusA" == "409" && "$statusB" == "200" ) ]]; then
+  echo "Parallel revisions not protected: $statusA / $statusB" >&2
+  cat "$tmp/bodyA" "$tmp/bodyB" >&2; exit 1
+fi
+check GET /api/bootstrap 200
+jq -e --argjson rev "$person_revision" '(.daten.personal[] |
+   select(.personalnummer==2) | (.nachname=="Race-A" or .nachname=="Race-B") and
+   ((._revision|tonumber) > $rev))' "$tmp/body" >/dev/null || {
+  echo "Concurrent person edit did not commit exactly once" >&2;cat "$tmp/body" >&2;exit 1;
+}
+echo "Concurrent personnel version race: 200 + 409 confirmed"
 # Replace admin session with the restricted PoliceRat account.
 check POST /api/logout 200
 check POST /api/login 200 '{"dienstnummer":"04","passwort":"rat-ci-example-not-live"}'
