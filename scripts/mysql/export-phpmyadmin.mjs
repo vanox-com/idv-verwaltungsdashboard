@@ -62,7 +62,7 @@ try{
  const tables=[...new Set(cols.map(c=>c.table_name))].sort();
  if(tables.length!==48)throw Error('Quellschema geändert: 48 Tabellen erwartet, gefunden '+tables.length+'. MySQL-Schema aktualisieren.');
  const primary=(await conn.query(
-  "SELECT cl.relname AS table_name, ARRAY(SELECT a.attname FROM unnest(con.conkey) WITH ORDINALITY u(n,ord)"+
+  "SELECT cl.relname AS table_name, ARRAY(SELECT a.attname::text FROM unnest(con.conkey) WITH ORDINALITY u(n,ord)"+
   " JOIN pg_attribute a ON a.attrelid=con.conrelid AND a.attnum=u.n ORDER BY u.ord) AS cols"+
   " FROM pg_constraint con JOIN pg_class cl ON cl.oid=con.conrelid"+
   " WHERE con.connamespace='public'::regnamespace AND con.contype='p'")).rows;
