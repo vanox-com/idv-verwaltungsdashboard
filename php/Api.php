@@ -238,6 +238,10 @@ function run(): void {
         if(dispatchPersonnel($u,$method,$uri)) return;
         require_once __DIR__.'/Textbausteine.php';
         if(dispatchText($u,$method,$uri)) return;
+        require_once __DIR__.'/Messages.php';
+        if(dispatchMessages($u,$method,$uri)) return;
+        require_once __DIR__.'/ReferenceLists.php';
+        if(dispatchReferenceLists($u,$method,$uri)) return;
         fail(501,'Diese Funktion wurde noch nicht auf die MySQL/PHP-Version umgestellt');
     }catch(PDOException $e){
         error_log('[IDV PHP] Database failure: '.$e->getCode());
