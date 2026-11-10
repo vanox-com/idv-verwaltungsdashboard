@@ -26,6 +26,12 @@ vollständig umgesetzt. **Deshalb noch kein Go-Live.**
 Eine Freigabe erfolgt erst nach vollständigem grünen Funktions-, Security-
 und Mehrbenutzertest und einem bestätigten Rückfallplan.
 
+**Automatische Freigabekontrolle:** `npm run mysql:cutover:check`.
+Das Programm prüft `scripts/mysql/cutover-readiness.json` und verweigert
+die eigentliche Migration, solange dort noch offene Funktionsprüfungen stehen.
+Dies ist aktuell bewusst der Fall. Die Freigabedatei darf erst nach
+nachgewiesener Testabdeckung angepasst werden.
+
 ## Schritt 1 – Anforderungen vom neuen Hoster (später)
 
 - PHP 8.2+, Extensions `pdo_mysql`, `openssl`, `json`; Apache 2.4
@@ -80,7 +86,13 @@ und Mehrbenutzertest und einem bestätigten Rückfallplan.
    - oder `SOURCE_DATABASE_URL=… npm run mysql:export`, die lokale private
      SQL-Datei geschützt über phpMyAdmin importieren.
      Die Datei ist **streng vertraulich** und wird nicht in Git gespeichert.
-5. `SOURCE_DATABASE_URL=… MYSQL_DESTINATION_URL=… npm run mysql:verify`
+5. Alternativ zu den einzelnen Befehlen gibt es nach vollständiger Freigabe
+   **einen** gesteuerten Lauf:
+   `SOURCE_DATABASE_URL=… MYSQL_DESTINATION_URL=… MYSQL_COPY_CONFIRM=EMPTY_NEW_DATABASE IDV_WRITES_STOPPED=YES IDV_CUTOVER_CONFIRMED=I_AUTHORIZE_DATA_MIGRATION npm run mysql:cutover`.
+   Dieser bricht bei jedem Fehler ab, prüft zuerst das Quellschema,
+   kopiert nur in eine vollständig leere Zieldatenbank und vergleicht
+   die Daten anschließend automatisch.
+   `SOURCE_DATABASE_URL=… MYSQL_DESTINATION_URL=… npm run mysql:verify`
    muss ohne Abweichung abschließen. Alle Daten einschließlich
    Sonderrechte, Historien und Dokumentlinks vergleichen.
    Sitzungen werden absichtlich **nicht übernommen**: erneuter Login nötig.
