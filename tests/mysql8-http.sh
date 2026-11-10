@@ -203,4 +203,7 @@ check GET /api/urkunden/status 403
 check GET /api/kuendigungen/1/akte 403
 check POST /api/logout 200
 check GET /api/me 401
+# Must run LAST because the successful lockout intentionally blocks all
+# later authentication requests from this disposable localhost test IP.
+bash tests/mysql8-rate-limit.sh "http://127.0.0.1:8777"
 echo "Real MySQL 8 + PHP HTTP integration smoke succeeded."
