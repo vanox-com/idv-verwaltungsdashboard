@@ -1,107 +1,92 @@
-# IDV auf MySQL 8 + PHP – ohne Node.js-Webserver
+# IDV: PHP 8.2+ und MySQL 8.0.16+ ohne Node-Webserver
 
-**Entwicklungsstand, nicht für Livebetrieb freigegeben.** Dieser Branch stellt
-die bisherige Node-/Express-Webserver-Architektur schrittweise auf
-**PHP 8.2+ (PDO MySQL) und MySQL 8.0.16+** um.
+**Status: Migrations-Entwicklung – NICHT zur produktiven Umschaltung freigegeben.**
+Stand 10.11.2026. Arbeitsbranch: `migration/mysql8-php-cutover-2026-11-10`.
 
-Die bisherige Seite auf GitHub `main`/Render/PostgreSQL läuft weiter.
-Die MySQL-/PHP-Version ist derzeit **nicht funktionsgleich**.
+Der bisherige GitHub-Branch `main`, die Domain `idv-ppverwaltung.de`, Render
+und PostgreSQL wurden durch diese Arbeiten nicht umgestellt. Das bestehende
+Portal bleibt für den normalen Betrieb unverändert.
 
-## Anforderungen des Zielhosters
+## Zielhoster
 
-- MySQL **8.0.16+**, InnoDB, utf8mb4, phpMyAdmin
-- PHP **8.2+**, Erweiterungen `pdo_mysql`, `openssl`, `json`
-- Apache 2.4 mit `mod_rewrite` und aktivierter `.htaccess`, alternativ
-  gleichwertige Nginx-Routingregeln
-- **DocumentRoot unbedingt auf `public/` setzen.** Nur dort liegen
-  `index.html`, Grafiken und das PHP-API-Einstiegsskript `api.php`.
-  Das Repository-Hauptverzeichnis darf nicht als öffentliches Webroot
-  dienen: `src/`, `php/`, `scripts/` und Migrationstools müssen
-  außerhalb des öffentlich erreichbaren Verzeichnisses bleiben.
-- Zugriff auf MySQL über einen eingeschränkten Anwendungsbenutzer
-- GitHub-Deployment: Repository-Dateien auf Server bereitstellen,
-  DocumentRoot `public/` verwenden. **Kein `npm start`** auf dem
-  neuen Webserver erforderlich.
-- TLS/HTTPS und sichere Server-Secrets. Passwort/DSN **nicht in Git
-  oder das Webverzeichnis legen.**
+Benötigt: MySQL 8.0.16+ (InnoDB/utf8mb4), PHP 8.2+
+(`pdo_mysql`, `openssl`, `json`), Apache 2.4 mit `mod_rewrite`
+oder gleichwertiges Rewrite-Routing, HTTPS, Zugriff auf phpMyAdmin.
 
-## SQL über phpMyAdmin einspielen
+**DocumentRoot muss `public/` sein**, niemals das Repository-Root.
+`src/`, `php/`, `scripts/`, `migration-output/` und private
+Konfiguration dürfen nicht im Webroot liegen. Kein `npm start` auf dem
+Zielserver notwendig. Node.js wird nur für die einmaligen lokalen
+Import-/Vergleichswerkzeuge verwendet.
 
-In einer **neu angelegten, leeren** MySQL-8-Datenbank:
+Im Secret-Store des Hosters (nicht in GitHub) konfigurieren:
 
-1. Die Struktur `scripts/mysql/IDV-MySQL8-phpMyAdmin-SETUP.sql`
-   importieren. Sie erstellt die 48 ursprünglichen Tabellen sowie die
-   zusätzliche Tabelle für Anmeldeversuche, 33 Fremdschlüssel,
-   Revisionsspalten und MySQL-Constraints.
-2. **Wichtig:** In der neuen DB sind dann noch keine Benutzer,
-   Personalakten, Routine- oder Kündigungsdaten.
-3. Nach vollständiger Vorbereitung der Anwendung die vertraulichen
-   Bestandsdaten gesondert übertragen: `npm run mysql:export` auf
-   einem sicheren Quellrechner mit Zugriff auf PostgreSQL oder
-   `npm run mysql:copy` mit direkter Verbindung. Node wird **nur
-   für die Migration am Quell-/Entwicklerrechner benötigt**.
-   Auf dem Zielwebserver wird Node.js nicht benötigt.
-4. Letzte Datenübernahme erst **nach Schreibstopp** auf dem alten Portal.
-   Mit `npm run mysql:verify` Zeilenzahlen und Inhalte vergleichen.
-5. Erst nach allen API-Tests und bestätigtem Datenstand auf PHP
-   umschalten.
-
-### Datenbank-Variablen auf dem PHP-Webserver
-
-Die folgenden Werte müssen im geschützten Environment-/Secret-Bereich
-des Hosters gesetzt werden:
-
-| Name | Bedeutung |
+| Variable | Zweck |
 | --- | --- |
-| `MYSQL_HOST` | Hostname des MySQL-Servers |
-| `MYSQL_PORT` | Port, normalerweise 3306 |
-| `MYSQL_DATABASE` | Name der angelegten DB |
-| `MYSQL_USER` | eingeschränkter MySQL-Benutzer |
-| `MYSQL_PASSWORD` | MySQL-Passwort |
-| `MYSQL_SSL_CA` | optionaler Pfad zur vertrauenswürdigen CA |
-| `IDV_LOGIN_RATE_SECRET` | zusätzliches Secret zum Pseudonymisieren von Login-IP-Hashes |
+| `MYSQL_HOST`, `MYSQL_PORT` | MySQL-Adresse und Port |
+| `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` | neue DB, eingeschränkter Nutzer |
+| `MYSQL_SSL_CA` | optional Pfad zur vertrauenswürdigen TLS-CA |
+| `IDV_LOGIN_RATE_SECRET` | sicheres Secret für Login-Drosselung |
+| `COPNET_ENCRYPTION_KEY` | derselbe 64-stellige Hex-Schlüssel wie im bisherigen System; erforderlich für bestehende CopNet-Zugänge |
 
-PHP und MySQL sollten in Produktion per TLS kommunizieren, wenn
-sie nicht auf derselben abgeschotteten Maschine laufen.
+Die bestehende Google-OAuth-Konfiguration und neue Redirect-URI müssen
+vor dem Go-Live ebenfalls geprüft werden. Insbesondere Dokumentgeneratoren
+dürfen nicht heimlich von bisherigen Google-Drive-Verknüpfungen abweichen.
 
-## Bisher PHP-implementiert
+## Datenbank
 
-- Login mit bereits vorhandenen bcrypt-Passworthashes
-- 12-Stunden-Session in MySQL, Logout, Passwortwechsel
-- Effektive Gruppen- und Benutzerrechte bei Datenabfragen
-- Geschützter Dashboard-Bootstrap (aktuelle Lesestruktur/Pilot)
-- Lesezugriff auf Systemoptionen, Portaldesign und das
-  Protokoll mit 72-Stunden-Archiv
-- Anlegen neuer Routinetermine inklusive InnoDB-Zeilensperre,
-  Revisionsprüfung und Auditprotokoll
-- Gemeinsame Anmeldeversuchssperre in MySQL
-- PHP-Routing über `public/.htaccess`
-- GitHub-Actions-Checks für PHP-Syntax und MySQL-Struktur
+Die PostgreSQL-Live-Datenbank wurde **nur lesend** auf 48 Fachtabellen,
+33 FKs, 14 CHECK-Constraints und 316 Spalten geprüft.
 
-Alle noch nicht umgestellten Endpunkte geben bewusst **HTTP 501**
-zurück. Sie dürfen weder stillschweigend ohne Authentifizierung
-ausgeführt werden noch ungeprüft eine andere Datenbank benutzen.
+`scripts/mysql/IDV-MySQL8-phpMyAdmin-SETUP.sql` baut in einer neuen
+leeren MySQL-Datenbank 48 Fachtabellen plus die zusätzliche
+`idv_login_attempts`-Sicherheitstabelle, die 33 FKs, 14 CHECK-Regeln
+und acht Revisions-Trigger auf. Der Import und grundlegende PDO-
+Funktionstests wurden in GitHub Actions gegen echtes MySQL 8 getestet.
 
-## Noch nicht für einen Umzug fertig
+Die Bestandsdaten müssen später separat und **vertraulich** übertragen
+werden. Dafür gibt es:
 
-Die Node-Version besitzt derzeit **102 registrierte API-Routen**.
-Ein Großteil muss noch nach PHP/MySQL übertragen werden,
-insbesondere: vollständige Personalbearbeitung, Kündigungen,
-Disziplinarakten, POR, Beförderungen, Urkunden/Google-OAuth,
-Sonderzahlungen, Termine/Anwesenheit/Archive, Checklisten,
-Benutzerrechte, Dokumentgeneratoren, Admin-Optionen und
-Echtzeit-Aktualisierung.
+- `npm run mysql:prepare` – PostgreSQL-Schema nur lesend vergleichen
+- `npm run mysql:export` – lokaler privater SQL-Export für phpMyAdmin
+- `npm run mysql:copy` – direkter PostgreSQL→leere-MySQL-Transfer
+- `npm run mysql:verify` – Datenbestand Zeile für Zeile vergleichen
 
-Zudem sind die bisherigen PostgreSQL-Datenbanktrigger für
-Personalgruppen, Kündigungssnapshots und allgemeine Änderungshistorie
-in MySQL noch nicht vollständig umgesetzt. Der ausgeführte
-PHP-Schreibpfad für Routinetermine protokolliert Änderungen bereits
-transaktional; das ersetzt aber **nicht** die übrigen Trigger.
+Quell- und Zieldatenbank-Zugangsdaten ausschließlich auf einem berechtigten,
+geschützten Rechner als Umgebungsvariablen setzen. Session-Cookies/Tokens
+werden nicht migriert, Nutzer melden sich neu an.
 
-**Keine Umstellung des produktiven Branches, keine DNS-Änderung
-und keine Veränderung der bestehenden PostgreSQL-Datenbank**
-vor vollständigem Test aller API-Routen.
+## Auf PHP bereits portierte Bereiche
 
-Die Dateien sind zurzeit im GitHub-Branch `migration/mysql`;
-es wurden bislang **keine Dateien auf dem neuen Hoster eingespielt**
-und **keine produktiven Daten auf eine MySQL-Datenbank übertragen**.
+Login (bcrypt), Sitzungen/Passwortwechsel, Drosselung, differenzierte
+Berechtigungen und Datenausgabe, zentrale Bootstrap-Leseansicht (noch
+nicht identisch zum Node-Bootstrap), Routintermin-Erstellung, Benutzer-
+und Rollenrechte, Systemoptionen, Dashboard-Layout, Portaldesign,
+Bekanntmachungen, Personalbearbeitung und freie Nummern, Kündigung
+aus Personalstatus mit Snapshot, administrative Personallöschung,
+Personalhistorie, Checklisten inkl. Revisionsschutz, Textbausteine,
+Mitteilungen, Sperrfristen/Blacklist, Geburtstage/Jubiläen,
+Organigramm, Personalstatistik, Kopie der CopNet-Verschlüsselung und
+eine kurze SSE-Verbindung für Mehrbenutzer-Benachrichtigungen.
+
+**Diese Implementierungen sind noch nicht vollständig end-to-end
+und mit sämtlichen Rechteszenarien getestet.** Die MySQL-/
+PHP-Version ist noch nicht funktionsgleich zur Node-Version.
+
+## Kritische Restarbeiten
+
+Insbesondere müssen die noch fehlenden API-Endpunkte und die
+vollständige Ausgabe-/Schreiblogik für Rang/POR, Beförderungen,
+Urkunden, Kündigungs- und Routinearchive, Disziplinarakten,
+Sonderfunktionen, Routine-Anwesenheit, Dokumentenlinks und
+Google-OAuth einschließlich automatischer Audits und
+konfliktgeschützter gleichzeitiger Bearbeitung fertiggestellt werden.
+
+Nicht implementierte Routen geben absichtlich HTTP 501 zurück;
+**das ist eine Freigabesperre, keine Funktion**.
+
+Die vollständige, verbindliche Prüfreihenfolge steht in
+`docs/UMZUG-STARTSIGNAL.md`. Erst nach grünem Funktionstest
+und finaler Datenprüfung wird der Anbieter gewechselt; bis dahin
+keine DNS-Änderung, keine Umstellung von `main` und keine Veränderung
+der produktiven PostgreSQL-Datenbank.
