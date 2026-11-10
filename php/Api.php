@@ -75,6 +75,10 @@ function body(): array {
     return json_decode($raw, true, 64, JSON_THROW_ON_ERROR);
 }
 function secureRequest(): bool {
+    // Shared PHP hosts may terminate HTTPS at their reverse proxy.
+    // Trust only an explicit server-side setting, never client-supplied
+    // X-Forwarded-Proto, when enforcing Secure cookies and Origin checks.
+    if(getenv('IDV_FORCE_HTTPS')==='1')return true;
     return ($_SERVER['HTTPS'] ?? '') === 'on' || ($_SERVER['SERVER_PORT'] ?? '') === '443';
 }
 function csrfCheck(): void {
