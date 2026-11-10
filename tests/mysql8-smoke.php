@@ -44,6 +44,8 @@ try {
 } catch(PDOException $e) {
     assertThat($e->getCode()==='23000','unexpected open DN rejection: '.$e->getCode());
 }
+// Fixture verified; remove pending request before HTTP DN approval scenarios.
+IDV\sql('DELETE FROM dienstnummer_antraege WHERE alt_nr=1');
 $admin=['id'=>$uid,'dienstnummer'=>'00','anzeigename'=>'Test admin','rolle'=>'Administrator',
         'gesperrt'=>0,'muss_passwort_aendern'=>0,'zweck'=>'voll'];
 assertThat((IDV\rights($admin)['pers']??0)===2,'role permissions');
