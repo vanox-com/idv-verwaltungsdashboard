@@ -87,12 +87,25 @@ nachgewiesener Testabdeckung angepasst werden.
    ```bash
    SOURCE_DATABASE_URL="postgresql://..." \
    MYSQL_DESTINATION_URL="mysql://..." \
+   IDV_EXPECTED_SOURCE_DATABASE="QUELLDATENBANK" \
+   IDV_EXPECTED_TARGET_DATABASE="NEUE_ZIELDATENBANK" \
    MYSQL_SCHEMA_CONFIRM=EMPTY_NEW_DATABASE \
    MYSQL_COPY_CONFIRM=EMPTY_NEW_DATABASE \
    IDV_WRITES_STOPPED=YES \
+   IDV_WRITE_FREEZE_VERIFIED=YES \
+   IDV_BACKUP_CONFIRMED=RESTORE_TESTED \
+   IDV_STAGING_ACCEPTED=PASSED \
+   IDV_ROLLBACK_CONFIRMED=YES \
    IDV_CUTOVER_CONFIRMED=I_AUTHORIZE_DATA_MIGRATION \
    npm run mysql:cutover
    ```
+
+   Die zusätzlichen Bestätigungen sind **keine automatische Datensicherung
+   oder Schreibsperre**. Sie dürfen nur gesetzt werden, nachdem ein
+   PostgreSQL-Backup erfolgreich wiederhergestellt, die alte Anwendung
+   tatsächlich schreibgesperrt und der Staging-/Rückfallplan abgenommen
+   wurde. Die beiden erwarteten Datenbanknamen müssen exakt mit
+   den URLs übereinstimmen (Fehlbedienungsschutz).
 
    Solange `cutover-readiness.json` offene Prüfpunkte meldet, verweigert
    das Skript den Lauf. Zugangsdaten nur im geschützten Terminal bzw.
@@ -125,6 +138,13 @@ nachgewiesener Testabdeckung angepasst werden.
   nicht unbesehen DNS zurückschalten! Sonst gehen neue Änderungen verloren.
   Zuerst beide Systeme schreibgeschützt schalten und die seit dem Umschalten
   entstandenen Vorgänge transaktional abgleichen bzw. kontrolliert zurückspielen.
+
+## Schritt 5 – Übergabe zur späteren Ausführung
+
+Der vollständige, noch **nicht freigegebene** Ablauf mit Staging-
+Nachweisen, Rückfall vor/nach ersten MySQL-Schreibvorgängen und
+allen zusätzlichen Sicherheitsbestätigungen ist in
+`docs/MIGRATION-SCHRITT-5.md` dokumentiert.
 
 ## Schlussnotiz
 
