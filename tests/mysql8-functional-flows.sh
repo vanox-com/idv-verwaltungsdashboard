@@ -69,7 +69,7 @@ rev="$(jq -r '.daten.kuendigungen[] | select(.id==1) | ._revision' "$work/body")
 [[ "$rev" =~ ^[0-9]+$ ]] || { echo "Termination version missing" >&2;exit 1; }
 req PATCH /api/kuendigung/1/dokument 200 '{"feld":"vertrag","name":"CI signed contract","url":"https://example.test/ci-contract"}' "$rev"
 req GET /api/kuendigungen/1/akte 200
-assert_json 'any(.dokumente[]; .name=="Arbeitsvertrag" and (.wert|contains("https://example.test/ci-contract")))' "Termination document link was not stored"
+assert_json 'any(.dokumente[]; .name=="Arbeitsvertrag" and (.wert|fromjson|.u)=="https://example.test/ci-contract")' "Termination document link was not stored"
 echo "Termination document link workflow OK"
 
 # User-defined Dienstnummer occupancy: freihalten is free; Gekündigt is not.
