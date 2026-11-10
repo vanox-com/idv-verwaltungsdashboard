@@ -9,6 +9,11 @@ use RuntimeException;
 
 const SESSION_HOURS = 12;
 const MAX_BODY_BYTES = 2097152;
+const PANEL_LOGIN_ROLES = ['Administrator','Leitungsdienst','Polizeirat'];
+
+function hasPanelLoginRole(string $role): bool {
+    return in_array($role,PANEL_LOGIN_ROLES,true);
+}
 
 function respond(int $code, array $result): never {
     http_response_code($code);
@@ -99,7 +104,7 @@ function loggedUser(bool $allowPasswordChange=false): ?array {
          FROM sessions s JOIN users u ON u.id=s.user_id
          WHERE s.token=? AND s.ablauf>UTC_TIMESTAMP() LIMIT 1",[$token]);
     $u=$users[0]??null;
-    if (!$u || (int)$u['gesperrt']===1) return null;
+    if (!$u || (int)$u['gesperrt']===1 || !hasPanelLoginRole((string)$u['rolle'])) return null;
     if ((int)$u['muss_passwort_aendern']===1) {
         return $allowPasswordChange && $u['zweck']==='passwortwechsel'?$u:null;
     }
@@ -146,7 +151,7 @@ function handleLogin(): never {
     if ($number===''||$password==='') fail(400,'Dienstnummer und Passwort nötig');
     if(strlen($number)>32||strlen($password)>4096) fail(400,'Ungültige Zugangsdaten');
     checkLoginRate();
-    $list=sql("SELECT id,passwort_hash,muss_passwort_aendern,gesperrt FROM users WHERE dienstnummer=? LIMIT 1",[$number]);
+    $list=sql("SELECT id,rolle,passwort_hash,muss_passwort_aendern,gesperrt FROM users WHERE dienstnummer=? LIMIT 1",[$number]);
     $u=$list[0]??null;
     // Same generic error to avoid user enumeration.
     if(!$u||!password_verify($password,(string)$u['passwort_hash'])){
@@ -154,6 +159,9 @@ function handleLogin(): never {
         fail(401,'Dienstnummer oder Passwort stimmt nicht');
     }
     if((int)$u['gesperrt']===1)fail(403,'Dieser Zugang ist gesperrt');
+    // Only the three explicitly authorized dashboard roles can sign in.
+    if(!hasPanelLoginRole((string)$u['rolle']))
+        fail(403,'Für diese Rolle besteht kein Verwaltungszugang');
     $token=bin2hex(random_bytes(32));
     $purpose=(int)$u['muss_passwort_aendern']===1?'passwortwechsel':'voll';
     $expiry=time()+SESSION_HOURS*3600;
