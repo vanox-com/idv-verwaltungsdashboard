@@ -26,6 +26,14 @@ try{
  const expected=[...ddl.matchAll(/^CREATE TABLE \x60([A-Za-z_][A-Za-z0-9_]*)\x60 \(/gm)].map(x=>x[1]).sort();
  const current=tableResult.rows.map(x=>x.table_name).sort();
  const unchanged=JSON.stringify(expected)===JSON.stringify(current);
+ const reviewedColumns=new Map();
+ for(const match of ddl.matchAll(/CREATE TABLE \x60([A-Za-z_][A-Za-z0-9_]*)\x60 \(([\s\S]*?)\) ENGINE=InnoDB/g)){
+  const set=new Set([...match[2].matchAll(/^\s*\x60([A-Za-z_][A-Za-z0-9_]*)\x60\s+[A-Z]/gm)].map(x=>x[1]));
+  reviewedColumns.set(match[1],set);
+ }
+ const sourceColumns=columnResult.rows;
+ const missingColumns=sourceColumns.filter(c=>!reviewedColumns.get(c.table_name)?.has(c.column_name));
+ const columnsMatch=missingColumns.length===0;
  const relationships=(ddl.match(/\bFOREIGN KEY \(/g)||[]).length;
  const checks=(ddl.match(/ ADD CONSTRAINT \x60[^\x60]+\x60 CHECK \(/g)||[]).length;
  const report={
@@ -34,26 +42,29 @@ try{
   foreignKeys:fkResult.rowCount,checks:checkResult.rowCount,
   reviewedSchemaTables:expected.length,reviewedSchemaForeignKeys:relationships,
   reviewedSchemaChecks:checks,tableNamesMatch:unchanged,
+  columnNamesMatch:columnsMatch,missingColumnCount:missingColumns.length,
   applicationReady:false,
   pending:[
-   'Rewrite all PostgreSQL backend queries and database driver usage',
-   'Port PostgreSQL audit, snapshot and group triggers',
-   'Replace xmin revision handling with MySQL transaction revisions',
-   'Run real MySQL 8 integration/security tests before cutover'
+   'Verify server-side route and UI parity under all roles',
+   'Verify audit and snapshot behavior for historical data',
+   'Run concurrent multi-user revision tests',
+   'Verify real Google OAuth, staging and the final data comparison'
   ]
  };
- if(!unchanged||relationships!==fkResult.rowCount||checks!==checkResult.rowCount)
+ if(!unchanged||!columnsMatch||relationships!==fkResult.rowCount||checks!==checkResult.rowCount)
   throw Error('Datenbankstruktur weicht vom MySQL8-Schema ab. Baseline zuerst erneuern.');
+ const combined=await readFile(path.join(dir,'IDV-MySQL8-phpMyAdmin-SETUP.sql'),'utf8');
  const target=path.resolve('migration-output');
  await mkdir(target,{recursive:true,mode:0o700});
  await Promise.all([
   writeFile(path.join(target,'mysql8-schema.sql'),ddl,{mode:0o600}),
+  writeFile(path.join(target,'IDV-MySQL8-phpMyAdmin-SETUP.sql'),combined,{mode:0o600}),
   writeFile(path.join(target,'mysql8-preflight.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600})
  ]);
  await conn.query('COMMIT');
  console.log('MySQL8 Schema-Preflight erfolgreich:',report.tables,'Tabellen,',report.foreignKeys,'Fremdschlüssel.');
- console.log('Erstellt: migration-output/mysql8-schema.sql und mysql8-preflight.json.');
- console.log('Achtung: Backend noch nicht MySQL-kompatibel. Keine Live-Umschaltung.');
+ console.log('Erstellt: migration-output/IDV-MySQL8-phpMyAdmin-SETUP.sql, mysql8-schema.sql und mysql8-preflight.json.');
+ console.log('Achtung: Funktionsgleichheit noch nicht vollständig abgenommen. Keine Live-Umschaltung.');
 }catch(e){
  if(conn)await conn.query('ROLLBACK').catch(()=>{});
  console.error('Preflight fehlgeschlagen:',e.message);
