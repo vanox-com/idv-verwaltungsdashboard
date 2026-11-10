@@ -1,0 +1,8 @@
+# Apache 2.4 / PHP 8.2+ — document root MUST be this public directory.
+Options -Indexes
+DirectoryIndex index.html
+RewriteEngine On
+RewriteRule ^api(?:/.*)?$ api.php [QSA,L]
+<FilesMatch "^(?:\.htaccess|\.env|composer\.(?:json|lock))$">
+  Require all denied
+</FilesMatch>
