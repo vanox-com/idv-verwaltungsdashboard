@@ -264,6 +264,8 @@ function run(): void {
         if(dispatchTerminationEditing($u,$method,$uri)) return;
         require_once __DIR__.'/DienstnummerAntraege.php';
         if(dispatchDNRequests($u,$method,$uri)) return;
+        require_once __DIR__.'/AktenFeatures.php';
+        if(dispatchRecordFeatures($u,$method,$uri)) return;
         fail(501,'Diese Funktion wurde noch nicht auf die MySQL/PHP-Version umgestellt');
     }catch(PDOException $e){
         error_log('[IDV PHP] Database failure: '.$e->getCode());
