@@ -11,7 +11,7 @@ $pdo=IDV\db();
 assertThat($pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql','PDO is not using MySQL');
 IDV\sql("INSERT INTO roles(name,farbe,sensibel) VALUES('Administrator','#000000',1)");
 IDV\sql("INSERT INTO roles(name,farbe,sensibel) VALUES('Polizeirat','#112233',0)");
-foreach(['pers','chk','backup','rechtesimulator','geb','jub','org','texte','mitteilungen','kue','sonder','dis','bef','design'] as $module)
+foreach(['pers','chk','backup','rechtesimulator','geb','jub','org','texte','mitteilungen','kue','sonder','dis','bef','design','por','ranghistorie','rout','routarchiv','kuearchiv','befricht','papierkorb','persverlauf','log','urkunden','praktika'] as $module)
     IDV\sql('INSERT INTO role_perms(rolle,modul,stufe) VALUES(?,?,2)',['Administrator',$module]);
 IDV\sql("INSERT INTO role_perms(rolle,modul,stufe) VALUES('Polizeirat','chk',1)");
 $password=password_hash('only-ci-example-not-live',PASSWORD_BCRYPT,['cost'=>4]);
@@ -19,7 +19,13 @@ IDV\sql("INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_pas
          VALUES('00','Test admin','Administrator',?,0)",[$password]);
 $uid=(int)$pdo->lastInsertId();
 assertThat(password_verify('only-ci-example-not-live',$password),'bcrypt compatibility');
-IDV\sql("INSERT INTO personal(personalnummer,vorname,nachname,status) VALUES(1,'Test','Person','Aktiv')");
+IDV\sql("INSERT INTO personal(personalnummer,vorname,nachname,status,dienstgrad) VALUES(1,'Test','Person','Aktiv','Polizeimeisteranwärter')");
+IDV\sql("INSERT INTO raenge(name,abk,tage,sortierung,naechster_rang) VALUES('Polizeimeisteranwärter','PMA',NULL,1,'Polizeimeister')");
+IDV\sql("INSERT INTO raenge(name,abk,tage,sortierung,naechster_rang) VALUES('Polizeimeister','PM',365,2,NULL)");
+IDV\sql('INSERT INTO routine(personalnummer,tage,personen,sortierung) VALUES(?,?,?,?)',[
+    1,json_encode(['04.11.2026']),json_encode([['nr'=>1,'vorname'=>'Test',
+       'nachname'=>'Person','anwesend'=>[null],'abgemeldet'=>false]]),1
+]);
 $p=IDV\sql('SELECT row_revision FROM personal WHERE personalnummer=1');
 assertThat((int)$p[0]['row_revision']===1,'personal first revision');
 IDV\sql("UPDATE personal SET nachname='Testperson' WHERE personalnummer=1");
