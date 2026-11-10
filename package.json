@@ -14,7 +14,8 @@
     "mysql:verify": "node scripts/mysql/verify.mjs",
     "php:lint": "php -l php/Api.php",
     "mysql:cutover:check": "node scripts/mysql/cutover.mjs --check",
-    "mysql:cutover": "node scripts/mysql/cutover.mjs --execute"
+    "mysql:cutover": "node scripts/mysql/cutover.mjs --execute",
+    "mysql:install-schema": "node scripts/mysql/install-schema.mjs"
   },
   "engines": {
     "node": ">=20"
