@@ -117,6 +117,9 @@ jq -e 'any(.[]; .bereich=="personal" and .benutzer=="Test admin" and
    (.details | type=="array"))' "$tmp/body" >/dev/null || {
    echo "Authenticated actor not recorded in MySQL audit journal" >&2;cat "$tmp/body" >&2;exit 1;
 }
+# Method/path contract for all 103 original Node APIs, including protected routes.
+# This runs only against this disposable MySQL CI fixture.
+bash tests/mysql8-api-routes.sh "$tmp/cookies" "http://127.0.0.1:8777"
 # Replace admin session with the restricted PoliceRat account.
 check POST /api/logout 200
 check POST /api/login 200 '{"dienstnummer":"04","passwort":"rat-ci-example-not-live"}'
