@@ -4,7 +4,7 @@ namespace IDV;
 
 function dnEmployment(int $n): string { return $n>=51&&$n<=60?'Nebenberuf':'Hauptberuf'; }
 function dnOccupied(string $s): bool {
-    return in_array(mb_strtolower(trim($s),'UTF-8'),['aktiv','abgemeldet','inaktiv','suspendiert'],true);
+    return in_array(strtolower(trim($s)),['aktiv','abgemeldet','inaktiv','suspendiert'],true);
 }
 function sensitiveFields(array $u,array $fields): void {
     $confidential=['geburtsdatum','handy','arbeitsvertrag','ernennungsurkunde',
