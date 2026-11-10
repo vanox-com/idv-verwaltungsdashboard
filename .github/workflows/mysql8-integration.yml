@@ -25,11 +25,13 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-          extensions: pdo_mysql, json, openssl
+          extensions: pdo_mysql, json, openssl, curl, zip
           coverage: none
       - name: PHP syntax
         run: |
           for f in public/api.php php/*.php; do php -l "$f" || exit 1; done
+      - name: Test Word template editing and Google client host restrictions
+        run: php tests/mysql8-docx.php
       - name: Import complete reviewed phpMyAdmin SQL into real MySQL 8
         run: |
           mysql --host=127.0.0.1 --port=3306 --user=root --password=test-root-password idv_ci < scripts/mysql/IDV-MySQL8-phpMyAdmin-SETUP.sql
