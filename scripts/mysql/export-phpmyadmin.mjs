@@ -76,6 +76,7 @@ try{
   '-- Sitzungen werden absichtlich nicht exportiert; alle Benutzer melden sich erneut an.',
   "SET NAMES utf8mb4;",
   "SET time_zone = '+00:00';",
+  "SET @idv_migration = 1;",
   "SET FOREIGN_KEY_CHECKS = 0;",
   "START TRANSACTION;",
   ''
@@ -110,6 +111,7 @@ try{
   '',
   'COMMIT;',
   'SET FOREIGN_KEY_CHECKS = 1;',
+  'SET @idv_migration = 0;',
   '-- Nach Import alle 48 Tabellen, Zeilenanzahlen und Funktionen pruefen.',
   '-- MySQL-Backend muss separat vollstaendig portiert und getestet werden.',
   ''

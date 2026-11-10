@@ -38,7 +38,7 @@ jobs:
           test "$(mysql --batch --skip-column-names -h127.0.0.1 -uroot -ptest-root-password -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='idv_ci' AND table_type='BASE TABLE'")" -eq 49
           test "$(mysql --batch --skip-column-names -h127.0.0.1 -uroot -ptest-root-password -e "SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema='idv_ci'")" -eq 33
           test "$(mysql --batch --skip-column-names -h127.0.0.1 -uroot -ptest-root-password -e "SELECT COUNT(*) FROM information_schema.check_constraints WHERE constraint_schema='idv_ci'")" -eq 14
-          test "$(mysql --batch --skip-column-names -h127.0.0.1 -uroot -ptest-root-password -e "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema='idv_ci'")" -eq 8
+          test "$(mysql --batch --skip-column-names -h127.0.0.1 -uroot -ptest-root-password -e "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema='idv_ci'")" -eq 35
       - name: Run PHP/PDO database smoke test with artificial nonpersonal records
         env:
           MYSQL_HOST: 127.0.0.1

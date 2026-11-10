@@ -96,6 +96,7 @@ try{
  const pk=new Map(primary.map(x=>[x.table_name,x.cols]));
  const totals={};
  // PostgreSQL remains read-only. MySQL writes form a single InnoDB transaction.
+ await mysqlConn.query('SET @idv_migration=1, @idv_actor=NULL');
  await mysqlConn.query('SET FOREIGN_KEY_CHECKS=0');
  await mysqlConn.beginTransaction();
  try{

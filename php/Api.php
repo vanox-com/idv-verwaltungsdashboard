@@ -211,7 +211,9 @@ function run(): void {
         if($method==='POST'&&$uri==='/api/login')handleLogin();
         if($method==='POST'&&$uri==='/api/logout')handleLogout();
         if($method==='GET'&&$uri==='/api/me'){
-            $u=requireLogin();respond(200,sessionApiUser($u));
+            $u=requireLogin();
+        // MySQL AFTER triggers associate safe audit fields with the authenticated actor.
+        sql('SET @idv_actor = ?',[(int)$u['id']]);respond(200,sessionApiUser($u));
         }
         if($method==='POST'&&$uri==='/api/passwort')handlePassword();
         // Unknown routes must fail closed, and no PHP code may delegate to PostgreSQL.
