@@ -145,6 +145,7 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
                     'beschaeftigungsart'=>dnEmployment($n),
                     'status'=>$b['status']??'Aktiv',
                     'waffenschein','spind'=>!empty($b[$key])?1:0,
+                    'arbeitsvertrag_url','ernennungsurkunde_url'=>$b[$key]??'',
                     default=>$b[$key]??null
                 };
                 $values[]=($v===''&&!in_array($key,['arbeitsvertrag_url','ernennungsurkunde_url'],true))?null:$v;
