@@ -60,7 +60,13 @@ try{
  await conn.query("SET LOCAL TIME ZONE 'UTC'");
  const cols=(await conn.query("SELECT table_name,column_name,data_type,ordinal_position FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name,ordinal_position")).rows;
  const tables=[...new Set(cols.map(c=>c.table_name))].sort();
- if(tables.length<40)throw Error('Unerwartet kleine Datenbank; kein Export');
+ if(tables.length!==48)throw Error('Quellschema geändert: 48 Tabellen erwartet, gefunden '+tables.length+'. MySQL-Schema aktualisieren.');
+ const primary=(await conn.query(
+  "SELECT cl.relname AS table_name, ARRAY(SELECT a.attname FROM unnest(con.conkey) WITH ORDINALITY u(n,ord)"+
+  " JOIN pg_attribute a ON a.attrelid=con.conrelid AND a.attnum=u.n ORDER BY u.ord) AS cols"+
+  " FROM pg_constraint con JOIN pg_class cl ON cl.oid=con.conrelid"+
+  " WHERE con.connamespace='public'::regnamespace AND con.contype='p'")).rows;
+ const keys=new Map(primary.map(r=>[r.table_name,r.cols]));
  await mkdir(outputDir,{recursive:true,mode:0o700});
  handle=await open(tempPath,'wx',0o600);
  await handle.writeFile([
@@ -83,14 +89,21 @@ try{
   // Deterministic table snapshot, with no volatile sort or row changes.
   const quoted=pgQuote(table);
   const amount=Number((await conn.query('SELECT COUNT(*)::int AS n FROM '+quoted)).rows[0].n);
+  const key=keys.get(table);
+  if(!key?.length)throw Error('Fehlender Primärschlüssel für reproduzierbaren SQL-Export: '+table);
+  const orderBy=key.map(pgQuote).join(', ');
+  let copied=0;
   for(let offset=0;offset<amount;offset+=50){
-   const {rows}=await conn.query('SELECT * FROM '+quoted+' LIMIT 50 OFFSET $1',[offset]);
+   // Deterministic pagination within the single REPEATABLE READ snapshot.
+   const {rows}=await conn.query('SELECT * FROM '+quoted+' ORDER BY '+orderBy+' LIMIT 50 OFFSET $1',[offset]);
    if(!rows.length)throw Error('Unvollstaendige Quellabfrage '+table);
    const tuples=rows.map(row=>'('+cs.map(c=>valueSql(row[c.column_name],c.data_type)).join(', ')+')');
    const statement='INSERT INTO '+q(table)+' ('+columns.map(q).join(', ')+') VALUES\n'+tuples.join(',\n')+';\n';
    await handle.writeFile(statement);
    total+=rows.length;
+   copied+=rows.length;
   }
+  if(copied!==amount)throw Error('Zeilenanzahl beim Export abweichend: '+table);
   console.log('Exportiert:',table,amount,'Zeilen');
  }
  await handle.writeFile([
