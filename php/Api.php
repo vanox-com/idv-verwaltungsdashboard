@@ -246,6 +246,8 @@ function run(): void {
         if(dispatchOrg($u,$method,$uri)) return;
         require_once __DIR__.'/PersonnelHistory.php';
         if(dispatchPersonnelHistory($u,$method,$uri)) return;
+        require_once __DIR__.'/CopNet.php';
+        if(dispatchCopNet($u,$method,$uri)) return;
         fail(501,'Diese Funktion wurde noch nicht auf die MySQL/PHP-Version umgestellt');
     }catch(PDOException $e){
         error_log('[IDV PHP] Database failure: '.$e->getCode());
