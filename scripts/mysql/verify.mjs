@@ -47,11 +47,15 @@ function normalize(v,type){
  return String(v);
 }
 function rowDigest(rows,cols){
+ // PostgreSQL and MySQL can sort string primary keys in different orders.
+ // Compare a sorted multiset of canonical row hashes instead of relying on
+ // server-side collation. Duplicate rows remain distinguishable by count.
+ const hashes=rows.map(row=>{
+  const values=cols.map(c=>normalize(row[c.column_name],c.data_type));
+  return createHash('sha256').update(JSON.stringify(values),'utf8').digest('hex');
+ }).sort();
  const h=createHash('sha256');
- for(const row of rows){
-  const vals=cols.map(c=>normalize(row[c.column_name],c.data_type));
-  h.update(JSON.stringify(vals)+'\n','utf8');
- }
+ for(const value of hashes)h.update(value+'\n','utf8');
  return h.digest('hex');
 }
 let pgConn,myConn;
