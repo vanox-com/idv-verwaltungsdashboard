@@ -167,9 +167,17 @@ function dispatchRecordFeatures(array $u,string $method,string $uri): bool {
             if($area==='kuendigungen')restoreSqlRecord('kuendigungen',$record);
             elseif($area==='checklisten'){
                 restoreSqlRecord('checklisten',$record);
-                foreach(is_array($entry['zusatz']??null)?$entry['zusatz']:[] as $r)
+                // The archived checklist-status snapshot stores only punkt and erledigt.
+                // Reattach rows to the restored checklist name from the trash entry,
+                // not to a nonexistent name field in each status row.
+                $items=is_array($entry['zusatz']??null)?$entry['zusatz']:[];
+                foreach($items as $r){
+                    if(!is_array($r)||!is_int($r['punkt']??null)||$r['punkt']<0||
+                        !in_array($r['erledigt']??null,[0,1,false,true,'0','1'],true))
+                        fail(409,'Archivierte Checklisten-Häkchen sind ungültig');
                     sql('INSERT INTO checklisten_status(name,punkt,erledigt)
-                        VALUES(?,?,?)',[$r['name'],$r['punkt'],!empty($r['erledigt'])?1:0]);
+                        VALUES(?,?,?)',[$entry['schluessel'],$r['punkt'],(int)(bool)$r['erledigt']]);
+                }
             }elseif($area==='personal'){
                 $nr=filter_var($record['personalnummer']??null,FILTER_VALIDATE_INT);
                 if(!$nr||(string)$nr!==(string)$entry['schluessel'])fail(409,'Ungültiger Personaldatensatz');
