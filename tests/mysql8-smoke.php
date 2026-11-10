@@ -15,6 +15,10 @@ echo 'Personal FK tables: '.json_encode($refs,JSON_UNESCAPED_UNICODE|JSON_THROW_
 assertThat($pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql','PDO is not using MySQL');
 IDV\sql("INSERT INTO roles(name,farbe,sensibel) VALUES('Administrator','#000000',1)");
 IDV\sql("INSERT INTO roles(name,farbe,sensibel) VALUES('Polizeirat','#112233',0)");
+IDV\sql("INSERT INTO roles(name,farbe,sensibel) VALUES('Leitungsdienst','#456789',0)");
+IDV\sql("INSERT INTO roles(name,farbe,sensibel) VALUES('Gast','#456789',0)");
+foreach(['dash'=>1,'pers'=>2,'chk'=>2,'bef'=>2,'rout'=>2] as $mod=>$level)
+    IDV\sql("INSERT INTO role_perms(rolle,modul,stufe) VALUES('Leitungsdienst',?,?)",[$mod,$level]);
 foreach(['dash','pers','chk','backup','rechtesimulator','geb','jub','org','texte','mitteilungen','kue','sonder','dis','bef','design','por','ranghistorie','rout','routarchiv','kuearchiv','befricht','papierkorb','persverlauf','log','urkunden','praktika'] as $module)
     IDV\sql('INSERT INTO role_perms(rolle,modul,stufe) VALUES(?,?,2)',['Administrator',$module]);
 IDV\sql("INSERT INTO role_perms(rolle,modul,stufe) VALUES('Polizeirat','chk',1)");
@@ -29,6 +33,16 @@ $uid=(int)$pdo->lastInsertId();
 $councilPass=password_hash('rat-ci-example-not-live',PASSWORD_BCRYPT,['cost'=>4]);
 IDV\sql("INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern)
          VALUES('04','Test Council','Polizeirat',?,0)",[$councilPass]);
+
+$leaderHash=password_hash('ci-leader-secret-123',PASSWORD_BCRYPT,['cost'=>4]);
+IDV\sql("INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern)
+         VALUES('05','Test leadership','Leitungsdienst',?,0)",[$leaderHash]);
+IDV\sql("INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern)
+         VALUES('12','Test guest','Gast',?,0)",[$leaderHash]);
+IDV\sql("INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,gesperrt,muss_passwort_aendern)
+         VALUES('13','Test locked','Leitungsdienst',?,1,0)",[$leaderHash]);
+IDV\sql("INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern)
+         VALUES('14','Test password gate','Leitungsdienst',?,1)",[$leaderHash]);
 assertThat(password_verify('only-ci-example-not-live',$password),'bcrypt compatibility');
 IDV\sql("INSERT INTO personal(personalnummer,vorname,nachname,status,dienstgrad) VALUES(1,'Test','Person','Aktiv','Polizeimeisteranwärter')");
 $group=IDV\sql('SELECT gruppe FROM personal WHERE personalnummer=1');
