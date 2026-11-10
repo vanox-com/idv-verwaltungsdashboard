@@ -72,6 +72,13 @@ jobs:
       - name: Validate migration script syntax before any data movement
         run: |
           for f in scripts/mysql/*.mjs; do node --check "$f" || exit 1; done
+      - name: Assert cutover remains fail-closed without nine approvals and verified backup
+        run: |
+          node --test tests/cutover-policy.test.mjs
+          if node scripts/mysql/cutover.mjs --execute; then
+            echo "Critical: cutover unexpectedly accepted missing release approvals" >&2
+            exit 1
+          fi
       - name: Verify one-command installer on new empty MySQL 8 schema
         env:
           MYSQL_DESTINATION_URL: mysql://root:test-root-password@127.0.0.1:3306/idv_setup_ci
