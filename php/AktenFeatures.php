@@ -22,8 +22,8 @@ function sortedEvents(array $items): array {
 function restoreSqlRecord(string $table,array $record): void {
     if(!in_array($table,['kuendigungen','checklisten'],true))
         throw new \LogicException('Invalid restore table');
-    $permitted=array_column(sql('SELECT column_name FROM information_schema.columns
-        WHERE table_schema=DATABASE() AND table_name=? ORDER BY ordinal_position',[$table]),'column_name');
+    $permitted=array_column(sql('SELECT column_name AS fieldname FROM information_schema.columns
+        WHERE table_schema=DATABASE() AND table_name=? ORDER BY ordinal_position',[$table]),'fieldname');
     $data=array_intersect_key($record,array_flip($permitted));
     unset($data['row_revision']);
     if(!$data)fail(409,'Wiederherstellungsdaten fehlen');
