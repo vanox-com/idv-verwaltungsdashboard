@@ -548,11 +548,11 @@ ALTER TABLE `dienstnummer_antraege` ADD CONSTRAINT `dienstnummer_antraege_nummer
 
 -- PostgreSQL has a unique partial index to allow only one pending rank application per person.
 -- MySQL generated NULLs make all non-pending rows exempt from this unique constraint.
-ALTER TABLE `personal_rangantraege` ADD COLUMN `beantragt_personalnummer` INT GENERATED ALWAYS AS (CASE WHEN `status` = 'beantragt' THEN `personalnummer` ELSE NULL END) STORED;
+ALTER TABLE `personal_rangantraege` ADD COLUMN `beantragt_personalnummer` INT GENERATED ALWAYS AS (CASE WHEN `status` = 'beantragt' THEN `personalnummer` ELSE NULL END) VIRTUAL;
 CREATE UNIQUE INDEX `personal_rangantraege_ein_offener_idx` ON `personal_rangantraege` (`beantragt_personalnummer`);
 
 -- Only one pending DN-change request per source number; closed requests remain historical.
-ALTER TABLE `dienstnummer_antraege` ADD COLUMN `offene_alt_nr` INT GENERATED ALWAYS AS (CASE WHEN `status` = 'beantragt' THEN `alt_nr` ELSE NULL END) STORED;
+ALTER TABLE `dienstnummer_antraege` ADD COLUMN `offene_alt_nr` INT GENERATED ALWAYS AS (CASE WHEN `status` = 'beantragt' THEN `alt_nr` ELSE NULL END) VIRTUAL;
 CREATE UNIQUE INDEX `dienstnummer_antraege_ein_offener_idx` ON `dienstnummer_antraege` (`offene_alt_nr`);
 
 ALTER TABLE `dienstnummer_antraege` ADD CONSTRAINT `dienstnummer_antraege_antragsteller_id_fkey` FOREIGN KEY (`antragsteller_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE RESTRICT;
