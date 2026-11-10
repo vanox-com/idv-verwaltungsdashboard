@@ -25,15 +25,11 @@ const DG_TYPES={
 };
 const dgEsc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let dgCodeClient=null,dgPending=null,dgClientId='',dgScript;
-const DG_GOOGLE_MAIN_ORIGIN='https://idv-ppverwaltung.de';
-function dgPruefeGooglePortalUrsprung(){
-  // Google Identity Services startet den OAuth-Code-Flow aus der aktiven
-  // Browser-Origin. Die Render-Subdomain ist nur als technische Fallback-
-  // Adresse gedacht und nicht als dauerhaft freigegebene OAuth-Domain.
-  if(window.location.origin!==DG_GOOGLE_MAIN_ORIGIN)
-    throw Error('Google-Dokumente bitte über die IDV-Hauptdomain erstellen. '+
-      'Diese Portal-Adresse ist für Google OAuth nicht als Ursprung vorgesehen. '+
-      'Bitte die Hauptdomain öffnen und dich dort mit deiner Dienstnummer anmelden.');
+function dgPruefeGooglePortalUrsprung(config){
+  // The backend supplies an explicitly configured and validated HTTPS origin.
+  // Never accept arbitrary hosts or derive OAuth trust from the request Host alone.
+  if(!config?.origin||window.location.origin!==config.origin)
+    throw Error('Google-Dokumente bitte auf der für diesen Hoster freigegebenen Portal-Adresse öffnen.');
 }
 function dgLoadGoogle(){
  if(window.google?.accounts?.oauth2)return Promise.resolve();
@@ -72,8 +68,8 @@ async function dgTextbausteine(){
 }
 async function dgPrepareAuth(){
   try{
-   dgPruefeGooglePortalUrsprung();
    const result=await api('/dokumentgenerator/status');
+   dgPruefeGooglePortalUrsprung(result);
    if(!result.eingerichtet)throw Error('Google OAuth ist noch nicht eingerichtet.');
    const nameInput=document.getElementById('dg_unterzeichner');
    if(nameInput){
