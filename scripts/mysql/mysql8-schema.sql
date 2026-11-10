@@ -244,7 +244,7 @@ CREATE TABLE `organigramm_layout` (
 
 CREATE TABLE `personal` (
   `personalnummer` INT NOT NULL,
-  `gruppe` VARCHAR(191) NOT NULL DEFAULT 'Hauptberuf',
+  `gruppe` VARCHAR(191) NOT NULL DEFAULT 'Nicht zugeordnet',
   `status` VARCHAR(191) NOT NULL DEFAULT 'Aktiv',
   `vorname` LONGTEXT,
   `nachname` LONGTEXT,
