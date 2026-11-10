@@ -150,6 +150,35 @@ jq -e --argjson rev "$person_revision" '(.daten.personal[] |
   echo "Concurrent person edit did not commit exactly once" >&2;cat "$tmp/body" >&2;exit 1;
 }
 echo "Concurrent personnel version race: 200 + 409 confirmed"
+# Stream must notify other sessions about the committed MySQL audit/log change.
+check GET /api/bootstrap 200
+next_revision="$(jq -r '.daten.personal[] | select(.personalnummer==2) | ._revision' "$tmp/body")"
+curl -sS -N --max-time 9 -b "$tmp/cookie2" \
+  http://127.0.0.1:8777/api/changes >"$tmp/sse.log" 2>"$tmp/sse.err" &
+ssepid=$!
+ready=false
+for attempt in {1..30}; do
+  if grep -q ': verbunden' "$tmp/sse.log" 2>/dev/null; then ready=true;break;fi
+  sleep 0.1
+done
+if [[ "$ready" != true ]]; then
+  echo "SSE subscription did not establish" >&2
+  cat "$tmp/sse.err" >&2;kill "$ssepid" 2>/dev/null || true;exit 1
+fi
+check PATCH /api/personal/2 200 '{"nachname":"SSE-Confirmed"}' "$next_revision"
+notified=false
+for attempt in {1..35}; do
+  if grep -q 'event: aktualisierung' "$tmp/sse.log" 2>/dev/null; then notified=true;break;fi
+  sleep 0.15
+done
+kill "$ssepid" 2>/dev/null || true
+wait "$ssepid" 2>/dev/null || true
+if [[ "$notified" != true ]]; then
+  echo "MySQL SSE notifications did not reach another authenticated session" >&2
+  cat "$tmp/sse.log" >&2;exit 1
+fi
+echo "Cross-session MySQL SSE update received"
+
 # Replace admin session with the restricted PoliceRat account.
 check POST /api/logout 200
 check POST /api/login 200 '{"dienstnummer":"04","passwort":"rat-ci-example-not-live"}'
