@@ -8,6 +8,10 @@ function assertThat(bool $condition,string $message): void {
 }
 
 $pdo=IDV\db();
+$refs=IDV\sql("SELECT table_name,column_name FROM information_schema.key_column_usage
+WHERE table_schema=DATABASE() AND referenced_table_name='personal'
+AND referenced_column_name='personalnummer' ORDER BY table_name");
+echo 'Personal FK tables: '.json_encode($refs,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)."\n";
 assertThat($pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql','PDO is not using MySQL');
 IDV\sql("INSERT INTO roles(name,farbe,sensibel) VALUES('Administrator','#000000',1)");
 IDV\sql("INSERT INTO roles(name,farbe,sensibel) VALUES('Polizeirat','#112233',0)");
