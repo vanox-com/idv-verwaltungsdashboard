@@ -232,6 +232,8 @@ function run(): void {
         if(dispatchChecklists($u,$method,$uri)) return;
         require_once __DIR__.'/Personnel.php';
         if(dispatchPersonnel($u,$method,$uri)) return;
+        require_once __DIR__.'/Textbausteine.php';
+        if(dispatchText($u,$method,$uri)) return;
         fail(501,'Diese Funktion wurde noch nicht auf die MySQL/PHP-Version umgestellt');
     }catch(PDOException $e){
         error_log('[IDV PHP] Database failure: '.$e->getCode());
