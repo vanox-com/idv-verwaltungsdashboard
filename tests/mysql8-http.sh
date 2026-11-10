@@ -98,8 +98,9 @@ check POST /api/kuendigung 200 '{"nr":1,"vorname":"Test","nachname":"Person","ra
 check GET /api/kuendigungen/1/akte 200
 check PATCH /api/kuendigung/1 200 '{"waffe":"Informiert"}' 1
 check POST /api/dienstnummer-antraege 201 '{"alt_nr":1,"ziel_nr":3,"art":"personal","begruendung":"Test ordnungsgemaesser Wechsel"}'
+dn_request_id="$(jq -r '.id' "$tmp/body")"
 check GET /api/dienstnummer-antraege 200
-check POST /api/dienstnummer-antraege/1/entscheidung 200 '{"status":"genehmigt","notiz":"Freigabe zum Test"}'
+check POST "/api/dienstnummer-antraege/$dn_request_id/entscheidung" 200 '{"status":"genehmigt","notiz":"Freigabe zum Test"}'
 check GET /api/akten/3/laufbahn 200
 check POST /api/logout 200
 check GET /api/me 401
