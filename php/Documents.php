@@ -9,7 +9,9 @@ function permittedDocument(array $rights,string $type,int $level=2): bool {
 }
 function documentStatus(array $u): array {
     $google=googleCredentials();$name=trim(userName($u));
-    return ['eingerichtet'=>$google!==null,'clientId'=>$google['id']??null,
+    $origin=googlePortalOrigin();
+    return ['eingerichtet'=>$google!==null&&$origin!==null,'clientId'=>$google['id']??null,
+        'origin'=>$origin,
         'ersteller'=>$name,
         'erstellerVollstaendig'=>count(preg_split('/\s+/u',$name))>=2&&strlen($name)<=160];
 }
