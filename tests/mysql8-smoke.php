@@ -31,6 +31,12 @@ IDV\sql("INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_pas
          VALUES('04','Test Council','Polizeirat',?,0)",[$councilPass]);
 assertThat(password_verify('only-ci-example-not-live',$password),'bcrypt compatibility');
 IDV\sql("INSERT INTO personal(personalnummer,vorname,nachname,status,dienstgrad) VALUES(1,'Test','Person','Aktiv','Polizeimeisteranwärter')");
+$group=IDV\sql('SELECT gruppe FROM personal WHERE personalnummer=1');
+assertThat(($group[0]['gruppe']??null)==='Leitungsdienst','DN 01 must auto-derive leadership group');
+IDV\sql("INSERT INTO personal(personalnummer,vorname,nachname,status,dienstgrad)
+         VALUES(6,'Group','Fixture','Aktiv','Polizeimeisteranwärter')");
+$group=IDV\sql('SELECT gruppe FROM personal WHERE personalnummer=6');
+assertThat(($group[0]['gruppe']??null)==='Mittlerer Dienst','PMA outside 01–05 must auto-derive middle service group');
 IDV\sql("INSERT INTO raenge(name,abk,tage,sortierung,naechster_rang) VALUES('Polizeimeisteranwärter','PMA',NULL,1,'Polizeimeister')");
 IDV\sql("INSERT INTO raenge(name,abk,tage,sortierung,naechster_rang) VALUES('Polizeimeister','PM',365,2,NULL)");
 IDV\sql('INSERT INTO routine(personalnummer,tage,personen,sortierung) VALUES(?,?,?,?)',[
