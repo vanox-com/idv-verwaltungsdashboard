@@ -4,14 +4,14 @@ namespace IDV;
 
 function checklistInput(array $input): array {
     $name=$input['name']??null;
-    if(!is_string($name)||trim($name)===''||mb_strlen(trim($name))>120)fail(400,'Name muss 1–120 Zeichen lang sein');
+    if(!is_string($name)||trim($name)===''||strlen(trim($name))>120)fail(400,'Name muss 1–120 Zeichen lang sein');
     $tasks=$input['aufgaben']??null;
     if(!is_array($tasks)||count($tasks)>100)fail(400,'Maximal 100 Aufgaben pro Checkliste erlaubt');
     $clean=[];
     foreach($tasks as $i=>$t){
         if(!is_array($t)||!is_string($t['t']??null)||!is_string($t['u']??''))fail(400,'Ungültige Aufgabe '.($i+1));
         $text=trim($t['t']);$url=trim($t['u']??'');
-        if($text===''||mb_strlen($text)>500||strlen($url)>2048)fail(400,'Aufgabe '.($i+1).': Text fehlt oder ist zu lang');
+        if($text===''||strlen($text)>500||strlen($url)>2048)fail(400,'Aufgabe '.($i+1).': Text fehlt oder ist zu lang');
         if($url!==''){
             $parts=parse_url($url);
             if(!is_array($parts)||($parts['scheme']??null)!=='https'||!str_contains((string)($parts['host']??''),'.')||
