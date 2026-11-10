@@ -122,7 +122,9 @@ jobs:
           COPNET_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
           IDV_LOGIN_RATE_SECRET: 'ci-fixture-secret-not-for-production-1234'
         run: bash tests/mysql8-http.sh
-      - name: Read-only PHP/MySQL/OAuth/CopNet staging preflight
+      - name: Assemble sanitized PHP staging package
+        run: bash scripts/hosting/build-package.sh
+      - name: Verify deployed ZIP under real extracted directory layout
         env:
           MYSQL_HOST: 127.0.0.1
           MYSQL_PORT: '3306'
@@ -135,9 +137,19 @@ jobs:
           IDV_GOOGLE_ORIGIN: https://staging.example.test
           IDV_LOGIN_RATE_SECRET: ci-fixture-secret-not-for-production-1234
           IDV_FORCE_HTTPS: '0'
-        run: php scripts/hosting/preflight.php --json
-      - name: Assemble sanitized PHP staging package
-        run: bash scripts/hosting/build-package.sh
+        run: |
+          mkdir -p "$RUNNER_TEMP/idv-staging-artifact"
+          unzip -q migration-output/IDV-PHP-MySQL8-STAGING.zip -d "$RUNNER_TEMP/idv-staging-artifact"
+          test -f "$RUNNER_TEMP/idv-staging-artifact/public/index.html"
+          test -f "$RUNNER_TEMP/idv-staging-artifact/php/Api.php"
+          test -f "$RUNNER_TEMP/idv-staging-artifact/scripts/hosting/preflight.php"
+          test ! -e "$RUNNER_TEMP/idv-staging-artifact/src"
+          test ! -e "$RUNNER_TEMP/idv-staging-artifact/node_modules"
+          test ! -e "$RUNNER_TEMP/idv-staging-artifact/.env"
+          cd "$RUNNER_TEMP/idv-staging-artifact"
+          for f in public/api.php php/*.php scripts/hosting/preflight.php; do php -l "$f" || exit 1; done
+          php scripts/hosting/preflight.php --json | tee "$RUNNER_TEMP/idv-staging-preflight.json"
+          jq -e '.ok==true and .checks.document_root_layout.ok==true' "$RUNNER_TEMP/idv-staging-preflight.json"
       - name: Keep staging code package as a GitHub Actions artifact
         uses: actions/upload-artifact@v4
         with:
