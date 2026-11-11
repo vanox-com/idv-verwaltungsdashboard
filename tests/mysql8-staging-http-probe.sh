@@ -23,6 +23,8 @@ path="$(printf '%s' "$url" | sed -E 's@^https://[^/]+@@')"
 code=404;type=text/html;payload='<html>not found</html>'
 case "$path" in
   /)code=200;payload='<html>login</html>';;
+  /start)code=200;payload='<html>public info</html>';;
+  /datenschutz)code=200;payload='<html>privacy policy</html>';;
   /dokumentUI.js)code=200;type=application/javascript;payload='window.example=true';;
   /api/login)code=403;type=application/json;payload='{"error":"Ungültiger Anfrageursprung"}';;
   /api/*)code=401;type=application/json;payload='{"error":"Nicht angemeldet"}';;
@@ -71,6 +73,8 @@ echo "Forbidden and malformed staging origins rejected before HTTP OK"
 bash "$root/scripts/hosting/staging-http-check.sh" https://staging.example.com >"$work/normal"
 grep -q "Anonymous staging checks PASSED" "$work/normal"
 grep -q 'https://staging.example.com/api/me' "$STAGING_MOCK_LOG"
+grep -q 'https://staging.example.com/start' "$STAGING_MOCK_LOG"
+grep -q 'https://staging.example.com/datenschutz' "$STAGING_MOCK_LOG"
 echo "Full synthetic HTTPS staging acceptance flow OK"
 
 for fault in LEAK WEAK_HEADERS;do
