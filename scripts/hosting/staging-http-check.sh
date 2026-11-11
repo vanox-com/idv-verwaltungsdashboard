@@ -11,6 +11,10 @@ if [[ ! "$origin" =~ ^https://[a-zA-Z0-9-]+\.[a-zA-Z0-9.-]+(:[0-9]{1,5})?$ ]];th
  echo "Expected exact HTTPS origin of a separate staging hostname" >&2;exit 2
 fi
 host="$(printf '%s' "$origin" | sed -E 's@^https://@@;s@:[0-9]+$@@' | tr '[:upper:]' '[:lower:]')"
+if [[ "$host" =~ ^[0-9.]+$ ]];then
+ echo "Direct IP addresses are not accepted as external staging domains" >&2
+ exit 2
+fi
 case "$host" in
  idv-ppverwaltung.de|*.idv-ppverwaltung.de|idv-verwaltungsdashboard-1.onrender.com|*.onrender.com|localhost|*.localhost|*.local|*.internal|*.test)
    echo "Production or test-only host is forbidden for the external staging probe" >&2;exit 2;;
