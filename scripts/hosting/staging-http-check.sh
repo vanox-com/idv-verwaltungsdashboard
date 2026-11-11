@@ -61,9 +61,10 @@ for path in /api/me /api/bootstrap /api/dokumentgenerator/status /api/users /api
  done
 done
 # No private file should be served, redirected or replaced with index.html.
-for path in /php/Api.php /src/server.js /src/schema.sql /.git/config /.env \
+for path in /php/Api.php /src/server.js /src/schema.sql /src/daten.json /.git/config /.env /.env.local \
  /HOSTING-SETUP.md /scripts/hosting/preflight.php \
- /scripts/mysql/IDV-MySQL8-phpMyAdmin-SETUP.sql /migration-output/private.sql;do
+ /scripts/mysql/IDV-MySQL8-phpMyAdmin-SETUP.sql \
+ /migration-output/private.sql /migration-output/mysql8-data-PRIVATE.sql;do
  status="$(curl --silent --show-error --max-time 12 --connect-timeout 6 \
    --max-redirs 0 -o /dev/null -w '%{http_code}' "$origin$path")"
  if [[ "$status" != 403 && "$status" != 404 ]];then
