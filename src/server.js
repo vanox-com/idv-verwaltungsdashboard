@@ -16,6 +16,7 @@ import { disziplinTitelErgaenzen } from './disziplinTitel.js';
 import { registerDienstnummerAntraege } from './dienstnummerAntraege.js';
 import { registerKueArchivRoutes,KUE_AKTUELL_BEDINGUNG,KUE_LIST_COLUMNS } from './kuendigungsArchiv.js';
 import { hashPassword, verifyPassword, newSessionToken, SESSION_HOURS } from './auth.js';
+import { validPersonnelStatus } from './personalStatus.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -1040,6 +1041,8 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
     return res.status(400).json({error:'Ungültige Personalnummer'});
   const revision=aktenRevision(req,res);if(revision===null)return;
   const body=req.body&&typeof req.body==='object'&&!Array.isArray(req.body)?req.body:{};
+  if(Object.hasOwn(body,'status')&&!validPersonnelStatus(body.status))
+    return res.status(400).json({error:'Ungültiger Personalstatus',feld:'status'});
   if(Object.hasOwn(body,'dienstgrad'))
     return res.status(409).json({error:'Dienstgrad ausschließlich über die Beförderungsverwaltung ändern'});
   const beantragterRang=String(body.beantragter_rang||'').trim();
@@ -1175,6 +1178,8 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
       return res.status(400).json({error:'Dienstnummer 51–60 ist Nebenberuf; alle anderen sind Hauptberuf'});
     if (!String(b.vorname || '').trim() || !String(b.nachname || '').trim())
       return res.status(400).json({ error: 'Vor- und Nachname nötig' });
+    if(Object.hasOwn(b,'status')&&!validPersonnelStatus(b.status,{creating:true}))
+      return res.status(400).json({error:'Ungültiger Personalstatus',feld:'status'});
     if(b.status==='Gekündigt')
       return res.status(400).json({error:'Bitte erst die Personalakte anlegen und anschließend über „Bearbeiten“ kündigen'});
     const client=await db.connect().catch(next);if(!client)return;
@@ -1249,7 +1254,7 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
       `INSERT INTO personal (personalnummer, gruppe, beschaeftigungsart, status, vorname, nachname, geburtsdatum, handy,
         waffenschein, spind, nebenjob, dienstgrad, eintrittsdatum, arbeitsvertrag, ernennungsurkunde,
         urlaub_von, urlaub_bis, urlaub_tage, bemerkung, rsa, arbeitsvertrag_url, ernennungsurkunde_url)
-       VALUES ($1,$2,$3,$22,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+       VALUES ($1,$2,$22,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        ON CONFLICT (personalnummer) DO UPDATE SET
          gruppe=EXCLUDED.gruppe,beschaeftigungsart=EXCLUDED.beschaeftigungsart,
          status=EXCLUDED.status,vorname=EXCLUDED.vorname,nachname=EXCLUDED.nachname,
