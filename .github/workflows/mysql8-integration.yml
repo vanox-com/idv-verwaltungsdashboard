@@ -49,6 +49,10 @@ jobs:
         run: php tests/mysql8-google-origin.php
       - name: Shell-check hosting deployment tools
         run: bash -n scripts/hosting/*.sh
+      - name: Test staging HTTPS probe without touching external websites
+        run: |
+          bash -n tests/mysql8-staging-http-probe.sh
+          bash tests/mysql8-staging-http-probe.sh
       - name: Verify HTTPS session security on direct and proxy PHP hosts
         run: php tests/mysql8-https.php
       - name: Import complete reviewed phpMyAdmin SQL into real MySQL 8
