@@ -2876,7 +2876,8 @@ function personalBearbeiten(nr) {
   const vorschlag = Array.from({length:60},(_,i)=>i+1).find(n=>!used.includes(n))||Math.max(60,...used)+1;
   const raenge = (D.raenge || []).map(r => r.name).filter(Boolean);
   const gruppen = [...new Set([...(D.systemOptionen?.mitarbeitergruppen||['Mittlerer Dienst','Gehobener Dienst','Polizeirat','Leitungsdienst','Nicht zugeordnet']),...(D.personal||[]).map(x=>x.gruppe).filter(Boolean)])];
-  const statusAlle = ['Aktiv','Abgemeldet','Inaktiv','Suspendiert','Gekündigt','freihalten',...(D.personal || []).map(x => x.status).filter(Boolean)];
+  // Malformed values stored by the old create route are never valid status choices.
+  const statusAlle = ['Aktiv','Abgemeldet','Inaktiv','Suspendiert','Gekündigt','freihalten'];
   const status = neu ? statusAlle.filter(x => x !== 'Gekündigt') : statusAlle;
   const datum = x => x ? String(x).slice(0,10) : '';
   const felder = [
