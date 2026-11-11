@@ -42,6 +42,10 @@ check(){
 }
 
 check '/' 200 'text/html'
+# These public URLs were explicit Express routes in the old Node server.
+# Apache must preserve them rather than returning 404 or the login page.
+check '/start' 200 'text/html'
+check '/datenschutz' 200 'text/html'
 check '/dokumentUI.js' 200 'javascript'
 # Deny anonymous access and reject a misleading "200 index.html" API fallback.
 for path in /api/me /api/bootstrap /api/dokumentgenerator/status /api/users /api/changes /api/copnet/1;do
