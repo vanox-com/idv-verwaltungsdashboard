@@ -47,6 +47,12 @@ jobs:
         run: php tests/mysql8-docx.php
       - name: Validate staging Google origin security
         run: php tests/mysql8-google-origin.php
+      - name: Verify public information and privacy routes in Apache package
+        run: |
+          test -f public/start.html
+          test -f public/datenschutz.html
+          grep -Fq 'RewriteRule ^start/?$ start.html [L]' public/.htaccess
+          grep -Fq 'RewriteRule ^datenschutz/?$ datenschutz.html [L]' public/.htaccess
       - name: Shell-check hosting deployment tools
         run: bash -n scripts/hosting/*.sh
       - name: Test staging HTTPS probe without touching external websites
