@@ -66,6 +66,23 @@ if($allDb&&extension_loaded('pdo_mysql')){
         $complete=(int)$a['tables']===49&&(int)$a['fks']===33&&
             (int)$a['checks']===14&&(int)$a['triggers']===35;
         $test('mysql_schema',$complete,'expected 49 tables, 33 FKs, 14 CHECKs and 35 triggers');
+        // Check domain-specific occupancy/employment rules after the transfer.
+        // Legacy Node classified service number 50 as main; the approved
+        // PHP rule is 50–60 secondary. Do not silently rewrite historical
+        // personnel data: stop staging acceptance until a reviewer resolves it.
+        if($complete){
+            $employmentMismatch=$pdo->query(
+                "SELECT COUNT(*) FROM personal WHERE administrativ_geloescht_am IS NULL
+                 AND status IN ('Aktiv','Abgemeldet','Inaktiv','Suspendiert','Gekündigt')
+                 AND ((personalnummer BETWEEN 50 AND 60 AND
+                       COALESCE(beschaeftigungsart,'')<>'Nebenberuf')
+                   OR (personalnummer NOT BETWEEN 50 AND 60 AND
+                       COALESCE(beschaeftigungsart,'')<>'Hauptberuf'))"
+            )->fetchColumn();
+            $count=(int)$employmentMismatch;
+            $test('service_number_employment_contract',$count===0,
+                '50–60 = Nebenberuf; all other service numbers = Hauptberuf; conflicting occupied records: '.$count);
+        }
         $r=$pdo->query("SELECT passwort_verschluesselt FROM copnet_zugaenge
              WHERE passwort_verschluesselt IS NOT NULL AND passwort_verschluesselt<>'' LIMIT 1")->fetch(\PDO::FETCH_ASSOC);
         if($r){
