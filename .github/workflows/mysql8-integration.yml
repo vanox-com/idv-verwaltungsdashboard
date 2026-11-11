@@ -161,7 +161,17 @@ jobs:
           cd "$RUNNER_TEMP/idv-staging-artifact"
           for f in public/api.php php/*.php scripts/hosting/preflight.php; do php -l "$f" || exit 1; done
           php scripts/hosting/preflight.php --json | tee "$RUNNER_TEMP/idv-staging-preflight.json"
-          jq -e '.ok==true and .checks.document_root_layout.ok==true' "$RUNNER_TEMP/idv-staging-preflight.json"
+          jq -e '.ok==true and .checks.document_root_layout.ok==true and .checks.service_number_employment_contract.ok==true' "$RUNNER_TEMP/idv-staging-preflight.json"
+          # Prove the read-only preflight detects an OLD 50=Hauptberuf
+          # record instead of silently changing business classifications.
+          mysql -h127.0.0.1 -uroot -ptest-root-password idv_ci -e "INSERT INTO personal(personalnummer,vorname,nachname,status,beschaeftigungsart) VALUES (50,'CI','Mismatch','Aktiv','Hauptberuf')"
+          if php scripts/hosting/preflight.php --json > "$RUNNER_TEMP/idv-staging-preflight-mismatch.json"; then
+            echo "Preflight failed to block a synthetic dienstnummer-50 employment mismatch" >&2
+            exit 1
+          fi
+          jq -e '.ok==false and .checks.service_number_employment_contract.ok==false' "$RUNNER_TEMP/idv-staging-preflight-mismatch.json"
+          mysql -h127.0.0.1 -uroot -ptest-root-password idv_ci -e "DELETE FROM personal WHERE personalnummer=50 AND vorname='CI'"
+
       - name: Keep staging code package as a GitHub Actions artifact
         uses: actions/upload-artifact@v4
         with:
