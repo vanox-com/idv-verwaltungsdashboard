@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hashPassword } from './auth.js';
 import { createHash } from 'node:crypto';
+import { repairMarkClarkStatus } from './personalStatus.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -23,6 +24,8 @@ export const db = new pg.Pool({
 export async function initDb() {
   const sql = await readFile(path.join(__dirname, 'schema.sql'), 'utf8');
   await db.query(sql);
+  // Repair only the verified DN48 data-entry regression before serving requests.
+  await repairMarkClarkStatus(db);
   await seedBenutzer();
   await originalDokumentLinksUebernehmen();
   await excelPersonalLinksUebernehmen();
