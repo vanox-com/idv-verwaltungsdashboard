@@ -2,6 +2,10 @@
 Options -Indexes
 DirectoryIndex index.html
 RewriteEngine On
+# Preserve the exact public URLs used by the legacy Node server and
+# OAuth/privacy links in public/index.html.
+RewriteRule ^start/?$ start.html [L]
+RewriteRule ^datenschutz/?$ datenschutz.html [L]
 RewriteRule ^api(?:/.*)?$ api.php [QSA,L]
 <FilesMatch "^(?:\.htaccess|\.env|composer\.(?:json|lock))$">
   Require all denied
