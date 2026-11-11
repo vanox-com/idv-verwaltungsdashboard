@@ -11,23 +11,20 @@ und einige Sicherheits-/Datenbetriebsthemen sind noch offen.
 
 ## Priorität 0 – Vertraulichkeit und öffentliches Repository
 
-**Bestätigt:** GitHub meldet für `vanox-com/idv-verwaltungsdashboard` `visibility: public`.
-Die Datei `src/daten.json` liegt auch auf `main`, enthält **58
-Personalakten**, **55 Kündigungsvorgänge** und **57 Disziplinareinträge**.
-Bei 47 Personalakten ist `geburtsdatum`, bei 49 das Feld `handy`
-ausgefüllt. Es wurden für dieses Audit **keine Werte veröffentlicht
-oder nach außen kopiert**.
+**Bestätigt:** Das Repository ist derzeit öffentlich.
+Im bisherigen, öffentlich einsehbaren Projektbestand befinden sich
+auch Datenfelder aus der Personalverwaltung. Selbst wenn diese
+zum Rollenspiel gehören, muss der Betreiber überprüfen, ob alle Inhalte
+ausdrücklich für die Veröffentlichung geeignet sind.
 
-Das sind GTA-RP-Daten; ob alle enthaltenen Informationen frei erfunden
-sind, ist nicht verifiziert. Falls tatsächliche Personen oder
-Kontaktmöglichkeiten betroffen sein können: Betreiber muss
-Repository und ältere Git-Historie als potenziell öffentlich
-zugänglich behandeln. **Empfehlung:** Sichtbarkeit prüfen und möglichst
-auf `Private` setzen; betroffene Daten auf notwendige Inhalte
-reduzieren, eventuell exponierte Secrets/echte Kontaktdaten gesondert
-bewerten. Ein Löschen aus einem neuen Commit entfernt frühere
-Git-History-Versionen nicht. **Keine destruktive Git-Historienänderung
-ohne gesonderte Bestätigung.**
+Empfohlen: Repository-Zugriffsrechte und bisherige Git-Historie
+unverzüglich überprüfen. Ein reiner Dateilösch-Commit beseitigt keine
+älteren Versionen. Namen, Dateipfade und Zählungen der
+betroffenen Datensätze werden in diesem öffentlich abrufbaren
+Bericht bewusst nicht ausgeführt.
+
+**Keine Änderung der Repository-Sichtbarkeit oder der Git-Historie
+ohne ausdrückliche Entscheidung des Betreibers.**
 
 ## Priorität 1 – vor der Live-Freigabe zwingend
 
