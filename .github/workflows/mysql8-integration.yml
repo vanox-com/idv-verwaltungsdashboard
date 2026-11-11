@@ -45,6 +45,8 @@ jobs:
           for f in public/api.php php/*.php; do php -l "$f" || exit 1; done
       - name: Test Word template editing and Google client host restrictions
         run: php tests/mysql8-docx.php
+      - name: Verify personnel status and automatically populated routine roster
+        run: php tests/mysql8-personal-status.php
       - name: Validate staging Google origin security
         run: php tests/mysql8-google-origin.php
       - name: Verify public information and privacy routes in Apache package
