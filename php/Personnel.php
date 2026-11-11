@@ -3,6 +3,12 @@ declare(strict_types=1);
 namespace IDV;
 
 function dnEmployment(int $n): string { return $n>=50&&$n<=60?'Nebenberuf':'Hauptberuf'; }
+function personnelStatusAllowed(mixed $value,bool $creating=false): bool {
+    return is_string($value) &&
+      in_array($value,['Aktiv','Abgemeldet','Inaktiv','Suspendiert','Gekündigt','freihalten'],true) &&
+      (!$creating||$value!=='Gekündigt');
+}
+
 function dnOccupied(string $s): bool {
     return in_array(strtolower(trim($s)),['aktiv','abgemeldet','inaktiv','suspendiert','gekündigt'],true);
 }
@@ -120,6 +126,8 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
         if($n===false||$n===null)fail(400,'Ungültige Personalnummer');
         if(isset($b['beschaeftigungsart'])&&$b['beschaeftigungsart']!==dnEmployment($n))fail(400,'Beschäftigungsart passt nicht zur Dienstnummer');
         if(trim((string)($b['vorname']??''))===''||trim((string)($b['nachname']??''))==='')fail(400,'Vor- und Nachname nötig');
+        if(array_key_exists('status',$b)&&!personnelStatusAllowed($b['status'],true))
+            fail(400,'Ungültiger Personalstatus – Beschäftigungsart und Status sind verschiedene Felder');
         if(($b['status']??'')==='Gekündigt')fail(400,'Bitte zuerst die Personalakte anlegen und anschließend kündigen');
         db()->beginTransaction();
         try{
@@ -185,6 +193,8 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
     }
     if($method==='PATCH'&&preg_match('#^/api/personal/([1-9][0-9]*)$#D',$uri,$m)){
         needRight($u,'pers',2);$n=cleanId($m[1]);$revision=expectedRevision();$b=body();
+        if(array_key_exists('status',$b)&&!personnelStatusAllowed($b['status']))
+            fail(400,'Ungültiger Personalstatus – Beschäftigungsart und Status sind verschiedene Felder');
         if(array_key_exists('dienstgrad',$b))fail(409,'Dienstgrad ausschließlich über die Beförderungsverwaltung ändern');
         sensitiveFields($u,$b);personnelLinks($b);
         if(isset($b['beschaeftigungsart'])&&$b['beschaeftigungsart']!==dnEmployment($n))fail(400,'Beschäftigungsart passt nicht zur Dienstnummer');
