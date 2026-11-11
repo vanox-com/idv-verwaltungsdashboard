@@ -1,0 +1,26 @@
+name: Personnel status regression
+on:
+  push:
+    branches:
+      - main
+      - migration/mysql8-php-cutover-2026-11-10
+    paths:
+      - 'src/server.js'
+      - 'src/db.js'
+      - 'src/personalStatus.js'
+      - 'public/index.html'
+      - 'php/Personnel.php'
+      - 'php/Bootstrap.php'
+      - 'tests/personal-status-regression.test.mjs'
+      - '.github/workflows/personnel-status-regression.yml'
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Node personnel status and one-time repair regression
+        run: node --test tests/personal-status-regression.test.mjs
