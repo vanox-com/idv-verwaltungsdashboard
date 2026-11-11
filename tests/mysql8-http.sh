@@ -63,7 +63,14 @@ check GET /api/mitteilungen/verwaltung 200
 check GET /api/textbausteine 200
 check GET /api/organigramm 200
 longurl="https://example.test/$(printf 'a%.0s' {1..380})"
+# Reject the original bug: Beschäftigungsart must never become Personalstatus.
+check POST /api/personal 400 '{"personalnummer":49,"vorname":"Invalid","nachname":"Status","status":"Hauptberuf","beschaeftigungsart":"Hauptberuf"}'
 check POST /api/personal 200 '{"personalnummer":2,"vorname":"HTTP","nachname":"Fixture","gruppe":"Mittlerer Dienst","status":"Aktiv","beschaeftigungsart":"Hauptberuf","arbeitsvertrag_url":"'"$longurl"'"}'
+check GET /api/bootstrap 200
+jq -e 'any(.daten.personal[]; .personalnummer==2 and .status=="Aktiv" and .beschaeftigungsart=="Hauptberuf")' "$tmp/body" >/dev/null || {
+  echo "PHP/MySQL stored employment in the status field" >&2;exit 1
+}
+check PATCH /api/personal/2 400 '{"status":"Nebenberuf"}' 1
 check PATCH /api/personal/2 200 '{"nachname":"Fixture2"}' 1
 check PATCH /api/personal/2 409 '{"nachname":"Stale update"}' 1
 check POST /api/checklisten 201 '{"name":"API test list","aufgaben":[{"t":"First","u":""}]}'
