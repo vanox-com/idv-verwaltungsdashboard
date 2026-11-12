@@ -15,6 +15,7 @@ import { registerAktenFeatures } from './aktenFeatures.js';
 import { disziplinTitelErgaenzen } from './disziplinTitel.js';
 import { registerDienstnummerAntraege } from './dienstnummerAntraege.js';
 import { registerKueArchivRoutes,KUE_AKTUELL_BEDINGUNG,KUE_LIST_COLUMNS } from './kuendigungsArchiv.js';
+import { registerAbmeldungenRoutes } from './abmeldungenBot.js';
 import { hashPassword, verifyPassword, newSessionToken, SESSION_HOURS } from './auth.js';
 import { validPersonnelStatus } from './personalStatus.js';
 
@@ -2557,7 +2558,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
   try {
     const rolle = req.params.rolle, modul = req.params.modul;
     const stufe = req.body?.stufe;
-    const erlaubteModule = new Set(['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen','papierkorb','kuearchiv']);
+    const erlaubteModule = new Set(['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen','papierkorb','kuearchiv','abm']);
     if (rolle === 'Administrator')
       return res.status(403).json({ error: 'Administratorrechte sind fest' });
     if (!erlaubteModule.has(modul) || ![0, 1, 2].includes(stufe))
@@ -2579,7 +2580,7 @@ app.patch('/api/rollen/:rolle/recht/:modul', requireLogin, nurAdmin, async (req,
 app.patch('/api/users/:id/recht/:modul',requireLogin,nurAdmin,async(req,res,next)=>{
   try{
     const userId=Number(req.params.id),modul=req.params.modul,stufe=req.body?.stufe;
-    const erlaubte=new Set(['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen','papierkorb','kuearchiv']);
+    const erlaubte=new Set(['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen','papierkorb','kuearchiv','abm']);
     if(!Number.isSafeInteger(userId)||userId<1||!erlaubte.has(modul)||
        ![null,0,1,2].includes(stufe))
       return res.status(400).json({error:'Ungültige Berechtigung'});
@@ -2796,6 +2797,7 @@ registerBefRichtRoutes(app,db,requireLogin,requireRight);
 registerDienstnummerAntraege(app,db,requireLogin,effektiveRechte);
 registerAktenFeatures(app,db,requireLogin,requireRight,effektiveRechte);
 registerKueArchivRoutes(app,db,requireLogin,requireRight,effektiveRechte);
+registerAbmeldungenRoutes(app,db,requireLogin,requireRight,effektiveRechte);
 
 app.use((err, req, res, next) => {
   console.error(err);

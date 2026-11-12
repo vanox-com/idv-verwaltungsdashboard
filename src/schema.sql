@@ -1042,3 +1042,10 @@ WHERE r.id=2
    SELECT 1 FROM jsonb_array_elements(r.personen) AS eintrag
    WHERE eintrag->>'nr'='1'
  );
+
+/* Abmeldungen aus dem Polizei-Discord-Bot (Modul abm): Stufe 1 ansehen,
+   Stufe 2 annehmen/ablehnen. Bestehende Rechte werden nie überschrieben. */
+INSERT INTO role_perms(rolle,modul,stufe) VALUES
+ ('Administrator','abm',2),('Leitungsdienst','abm',2),('Polizeirat','abm',2),
+ ('Ausbilder','abm',0),('Mitarbeiter','abm',0)
+ON CONFLICT(rolle,modul) DO NOTHING;

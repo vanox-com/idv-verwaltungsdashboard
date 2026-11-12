@@ -1675,7 +1675,7 @@ body{overflow-x:clip}
 const MODS = [
   ['dash','Dashboard','📊'],['pers','Personal','👥'],['bef','Beförderungen','⭐'],
   ['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
-  ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],
+  ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],['abm','Abmeldungen','📅'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
   ['rechtesimulator','Berechtigungs-Simulator','🛡️'],['design','Designverwaltung','🎨'],['backup','Backup-Übersicht','🗄️'],['users','Benutzer & Rollen','🔐'],['befricht','Beförderungsrichtlinien','📋'],['system','Systemverwaltung','⚙️'],['meldungen','Mitteilungen verwalten','📣'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾'],['papierkorb','Papierkorb','🗑️']
@@ -1684,7 +1684,7 @@ const MODS = [
    Ein aktives Modul hält seine Kategorie immer geöffnet. */
 const NAV_GRUPPEN = [
   {id:'uebersicht',titel:'Übersicht',module:['dash']},
-  {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','praktika','rout','geb','jub' ,'statistik']},
+  {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','praktika','rout','abm','geb','jub' ,'statistik']},
   {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
   {id:'verwaltung',titel:'Administration',module:['users','befricht','system','meldungen','rechtesimulator','design','backup','log','papierkorb']}
@@ -2021,6 +2021,7 @@ function navIcon(id) {
     kue: '<path d="M13 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M13 3v5h5M10 13h11m-4-4 4 4-4 4"/>',
     dis: '<path d="M12 3v18M4 7h16M5 7l-3 7h6L5 7zM19 7l-3 7h6l-3-7zM8 21h8"/>',
     rout: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    abm: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M9 15l2 2 4-4"/>',
     chk: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m7 12 3 3 7-7"/>',
     texte: '<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/>',
     rl: '<path d="M12 6c-3-2-6-2-10-1v15c4-1 7-1 10 1 3-2 6-2 10-1V5c-4-1-7-1-10 1zM12 6v15"/>',
@@ -2102,6 +2103,7 @@ function zeichne() {
   if (tab==='papierkorb') { window.IDVAkten?.papierkorb(); return; }
   if (tab==='org') { ladeOrganigramm(); return; }
   if (tab==='texte') { ladeTextbausteine(); return; }
+  if (tab==='abm') { window.IDVAbmeldungen?.laden(); return; }
   if (['sperr','geb','jub','bl'].includes(tab)) { ladeExtra(tab); return; }
   if (tab === 'log') {
     $('#inhalt').innerHTML = '<h1>Protokoll</h1><p>Lade Einträge …</p>';
@@ -5841,6 +5843,7 @@ document.addEventListener('click',async e=>{
 <script src="/porHinweise.js"></script>
 <script src="/aktenFeatures.js"></script>
 <script src="/kuendigungsArchiv.js"></script>
+<script src="/abmeldungen.js"></script>
 <script src="/responsiveNav.js"></script>
 </body>
 </html>
