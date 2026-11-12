@@ -8,3 +8,11 @@ migration-output/
 *.backup
 *.ndjson
 .DS_Store
+# Zugangsdaten liegen ausschließlich auf dem Server (Plesk), nie im Repository
+*.local.php
+config.local.php
+php/config.php
+.user.ini
+.php-ini
+*.pem
+*.key
