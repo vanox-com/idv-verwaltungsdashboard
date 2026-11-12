@@ -1554,6 +1554,70 @@ html[data-design-preset="schulzi"] input,html[data-design-preset="schulzi"] sele
 #idvThemeParticles .theme-particle{position:absolute;display:block;color:#bd9b73;opacity:.28;animation:idvPartikelSchweben var(--zeit) ease-in-out infinite alternate}
 @keyframes idvPartikelSchweben{0%{transform:translate3d(-5px,6px,0) rotate(-18deg);opacity:.14}100%{transform:translate3d(28px,-35px,0) rotate(15deg);opacity:.4}}
 @media(prefers-reduced-motion:reduce){#idvThemeParticles .theme-particle{animation:none!important;opacity:.12}}
+
+/* ===== Responsives Layout: Mobile (ab 360 px), Tablet, kleine Laptops, Desktop =====
+   Nur Darstellung. Unter 1024 px wird die Sidebar zum Off-Canvas-Menü (Burger). */
+body{overflow-x:clip}
+#inhalt{min-width:0;overflow-wrap:break-word}
+#inhalt :where(.box,.kachel,.hello,.dash-cell,.grid2>*){min-width:0}
+#inhalt :where(img,video){max-width:100%}
+#inhalt pre{white-space:pre-wrap}
+.tw{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.grid2{grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))}
+.routine-tabs{flex-wrap:wrap}
+.routine-tabs button{flex:1 1 135px}
+.nav-toggle{
+  display:none;place-items:center;flex-shrink:0;
+  width:43px;height:43px;padding:0;border-radius:12px;
+  background:rgba(140,148,194,.095);border:1px solid rgba(176,173,217,.38);color:#e0e0f5;
+}
+.nav-toggle svg{width:22px;height:22px}
+.nav-backdrop{display:none}
+/* Kacheln 4 → 2 → 1, Panels 2 → 1 */
+@media(min-width:1240px){.dash-cell-kpi{grid-column:span 3}}
+@media(min-width:1024px) and (max-width:1179.98px){.dash-cell-panel{grid-column:span 12}}
+@media(max-width:1023.98px){
+  #app{display:block}
+  #app>aside{
+    position:fixed;top:0;bottom:0;left:0;z-index:1200;
+    width:min(300px,86vw);height:100dvh;padding:15px 13px;
+    display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;
+    border-right:1px solid #353e49;border-bottom:0;
+    box-shadow:14px 0 42px rgba(0,0,0,.45);
+    transform:translateX(-105%);visibility:hidden;
+    transition:transform .24s ease,visibility 0s linear .24s;
+  }
+  #app.nav-open>aside{transform:none;visibility:visible;transition:transform .24s ease,visibility 0s}
+  #app>aside .sidebar-brand{align-items:center;width:auto;margin:0 1px 13px;padding:2px 3px 16px}
+  #app>aside .idv-sidebar-logo{width:100%;max-width:240px}
+  #app>aside #menu,#app>aside .sidebar-gruppe{width:auto}
+  #app>aside .sidebar-gruppe-inhalt{display:block}
+  #app>aside .sidebar-gruppe-inhalt a{margin:0 0 2px;padding:8px 9px}
+  #app>aside .me{width:auto;margin:18px 0 0}
+  .nav-backdrop{
+    display:block;position:fixed;inset:0;z-index:1190;
+    background:rgba(6,9,13,.58);opacity:0;pointer-events:none;transition:opacity .2s ease;
+  }
+  #app.nav-open .nav-backdrop{opacity:1;pointer-events:auto}
+  html.nav-lock{overflow:hidden}
+  .nav-toggle{display:inline-grid}
+  .workspace-main{padding:0 clamp(14px,3.2vw,28px) 32px;max-width:none}
+  .workspace-main::before{inset:0;opacity:.18}
+  .workspace-topbar{
+    position:sticky;top:0;z-index:60;
+    min-height:64px;margin-bottom:18px;padding:10px 2px;
+    background:rgba(25,29,35,.93);backdrop-filter:blur(8px);
+  }
+}
+@media(max-width:479.98px){
+  .dash-cell-kpi{grid-column:span 12}
+  .dash-cell>.kachel{min-height:112px}
+  .kacheln{grid-template-columns:minmax(0,1fr)}
+  .workspace-topbar-icon{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+  #app>aside,.nav-backdrop{transition:none!important}
+}
 </style>
 </head>
 <body>
@@ -1591,7 +1655,7 @@ html[data-design-preset="schulzi"] input,html[data-design-preset="schulzi"] sele
   <div class="login-bottom"><div class="login-bottom-left">SICHERHEIT · VERTRAUEN · TEAMGEIST</div><div class="login-bottom-right">GESCHÜTZTER DIENSTZUGANG</div></div>
 </div>
 <div id="app" class="hide">
-  <aside>
+  <aside id="appSidebar">
     <div class="sidebar-brand"><img class="idv-sidebar-logo" src="/assets/idv-polizei-logo-transparent.svg" width="255" height="100" alt="Polizei IdentityValley GTA RP" decoding="async"><span class="sidebar-brand-caption">VERWALTUNGSPORTAL <span aria-hidden="true">·</span> GESCHÜTZTER ZUGANG</span></div>
     <div id="menu"></div>
     <div class="me">
@@ -1600,7 +1664,8 @@ html[data-design-preset="schulzi"] input,html[data-design-preset="schulzi"] sele
       <div style="margin-top:12px;font-size:11px"><a href="/datenschutz" target="_blank" rel="noopener noreferrer">Datenschutz</a> · <a href="/start" target="_blank" rel="noopener noreferrer">Über das Portal</a></div>
     </div>
   </aside>
-  <main class="workspace-main"><header class="workspace-topbar"><div class="workspace-topbar-icon" id="workspaceTopbarIcon" data-group="uebersicht" aria-hidden="true"></div><div class="workspace-topbar-title"><strong>VERWALTUNGSZENTRALE</strong><span id="workspaceBereich">Dashboard</span></div><span class="workspace-topbar-caption"><span class="workspace-status-dot" aria-hidden="true"></span>IDENTITYVALLEY · GTA RP</span></header><div id="inhalt"></div></main>
+  <div class="nav-backdrop" id="navBackdrop" aria-hidden="true"></div>
+  <main class="workspace-main"><header class="workspace-topbar"><button type="button" class="nav-toggle" id="navToggle" aria-label="Menü öffnen" aria-controls="appSidebar" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><div class="workspace-topbar-icon" id="workspaceTopbarIcon" data-group="uebersicht" aria-hidden="true"></div><div class="workspace-topbar-title"><strong>VERWALTUNGSZENTRALE</strong><span id="workspaceBereich">Dashboard</span></div><span class="workspace-topbar-caption"><span class="workspace-status-dot" aria-hidden="true"></span>IDENTITYVALLEY · GTA RP</span></header><div id="inhalt"></div></main>
 </div>
 <dialog id="personalDialog" aria-label="Personalakte"></dialog><dialog id="sfDialog" aria-label="Sonderfunktionen bearbeiten"></dialog><dialog id="porDialog" aria-label="POR-Freigabe"></dialog>
 
@@ -5778,5 +5843,6 @@ document.addEventListener('click',async e=>{
 <script src="/porHinweise.js"></script>
 <script src="/aktenFeatures.js"></script>
 <script src="/kuendigungsArchiv.js"></script>
+<script src="/responsiveNav.js"></script>
 </body>
 </html>
