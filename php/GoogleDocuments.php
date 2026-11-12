@@ -20,11 +20,86 @@ const IDV_GOOGLE_TEMPLATES=[
     'praktikumsbestaetigung'=>['titel'=>'Praktikumsbestätigung','id'=>'15RWiI94EB1EGqZNnX-h95awljtHBt_Krrute35UWhkA','recht'=>'praktika'],
     'nebenjob'=>['titel'=>'Nebenjobfreigabe','id'=>'1Xrr8Sz4zNxYU1TY0Tk_OjBVeAq0muuw7ty3xkILENVM','recht'=>'pers']
 ];
-function googleCredentials(): ?array {
-    $id=trim((string)getenv('GOOGLE_OAUTH_CLIENT_ID'));
-    $secret=trim((string)getenv('GOOGLE_OAUTH_CLIENT_SECRET'));
-    if(!preg_match('/^[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/D',$id)||strlen($secret)<10)return null;
+/** Private server-only configuration; never inside the public/ document root. */
+function googlePrivateConfigFile(): string {
+    $dir=trim((string)(getenv('IDV_TEMPLATE_DIR')?:''));
+    $base=$dir!==''?$dir:dirname(__DIR__).'/private/google-templates';
+    if(!str_starts_with($base,'/'))throw new \RuntimeException('Privater Vorlagenpfad ist ungültig');
+    return rtrim($base,'/').'/.google-oauth-credentials.json';
+}
+function googleCredentialPair(?string $id,?string $secret): ?array {
+    if(!is_string($id)||!is_string($secret)||
+       !preg_match('/^[A-Za-z0-9_-]+\\.apps\\.googleusercontent\\.com$/D',$id)||
+       strlen($secret)<10||strlen($secret)>512||preg_match('/[\\x00-\\x20\\x7f]/',$secret))return null;
     return ['id'=>$id,'secret'=>$secret];
+}
+function googlePrivateCredentials(): ?array {
+    $path=googlePrivateConfigFile();
+    if(is_link($path)||!is_file($path))return null;
+    $bytes=@file_get_contents($path);
+    if(!is_string($bytes)||strlen($bytes)>2048)return null;
+    $data=json_decode($bytes,true);
+    if(!is_array($data))return null;
+    return googleCredentialPair($data['id']??null,$data['secret']??null);
+}
+function googleCredentialsSource(): string {
+    $env=googleCredentialPair(getenv('GOOGLE_OAUTH_CLIENT_ID')?:null,getenv('GOOGLE_OAUTH_CLIENT_SECRET')?:null);
+    if($env!==null)return 'environment';
+    return googlePrivateCredentials()!==null?'admin':'missing';
+}
+function googleCredentials(): ?array {
+    $env=googleCredentialPair(getenv('GOOGLE_OAUTH_CLIENT_ID')?:null,getenv('GOOGLE_OAUTH_CLIENT_SECRET')?:null);
+    return $env??googlePrivateCredentials();
+}
+/** Persist administrator-provided credentials only in a private chmod-0600 file. */
+function googleSavePrivateCredentials(string $id,string $secret): void {
+    $pair=googleCredentialPair(trim($id),trim($secret));
+    if($pair===null)fail(400,'Ungültige Google OAuth Client-ID oder Client-Secret');
+    $path=googlePrivateConfigFile();
+    $dir=dirname($path);
+    if(!is_dir($dir)||is_link($dir)||!is_writable($dir))
+        fail(503,'Privater Vorlagenordner ist nicht beschreibbar');
+    if(is_link($path))fail(503,'Unsicherer Konfigurationspfad');
+    $tmp=$dir.'/.google-oauth-'.bin2hex(random_bytes(12)).'.tmp';
+    $handle=@fopen($tmp,'x');
+    if($handle===false)fail(503,'Private OAuth-Konfiguration konnte nicht vorbereitet werden');
+    try {
+        @chmod($tmp,0600);
+        $bytes=json_encode($pair,JSON_THROW_ON_ERROR);
+        if(fwrite($handle,$bytes)!==strlen($bytes)||!fflush($handle))
+            fail(503,'OAuth-Konfiguration konnte nicht vollständig geschrieben werden');
+    }finally{fclose($handle);}
+    try {
+        if(!@rename($tmp,$path))fail(503,'Private OAuth-Konfiguration konnte nicht aktiviert werden');
+        @chmod($path,0600);
+    }finally{@unlink($tmp);}
+}
+function dispatchGoogleAdminSettings(array $user,string $method,string $uri): bool {
+    if($uri!=='/api/system/google-oauth')return false;
+    if(($user['rolle']??'')!=='Administrator')fail(403,'Nur Administratoren dürfen Google OAuth einrichten');
+    if($method==='GET'){
+        $creds=googleCredentials();
+        respond(200,['eingerichtet'=>$creds!==null,
+            'clientId'=>$creds['id']??'',
+            'quelle'=>googleCredentialsSource(),
+            'origin'=>googlePortalOrigin()]);
+    }
+    if($method!=='POST')fail(405,'Methode nicht erlaubt');
+    // Require an explicit browser Origin; cross-origin requests cannot update secrets.
+    if(!secureRequest()||($_SERVER['HTTP_ORIGIN']??'')!==googlePortalOrigin())
+        fail(403,'Google OAuth darf nur über die sichere Portal-Adresse eingerichtet werden');
+    $data=body();
+    $id=$data['clientId']??null;
+    $secret=$data['clientSecret']??null;
+    if(!is_string($id)||!is_string($secret)||strlen($id)>256||strlen($secret)>512)
+        fail(400,'Client-ID und Client-Secret sind erforderlich');
+    if($secret==='')$secret=googlePrivateCredentials()['secret']??'';
+    googleSavePrivateCredentials($id,$secret);
+    sql('INSERT INTO log(user_id,aktion,art) VALUES(?,?,?)',
+        [(int)$user['id'],'Private Google OAuth-Konfiguration aktualisiert','system']);
+    respond(200,['ok'=>true,'eingerichtet'=>googleCredentials()!==null,
+        'clientId'=>googleCredentials()['id']??'',
+        'quelle'=>googleCredentialsSource(),'origin'=>googlePortalOrigin()]);
 }
 function googlePortalOrigin(): ?string {
     $value=trim((string)(getenv('IDV_GOOGLE_ORIGIN')?:IDV_GOOGLE_PRODUCTION_ORIGIN));
