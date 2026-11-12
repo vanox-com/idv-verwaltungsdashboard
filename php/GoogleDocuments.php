@@ -6,6 +6,9 @@ namespace IDV;
  * Server-side DOCX and personal Google OAuth helpers.
  * Never persist OAuth access tokens. Never disable Google TLS validation.
  */
+// Canonical HTTPS origin of the new PHP panel. Explicit host configuration wins.
+// Never derive the trusted OAuth origin from untrusted HTTP Host headers.
+const IDV_GOOGLE_PRODUCTION_ORIGIN='https://pol-panel.identityvalley.de';
 const IDV_GOOGLE_TEMPLATES=[
     'abmahnung'=>['titel'=>'Abmahnung','id'=>'1wUNxrOWCxMUHF12Mq54PNfUKOfytKiYAA399g3aYF5w','recht'=>'dis'],
     'fristgerecht'=>['titel'=>'Fristgerechte Kündigung','id'=>'10RN9SpmI2OdElidWpbhsIIqJ26DhaAYd8A4bUuim7hw','recht'=>'kue'],
@@ -24,7 +27,7 @@ function googleCredentials(): ?array {
     return ['id'=>$id,'secret'=>$secret];
 }
 function googlePortalOrigin(): ?string {
-    $value=trim((string)(getenv('IDV_GOOGLE_ORIGIN')?:''));
+    $value=trim((string)(getenv('IDV_GOOGLE_ORIGIN')?:IDV_GOOGLE_PRODUCTION_ORIGIN));
     if($value===''||strlen($value)>253)return null;
     $url=parse_url($value);
     if(!is_array($url)||($url['scheme']??null)!=='https'||
@@ -35,6 +38,14 @@ function googlePortalOrigin(): ?string {
     $host=strtolower((string)$url['host']);
     if($host!=='localhost'&&!str_contains($host,'.'))return null;
     return $value;
+}
+/** Safe diagnostics for authenticated users; never return the OAuth secret. */
+function googleSetupHint(): ?string {
+    if(googleCredentials()===null)
+        return 'Google OAuth ist auf dem neuen Server noch nicht vollständig eingerichtet: GOOGLE_OAUTH_CLIENT_ID und/oder GOOGLE_OAUTH_CLIENT_SECRET fehlen oder sind ungültig.';
+    if(googlePortalOrigin()===null)
+        return 'IDV_GOOGLE_ORIGIN ist ungültig. Bitte eine HTTPS-Adresse ohne Pfad hinterlegen.';
+    return null;
 }
 function googleOrigin(): string {
     $expected=googlePortalOrigin();
