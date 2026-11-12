@@ -69,8 +69,8 @@ async function dgTextbausteine(){
 async function dgPrepareAuth(){
   try{
    const result=await api('/dokumentgenerator/status');
+   if(!result.eingerichtet)throw Error(result.hinweis||'Google OAuth ist noch nicht eingerichtet.');
    dgPruefeGooglePortalUrsprung(result);
-   if(!result.eingerichtet)throw Error('Google OAuth ist noch nicht eingerichtet.');
    const nameInput=document.getElementById('dg_unterzeichner');
    if(nameInput){
     nameInput.value=result.ersteller||'';
