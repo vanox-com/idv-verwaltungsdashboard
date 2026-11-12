@@ -93,7 +93,7 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
             respond(200,['ok'=>true]);
         }
     }
-    $allowed=['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen','papierkorb','kuearchiv'];
+    $allowed=['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','org','sperr','geb','jub','bl','log','por','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen','papierkorb','kuearchiv','abm'];
     if($method==='PATCH'&&preg_match('#^/api/rollen/([^/]+)/recht/([^/]+)$#D',$uri,$m)){
         needAdmin($u);$role=rawurldecode($m[1]);$mod=rawurldecode($m[2]);$b=body();$level=$b['stufe']??null;
         if($role==='Administrator')fail(403,'Administratorrechte sind fest');
