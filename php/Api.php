@@ -249,6 +249,8 @@ function run(): void {
         if(dispatchSettings($u,$method,$uri)) return;
         require_once __DIR__.'/Checklists.php';
         if(dispatchChecklists($u,$method,$uri)) return;
+        require_once __DIR__.'/TerminationDiagnostics.php';
+        if(dispatchTerminationDiagnostics($u,$method,$uri)) return;
         require_once __DIR__.'/Personnel.php';
         if(dispatchPersonnel($u,$method,$uri)) return;
         require_once __DIR__.'/Textbausteine.php';
