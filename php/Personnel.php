@@ -209,6 +209,7 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
         $rankDate=$b['rang_datum']??null;
         if(strlen($rank)>150||strlen($rankReason)>1000||($rankDate!==null&&!preg_match('/^\d{4}-\d{2}-\d{2}$/D',(string)$rankDate)))
             fail(400,'Ungültiger Rangänderungsantrag');
+        $saveStep='P01'; // Personalakte sperren
         db()->beginTransaction();
         try{
             $found=sql('SELECT * FROM personal WHERE personalnummer=? FOR UPDATE',[$n]);
@@ -230,18 +231,23 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
                 $params[]=($value===''&&!in_array($key,['arbeitsvertrag_url','ernennungsurkunde_url'],true))?null:$value;
             }
             $params[]=$n;$params[]=$revision;
+            $saveStep='P02'; // Personalstatus und sonstige Änderungen speichern
             $stmt=db()->prepare('UPDATE personal SET '.implode(',',$updates).' WHERE personalnummer=? AND row_revision=?');
             $stmt->execute($params);
             if($stmt->rowCount()!==1)versionConflict();
+            $saveStep='P03'; // Gespeicherten Status einlesen
             $applied=sql('SELECT * FROM personal WHERE personalnummer=?',[$n])[0];
             if($rank!=='')
                 sql('INSERT INTO personal_rangantraege(personalnummer,alter_rang,beantragter_rang,begruendung,antragsteller_id,korrigiertes_befoerderungsdatum) VALUES(?,?,?,?,?,?)',
                     [$n,$before['dienstgrad']??'',$rank,$rankReason,$u['id'],$rankDate]);
             $added=false;$oldTerm=false;
             if($termination){
+                $saveStep='K01'; // Historische Kündigungen abgleichen
                 $oldTerm=(bool)termMatches($applied);
                 if(!$oldTerm){
+                    $saveStep='K02'; // Kündigung und Personalsnapshot anlegen
                     addTermination($applied,trim((string)$b['kuendigungsgrund']));$added=true;
+                    $saveStep='K03'; // Kündigung protokollieren
                     auditAction($u,'Kündigung automatisch angelegt: '.$n.' '.$applied['vorname'].' '.$applied['nachname'],'add');
                 }
             }
@@ -249,10 +255,24 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
             foreach(['vorname','nachname','status','gruppe','beschaeftigungsart','nebenjob','eintrittsdatum'] as $key)
                 if(array_key_exists($key,$changes)&&(string)($before[$key]??'')!==(string)($changes[$key]??''))
                     $delta[$key]=['alt'=>$before[$key]??null,'neu'=>$changes[$key]??null];
+            $saveStep='P04'; // Änderungen protokollieren
             if($delta)sql('INSERT INTO personal_audit(personalnummer,user_id,aenderungen) VALUES(?,?,?)',
                 [$n,$u['id'],json_encode($delta,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)]);
+            $saveStep='P05'; // Auditprotokoll schreiben
             auditAction($u,'Personal '.$n.' geändert'.($termination?' (Status: Gekündigt)':''));
+            $saveStep='P06'; // Transaktion bestätigen
             db()->commit();
+        }catch(\PDOException $e){
+            if(db()->inTransaction())db()->rollBack();
+            if($termination??false){
+                // No SQL query, personal names, reason or credentials in error response.
+                $driverCode=(int)($e->errorInfo[1]??0);
+                $errorCode='KUEND-'.$saveStep.'-'.($driverCode>0?$driverCode:'DB');
+                error_log('[IDV PHP] Kündigung fehlgeschlagen: Schritt='.$saveStep.
+                    ' SQLSTATE='.$e->getCode().' MySQL='.$driverCode);
+                fail(500,'Kündigung konnte nicht gespeichert werden (Diagnose: '.$errorCode.').');
+            }
+            throw $e;
         }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
         respond(200,['ok'=>true,'rangantrag_angelegt'=>$rank!=='','kuendigung_angelegt'=>$added,'kuendigung_vorhanden'=>$oldTerm]);
     }
