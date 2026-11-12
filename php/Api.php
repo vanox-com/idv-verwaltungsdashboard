@@ -284,6 +284,8 @@ function run(): void {
         require_once __DIR__.'/AktenFeatures.php';
         if(dispatchRecordFeatures($u,$method,$uri)) return;
         require_once __DIR__.'/GoogleDocuments.php';
+        require_once __DIR__.'/GoogleTemplates.php';
+        if(dispatchGoogleTemplateAdmin($u,$method,$uri))return;
         require_once __DIR__.'/DocumentTemplates.php';
         require_once __DIR__.'/Documents.php';
         if(dispatchDocuments($u,$method,$uri)) return;
