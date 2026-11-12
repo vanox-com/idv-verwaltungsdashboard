@@ -18,6 +18,8 @@ jobs:
           for f in public/api.php php/*.php; do
             php -l "$f" || exit 1
           done
+      - name: Test Google OAuth origin validation and safe diagnostics
+        run: php tests/mysql8-google-origin.php
       - name: Confirm reviewed MySQL schema structure
         run: |
           test "$(grep -c '^CREATE TABLE ' scripts/mysql/mysql8-schema.sql)" -eq 48
