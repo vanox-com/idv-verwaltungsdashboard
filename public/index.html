@@ -3423,7 +3423,7 @@ async function urkundenAuthVorbereiten(){
   }
   await urkundenGoogleScript;
   if(!urkundenCodeClient)urkundenCodeClient=google.accounts.oauth2.initCodeClient({
-   client_id:config.clientId,scope:'https://www.googleapis.com/auth/drive.file',ux_mode:'popup',
+   client_id:config.clientId,scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',ux_mode:'popup',
    select_account:true,
    callback:async response=>{
     const pending=urkundenPending;urkundenPending=null;
