@@ -27,9 +27,12 @@ function dispatchCertificates(array $u,string $method,string $uri): bool {
         if(!canIssueCertificate($u))fail(403,'Kein Recht für diese Beförderungsaktion');
         $google=googleCredentials();
         $origin=googlePortalOrigin();
-        respond(200,['eingerichtet'=>$google!==null&&$origin!==null,
+        $ready=idvTemplatesReady();
+        $hint=googleSetupHint();
+        if($hint===null&&!$ready)$hint='Originalvorlagen fehlen: Administrator muss das ZIP unter /vorlagen.html importieren.';
+        respond(200,['eingerichtet'=>$google!==null&&$origin!==null&&$ready,
             'clientId'=>$google['id']??null,'origin'=>$origin,
-            'hinweis'=>googleSetupHint(),'modus'=>'persoenlich']);
+            'hinweis'=>$hint,'modus'=>'persoenlich']);
     }
     if($method==='POST'&&preg_match('#^/api/urkunden/polizeimeister/([1-9][0-9]*)$#D',$uri,$m)){
         needRight($u,'bef');if(!canIssueCertificate($u))fail(403,'Kein Recht für diese Beförderungsaktion');
@@ -62,7 +65,7 @@ function dispatchCertificates(array $u,string $method,string $uri): bool {
         $token=null;$created=null;$saved=false;
         try{
             $token=googleCodeForSession($code,$origin,$google);
-            $original=googleDownloadTemplate($token,IDV_CERTIFICATE_GOOGLE_ID);
+            $original=idvTemplateBytes('urkunde');
             $docx=docxRewrite($original,fn($xml)=>certificateFillXml($xml,$person,$oath,$promoted));
             $title='Ernennungsurkunde '.$name;
             $created=googleUploadDocx($token,$title,$docx);
