@@ -19,7 +19,7 @@ try {
             throw new RuntimeException('Test-DOCX konnte nicht geöffnet werden');
         $doc->addFromString('[Content_Types].xml','<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>');
         $doc->addFromString('word/document.xml','<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'.$key.str_repeat('x',200).'</w:document>');
-        $doc->addFromString('word/styles.xml',str_repeat('S',1200));
+        $doc->addFromString('word/styles.xml',base64_encode(random_bytes(2048)));
         $doc->close();
         // The test intentionally creates a valid ZIP-shaped DOCX; production
         // templates are genuine Google Docs DOCX exports.
@@ -32,7 +32,6 @@ if(!IDV\idvTemplatesReady())throw new RuntimeException('Template import failed')
 foreach(IDV\IDV_TEMPLATE_KEYS as $key){
     if(!str_starts_with(IDV\idvTemplateBytes($key),'PK'))
         throw new RuntimeException('Unusable template '.$key);
-    if(!str_contains(IDV\idvTemplateBytes($key),'')){}
 }
 foreach(glob($dir.'/*')?:[] as $path)unlink($path);
 rmdir($dir);
