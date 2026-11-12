@@ -1,5 +1,6 @@
 /* Gemeinsamer Generator für RP-Verwaltungsdokumente.
    Berechtigungen, Aktenzuordnung und Speicherung werden serverseitig geprüft. */
+const DG_GOOGLE_MAIN_ORIGIN='https://pol-panel.identityvalley.de';
 const DG_FIELDS={
  datum:['Ausstellungsdatum','date'],unterzeichner:['Polizeilicher Unterzeichner (angemeldetes Konto)','text'],
  rang:['Dienstgrad des Unterzeichners','text'],anrede:['Anrede','select'],
