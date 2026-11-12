@@ -30,7 +30,29 @@ Im Secret-Store des Hosters (nicht in GitHub) konfigurieren:
 | `IDV_FORCE_HTTPS` | Nur bei HTTPS-Terminierung vor PHP (Reverse Proxy) auf `1` setzen, damit Session-Cookies und Origin-Prüfung zuverlässig HTTPS erzwingen; niemals ungeprüfte `X-Forwarded-Proto`-Header vertrauen |
 | `COPNET_ENCRYPTION_KEY` | derselbe 64-stellige Hex-Schlüssel wie im bisherigen System; erforderlich für bestehende CopNet-Zugänge |
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | Google-Webanwendungsclient; Zugangsdaten ausschließlich im Hostersecret speichern |
-| `IDV_GOOGLE_ORIGIN` | Exakte HTTPS-Origin des neuen Staging-/Produktivportals (ohne Pfad/abschließenden Slash), zusätzlich in Google Cloud als autorisierten JavaScript-Ursprung hinterlegen |
+| `IDV_GOOGLE_ORIGIN` | Optional für abweichende Domains/Staging; bei nicht gesetztem Wert ist `https://pol-panel.identityvalley.de` die feste HTTPS-Standard-Origin. Explizite Werte müssen exakt und ohne Pfad/abschließenden Slash passen. |
+
+### Google OAuth auf pol-panel.identityvalley.de (12.11.2026)
+
+Die sichere PHP-Standard-Origin ist `https://pol-panel.identityvalley.de` (nur
+für Google OAuth, kein DNS-Eintrag). Dafür wird kein `IDV_GOOGLE_ORIGIN`
+benötigt, solange kein abweichender Wert bereits im Hoster gesetzt ist.
+In Google Cloud → Auth Platform → Clients → Webanwendung muss genau diese
+Adresse unter **Autorisierte JavaScript-Quellen** stehen. Der persönliche
+Google-Popup-Codeflow tauscht den Code serverseitig mit dieser Origin aus.
+
+**Zwingend beim Hoster:** `GOOGLE_OAUTH_CLIENT_ID` und
+`GOOGLE_OAUTH_CLIENT_SECRET` als **private Server-Umgebungsvariablen**
+setzen (nicht in GitHub, nicht im Browser oder in einer öffentlichen Datei).
+Ohne diese zwei Werte kann PHP keine Urkunden/Dokumente erstellen.
+Angemeldete Nutzer sehen über die Dokumentgenerator-Statusabfrage eine
+Fehlermeldung, wenn die Konfiguration fehlt, niemals das Secret selbst.
+
+Die Branding-Überprüfung durch Google ist davon getrennt. Wer die Anwendung
+öffentlich verifizieren lassen will, braucht die Bestätigung der
+übergeordneten Domain `identityvalley.de` durch den Domaininhaber in
+Google Search Console. Für Tests mit freigegebenen Testnutzern ist
+keine abgeschlossene Branding-Verifizierung notwendig.
 
 Die bestehende Google-OAuth-Konfiguration und neue Redirect-URI müssen
 vor dem Go-Live ebenfalls geprüft werden. Insbesondere Dokumentgeneratoren
