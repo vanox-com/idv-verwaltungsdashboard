@@ -11,7 +11,7 @@ function documentStatus(array $u): array {
     $google=googleCredentials();$name=trim(userName($u));
     $origin=googlePortalOrigin();
     return ['eingerichtet'=>$google!==null&&$origin!==null,'clientId'=>$google['id']??null,
-        'origin'=>$origin,
+        'origin'=>$origin,'hinweis'=>googleSetupHint(),
         'ersteller'=>$name,
         'erstellerVollstaendig'=>count(preg_split('/\s+/u',$name))>=2&&strlen($name)<=160];
 }
