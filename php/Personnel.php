@@ -228,6 +228,15 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
             $updates=[];$params=[];
             foreach($changes as $key=>$value){
                 $updates[]=$key.'=?';
+                if(in_array($key,['waffenschein','spind'],true)){
+                    // The browser sends booleans; PDO execute(array) can bind false
+                    // as an empty string, which MySQL 8 rejects for TINYINT (1366).
+                    // Match the existing CREATE route by storing integer 0/1.
+                    if(!is_bool($value)&&!in_array($value,[0,1],true))
+                        fail(400,'Ungültiger Wert für das Feld '.$key);
+                    $params[]=$value?1:0;
+                    continue;
+                }
                 $params[]=($value===''&&!in_array($key,['arbeitsvertrag_url','ernennungsurkunde_url'],true))?null:$value;
             }
             $params[]=$n;$params[]=$revision;
