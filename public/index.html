@@ -1558,6 +1558,8 @@ html[data-design-preset="schulzi"] input,html[data-design-preset="schulzi"] sele
 /* ===== Responsives Layout: Mobile (ab 360 px), Tablet, kleine Laptops, Desktop =====
    Nur Darstellung. Unter 1024 px wird die Sidebar zum Off-Canvas-Menü (Burger). */
 body{overflow-x:clip}
+/* Inhalt nutzt die volle Breite neben der Sidebar (vorher max. 1800 px, rechts leer auf breiten Monitoren). */
+#app>main.workspace-main{max-width:none}
 #inhalt{min-width:0;overflow-wrap:break-word}
 #inhalt :where(.box,.kachel,.hello,.dash-cell,.grid2>*){min-width:0}
 #inhalt :where(img,video){max-width:100%}
