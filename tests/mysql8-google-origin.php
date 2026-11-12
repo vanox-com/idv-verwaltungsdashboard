@@ -9,7 +9,7 @@ $cases=[
     ['https://staging.example.test?x=1',null],
     ['https://someone@staging.example.test',null],
     ['https://example.test:8443','https://example.test:8443'],
-    ['',null]
+    ['', 'https://pol-panel.identityvalley.de']
 ];
 putenv('IDV_GOOGLE_ORIGIN');
 if(IDV\googlePortalOrigin()!=='https://pol-panel.identityvalley.de')
