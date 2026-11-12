@@ -1,0 +1,23 @@
+# Abhängigkeiten
+node_modules/
+
+# Zugangsdaten und Umgebung – liegen ausschließlich auf dem Server (Plesk), nie im Repository
+.env
+.env.*
+!.env.example
+*.local.php
+config.local.php
+php/config.php
+.user.ini
+.php-ini
+*.pem
+*.key
+
+# Datenbank-Exporte und Migrationsausgaben (personenbezogene Daten)
+migration-output/
+*.sql.gz
+*.dump
+*.backup
+*.ndjson
+
+.DS_Store
