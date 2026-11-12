@@ -95,18 +95,8 @@ function googleCodeForSession(string $code,string $origin,array $config): string
         fail(401,'Google-Anmeldung fehlgeschlagen. Bitte erneut auswählen.');
     return (string)$body['access_token'];
 }
-function googleDownloadTemplate(string $token,string $id): string {
-    $url='https://www.googleapis.com/drive/v3/files/'.rawurlencode($id).
-        '/export?mimeType='.rawurlencode('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    $r=googleRequest($url,'GET',$token);
-    if($r['code']===401)fail(401,'Originalvorlage: Google-Anmeldung abgelaufen (HTTP 401)');
-    if($r['code']===403)fail(403,'Originalvorlage: Keine Leseberechtigung für dieses Konto (HTTP 403)');
-    if($r['code']===404)fail(404,'Originalvorlage: Nicht gefunden (HTTP 404)');
-    if($r['code']!==200)fail(422,'Originalvorlage konnte nicht geladen werden (HTTP '.$r['code'].')');
-    if(strlen($r['body'])<1000||strlen($r['body'])>6000000||
-       substr($r['body'],0,2)!=='PK')fail(422,'Vorlage ist keine gültige Word-Datei');
-    return $r['body'];
-}
+// Source templates are now loaded from the private local DOCX bundle.
+// The personal user OAuth token is never used to read original Drive files.
 function docxRewrite(string $bytes,callable $rewrite): string {
     if(!class_exists(\ZipArchive::class))fail(503,'PHP-ZIP-Erweiterung für Word-Dokumente fehlt');
     $temporary=tempnam(sys_get_temp_dir(),'idvdoc_');
