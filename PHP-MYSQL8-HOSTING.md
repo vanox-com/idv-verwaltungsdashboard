@@ -54,6 +54,52 @@ Die Branding-Überprüfung durch Google ist davon getrennt. Wer die Anwendung
 Google Search Console. Für Tests mit freigegebenen Testnutzern ist
 keine abgeschlossene Branding-Verifizierung notwendig.
 
+### Einmaliger Import der zehn Originalvorlagen (ohne Google Drive Readonly)
+
+**Die Originalvorlagen gehören NICHT in dieses öffentliche GitHub-Repository.**
+Der Administrator importiert nach dem Einspielen des PHP-Branches einmalig das
+private ZIP-Paket `IDV_Originalvorlagen_10_Dokumente.zip` auf
+`https://pol-panel.identityvalley.de/vorlagen.html`.
+
+Das Paket enthält exakt die folgenden Dateien (als exportierte Google-Docs
+DOCX-Originale, mit unverändertem Wappen, Layout und Platzhaltern):
+
+```text
+abmahnung.docx               fristgerecht.docx
+fristlos.docx                hauptvertrag.docx
+pmavertrag.docx              nebenvertrag.docx
+praktikum.docx               praktikumsbestaetigung.docx
+nebenjob.docx                urkunde.docx
+```
+
+Die PHP-API `/api/system/vorlagen` ist ausschließlich für eingeloggte
+**Administratoren** zugänglich. Sie validiert die zehn DOCX-Dateien, lehnt
+fremde ZIP-Einträge ab und legt sie in
+`<Repository-Root>/private/google-templates/` (außerhalb von `public/`)
+ab. Der private Ordner wird durch `.gitignore` von GitHub ausgeschlossen.
+Falls das Hosting den Ordner nicht beschreiben kann, muss der Hoster einmalig
+Schreibrechte gewähren oder den privaten absoluten Speicherpfad per
+`IDV_TEMPLATE_DIR` setzen. Das ZIP nie in `public/` hochladen.
+
+**OAuth-Scope der Benutzer:** ausschließlich
+`https://www.googleapis.com/auth/drive.file`. Der Google-Nutzer gibt der
+App lediglich Erlaubnis, in **seinem Drive** ein neues Google-Dokument aus
+der lokal gespeicherten Originalvorlage zu erstellen. Die Originalvorlagen
+werden nicht mit seinem Token heruntergeladen. Der Google-Nutzer ist
+Eigentümer seines neuen Dokuments. Der Zugriff auf die geschützten Originale
+ist auf den Server beschränkt; kein `drive.readonly` erforderlich.
+
+Bis der Admin die zehn Originalvorlagen importiert hat, melden die
+Status-Endpunkte `eingerichtet:false` mit einem Hinweis auf
+`/vorlagen.html`. Der erfolgreiche Import ersetzt keine fehlenden
+`GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` am Server.
+
+**Google Branding:** Die Verwendung von `drive.file` reduziert die
+Berechtigungsprüfung erheblich. Eine öffentliche Google-Branding-Verifizierung
+von `identityvalley.de` benötigt weiterhin einen passenden
+Domain-Eigentumsnachweis. Technische OAuth-Tests benötigen keine abgeschlossene
+Branding-Verifizierung; die Zielgruppen- und Veröffentlichungsregeln gelten.
+
 Die bestehende Google-OAuth-Konfiguration und neue Redirect-URI müssen
 vor dem Go-Live ebenfalls geprüft werden. Insbesondere Dokumentgeneratoren
 dürfen nicht heimlich von bisherigen Google-Drive-Verknüpfungen abweichen.
