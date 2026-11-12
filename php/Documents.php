@@ -10,8 +10,11 @@ function permittedDocument(array $rights,string $type,int $level=2): bool {
 function documentStatus(array $u): array {
     $google=googleCredentials();$name=trim(userName($u));
     $origin=googlePortalOrigin();
-    return ['eingerichtet'=>$google!==null&&$origin!==null,'clientId'=>$google['id']??null,
-        'origin'=>$origin,'hinweis'=>googleSetupHint(),
+    $ready=idvTemplatesReady();
+    $hint=googleSetupHint();
+    if($hint===null&&!$ready)$hint='Originalvorlagen fehlen: Administrator muss das ZIP unter /vorlagen.html importieren.';
+    return ['eingerichtet'=>$google!==null&&$origin!==null&&$ready,'clientId'=>$google['id']??null,
+        'origin'=>$origin,'hinweis'=>$hint,
         'ersteller'=>$name,
         'erstellerVollstaendig'=>count(preg_split('/\s+/u',$name))>=2&&strlen($name)<=160];
 }
@@ -96,7 +99,7 @@ function dispatchDocuments(array $u,string $method,string $uri): bool {
         $token=null;$fileId=null;$saved=false;
         try{
             $token=googleCodeForSession($code,$origin,$oauth);
-            $word=googleDownloadTemplate($token,$tpl['id']);
+            $word=idvTemplateBytes($type);
             $docx=docxRewrite($word,fn($xml)=>documentFillXml($xml,$type,$p,$f));
             $fileId=googleUploadDocx($token,$title,$docx);
             $link='https://docs.google.com/document/d/'.$fileId.'/edit';
