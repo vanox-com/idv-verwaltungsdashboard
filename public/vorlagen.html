@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>IDV · Private Google-Dokumentvorlagen</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;background:#101825;color:#e6ecf5;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:760px;margin:7vh auto;padding:24px}
+h1{font-size:27px;margin:0 0 8px}p{color:#a8bbcc}
+.panel{background:#192638;border:1px solid #34465f;border-radius:14px;padding:26px;margin:20px 0}
+#status{padding:12px 0;min-height:24px}ul{padding-left:24px;columns:2;line-height:2}
+.good{color:#79dab0}.missing,.error{color:#ff9b9b}
+input[type=file]{display:block;width:100%;margin:18px 0;padding:16px;border:1px dashed #7895ba;border-radius:9px;background:#101d2e}
+button{background:#4674ae;color:white;font:inherit;font-weight:600;border:0;padding:11px 20px;border-radius:7px;cursor:pointer}
+button:disabled{opacity:.5;cursor:wait}
+a{color:#9fc5ef}small{color:#96a8bc}
+@media(max-width:580px){ul{columns:1}main{padding:14px}}
+</style>
+</head>
+<body>
+<main>
+<a href="/">← Zum IDV-Verwaltungsdashboard</a>
+<h1>Private Dokumentvorlagen</h1>
+<p>Nur für Administratoren. Hier werden die zehn originalen Word-Vorlagen einmalig in einen nicht öffentlich zugänglichen Serverordner importiert. Kein Mitarbeiter muss Google Zugriff auf sein gesamtes Drive geben.</p>
+<section class="panel">
+<h2>Vorlagenstatus</h2>
+<div id="status" role="status">Prüfe Administratorrechte und Servervorlagen …</div>
+<ul id="vorlagen"></ul>
+</section>
+<section class="panel">
+<h2>Originalvorlagen importieren</h2>
+<p>Wähle das bereitgestellte ZIP-Paket mit genau zehn DOCX-Dateien. Die Originale werden unverändert geschützt gespeichert; die fertigen Dokumente gehören später dem jeweils angemeldeten Google-Nutzer.</p>
+<form id="uploadForm">
+<label for="paket"><strong>ZIP mit Originalvorlagen</strong></label>
+<input type="file" id="paket" name="paket" accept=".zip,application/zip" required>
+<button id="upload" type="submit">Vorlagenpaket importieren</button>
+</form>
+<p id="meldung" role="status"></p>
+<small>Die Dateien bleiben außerhalb des öffentlichen Webverzeichnisses. Bei fehlenden Schreibrechten ist eine einmalige Freigabe durch den Hoster erforderlich.</small>
+</section>
+</main>
+<script>
+'use strict';
+const keys={
+abmahnung:'Abmahnung',fristgerecht:'Fristgerechte Kündigung',
+fristlos:'Fristlose Kündigung',hauptvertrag:'Arbeitsvertrag Hauptberuf',
+pmavertrag:'Arbeitsvertrag PMA',nebenvertrag:'Arbeitsvertrag Nebenberuf',
+praktikum:'Praktikumsvertrag',praktikumsbestaetigung:'Praktikumsbestätigung',
+nebenjob:'Nebenjobfreigabe',urkunde:'Ernennungsurkunde PMA → PM'
+};
+async function request(url,options={}){
+ const response=await fetch(url,{...options,credentials:'same-origin',cache:'no-store'});
+ let data;
+ try{data=await response.json()}catch{throw Error('Keine gültige Antwort vom Server');}
+ if(!response.ok)throw Error(data?.error||'Serverfehler ('+response.status+')');
+ return data;
+}
+function render(data){
+ document.getElementById('status').textContent=data.bereit
+  ?'✓ Alle zehn Originalvorlagen sind bereit. Der Dokumentgenerator kann diese verwenden.'
+  :'Es fehlen noch Originalvorlagen. Bitte das ZIP vollständig importieren.';
+ document.getElementById('status').className=data.bereit?'good':'missing';
+ const ul=document.getElementById('vorlagen');
+ ul.replaceChildren();
+ for(const [key,name] of Object.entries(keys)){
+   const li=document.createElement('li');
+   li.textContent=(data.vorlagen?.[key]?'✓ ':'○ ')+name;
+   li.className=data.vorlagen?.[key]?'good':'missing';
+   ul.appendChild(li);
+ }
+}
+async function refresh(){
+ try{render(await request('/api/system/vorlagen'));}
+ catch(e){
+  document.getElementById('status').textContent=e.message+
+    ' – bitte zuerst als Administrator unter der Hauptseite anmelden.';
+  document.getElementById('status').className='error';
+  document.getElementById('upload').disabled=true;
+ }
+}
+document.getElementById('uploadForm').addEventListener('submit',async event=>{
+ event.preventDefault();
+ const upload=document.getElementById('upload');
+ const message=document.getElementById('meldung');
+ const file=document.getElementById('paket').files[0];
+ if(!file)return;
+ upload.disabled=true;message.textContent='Prüfe und importiere zehn Originalvorlagen …';message.className='';
+ try{
+   const fd=new FormData();fd.set('paket',file,file.name);
+   const result=await request('/api/system/vorlagen',{method:'POST',body:fd});
+   render(result);
+   message.textContent='✓ Vorlagenpaket sicher importiert. Du kannst die Dokumenterstellung jetzt testen.';
+   message.className='good';
+ }catch(e){message.textContent=e.message;message.className='error';}
+ finally{upload.disabled=false;}
+});
+void refresh();
+</script>
+</body>
+</html>
