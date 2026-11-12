@@ -84,9 +84,8 @@ async function dgPrepareAuth(){
     dgClientId=result.clientId;
     dgCodeClient=google.accounts.oauth2.initCodeClient({
      client_id:dgClientId,
-     // drive.file zum Anlegen der fertigen Dokumente;
-     // drive.readonly zum Lesen der bestehenden, privaten Originalvorlagen.
-     scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+     // Nur die neue Datei im persönlichen Drive anlegen; Quelle bleibt privat auf dem Server.
+     scope:'https://www.googleapis.com/auth/drive.file',
      ux_mode:'popup',select_account:true,
      callback:async response=>{
       const job=dgPending;dgPending=null;if(!job)return;
@@ -140,7 +139,7 @@ async function dgShow(typ,nr=0,kontext=0){
   '<div class="dg-input"><label for="dg_block">Textbaustein einfügen</label><select id="dg_block"></select><p class="mut">Der Text kann anschließend vollständig bearbeitet werden.</p></div>':'';
  dlg.innerHTML='<div class="dg-head"><div><h2>'+DG_TYPES[typ][0]+'</h2><p class="mut">'+dgEsc(name)+
    (nr?' · Nr. '+Number(nr):'')+'</p></div><button type="button" id="dg_close">✕</button></div>'+
-  '<p class="mut">Die Personaldaten werden automatisch aus der Akte eingesetzt. Freitextfelder kannst du bearbeiten. Die Originalvorlage bleibt unverändert. Google fragt beim ersten Mal zusätzlich nach Leserechten für bestehende Drive-Dateien, damit die geschützte Vorlage geladen werden kann.</p>'+
+  '<p class="mut">Die Personaldaten werden automatisch aus der Akte eingesetzt. Freitextfelder kannst du bearbeiten. Die Originalvorlage bleibt unverändert. Google darf ausschließlich das fertige Dokument in deinem eigenen Drive erstellen. Die Originalvorlage wird privat auf dem Server bereitgestellt.</p>'+
   '<form id="dg_form">'+own+'<div class="dg-grid">'+
    fields.map(k=>dgField(k,defaults)).join('')+'</div>'+snippets+
   '<div class="dg-bottom"><span class="fehler" id="dg_error" role="alert"></span><button type="submit" class="p" id="dg_submit">Mit Google Drive erstellen</button></div></form>';
