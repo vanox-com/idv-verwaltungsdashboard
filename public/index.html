@@ -3405,7 +3405,7 @@ async function urkundenAuthVorbereiten(){
  try{
   const config=await api('/urkunden/status');
   if(!config.eingerichtet){
-   if(status)status.textContent='Google OAuth oder Portal-Origin noch nicht beim neuen Hoster konfiguriert.';
+   if(status)status.textContent=config.hinweis||'Google OAuth oder Portal-Origin noch nicht beim neuen Hoster konfiguriert.';
    return;
   }
   if(!config.origin||window.location.origin!==config.origin){
