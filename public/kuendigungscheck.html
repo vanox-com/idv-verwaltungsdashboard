@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>IDV · Kündigungs-Datenbankprüfung</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#101825;color:#eaf0f9;font:15px/1.6 system-ui,sans-serif}main{max-width:700px;margin:8vh auto;padding:20px}h1{font-size:25px}.panel{background:#18283a;border:1px solid #354963;border-radius:12px;padding:26px}p{color:#b6c5d8}a{color:#9dc5ff}button{background:#486f9b;color:white;border:0;border-radius:7px;padding:11px 20px;cursor:pointer;font:inherit}button:disabled{opacity:.6}.pass{color:#8ae8ba}.fail{color:#ffabab}code{padding:3px;background:#0e1b2a;border-radius:4px;overflow-wrap:anywhere}ul{padding-left:22px}pre{white-space:pre-wrap}
+</style></head><body><main>
+<a href="/">← Zurück zum Dashboard</a>
+<h1>Personalstatus „Gekündigt“ – Datenbankprüfung</h1>
+<p>Nur für Administratoren. Der Test liest ausschließlich die Datenbankstruktur. Es werden keine Personalakten verändert und keine Kündigungen angelegt.</p>
+<section class="panel">
+<button type="button" id="check">Datenbank prüfen</button>
+<p id="summary" role="status">Noch nicht geprüft.</p>
+<div id="details"></div>
+</section>
+</main><script>
+'use strict';
+const summary=document.getElementById('summary'),details=document.getElementById('details');
+document.getElementById('check').addEventListener('click',async()=>{
+ const btn=document.getElementById('check');
+ btn.disabled=true;summary.textContent='Prüfe …';summary.className='';details.replaceChildren();
+ try {
+   const r=await fetch('/api/system/kuendigungscheck',{credentials:'same-origin',cache:'no-store'});
+   const j=await r.json();
+   if(!r.ok)throw Error(j?.error||'HTTP '+r.status);
+   summary.textContent=j.bereit?'✓ Datenbank-Grundprüfung bestanden':'⚠ Datenbankschema ist für Kündigungen nicht vollständig.';
+   summary.className=j.bereit?'pass':'fail';
+   const p=document.createElement('p');
+   p.textContent=j.hinweis||'';
+   details.appendChild(p);
+   const t=document.createElement('p');
+   t.textContent='Revisionsschutz Personal: '+(j.personal_revision_trigger?'vorhanden':'fehlt');
+   details.appendChild(t);
+   if(j.fehlende_spalten?.length){
+      const label=document.createElement('p');label.textContent='Fehlende Datenbankspalten:';details.appendChild(label);
+      const list=document.createElement('ul');
+      for(const name of j.fehlende_spalten){
+        const li=document.createElement('li');const code=document.createElement('code');
+        code.textContent=name;li.appendChild(code);list.appendChild(li);
+      }
+      details.appendChild(list);
+   }
+ } catch(e){summary.textContent='Prüfung nicht möglich: '+e.message;summary.className='fail';}
+ finally{btn.disabled=false;}
+});
+</script></body></html>
