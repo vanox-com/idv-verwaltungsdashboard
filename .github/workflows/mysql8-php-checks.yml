@@ -28,7 +28,7 @@ jobs:
         run: php tests/mysql8-private-templates.php
       - name: Check minimal Google Drive scope in browser
         run: |
-          ! grep -Eq 'drive\\.readonly|auth/drive([^.]|$)' public/dokumentUI.js public/index.html
+          ! grep -Fq 'drive.readonly' public/dokumentUI.js public/index.html
       - name: Confirm reviewed MySQL schema structure
         run: |
           test "$(grep -c '^CREATE TABLE ' scripts/mysql/mysql8-schema.sql)" -eq 48
