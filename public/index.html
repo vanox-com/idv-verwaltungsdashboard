@@ -3434,9 +3434,8 @@ async function urkundenAuthVorbereiten(){
       method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
       body:JSON.stringify({eid_datum:pending.eid,google_code:response.code})
      });
+     window.IDVDokumentOeffnen(result.url);
      await starten();
-     alert('Urkunde wurde im gewählten Google-Konto angelegt und mit der Personalakte verknüpft.');
-     window.open(result.url,'_blank','noopener,noreferrer');
     }catch(e){alert('Urkunde konnte nicht erstellt werden: '+e.message);}
     finally{if(pending.button.isConnected){
       pending.button.disabled=false;pending.button.textContent='Ernennungsurkunde erstellen';
