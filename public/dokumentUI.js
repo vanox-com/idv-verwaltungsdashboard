@@ -97,9 +97,9 @@ async function dgPrepareAuth(){
         body:JSON.stringify({...job.payload,google_code:response.code})
        });
        job.dialog.close();
-       // Versuch sofort nach der API-Antwort; Link-Fallback bei Popup-Blockern.
-       window.idvFertigesDokumentOeffnen(saved.url);
        await starten();
+       window.open(saved.url,'_blank','noopener,noreferrer');
+       alert('Dokument wurde in deinem Google Drive erzeugt und in der Akte verlinkt.');
       }catch(err){alert('Dokument konnte nicht erstellt werden: '+err.message);}
       finally{if(job.button.isConnected){job.button.disabled=false;job.button.textContent='Mit Google Drive erstellen';}}
      },
