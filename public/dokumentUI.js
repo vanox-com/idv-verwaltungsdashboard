@@ -1,6 +1,51 @@
 /* Gemeinsamer Generator für RP-Verwaltungsdokumente.
    Berechtigungen, Aktenzuordnung und Speicherung werden serverseitig geprüft. */
 const DG_GOOGLE_MAIN_ORIGIN='https://pol-panel.identityvalley.de';
+/* Opens a newly created Google Doc and shows a clickable link if the
+   browser blocks tabs opened from an asynchronous Google OAuth callback. */
+window.IDVDokumentOeffnen = function(value) {
+  let url;
+  try { url = new URL(String(value)); }
+  catch { throw new Error('Google hat keinen gültigen Dokumentlink zurückgegeben.'); }
+  if (url.protocol !== 'https:' || url.hostname !== 'docs.google.com' ||
+      !url.pathname.startsWith('/document/d/')) {
+    throw new Error('Ungültiger Google-Dokumentlink.');
+  }
+  let opened = null;
+  try {
+    opened = window.open(url.href, '_blank');
+    if (opened) opened.opener = null;
+  } catch { /* Popup-Blocker: the real link below always works. */ }
+
+  const existing = document.getElementById('idv-document-open-notice');
+  if (existing) existing.remove();
+  const notice = document.createElement('aside');
+  notice.id = 'idv-document-open-notice';
+  notice.setAttribute('role', 'status');
+  notice.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:99999;max-width:min(380px,calc(100vw - 40px));padding:17px;border:1px solid #52769e;border-radius:12px;background:#18283b;color:#e8f0ff;box-shadow:0 8px 25px #0009;font:14px/1.5 system-ui,sans-serif';
+  const heading = document.createElement('strong');
+  heading.textContent = 'Google-Dokument erfolgreich erstellt';
+  const description = document.createElement('p');
+  description.style.cssText = 'margin:8px 0 12px;color:#bbcce0';
+  description.textContent = opened
+    ? 'Das Dokument wurde in einem neuen Tab geöffnet.'
+    : 'Dein Browser hat den neuen Tab möglicherweise blockiert. Öffne das fertige Dokument hier:';
+  const link = document.createElement('a');
+  link.href = url.href;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.textContent = 'Google-Dokument öffnen';
+  link.style.cssText = 'color:#acd6ff;font-weight:600;text-decoration:underline';
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.textContent = 'Schließen';
+  close.style.cssText = 'margin-left:15px;padding:5px 9px;background:transparent;color:inherit;border:1px solid #687f9b;border-radius:6px;cursor:pointer';
+  close.addEventListener('click', () => notice.remove());
+  notice.append(heading, description, link, close);
+  document.body.appendChild(notice);
+  return !!opened;
+};
+
 const DG_FIELDS={
  datum:['Ausstellungsdatum','date'],unterzeichner:['Polizeilicher Unterzeichner (angemeldetes Konto)','text'],
  rang:['Dienstgrad des Unterzeichners','text'],anrede:['Anrede','select'],
@@ -97,9 +142,8 @@ async function dgPrepareAuth(){
         body:JSON.stringify({...job.payload,google_code:response.code})
        });
        job.dialog.close();
+       window.IDVDokumentOeffnen(saved.url);
        await starten();
-       window.open(saved.url,'_blank','noopener,noreferrer');
-       alert('Dokument wurde in deinem Google Drive erzeugt und in der Akte verlinkt.');
       }catch(err){alert('Dokument konnte nicht erstellt werden: '+err.message);}
       finally{if(job.button.isConnected){job.button.disabled=false;job.button.textContent='Mit Google Drive erstellen';}}
      },
