@@ -6,7 +6,7 @@
 const STATUS=['offen','angenommen','abgelehnt'];
 const ID_RE=/^[a-z0-9_]{3,40}$/;
 
-async function botRequest(method,pfad,payload){
+export async function botRequest(method,pfad,payload){
   const base=process.env.POLBOT_API_URL||'',secret=process.env.POLBOT_API_SECRET||'';
   if(!base||secret.length<32){const e=new Error('Anbindung an den Polizei-Bot ist nicht konfiguriert');e.status=503;throw e;}
   let r;

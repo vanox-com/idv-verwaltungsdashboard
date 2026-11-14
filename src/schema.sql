@@ -1049,3 +1049,9 @@ INSERT INTO role_perms(rolle,modul,stufe) VALUES
  ('Administrator','abm',2),('Leitungsdienst','abm',2),('Polizeirat','abm',2),
  ('Ausbilder','abm',0),('Mitarbeiter','abm',0)
 ON CONFLICT(rolle,modul) DO NOTHING;
+
+/* Bot-Konfiguration des Polizei-Discord-Bots (Modul botcfg): Stufe 1 ansehen,
+   Stufe 2 speichern. Standard nur Administrator. Bestehende Rechte werden nie überschrieben. */
+INSERT INTO role_perms(rolle,modul,stufe)
+ SELECT name,'botcfg',CASE WHEN name='Administrator' THEN 2 ELSE 0 END FROM roles
+ON CONFLICT(rolle,modul) DO NOTHING;
