@@ -130,6 +130,7 @@
    case 'int': if(!Number.isInteger(v))return 'Ganze Zahl eingeben';if(spec.min!=null&&v<spec.min)return 'Mindestens '+spec.min;if(spec.max!=null&&v>spec.max)return 'Höchstens '+spec.max;return '';
    case 'column': if(optional&&!v)return '';return /^[A-Z]{1,3}$/.test(String(v||'').trim().toUpperCase())?'':'Spalte A–ZZZ';
    case 'bool': return '';
+   case 'select': return (spec.options||[]).some(o=>o.value===v)?'':'Bitte auswählen';
   }
   return '';
  }
@@ -177,6 +178,7 @@
    case 'int': return '<input type="number" step="1"'+(spec.min!=null?' min="'+spec.min+'"':'')+(spec.max!=null?' max="'+spec.max+'"':'')+' '+attrs+' data-bc-typ="int" value="'+esc(String(wert??''))+'"'+dis+'>';
    case 'column': return '<input '+attrs+' data-bc-typ="column" maxlength="3" autocomplete="off" spellcheck="false" value="'+esc(wert||'')+'"'+dis+'>';
    case 'bool': return '<label class="bc-schalter"><input type="checkbox" '+attrs+' data-bc-typ="bool"'+(wert?' checked':'')+dis+'> <span>'+(wert?'Eingeschaltet':'Ausgeschaltet')+'</span></label>';
+   case 'select': return '<select '+attrs+' data-bc-typ="select"'+dis+'>'+(spec.options||[]).map(o=>'<option value="'+esc(o.value)+'"'+(o.value===wert?' selected':'')+'>'+esc(o.label)+'</option>').join('')+'</select>';
    case 'url': return '<input type="url" '+attrs+' autocomplete="off" spellcheck="false" placeholder="https://…" value="'+esc(wert||'')+'"'+dis+'>';
    default: return '<input '+attrs+' autocomplete="off"'+(spec.max?' maxlength="'+spec.max+'"':'')+' value="'+esc(wert??'')+'"'+dis+(spec.key==='name'||spec.key==='label'?' placeholder="'+esc(spec.label)+'"':'')+'>';
   }
@@ -209,14 +211,14 @@
   return '<div class="bc-feld'+(f.type==='list'&&!kompakt?' voll':'')+(geaendert?' geaendert':'')+'" id="bc-'+esc(f.path.replace(/\./g,'-'))+'">'+
    '<div class="bc-lab"><span>'+esc(f.label)+'</span>'+(ql?'<span class="tag '+qc+'" title="Aktuelle Quelle des gespeicherten Werts">'+esc(ql)+'</span>':'')+
    (geaendert?'<span class="tag warn">geändert</span>':'')+
-   (f.apply==='restart'?'<span class="tag" title="Startnachricht in neuem Kanal erst nach Neustart">Neustart</span>':'')+
+   (f.apply==='restart'?'<span class="tag warn" title="Beim Neustart nach dem Speichern postet der Bot in einem neuen Kanal Startnachrichten">postet beim Neustart</span>':'')+
    '<span class="spacer"></span>'+
    (!dis&&!istStandard?'<button type="button" data-bc-std '+a+' title="Auf Standardwert zurücksetzen">Standard</button>':'')+
    (!dis&&geaendert?'<button type="button" data-bc-undo '+a+' title="Änderung verwerfen">↺</button>':'')+'</div>'+
    inner+
    (err?'<p class="bc-err">'+esc(err)+'</p>':'')+
    (f.help&&!kompakt?'<p class="bc-hilfe">'+esc(f.help)+'</p>':'')+
-   (!istStandard&&f.type!=='list'&&f.type!=='bool'?'<p class="bc-hilfe">Standard: <code>'+esc(String(w.standard??'–')||'leer')+'</code></p>':'')+
+   (!istStandard&&f.type!=='list'&&f.type!=='bool'?'<p class="bc-hilfe">Standard: <code>'+esc(f.type==='select'?((f.options||[]).find(o=>o.value===w.standard)?.label||w.standard):(String(w.standard??'–')||'leer'))+'</code></p>':'')+
    '</div>';
  }
  function zeichnen(){
@@ -257,11 +259,13 @@
 
  function leisteHtml(geaendert,nFehler){
   if(!schreiben())return meldung?'<p class="bc-meldung '+meldungArt+'">'+esc(meldung)+'</p>':'';
+  const nsText=neustartText();
   return '<div class="bc-leiste" role="region" aria-label="Speichern">'+
-    '<p class="bc-meldung '+meldungArt+'" role="status" aria-live="polite">'+(meldung?esc(meldung):geaendert.length?geaendert.length+' ungespeicherte Änderung(en)'+(nFehler?' · '+nFehler+' Feld(er) mit Fehler':''):'Alle Änderungen gespeichert.')+'</p>'+
+    '<p class="bc-meldung '+meldungArt+'" role="status" aria-live="polite">'+(meldung?esc(meldung):geaendert.length?geaendert.length+' ungespeicherte Änderung(en)'+(nFehler?' · '+nFehler+' Feld(er) mit Fehler':''):'Alle Änderungen gespeichert.')+
+    (nsText?'<br><span class="'+(ns.phase==='fehler'?'bad':ns.phase==='online'?'ok':'warn')+'" style="background:none">'+esc(nsText)+'</span>':'')+'</p>'+
     '<span class="spacer"></span>'+
     '<button type="button" data-bc-verwerfen'+(geaendert.length&&!laeuft?'':' disabled')+'>Verwerfen</button>'+
-    '<button type="button" class="p" data-bc-save'+(geaendert.length&&!nFehler&&!laeuft?'':' disabled')+'>'+(laeuft?'Speichert …':'Speichern'+(geaendert.length?' ('+geaendert.length+')':''))+'</button></div>';
+    '<button type="button" class="p" data-bc-save'+(geaendert.length&&!nFehler&&!laeuft&&ns.phase!=='laeuft'?'':' disabled')+'>'+(laeuft?'Speichert …':'Speichern'+(geaendert.length?' ('+geaendert.length+')':''))+'</button></div>';
  }
  /* Beim Tippen nicht alles neu zeichnen (Fokus/Klicks bleiben erhalten): nur Feldfehler und Leiste. */
  function teilUpdate(el){
@@ -279,6 +283,59 @@
   const l=document.querySelector('.bc-leiste');
   if(l)l.outerHTML=leisteHtml(geaenderte(),Object.keys(fehler).length);
  }
+
+ /* ── Automatischer Neustart nach dem Speichern (zusammengefasst, ca. 5 s) ── */
+ const NEUSTART_MS=5000;
+ const ns={timer:null,faellig:0,phase:'',t0:0,dauer:0,fehler:'',tick:null};
+ function neustartText(){
+  if(ns.phase==='geplant')return 'Gespeichert – Bot startet in '+Math.max(0,Math.ceil((ns.faellig-Date.now())/1000))+' s neu … (weitere Änderungen werden zusammengefasst)';
+  if(ns.phase==='laeuft')return 'Bot startet neu … ('+Math.round((Date.now()-ns.t0)/1000)+' s)';
+  if(ns.phase==='online')return 'Bot ist wieder online'+(ns.dauer?' – Neustart dauerte '+ns.dauer+' s':'')+'.';
+  if(ns.phase==='fehler')return 'Neustart: '+ns.fehler;
+  return '';
+ }
+ function leisteAktualisieren(){
+  if(!aktiv()||!daten)return;
+  const l=document.querySelector('.bc-leiste');
+  if(l)l.outerHTML=leisteHtml(geaenderte(),Object.keys(alleFehler()).length);
+ }
+ function tickStarten(){
+  if(ns.tick)return;
+  ns.tick=setInterval(()=>{leisteAktualisieren();if(ns.phase!=='geplant'&&ns.phase!=='laeuft'){clearInterval(ns.tick);ns.tick=null;}},1000);
+ }
+ function neustartPlanen(){
+  clearTimeout(ns.timer);
+  ns.phase='geplant';ns.faellig=Date.now()+NEUSTART_MS;ns.fehler='';
+  ns.timer=setTimeout(neustartAusfuehren,NEUSTART_MS);
+  tickStarten();
+ }
+ const warte=ms=>new Promise(r=>setTimeout(r,ms));
+ async function neustartAusfuehren(){
+  ns.timer=null;ns.phase='laeuft';ns.t0=Date.now();leisteAktualisieren();tickStarten();
+  try{
+   const headers={'Content-Type':'application/json'};
+   if(window.IDVLive?.clientId)headers['X-IDV-Client']=window.IDVLive.clientId;
+   const res=await fetch('/api/botcfg/neustart',{method:'POST',credentials:'same-origin',cache:'no-store',headers,body:'{}'});
+   const r=await res.json().catch(()=>({}));
+   if(!res.ok)throw new Error(r.error||'HTTP '+res.status);
+   if(r.neustart===false){ns.phase='online';ns.dauer=0;leisteAktualisieren();return;}
+   const vorher=r.vorher?.gestartetAm||null;
+   while(Date.now()-ns.t0<120000){
+    await warte(2000);
+    const h=await fetch('/api/botcfg/status',{credentials:'same-origin',cache:'no-store'}).then(x=>x.ok?x.json():null).catch(()=>null);
+    if(h?.erreichbar&&h.bereit&&h.gestartetAm&&h.gestartetAm!==vorher){
+     ns.phase='online';ns.dauer=Math.round((Date.now()-ns.t0)/1000);
+     if(aktiv()&&daten&&!geaenderte().length){try{uebernehmen(await api('/botcfg'));}catch{}}
+     if(aktiv())zeichnen();
+     return;
+    }
+   }
+   throw new Error('Bot nach 120 s nicht wieder online – bitte Pterodactyl-Konsole prüfen.');
+  }catch(e){ns.phase='fehler';ns.fehler=e.message;leisteAktualisieren();}
+ }
+ window.addEventListener('pagehide',()=>{
+  if(ns.timer){clearTimeout(ns.timer);ns.timer=null;try{navigator.sendBeacon('/api/botcfg/neustart');}catch{}}
+ });
 
  async function laden(){
   if(!can('botcfg')){$('#inhalt').innerHTML='<h1>Bot-Konfiguration</h1><p>Für die Bot-Konfiguration fehlt die Berechtigung.</p>';return;}
@@ -304,9 +361,11 @@
   if(Object.keys(alleFehler()).length)return;
   const werte={};
   for(const p of pfade)werte[p]=gleich(entwurf[p],daten.werte[p].standard)?null:entwurf[p];
-  const riskant=pfade.filter(p=>feld(p).apply==='restart'||p==='sek.guildId'||p==='funkbesetzung.enabled');
-  if(riskant.length&&!confirm('Folgende Änderungen haben sichtbare Auswirkungen in Discord:\n\n'+riskant.map(p=>'• '+feld(p).label).join('\n')+
-   '\n\n(z. B. neue Steuerungs-/Spind-Nachrichten beim nächsten Neustart, /sek wird auf einem anderen Server registriert oder Besetzungsübersichten werden wieder gepostet)\n\nTrotzdem speichern?'))return;
+  const riskant=pfade.filter(p=>feld(p).apply==='restart'||feld(p).apply==='commands'||p==='funkbesetzung.enabled');
+  const spind=pfade.includes('spind.channelId')&&entwurf['spind.channelId'];
+  if(riskant.length&&!confirm('Nach dem Speichern startet der Bot automatisch neu. Folgende Änderungen haben sichtbare Auswirkungen in Discord:\n\n'+riskant.map(p=>'• '+feld(p).label).join('\n')+
+   (spind?'\n\nACHTUNG: Im neuen Spind-Kanal legt der Bot beim Neustart sofort 50 Spind-Nachrichten an.':'')+
+   '\n\n(z. B. neue Steuerungsnachricht, Befehle auf einem anderen Server, Besetzungsübersichten werden wieder gepostet)\n\nTrotzdem speichern?'))return;
   laeuft=true;meldung='Speichert …';meldungArt='';fehlerServer={};zeichnen();
   try{
    const headers={'Content-Type':'application/json'};
@@ -321,7 +380,7 @@
     const labels=(r.geaendert||[]).map(p=>r.felder.find(f=>f.path===p)?.label||p);
     uebernehmen(r);
     meldung=labels.length?'Gespeichert und im Bot übernommen: '+labels.join(', ')+'.':'Keine Änderung nötig.';
-    if(r.neustartHinweis?.length)meldung+=' Hinweis: Neue Start-Nachrichten (Steuerung/Spinde) legt der Bot erst beim nächsten Neustart an.';
+    if(labels.length)neustartPlanen();
     if(r.warnungen?.length)meldung+=' Achtung: '+r.warnungen.join(' ');
     meldungArt=r.warnungen?.length?'warn':'ok';
    }

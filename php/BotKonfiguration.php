@@ -10,6 +10,11 @@ namespace IDV;
  * siehe Abmeldungen.php). Geheimnisse des Bots sind über diese API nicht erreichbar.
  *   GET /api/botcfg   Stufe 1: Schema, Werte, Standardwerte, Quelle, Guild-Verzeichnis
  *   PUT /api/botcfg   Stufe 2: { werte: { <pfad>: <wert>|null }, rev } – null = Standard
+ *   GET  /api/botcfg/status    Stufe 1: Online-Status des Bots (bereit, gestartetAm)
+ *   POST /api/botcfg/neustart  Stufe 2: Neustart über die Pterodactyl-Client-API (power restart).
+ *        Eigener Dienst-Account nur mit control.restart auf dem Bot-Server; Key nur als Env
+ *        PTERO_RESTART_KEY (+ PTERO_PANEL_URL, PTERO_SERVER_ID). Das Frontend fasst mehrere
+ *        Speichervorgänge zusammen (ca. 5 s) und ruft danach einmal neustart auf.
  */
 require_once __DIR__.'/Abmeldungen.php';
 
@@ -20,7 +25,45 @@ function botcfgLabels(array $data, array $paths): string {
     $s=implode(', ',$labels?:$paths);
     return mb_strlen($s)>900?mb_substr($s,0,900).' …':$s;
 }
+/** Kein respond()/fail() bei Nichterreichbarkeit: Status-Abfragen während des Neustarts sind normal. */
+function botcfgHealthSafe(): array {
+    $base=getenv('POLBOT_API_URL');$secret=getenv('POLBOT_API_SECRET');
+    if(!is_string($base)||$base===''||!is_string($secret)||strlen($secret)<32)return ['erreichbar'=>false,'bereit'=>false,'gestartetAm'=>null];
+    $ch=curl_init(rtrim($base,'/').'/health');
+    curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$secret,'Accept: application/json'],
+        CURLOPT_CONNECTTIMEOUT=>2,CURLOPT_TIMEOUT=>4,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_PROTOCOLS=>CURLPROTO_HTTP|CURLPROTO_HTTPS]);
+    $raw=curl_exec($ch);$code=(int)curl_getinfo($ch,CURLINFO_RESPONSE_CODE);curl_close($ch);
+    $d=is_string($raw)?json_decode($raw,true):null;
+    if($code!==200||!is_array($d))return ['erreichbar'=>false,'bereit'=>false,'gestartetAm'=>null];
+    return ['erreichbar'=>true,'bereit'=>($d['bereit']??false)===true,'gestartetAm'=>is_string($d['gestartetAm']??null)?$d['gestartetAm']:null];
+}
+function botcfgRestart(): array {
+    $url=getenv('PTERO_PANEL_URL');$key=getenv('PTERO_RESTART_KEY');$id=getenv('PTERO_SERVER_ID');
+    if(!is_string($url)||$url===''||!is_string($key)||strlen($key)<40||!is_string($id)||!preg_match('/^[a-f0-9]{8}$/D',$id))
+        fail(503,'Automatischer Neustart ist nicht konfiguriert');
+    $ch=curl_init(rtrim($url,'/').'/api/client/servers/'.$id.'/power');
+    curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_POSTFIELDS=>'{"signal":"restart"}',
+        CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$key,'Accept: application/json','Content-Type: application/json'],
+        CURLOPT_CONNECTTIMEOUT=>4,CURLOPT_TIMEOUT=>15,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS]);
+    curl_exec($ch);$code=(int)curl_getinfo($ch,CURLINFO_RESPONSE_CODE);curl_close($ch);
+    if($code!==204){error_log('[IDV PHP] Pterodactyl-Neustart fehlgeschlagen ('.$code.')');fail(502,'Neustart über Pterodactyl fehlgeschlagen (HTTP '.$code.')');}
+    return ['ok'=>true];
+}
 function dispatchBotKonfiguration(array $u,string $method,string $uri): bool {
+    if($uri==='/api/botcfg/status'&&$method==='GET'){
+        needRight($u,'botcfg');
+        respond(200,botcfgHealthSafe());
+    }
+    if($uri==='/api/botcfg/neustart'&&$method==='POST'){
+        needRight($u,'botcfg',2);
+        $h=botcfgHealthSafe();
+        // Zusammenfassen: Läuft der Bot erst seit < 20 s (z. B. Neustart aus anderem Tab), nicht erneut starten.
+        if($h['gestartetAm']&&($t=strtotime($h['gestartetAm']))!==false&&time()-$t<20)
+            respond(200,['ok'=>true,'neustart'=>false,'grund'=>'Bot wurde gerade erst neu gestartet','vorher'=>$h]);
+        botcfgRestart();
+        auditAction($u,'Polizei-Bot nach Konfigurationsänderung neu gestartet','edit');
+        respond(200,['ok'=>true,'neustart'=>true,'vorher'=>$h]);
+    }
     if($uri!=='/api/botcfg')return false;
     if($method==='GET'){
         needRight($u,'botcfg');
