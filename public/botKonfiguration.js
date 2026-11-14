@@ -128,7 +128,7 @@
     if(spec.pattern&&!new RegExp(spec.pattern).test(s))return spec.patternText||'Ungültiges Format';return '';}
    case 'url':{const s=String(v??'').trim();if(!s)return optional?'':'Pflichtfeld';try{return new URL(s).protocol==='https:'?'':'Nur https-URLs';}catch{return 'Keine gültige URL';}}
    case 'int': if(!Number.isInteger(v))return 'Ganze Zahl eingeben';if(spec.min!=null&&v<spec.min)return 'Mindestens '+spec.min;if(spec.max!=null&&v>spec.max)return 'Höchstens '+spec.max;return '';
-   case 'column': return /^[A-Z]{1,3}$/.test(String(v||'').trim().toUpperCase())?'':'Spalte A–ZZZ';
+   case 'column': if(optional&&!v)return '';return /^[A-Z]{1,3}$/.test(String(v||'').trim().toUpperCase())?'':'Spalte A–ZZZ';
    case 'bool': return '';
   }
   return '';
