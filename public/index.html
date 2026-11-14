@@ -5015,7 +5015,7 @@ async function ladeBenutzer() {
         '" data-perm-role="'+esc(r.name)+'" data-perm-module="'+esc(m[0])+
         '" data-perm-value="'+st+'" title="Klicken zum Ändern'+(RECHTE_HINWEISE[m[0]]?' – '+esc(RECHTE_HINWEISE[m[0]]):'')+'">'+status+'</button></td>';
     }).join('');
-    return '<tr><th scope="row">'+esc(m[1])+(RECHTE_HINWEISE[m[0]]?'<br><small class="mut">'+esc(RECHTE_HINWEISE[m[0]])+'</small>':'')+'</th>'+cells+'</tr>';
+    return '<tr><th scope="row">'+esc(m[1])+(RECHTE_HINWEISE[m[0]]?'<br><small class="mut" style="text-transform:none;letter-spacing:0;font-weight:400">'+esc(RECHTE_HINWEISE[m[0]])+'</small>':'')+'</th>'+cells+'</tr>';
   }).join('');
   $('#benutzerBereich').innerHTML=
     '<div class="box"><h3>Benutzerkonten</h3>'+tabelle(['Dienstnummer','Name','Rolle','Passwort','Status','Aktion'],rows)+'</div>'+
