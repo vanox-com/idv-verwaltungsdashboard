@@ -10,3 +10,9 @@ RewriteRule ^api(?:/.*)?$ api.php [QSA,L]
 <FilesMatch "^(?:\.htaccess|\.env|composer\.(?:json|lock))$">
   Require all denied
 </FilesMatch>
+# Oberfläche immer neu validieren (ETag), damit neue Module/Rechte ohne Cache-Leeren sichtbar sind.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(?:html|js|css)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>

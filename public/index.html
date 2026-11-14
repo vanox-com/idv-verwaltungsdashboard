@@ -4983,6 +4983,8 @@ document.addEventListener('click',e=>{
 });
 
 const RECHTE_MODULE=[...MODS.filter(m=>!['users','system','statistik','meldungen'].includes(m[0])),['kuearchiv','Kündigungsarchiv',''],['mitteilungen','Mitteilungen verwalten',''],['por','POR-Freigabe',''],['ranghistorie','Rangänderungs-Historie',''],['routarchiv','Routinearchiv','']];
+/* Bedeutung der Stufen, wo sie vom üblichen Lesen/Bearbeiten abweicht (Matrix + Einzelrechte). */
+const RECHTE_HINWEISE={abm:'Lesen = Abmeldungen ansehen · Bearbeiten = annehmen/ablehnen',botcfg:'Lesen = Konfiguration ansehen · Bearbeiten = ändern (Bot startet danach neu)'};
 let USER_ADMIN=null;
 function vUsers() {
   if(ME.rolle!=='Administrator')return '<p>Nur der Administrator darf Zugänge verwalten.</p>';
@@ -5011,9 +5013,9 @@ async function ladeBenutzer() {
       if(r.name==='Administrator')return '<td><span class="tag ok">'+status+'</span></td>';
       return '<td><button type="button" class="tag user-perm '+(st===2?'ok':st===1?'warn':'')+
         '" data-perm-role="'+esc(r.name)+'" data-perm-module="'+esc(m[0])+
-        '" data-perm-value="'+st+'" title="Klicken zum Ändern">'+status+'</button></td>';
+        '" data-perm-value="'+st+'" title="Klicken zum Ändern'+(RECHTE_HINWEISE[m[0]]?' – '+esc(RECHTE_HINWEISE[m[0]]):'')+'">'+status+'</button></td>';
     }).join('');
-    return '<tr><th scope="row">'+esc(m[1])+'</th>'+cells+'</tr>';
+    return '<tr><th scope="row">'+esc(m[1])+(RECHTE_HINWEISE[m[0]]?'<br><small class="mut">'+esc(RECHTE_HINWEISE[m[0]])+'</small>':'')+'</th>'+cells+'</tr>';
   }).join('');
   $('#benutzerBereich').innerHTML=
     '<div class="box"><h3>Benutzerkonten</h3>'+tabelle(['Dienstnummer','Name','Rolle','Passwort','Status','Aktion'],rows)+'</div>'+
@@ -5101,7 +5103,7 @@ function userAusnahmenAnzeigen(dialog,u){
     const grund=USER_ADMIN.perms.find(p=>p.rolle===u.rolle&&p.modul===modul);
     const ausnahme=(USER_ADMIN.userPerms||[]).find(p=>Number(p.user_id)===Number(u.id)&&p.modul===modul);
     const value=ausnahme===undefined?'inherit':String(ausnahme.stufe);
-    return '<label class="user-exception-label">'+esc(titel)+
+    return '<label class="user-exception-label"'+(RECHTE_HINWEISE[modul]?' title="'+esc(RECHTE_HINWEISE[modul])+'"':'')+'>'+esc(titel)+
       '<small>Rollenstandard: '+RECHTE_STUFEN[Number(grund?.stufe||0)]+'</small>'+
       '<select data-user-override="'+Number(u.id)+'" data-user-modul="'+esc(modul)+'" '+
       (u.rolle==='Administrator'?'disabled':'')+'>'+
