@@ -2590,7 +2590,7 @@ function vPers() {
 }
 
 
-/* Dienstnummernanträge: reguläre Antragstellung, POR entscheidet.
+   /* Dienstnummernanträge: reguläre Antragstellung, DN-Freigaberecht entscheidet.
    Ein Antrag ändert weder Personal noch Login, bevor er genehmigt wird. */
 async function ladeDienstnummerAntraege(){
  const root=document.getElementById('dnAntraegeBereich');
@@ -2605,7 +2605,7 @@ async function ladeDienstnummerAntraege(){
    const ursprung=esc(a.quell_name||'–')+' · '+esc(a.alt_nr)+' → '+esc(a.ziel_nr);
    const ziel=a.ziel_name?' (Zielakte: '+esc(a.ziel_name)+')':'';
    const actions=entscheidbar?
-    '<button type="button" class="p" data-dn-decision="'+Number(a.id)+'" data-dn-status="genehmigt">POR genehmigen</button> '+
+    '<button type="button" class="p" data-dn-decision="'+Number(a.id)+'" data-dn-status="genehmigt">Genehmigen</button> '+
     '<button type="button" data-dn-decision="'+Number(a.id)+'" data-dn-status="abgelehnt">Ablehnen</button>':'';
    return [ursprung,esc(typ)+ziel,esc(a.begruendung),esc(a.antragsteller||'–'),fd(a.erstellt),
       actions||'<span class="tag warn">'+(a.status==='beantragt'?'Wartet auf POR':esc(a.status))+'</span>'];
@@ -2681,7 +2681,7 @@ function dienstnummerAntragOeffnen(nr){
  };
 }
 async function dienstnummerEntscheiden(id,status,button){
- if(!can('por',2))return;
+ if(!can('dnfreigabe',2))return;
  const grund=status==='abgelehnt'?prompt('Ablehnungsgrund (mindestens 5 Zeichen):'):'';
  if(status==='abgelehnt'&&(grund===null||grund.trim().length<5))return;
  if(status==='genehmigt'&&!confirm('Dienstnummernwechsel genehmigen und SOFORT durchführen? Bitte die bisherige und neue Dienstnummer im Antrag prüfen. Eine belegte fremde Personalakte wird niemals überschrieben.'))return;
@@ -3360,7 +3360,7 @@ function vBef() {
   return '<h1>Beförderungen</h1><p class="mut">PM-, PK- und KK-Anwärter haben keine Mindestzeit. Nach bestandener jeweiliger Prüfung ist eine Beförderung mit POR-Freigabe sofort möglich. Für die übrigen Dienstgrade gelten die festgelegten Fristen.</p>' +
     (wartet ? '<div class="box idv-warnung"><b>'+wartet+'</b> POR-Anträge warten auf eine Entscheidung.</div>' : '') +
     '<div id="rangantraegeBereich" class="box"><h3>Offene Rangänderungsanträge</h3><p class="mut">Lade Anträge …</p></div>'+ 
-    ((can('por')||can('pers'))?'<section id="dnAntraegeBereich" class="box"><h3>Dienstnummern-Anträge · POR</h3><p class="mut">Lade …</p></section>':'')+ 
+    ((can('dnfreigabe')||can('pers'))?'<section id="dnAntraegeBereich" class="box"><h3>Dienstnummern-Anträge · Freigabe</h3><p class="mut">Lade …</p></section>':'')+
     ((can('por',1)||can('ranghistorie',1))?'<section class="box" id="ranghistorieBereich"><div class="ranghist-top"><div><h3>Rangänderungs-Historie</h3><p class="mut">Abgeschlossene POR-Entscheidungen – nur für Berechtigte einsehbar.</p></div><button type="button" data-ranghistorie-toggle aria-expanded="false">Historie anzeigen</button></div><div id="ranghistorieListe" hidden></div></section>':'')+ 
     (befDarfUrkunde()?'<section class="box"><h3>Ernennungsurkunden · Polizeimeister <span class="tag '+(offeneUrkunden.length?'warn':'ok')+'">'+offeneUrkunden.length+' offen</span></h3>'+
       '<p class="mut">Nur noch nicht erstellte Urkunden nach einer Beförderung von PMA zu PM. Die Dokumente werden im Google Drive des erstellenden Nutzers gespeichert.</p>'+
@@ -5050,9 +5050,9 @@ document.addEventListener('click',e=>{
   if(btn)textbausteinKopieren(btn);
 });
 
-const RECHTE_MODULE=[...MODS.filter(m=>!['users','system','statistik','meldungen'].includes(m[0])),['kuearchiv','Kündigungsarchiv',''],['mitteilungen','Mitteilungen verwalten',''],['por','POR-Freigabe',''],['ranghistorie','Rangänderungs-Historie',''],['routarchiv','Routinearchiv','']];
+const RECHTE_MODULE=[...MODS.filter(m=>!['users','system','statistik','meldungen'].includes(m[0])),['kuearchiv','Kündigungsarchiv',''],['mitteilungen','Mitteilungen verwalten',''],['por','POR-Freigabe',''],['dnfreigabe','DN-Anträge entscheiden',''],['ranghistorie','Rangänderungs-Historie',''],['routarchiv','Routinearchiv','']];
 /* Bedeutung der Stufen, wo sie vom üblichen Lesen/Bearbeiten abweicht (Matrix + Einzelrechte). */
-const RECHTE_HINWEISE={abm:'Lesen = Abmeldungen ansehen · Bearbeiten = annehmen/ablehnen',botcfg:'Lesen = Konfiguration ansehen · Bearbeiten = ändern (Bot startet danach neu)'};
+const RECHTE_HINWEISE={abm:'Lesen = Abmeldungen ansehen · Bearbeiten = annehmen/ablehnen',dnfreigabe:'Lesen = alle DN-Anträge ansehen · Bearbeiten = DN-Anträge annehmen/ablehnen',botcfg:'Lesen = Konfiguration ansehen · Bearbeiten = ändern (Bot startet danach neu)'};
 let USER_ADMIN=null;
 function vUsers() {
   if(ME.rolle!=='Administrator')return '<p>Nur der Administrator darf Zugänge verwalten.</p>';
