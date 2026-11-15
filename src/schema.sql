@@ -407,6 +407,12 @@ INSERT INTO role_perms (rolle,modul,stufe) VALUES
  ('Leitungsdienst','por',0),('Ausbilder','por',0),('Mitarbeiter','por',0)
 ON CONFLICT(rolle,modul) DO NOTHING;
 
+/* Dienstnummern-Anträge separat von Beförderungs-/POR-Freigaben entscheiden. */
+INSERT INTO role_perms (rolle,modul,stufe) VALUES
+ ('Administrator','dnfreigabe',2),('Polizeirat','dnfreigabe',2),
+ ('Leitungsdienst','dnfreigabe',2),('Ausbilder','dnfreigabe',0),('Mitarbeiter','dnfreigabe',0)
+ON CONFLICT(rolle,modul) DO NOTHING;
+
 /* Polizeiräte dürfen Textbausteine lesen und kopieren;
    andere Rollen erhalten standardmäßig keinen Zugriff. Bestehende
    Gruppen- und Einzelrechte werden niemals überschrieben. */
