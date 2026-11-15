@@ -120,6 +120,7 @@ function requireLogin(bool $allowPasswordChange=false): array {
     return $u;
 }
 function rights(array $u): array {
+    ensureDNApprovalPermissions();
     $rights=[];
     foreach(sql("SELECT modul,stufe FROM role_perms WHERE rolle=?",[$u['rolle']]) as $row)
         $rights[$row['modul']] = (int)$row['stufe'];
@@ -128,6 +129,17 @@ function rights(array $u): array {
             $rights[$row['modul']] = (int)$row['stufe'];
     }
     return $rights;
+}
+/* Neues, eigenständiges Entscheidungsrecht. Fügt fehlende Rollenstandards hinzu,
+   ohne bereits gesetzte Rechte oder individuelle Ausnahmen zu überschreiben. */
+function ensureDNApprovalPermissions(): void {
+    static $done=false;
+    if($done)return;
+    sql("INSERT IGNORE INTO role_perms(rolle,modul,stufe) VALUES
+        ('Administrator','dnfreigabe',2),('Polizeirat','dnfreigabe',2),
+        ('Leitungsdienst','dnfreigabe',2),('Ausbilder','dnfreigabe',0),
+        ('Mitarbeiter','dnfreigabe',0)");
+    $done=true;
 }
 function userName(array $u): string {
     $num=trim((string)$u['dienstnummer']);
