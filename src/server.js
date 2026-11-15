@@ -515,7 +515,7 @@ function valideDesign(d){
  Object.keys(d.extras).every(k=>[...DESIGN_KEYS,'modus','preset'].includes(k))&&
  DESIGN_KEYS.every(k=>d.extras[k]===undefined||HEX.test(d.extras[k]))&&
  (d.extras.modus===undefined||['dunkel','hell'].includes(d.extras.modus))&&
- (d.extras.preset===undefined||['flori','schulzi'].includes(d.extras.preset))));
+ (d.extras.preset===undefined||['flori','schulzi','chem'].includes(d.extras.preset))));
 }
 const THEME_DEFAULT={akzent:'#5b86ba',schleier:88,hintergrund:'wappen',extras:{}};
 app.get('/api/portal-design',requireLogin,async(req,res,next)=>{

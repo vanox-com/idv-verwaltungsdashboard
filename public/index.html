@@ -232,6 +232,18 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 
 /* Richtlinie und Organigramm */
 .rl-row[hidden]{display:none}
+.rl-intro{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}
+.rl-stat{padding:17px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.rl-stat strong{display:block;font-size:24px;color:var(--txt)}
+.rl-stat span{color:var(--mut);font-size:13px}
+.rl-table{width:100%;border-collapse:separate;border-spacing:0 8px}
+.rl-table th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);padding:10px 12px}
+.rl-table td{padding:15px 12px;background:var(--panel);vertical-align:top;line-height:1.5;border-block:1px solid var(--line)}
+.rl-table td:first-child{border-left:1px solid var(--line);border-radius:10px 0 0 10px;white-space:nowrap}
+.rl-table td:last-child{border-right:1px solid var(--line);border-radius:0 10px 10px 0}
+.rl-table .rl-description{font-weight:650;min-width:200px}
+.rl-table .rl-notes{font-size:13px;color:var(--mut)}
+@media(max-width:700px){.rl-intro{grid-template-columns:1fr}.rl-table{min-width:900px}}
 .org-top{text-align:center;padding:27px 20px 30px}
 .org-label{display:block;color:var(--mut);font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:9px}
 .org-oberrat{display:inline-block;background:linear-gradient(125deg,#59333e,#8b4d49);border:1px solid #a5756e;
@@ -1552,6 +1564,15 @@ html[data-design-preset="schulzi"] .tag{border-radius:0!important}
 html[data-design-preset="schulzi"] input,html[data-design-preset="schulzi"] select,html[data-design-preset="schulzi"] textarea{background:#0a0a0a!important;color:#fff!important;border:1px solid #bdbdbd!important}
 #idvThemeParticles{position:fixed;inset:0;pointer-events:none;z-index:34;overflow:hidden}
 #idvThemeParticles .theme-particle{position:absolute;display:block;color:#bd9b73;opacity:.28;animation:idvPartikelSchweben var(--zeit) ease-in-out infinite alternate}
+html[data-design-preset="chem"] body{background:linear-gradient(125deg,#25005d,#ff269e,#10e7ce,#fbea24,#4d00a0)!important;background-size:400% 400%!important;animation:chemRainbow 10s linear infinite}
+html[data-design-preset="chem"] aside{background:linear-gradient(155deg,#4a008d,#ff087d,#00b89c)!important;border-right:4px solid #f7ff00!important}
+html[data-design-preset="chem"] .box,html[data-design-preset="chem"] .karte,html[data-design-preset="chem"] .kachel{background:linear-gradient(130deg,#47168fef,#a10e70ec,#045e89ed)!important;border:2px solid #e5ff38!important;box-shadow:0 0 18px #e819c577!important;border-radius:22px!important}
+html[data-design-preset="chem"] h1,html[data-design-preset="chem"] h2{color:#fff36b!important;text-shadow:3px 3px #f300ae,-3px -2px #00fff0;animation:chemWiggle 3s ease-in-out infinite alternate}
+html[data-design-preset="chem"] button:hover{filter:hue-rotate(125deg) saturate(2);transform:rotate(-2deg) scale(1.025)}
+html[data-design-preset="chem"] #idvThemeParticles .theme-particle{opacity:.92;font-size:40px!important;filter:drop-shadow(0 0 6px #ff4cdb);animation:chemNugget var(--zeit) ease-in-out infinite alternate}
+@keyframes chemRainbow{to{background-position:100% 100%}}
+@keyframes chemWiggle{to{transform:skew(-2deg)}}
+@keyframes chemNugget{0%{transform:translate(-25px,20px) rotate(-30deg)}100%{transform:translate(55px,-85px) rotate(55deg)}}
 @keyframes idvPartikelSchweben{0%{transform:translate3d(-5px,6px,0) rotate(-18deg);opacity:.14}100%{transform:translate3d(28px,-35px,0) rotate(15deg);opacity:.4}}
 @media(prefers-reduced-motion:reduce){#idvThemeParticles .theme-particle{animation:none!important;opacity:.12}}
 
@@ -3614,7 +3635,8 @@ function vKue() {
   const archiv=KUE_VIEW_MODE==='archiv'&&can('kuearchiv');
   const schreiben=can('kue',2)&&(!archiv||can('kuearchiv',2));
   const alle=archiv?(KUE_ARCHIV_DATEN||[]):(D.kuendigungen||[]);
-  const eintraege=KUE_FOKUS_NR?alle.filter(k=>Number(k.personalnummer)===KUE_FOKUS_NR):alle;
+  const datumZeit=k=>{const raw=k.kuendigungsdatum||k.erfasst_am||k.statuswechsel_am||'';const zeit=Date.parse(raw);return Number.isFinite(zeit)?zeit:-Infinity;};
+  const eintraege=(KUE_FOKUS_NR?alle.filter(k=>Number(k.personalnummer)===KUE_FOKUS_NR):alle).slice().sort((a,b)=>datumZeit(b)-datumZeit(a)||Number(b.id)-Number(a.id));
   const fokusPerson=(D.personal||[]).find(p=>Number(p.personalnummer)===KUE_FOKUS_NR);
   const fokusInfo=KUE_FOKUS_NR?'<div class="pers-kue-filter" role="status">'+
     '<strong>Kündigungen für '+esc([fokusPerson?.vorname,fokusPerson?.nachname].filter(Boolean).join(' ')||'Personalnummer '+KUE_FOKUS_NR)+'</strong>'+
@@ -3675,7 +3697,7 @@ function vKue() {
       '<span class="kue-group-jumps">'+vorgaenge.map((k,i)=>'<button type="button" data-kue-jump-id="'+Number(k.id)+'" data-kue-jump-group="'+safeKey+'" title="Kündigungsvorgang #'+Number(k.id)+' anzeigen">'+(i+1)+'/'+vorgaenge.length+' · #'+Number(k.id)+'</button>').join('')+'</span></td></tr>';
     return summary+vorgaenge.map((k,i)=>'<tr class="kue-group-detail" data-kue-group="'+safeKey+'" data-kue-record-id="'+Number(k.id)+'"'+(KUE_OFFENE_GRUPPEN.has(key)?'':' hidden')+'>'+detailRow(k,i,vorgaenge.length)+'</tr>').join('');
   }).join('');
-  return '<h1>Kündigungen</h1>'+tabs+'<p class="kue-archive-notice">'+esc(hinweis)+'</p>'+
+  return '<h1>Kündigungen</h1>'+tabs+'<p class="kue-archive-notice">'+esc(hinweis)+' · Sortiert nach Kündigungsdatum (neueste zuerst).</p>'+
     '<div class="pers-bar"><span class="mut">Rückgaben, Sperrungen und gesicherte Personalakten.</span>'+
     '<span class="spacer"></span>'+(!archiv&&can('kue',2)?'<button type="button" class="p" id="kueNeu">+ Neue Kündigung</button>':'')+
     '</div>'+fokusInfo+(archiv&&!KUE_ARCHIV_DATEN?'<p class="mut" role="status">Archiv wird geladen …</p>':'')+
@@ -4482,13 +4504,18 @@ function vRl() {
       '<td><span class="tag bad">'+esc(spalten[3]||'–')+'</span></td>'+
       '<td>'+esc(spalten[4]||'–')+'</td><td>'+esc(spalten[5]||'–')+'</td></tr>';
   }).join('');
+  const anzahl=(r.zeilen||[]).length;
   return '<h1>Richtlinie Disziplinarmaßnahmen</h1>'+
+    '<p class="mut">Übersicht der hinterlegten Regelverstöße und möglichen Maßnahmen. Die konkrete Entscheidung erfolgt nach Prüfung des Einzelfalls.</p>'+
+    '<div class="rl-intro"><div class="rl-stat"><strong>'+anzahl+'</strong><span>Erfasste Regelungen</span></div>'+
+    '<div class="rl-stat"><strong>2 Stufen</strong><span>Milde und harte Maßnahmen im Vergleich</span></div>'+
+    '<div class="rl-stat"><strong>PDV</strong><span>Nach Vorschriften und Stichworten durchsuchbar</span></div></div>'+
     '<div class="pers-bar"><input id="rlSuche" type="search" aria-label="Disziplinarrichtlinie durchsuchen" '+
     'placeholder="PDV-Nummer, Verstoß oder Maßnahme suchen …">'+
     '<span class="spacer"></span><span class="mut" id="rlAnzahl">'+(r.zeilen||[]).length+' Einträge</span>'+
     (r.stand?'<span class="tag">Stand: '+esc(r.stand)+'</span>':'')+'</div>'+
-    '<div class="tw"><table><thead><tr>'+
-    ['PDV §','Kurzbeschreibung','Mild','Hart','Sonstiges','Anmerkungen'].map(x=>'<th>'+x+'</th>').join('')+
+    '<div class="tw"><table class="rl-table"><thead><tr>'+
+    ['PDV §','Verstoß / Beschreibung','Milde Maßnahme','Harte Maßnahme','Weitere Folgen','Hinweise'].map(x=>'<th>'+x+'</th>').join('')+
     '</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function rlFiltern() {
@@ -5389,14 +5416,17 @@ async function ladeBackup(){
 
 /* Spielerischer, nur dekorativer Partikelschleier im Florimodus. */
 function idvThemePartikelAktualisieren(){
- const active=document.documentElement.dataset.designPreset==='flori';
+ const preset=document.documentElement.dataset.designPreset;
+ const active=preset==='flori'||preset==='chem';
  let layer=document.getElementById('idvThemeParticles');
  if(!active){layer?.remove();return;}
+ if(layer&&layer.dataset.preset!==preset){layer.remove();layer=null;}
  if(layer)return;
  layer=document.createElement('div');layer.id='idvThemeParticles';layer.setAttribute('aria-hidden','true');
+ layer.dataset.preset=preset;
  for(let i=0;i<13;i++){
   const spot=document.createElement('span');spot.className='theme-particle';
-  spot.textContent=i%3===0?'✦':i%3===1?'●':'✧';
+  spot.textContent=preset==='chem'?['🍗','🍗','🥴','🍗','👁️'][i%5]:(i%3===0?'✦':i%3===1?'●':'✧');
   spot.style.left=((i*43+13)%97)+'%';spot.style.top=((i*31+17)%95)+'%';
   spot.style.fontSize=(11+(i%5)*6)+'px';spot.style.setProperty('--zeit',(4+i%6)+'s');
   spot.style.animationDelay=(-(i%7)*.8)+'s';layer.appendChild(spot);
@@ -5461,6 +5491,21 @@ function schulziRetroSound(test=false){
  }catch(e){/* Dekorative Klänge dürfen das Portal nicht beeinträchtigen. */}
 }
 /* Persistente Gestaltung, ausschließlich vordefinierte Hintergrundmotive. */
+const CHEM_MUSIK_URL='/assets/chem-loop.mp3',CHEM_KLICK_URL='/assets/chem-click.mp3';
+let chemMusik=null,chemStartVersucht=false;
+function chemAudioAktualisieren(){
+ const aktiv=document.documentElement.dataset.designPreset==='chem';
+ if(!aktiv){if(chemMusik){chemMusik.pause();chemMusik.currentTime=0;}chemStartVersucht=false;return;}
+ if(!chemMusik){chemMusik=new Audio(CHEM_MUSIK_URL);chemMusik.loop=true;chemMusik.volume=.42;chemMusik.preload='auto';}
+ // Browser erlauben Ton beim Laden häufig erst nach der ersten Nutzerinteraktion.
+ if(!chemStartVersucht){chemStartVersucht=true;void chemMusik.play().catch(()=>{});}
+}
+function chemKlickSound(){
+ if(document.documentElement.dataset.designPreset!=='chem')return;
+ if(chemMusik?.paused)void chemMusik.play().catch(()=>{});
+ const klick=new Audio(CHEM_KLICK_URL);klick.volume=.75;
+ void klick.play().catch(()=>{});
+}
 function applyPortalDesign(d){
  if(!d||!/^#[0-9a-f]{6}$/i.test(d.akzent))return;
  const a=d.akzent;
@@ -5468,8 +5513,9 @@ function applyPortalDesign(d){
  document.documentElement.style.setProperty('--acc',a);
  const ex=d.extras||{},light=ex.modus==='hell';
  document.documentElement.dataset.portalMode=light?'hell':'dunkel';
- document.documentElement.dataset.designPreset=['flori','schulzi'].includes(ex.preset)?ex.preset:'';
+ document.documentElement.dataset.designPreset=['flori','schulzi','chem'].includes(ex.preset)?ex.preset:'';
   idvThemePartikelAktualisieren();
+  chemAudioAktualisieren();
  const defaults=light?{flaeche:'#ffffff',seitenleiste:'#e9eff7',rahmen:'#c6d1df',schrift:'#15253b',sekundaer:'#52677f',highlight:'#e6f0ff'}:
  {flaeche:'#182333',seitenleiste:'#0b111a',rahmen:'#26354b',schrift:'#e6edf6',sekundaer:'#8ea0b8',highlight:'#203958'};
  const map={flaeche:'--panel',seitenleiste:'--portal-sidebar',rahmen:'--line',schrift:'--txt',sekundaer:'--mut',highlight:'--portal-highlight'};
@@ -5488,18 +5534,19 @@ const PORTAL_PRESETS={
  bernstein:{name:'Bernstein',akzent:'#e8a34f',hintergrund:'stahl',extras:{modus:'dunkel',flaeche:'#332b24',seitenleiste:'#201a16',rahmen:'#65503c',schrift:'#fff5e7',sekundaer:'#d4bba0',highlight:'#5a3f23'}},
  hell:{name:'Arktis Hell',akzent:'#2872bc',hintergrund:'ohne',extras:{modus:'hell',flaeche:'#ffffff',seitenleiste:'#e9eff7',rahmen:'#c6d1df',schrift:'#15253b',sekundaer:'#52677f',highlight:'#d6e9fa'}},
  flori:{name:'🐄 Florimodus (Muh!)',akzent:'#cfaa7d',hintergrund:'ohne',extras:{preset:'flori',modus:'dunkel',flaeche:'#2a231e',seitenleiste:'#17130f',rahmen:'#655444',schrift:'#f0e5d6',sekundaer:'#c4ae98',highlight:'#3f3329'}},
-  schulzi:{name:'📼 Schulzi-Modus (Retro)',akzent:'#e1e1e1',hintergrund:'ohne',extras:{preset:'schulzi',modus:'dunkel',flaeche:'#191919',seitenleiste:'#090909',rahmen:'#aaa9a8',schrift:'#f7f7f7',sekundaer:'#b2b2b2',highlight:'#303030'}}
+  schulzi:{name:'📼 Schulzi-Modus (Retro)',akzent:'#e1e1e1',hintergrund:'ohne',extras:{preset:'schulzi',modus:'dunkel',flaeche:'#191919',seitenleiste:'#090909',rahmen:'#aaa9a8',schrift:'#f7f7f7',sekundaer:'#b2b2b2',highlight:'#303030'}},
+  chem:{name:'🍗 Chem-Stil (Psychedelic)',akzent:'#e6ff28',hintergrund:'ohne',extras:{preset:'chem',modus:'dunkel',flaeche:'#4b188a',seitenleiste:'#48005d',rahmen:'#f4ff30',schrift:'#fff8d6',sekundaer:'#d2f7f0',highlight:'#b71793'}}
 };
 async function ladeDesign(){
  const area=$('#inhalt');
  area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p>Lade Gestaltung …</p>';
  try{
   const d=await api('/portal-design');
-  ausgewaehltesDesignPreset=['flori','schulzi'].includes(d.extras?.preset)?d.extras.preset:'';
+  ausgewaehltesDesignPreset=['flori','schulzi','chem'].includes(d.extras?.preset)?d.extras.preset:'';
   area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p class="mut">Du kannst dein eigenes Design speichern. Administratoren können zusätzlich den Standard für alle vorgeben.</p>'+
    '<section class="box"><h3>Farb-Presets</h3><p class="mut">Ein Preset übernimmt passende Farben. Über Vorschau testen und anschließend persönlich speichern.</p>'+
    '<div class="design-preset-grid">'+Object.entries(PORTAL_PRESETS).map(([id,p])=>'<button type="button" data-design-preset="'+id+'" title="'+esc(p.name)+'"><span class="design-preset-swatch" style="background:linear-gradient(125deg,'+p.extras.seitenleiste+','+p.extras.flaeche+')"><i style="background:'+p.akzent+'"></i></span><strong>'+esc(p.name)+'</strong></button>').join('')+'</div>'+ 
-   '<div class="flori-audio-test"><button type="button" id="floriMuhTest">🐮 Kräftiges MUUUH testen 🔊</button><button type="button" id="schulziRetroTest">📼 80er-Computerstart testen 🔊</button>'+
+   '<div class="flori-audio-test"><button type="button" id="floriMuhTest">🐮 Kräftiges MUUUH testen 🔊</button><button type="button" id="schulziRetroTest">📼 80er-Computerstart testen 🔊</button><button type="button" id="chemMusikTest">🍗 Chem-Musik starten / pausieren 🔊</button>'+
    '<small>Echte Kuhaufnahme: <a href="https://commons.wikimedia.org/wiki/File:Mudchute_cow_1.ogg" target="_blank" rel="noopener noreferrer">Secretlondon / Wikimedia Commons</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 3.0</a>. Im Florimodus muhende Klicks.</small></div></section>'+
    '<section class="box"><h3>Portal-Design</h3>'+
    '<label for="designAkzent">Akzentfarbe</label><input id="designAkzent" type="color" value="'+esc(d.akzent)+'" style="width:110px;height:48px;padding:5px">'+
@@ -5558,7 +5605,7 @@ function designEingabeVorschau(ev){
 document.addEventListener('input',designEingabeVorschau);
 document.addEventListener('change',designEingabeVorschau);
 function aktuelleDesignWerte(){
- return {akzent:$('#designAkzent').value,schleier:Number($('#designSchleier').value),hintergrund:$('#designMotiv').value,extras:{...(['flori','schulzi'].includes(ausgewaehltesDesignPreset)?{preset:ausgewaehltesDesignPreset}:{}),modus:$('#designModus').value,...Object.fromEntries([...document.querySelectorAll('[data-design-color]')].map(x=>[x.dataset.designColor,x.value]))}};
+ return {akzent:$('#designAkzent').value,schleier:Number($('#designSchleier').value),hintergrund:$('#designMotiv').value,extras:{...(['flori','schulzi','chem'].includes(ausgewaehltesDesignPreset)?{preset:ausgewaehltesDesignPreset}:{}),modus:$('#designModus').value,...Object.fromEntries([...document.querySelectorAll('[data-design-color]')].map(x=>[x.dataset.designColor,x.value]))}};
 }
 document.addEventListener('click',async ev=>{
  const preset=ev.target.closest('[data-design-preset]');
@@ -5651,6 +5698,17 @@ function florimodusMuh(test=false){
 document.addEventListener('click',e=>{
  if(e.target.closest('#floriMuhTest')){florimodusMuh(true);return;}
   if(e.target.closest('#schulziRetroTest')){schulziRetroSound(true);return;}
+  if(e.target.closest('#chemMusikTest')){
+    if(document.documentElement.dataset.designPreset!=='chem'){
+      ausgewaehltesDesignPreset='chem';
+      const p=PORTAL_PRESETS.chem;
+      $('#designAkzent').value=p.akzent;$('#designMotiv').value=p.hintergrund;$('#designModus').value=p.extras.modus;
+      document.querySelectorAll('[data-design-color]').forEach(input=>{input.value=p.extras[input.dataset.designColor]||input.value;});
+      applyPortalDesign(aktuelleDesignWerte());
+    }else if(chemMusik){if(chemMusik.paused)void chemMusik.play().catch(()=>{});else chemMusik.pause();}
+    return;
+  }
+ chemKlickSound();
  if(e.target.closest('button,a,[role="button"],summary,select,input[type="checkbox"],input[type="radio"]'))
   {florimodusMuh();schulziRetroSound();}
 });

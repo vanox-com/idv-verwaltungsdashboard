@@ -33,7 +33,7 @@ function portalDesignInput(): array {
         if(!in_array($name,[...$keys,'modus','preset'],true)) fail(400,'Ungültige Designeinstellungen');
         if(in_array($name,$keys,true) && !$hex($value))fail(400,'Ungültige Designeinstellungen');
         if($name==='modus'&&!in_array($value,['dunkel','hell'],true))fail(400,'Ungültige Designeinstellungen');
-        if($name==='preset'&&!in_array($value,['flori','schulzi'],true))fail(400,'Ungültige Designeinstellungen');
+        if($name==='preset'&&!in_array($value,['flori','schulzi','chem'],true))fail(400,'Ungültige Designeinstellungen');
     }
     return [$data['akzent'],$data['schleier'],$data['hintergrund'],json_encode($extras,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)];
 }
