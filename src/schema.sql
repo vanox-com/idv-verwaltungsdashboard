@@ -413,6 +413,11 @@ INSERT INTO role_perms (rolle,modul,stufe) VALUES
  ('Leitungsdienst','dnfreigabe',2),('Ausbilder','dnfreigabe',0),('Mitarbeiter','dnfreigabe',0)
 ON CONFLICT(rolle,modul) DO NOTHING;
 
+INSERT INTO role_perms (rolle,modul,stufe) VALUES
+ ('Administrator','rlbearb',2),('Polizeirat','rlbearb',0),
+ ('Leitungsdienst','rlbearb',0),('Ausbilder','rlbearb',0),('Mitarbeiter','rlbearb',0)
+ON CONFLICT(rolle,modul) DO NOTHING;
+
 /* Polizeiräte dürfen Textbausteine lesen und kopieren;
    andere Rollen erhalten standardmäßig keinen Zugriff. Bestehende
    Gruppen- und Einzelrechte werden niemals überschrieben. */
