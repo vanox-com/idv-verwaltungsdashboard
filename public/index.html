@@ -257,6 +257,17 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .rl-guide--measures{border-left:4px solid #73b76c}
 .rl-guide--important{border-left:4px solid #e45c5c;background:color-mix(in srgb,var(--panel) 91%,#9e3434)}
 .rl-guide .rl-pill{font-size:11px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}
+.rl-catalog-item{display:flex;align-items:center;gap:9px;padding:5px 0}
+.rl-catalog-item .rl-catalog-number{color:var(--mut);font-weight:750;min-width:26px}
+.rl-catalog-item .rl-catalog-name{flex:1}
+.rl-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.rl-edit-form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rl-edit-form label{display:grid;gap:5px;font-size:13px}
+.rl-edit-form label.rl-wide{grid-column:1/-1}
+.rl-edit-form input,.rl-edit-form textarea,.rl-edit-form select{width:100%;min-width:0}
+#rlEditDialog{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:24px;width:min(720px,95vw);max-height:90vh;overflow:auto}
+#rlEditDialog::backdrop{background:#050a18cc}
+@media(max-width:600px){.rl-edit-form{grid-template-columns:1fr}.rl-edit-form label.rl-wide{grid-column:auto}}
 .rl-table-caption{margin:22px 0 10px}
 .rl-table-caption h2{font-size:19px;margin:0 0 4px}
 @media(max-width:700px){.rl-intro{grid-template-columns:1fr}.rl-table{min-width:900px}}
@@ -2168,6 +2179,7 @@ function zeichne() {
     if(tab === 'design') ladeDesign();
     if(tab === 'bef') { ladeRangantraege(); void urkundenAuthVorbereiten(); void ladeDienstnummerAntraege(); }
     if(tab === 'befricht') void befRichtLaden();
+    if(tab === 'rl') void ladeDisziplinRichtlinie();
     if(tab === 'pers') { ladePersonalRangantraege(); void ladeDienstnummerAntraege(); }
     if(tab === 'praktika') void dgArchivLaden(0,'dgPraktikaArchiv');
     if(tab === 'rout'&&routineBereich==='archiv') void routineArchivLaden();
@@ -4507,29 +4519,43 @@ document.addEventListener('click',e=>{
 });
 
 
-/* Die Originaldatei zeigt die Disziplinarrichtlinie als durchsuchbare
-   Referenztabelle – keine Bearbeitungsfunktion war darin enthalten. */
+const RL_DEFAULT=['Mündliche Ermahnung','Schriftliche Verwarnung','Schriftliche Abmahnung',
+  'Degradierung nach PDV §28','Beförderungssperre','Entlassung nach PDV §33',
+  'Anordnung von Weiterbildungskursen','Entziehung abgelegter Prüfungen','Nicht diensttauglich',
+  'Anordnung sportlicher oder erzieherischer Maßnahmen','Suspendierung']
+  .map((text,i)=>({id:i+1,text}));
+let RL_STATE=null;
+async function ladeDisziplinRichtlinie(){
+ try{
+  const state=await api('/disziplinrichtlinie');
+  if(tab!=='rl')return;
+  RL_STATE=state;D.richtlinie=state;$('#inhalt').innerHTML=vRl();
+ }catch(e){if(tab==='rl')$('#inhalt').insertAdjacentHTML('afterbegin','<p class="fehler">Richtlinie konnte nicht aktualisiert werden: '+esc(e.message)+'</p>');}
+}
+function rlMassnahme(text,catalog){
+ return String(text||'').replace(/\bPunkt\s*(\d+)\b/gi,(original,id)=>{
+  const entry=catalog.find(x=>Number(x.id)===Number(id));
+  return entry?entry.text:original+' (nicht zugeordnet)';
+ });
+}
 function vRl() {
   const r = D.richtlinie || {stand:'',zeilen:[]};
-  const massnahmen=[
-    'Mündliche Ermahnung','Schriftliche Verwarnung','Schriftliche Abmahnung',
-    'Degradierung nach PDV §28','Beförderungssperre','Entlassung nach PDV §33',
-    'Anordnung von Weiterbildungskursen','Entziehung abgelegter Prüfungen',
-    'Nicht diensttauglich','Anordnung sportlicher oder erzieherischer Maßnahmen','Suspendierung'
-  ];
+  const massnahmen=r.massnahmen||RL_DEFAULT;
+  const darfEdit=can('rlbearb',2);
   const rows = (r.zeilen || []).map(z => {
     const spalten=[z.pdv||'',z.text_kurz||'',z.mild||'',z.hart||'',z.sonst||'',z.anmerkung||''];
-    const search=spalten.join(' ').toLowerCase();
+    const search=spalten.map(s=>rlMassnahme(s,massnahmen)).join(' ').toLowerCase();
     return '<tr class="rl-row" data-rl-query="'+esc(search)+'">'+
       '<td><strong>'+esc(spalten[0])+'</strong></td>'+
       '<td>'+esc(spalten[1])+'</td>'+
-      '<td><span class="tag warn">'+esc(spalten[2]||'–')+'</span></td>'+
-      '<td><span class="tag bad">'+esc(spalten[3]||'–')+'</span></td>'+
-      '<td>'+esc(spalten[4]||'–')+'</td><td>'+esc(spalten[5]||'–')+'</td></tr>';
+      '<td><span class="tag warn">'+esc(rlMassnahme(spalten[2],massnahmen)||'–')+'</span></td>'+
+      '<td><span class="tag bad">'+esc(rlMassnahme(spalten[3],massnahmen)||'–')+'</span></td>'+
+      '<td>'+esc(spalten[4]||'–')+'</td><td>'+esc(spalten[5]||'–')+'</td>'+
+      (darfEdit?'<td><button type="button" data-rl-edit="'+Number(z.id)+'">Bearbeiten</button> <button type="button" data-rl-remove="'+Number(z.id)+'">Entfernen</button></td>':'')+'</tr>';
   }).join('');
   const anzahl=(r.zeilen||[]).length;
   return '<h1>Richtlinie Disziplinarmaßnahmen</h1>'+
-    '<p class="mut">Die Punkte in der Richtlinientabelle beziehen sich auf den Maßnahmenkatalog 1–11. Hier findest du die geltenden Anmerkungen und Vorgaben direkt bei der Tabelle.</p>'+
+    '<p class="mut">Punktverweise werden automatisch als Maßnahmenbezeichnungen angezeigt. Hier findest du die geltenden Anmerkungen und Vorgaben direkt bei der Tabelle.</p>'+
     '<div class="rl-guidance">'+
       '<section class="rl-guide rl-guide--notice"><h2>📌 Anmerkungen</h2>'+
         '<p>Die Richtlinie ist eine Vorlage und Grundlage für disziplinare Maßnahmen. Sie wurde von der Polizeileitung mit dem Polizeioberrat besprochen, akzeptiert und vorgegeben.</p>'+
@@ -4540,9 +4566,11 @@ function vRl() {
         '<li><strong>2 Abmahnungen</strong> im selben Paragraphen ergeben eine Degradierung, jedoch nicht ohne Absprache mit POR oder LD.</li>'+
         '<li><strong>3 Abmahnungen</strong> im selben Paragraphen ergeben automatisch die fristlose Entlassung.</li>'+
       '</ul></section>'+
-      '<section class="rl-guide rl-guide--measures"><h2>⚖️ Mögliche Disziplinarmaßnahmen · Punkte 1–11</h2>'+
+      '<section class="rl-guide rl-guide--measures"><h2>⚖️ Mögliche Disziplinarmaßnahmen</h2>'+
         '<p class="mut">Die Nummern entsprechen den Punkten in den nachfolgenden Richtlinientabellen.</p>'+
-        '<ol class="rl-measures">'+massnahmen.map(m=>'<li>'+esc(m)+'</li>').join('')+'</ol></section>'+
+        '<div class="rl-measures">'+massnahmen.map(m=>'<div class="rl-catalog-item"><span class="rl-catalog-number">'+Number(m.id)+'.</span><span class="rl-catalog-name">'+esc(m.text)+'</span>'+
+          (darfEdit?'<button type="button" data-rl-medit="'+Number(m.id)+'" aria-label="Maßnahme bearbeiten">✎</button><button type="button" data-rl-mremove="'+Number(m.id)+'" aria-label="Maßnahme entfernen">×</button>':'')+'</div>').join('')+'</div>'+
+        (darfEdit?'<div class="rl-actions"><button type="button" data-rl-madd>+ Maßnahme hinzufügen</button></div>':'')+'</section>'+
       '<section class="rl-guide rl-guide--important"><h2>❗ Beachten</h2>'+
         '<p>Die Disziplinarmaßnahme ist abhängig von der Art des Verstoßes.</p>'+
         '<p>Die Strafen sind Vorgaben. Nach Absprache mit dem POR kann von diesen abgewichen werden.</p></section>'+
@@ -4550,13 +4578,14 @@ function vRl() {
     '<div class="rl-intro"><div class="rl-stat"><strong>'+anzahl+'</strong><span>Erfasste Regelungen</span></div>'+
     '<div class="rl-stat"><strong>2 Stufen</strong><span>Milde und harte Maßnahmen im Vergleich</span></div>'+
     '<div class="rl-stat"><strong>PDV</strong><span>Nach Vorschriften und Stichworten durchsuchbar</span></div></div>'+
-    '<div class="rl-table-caption"><h2>Richtlinientabelle</h2><p class="mut">Verstöße, mögliche Maßnahmen und zusätzliche Hinweise im Überblick.</p></div>'+
+    '<div class="rl-table-caption"><h2>Richtlinientabelle</h2><p class="mut">Verstöße, mögliche Maßnahmen und zusätzliche Hinweise im Überblick.</p>'+
+    (darfEdit?'<button type="button" class="p" data-rl-add>+ Richtlinieneintrag hinzufügen</button>':'')+'</div>'+
     '<div class="pers-bar"><input id="rlSuche" type="search" aria-label="Disziplinarrichtlinie durchsuchen" '+
     'placeholder="PDV-Nummer, Verstoß oder Maßnahme suchen …">'+
     '<span class="spacer"></span><span class="mut" id="rlAnzahl">'+(r.zeilen||[]).length+' Einträge</span>'+
     (r.stand?'<span class="tag">Stand: '+esc(r.stand)+'</span>':'')+'</div>'+
     '<div class="tw"><table class="rl-table"><thead><tr>'+
-    ['PDV §','Verstoß / Beschreibung','Milde Maßnahme','Harte Maßnahme','Weitere Folgen','Hinweise'].map(x=>'<th>'+x+'</th>').join('')+
+    ['PDV §','Verstoß / Beschreibung','Milde Maßnahme','Harte Maßnahme','Weitere Folgen','Hinweise',...(darfEdit?['Aktionen']:[])].map(x=>'<th>'+x+'</th>').join('')+
     '</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function rlFiltern() {
@@ -4568,6 +4597,73 @@ function rlFiltern() {
   });
   if($('#rlAnzahl'))$('#rlAnzahl').textContent=count+' Einträge';
 }
+async function rlSpeichern(next){
+ if(!can('rlbearb',2)||!RL_STATE)return;
+ try{
+  await api('/disziplinrichtlinie',{method:'PUT',body:JSON.stringify({...next,revision:RL_STATE.revision})});
+  await ladeDisziplinRichtlinie();
+ }catch(e){alert('Nicht gespeichert: '+e.message);if(/inzwischen geändert/.test(e.message))await ladeDisziplinRichtlinie();}
+}
+function rlKopie(){return JSON.parse(JSON.stringify(RL_STATE));}
+function rlDialog(html){
+ let dialog=document.getElementById('rlEditDialog');
+ if(!dialog){dialog=document.createElement('dialog');dialog.id='rlEditDialog';dialog.className='portal-dialog';document.body.appendChild(dialog);}
+ dialog.innerHTML=html;dialog.showModal();return dialog;
+}
+function rlEintragBearbeiten(id){
+ if(!RL_STATE||!can('rlbearb',2))return;
+ const found=RL_STATE.zeilen.find(x=>Number(x.id)===id);
+ if(id&&!found)return;
+ const row=found||{pdv:'',text_kurz:'',mild:'',hart:'',sonst:'',anmerkung:''};
+ const fields=[['pdv','PDV / Paragraph'],['text_kurz','Verstoß / Beschreibung'],['mild','Milde Maßnahme'],['hart','Harte Maßnahme'],['sonst','Weitere Folgen'],['anmerkung','Hinweise']];
+ const options=RL_STATE.massnahmen.map(x=>'<option value="Punkt '+Number(x.id)+'">'+esc(x.text)+'</option>').join('');
+ const d=rlDialog('<h2>'+(found?'Richtlinieneintrag bearbeiten':'Richtlinieneintrag hinzufügen')+'</h2>'+
+  '<form id="rlEditForm"><div class="rl-edit-form">'+fields.map(([key,title])=>'<label class="'+(['sonst','anmerkung'].includes(key)?'rl-wide':'')+'">'+title+
+    '<input name="'+key+'" value="'+esc(row[key]||'')+'" maxlength="2000" '+(['pdv','text_kurz'].includes(key)?'required':'')+
+    ' '+(['mild','hart'].includes(key)?'list="rlMassnahmenListe"':'')+'></label>').join('')+'</div>'+
+    '<datalist id="rlMassnahmenListe">'+options+'</datalist><p class="mut">Für Maßnahmen einen Vorschlag auswählen (Punktnummer); eigene Texte wie „Gespräch“ sind ebenfalls möglich.</p>'+
+    '<div class="rl-actions"><button class="p" type="submit">Speichern</button><button type="button" data-rl-cancel>Abbrechen</button></div></form>');
+ d.querySelector('[data-rl-cancel]').onclick=()=>d.close();
+ d.querySelector('form').onsubmit=async e=>{
+  e.preventDefault();const next=rlKopie();const values=Object.fromEntries(fields.map(([key])=>[key,d.querySelector('[name="'+key+'"]').value.trim()]));
+  if(found){const i=next.zeilen.findIndex(x=>Number(x.id)===id);next.zeilen[i]={...next.zeilen[i],...values};}
+  else next.zeilen.push(values);
+  d.close();await rlSpeichern(next);
+ };
+}
+async function rlMassnahmeBearbeiten(id,remove=false){
+ if(!RL_STATE||!can('rlbearb',2))return;
+ const next=rlKopie();const index=next.massnahmen.findIndex(x=>Number(x.id)===id);
+ if(id&&index<0)return;
+ if(remove){
+  const referenced=next.zeilen.some(r=>['mild','hart'].some(k=>new RegExp('\\bPunkt\\s*'+id+'\\b','i').test(r[k]||'')));
+  if(referenced){alert('Diese Maßnahme wird noch in der Richtlinientabelle verwendet. Bitte zuerst die betreffenden Einträge ändern.');return;}
+  if(!confirm('Maßnahme '+id+' wirklich entfernen?'))return;
+  next.massnahmen.splice(index,1);
+ }else{
+  const existing=index>=0?next.massnahmen[index].text:'';
+  const text=prompt(id?'Bezeichnung der Maßnahme ändern:':'Neue Disziplinarmaßnahme:',existing);
+  if(text===null)return;
+  if(text.trim().length<2||text.length>250){alert('Bitte eine Bezeichnung mit 2–250 Zeichen eingeben.');return;}
+  if(index>=0)next.massnahmen[index].text=text.trim();
+  else next.massnahmen.push({id:Math.max(0,...next.massnahmen.map(x=>Number(x.id)))+1,text:text.trim()});
+ }
+ await rlSpeichern(next);
+}
+document.addEventListener('click',e=>{
+ const target=e.target.closest('[data-rl-add],[data-rl-edit],[data-rl-remove],[data-rl-madd],[data-rl-medit],[data-rl-mremove]');
+ if(!target||!can('rlbearb',2)||!RL_STATE)return;
+ if(target.hasAttribute('data-rl-add'))rlEintragBearbeiten(0);
+ else if(target.hasAttribute('data-rl-edit'))rlEintragBearbeiten(Number(target.dataset.rlEdit));
+ else if(target.hasAttribute('data-rl-remove')){
+  const id=Number(target.dataset.rlRemove);
+  if(confirm('Diesen Richtlinieneintrag wirklich entfernen?')){
+   const next=rlKopie();next.zeilen=next.zeilen.filter(x=>Number(x.id)!==id);void rlSpeichern(next);
+  }
+ }else if(target.hasAttribute('data-rl-madd'))void rlMassnahmeBearbeiten(0);
+ else if(target.hasAttribute('data-rl-medit'))void rlMassnahmeBearbeiten(Number(target.dataset.rlMedit));
+ else if(target.hasAttribute('data-rl-mremove'))void rlMassnahmeBearbeiten(Number(target.dataset.rlMremove),true);
+});
 /* Organigramm aus den 13 bereits importierten Zeilen rekonstruieren,
    ohne die Quelldaten oder Führungsstruktur zu überschreiben. */
 
@@ -5050,9 +5146,9 @@ document.addEventListener('click',e=>{
   if(btn)textbausteinKopieren(btn);
 });
 
-const RECHTE_MODULE=[...MODS.filter(m=>!['users','system','statistik','meldungen'].includes(m[0])),['kuearchiv','Kündigungsarchiv',''],['mitteilungen','Mitteilungen verwalten',''],['por','POR-Freigabe',''],['dnfreigabe','DN-Anträge entscheiden',''],['ranghistorie','Rangänderungs-Historie',''],['routarchiv','Routinearchiv','']];
+const RECHTE_MODULE=[...MODS.filter(m=>!['users','system','statistik','meldungen'].includes(m[0])),['kuearchiv','Kündigungsarchiv',''],['mitteilungen','Mitteilungen verwalten',''],['por','POR-Freigabe',''],['dnfreigabe','DN-Anträge entscheiden',''],['rlbearb','Disziplinarrichtlinien bearbeiten',''],['ranghistorie','Rangänderungs-Historie',''],['routarchiv','Routinearchiv','']];
 /* Bedeutung der Stufen, wo sie vom üblichen Lesen/Bearbeiten abweicht (Matrix + Einzelrechte). */
-const RECHTE_HINWEISE={abm:'Lesen = Abmeldungen ansehen · Bearbeiten = annehmen/ablehnen',dnfreigabe:'Lesen = alle DN-Anträge ansehen · Bearbeiten = DN-Anträge annehmen/ablehnen',botcfg:'Lesen = Konfiguration ansehen · Bearbeiten = ändern (Bot startet danach neu)'};
+const RECHTE_HINWEISE={abm:'Lesen = Abmeldungen ansehen · Bearbeiten = annehmen/ablehnen',dnfreigabe:'Lesen = alle DN-Anträge ansehen · Bearbeiten = DN-Anträge annehmen/ablehnen',rlbearb:'Bearbeiten = Richtlinieneinträge und Maßnahmenkatalog ändern · Lesen über separates Richtlinienrecht',botcfg:'Lesen = Konfiguration ansehen · Bearbeiten = ändern (Bot startet danach neu)'};
 let USER_ADMIN=null;
 function vUsers() {
   if(ME.rolle!=='Administrator')return '<p>Nur der Administrator darf Zugänge verwalten.</p>';
