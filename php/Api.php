@@ -138,7 +138,10 @@ function ensureDNApprovalPermissions(): void {
     sql("INSERT IGNORE INTO role_perms(rolle,modul,stufe) VALUES
         ('Administrator','dnfreigabe',2),('Polizeirat','dnfreigabe',2),
         ('Leitungsdienst','dnfreigabe',2),('Ausbilder','dnfreigabe',0),
-        ('Mitarbeiter','dnfreigabe',0)");
+        ('Mitarbeiter','dnfreigabe',0),
+        ('Administrator','rlbearb',2),('Polizeirat','rlbearb',0),
+        ('Leitungsdienst','rlbearb',0),('Ausbilder','rlbearb',0),
+        ('Mitarbeiter','rlbearb',0)");
     $done=true;
 }
 function userName(array $u): string {
@@ -248,6 +251,8 @@ function run(): void {
             streamChanges($u);
         }
         require_once __DIR__.'/Bootstrap.php';
+        require_once __DIR__.'/DisziplinRichtlinie.php';
+        if(dispatchDisziplinRichtlinie($u,$method,$uri))return;
         if($method==='GET'&&$uri==='/api/bootstrap')handleBootstrap($u);
         if($method==='GET'&&$uri==='/api/system-optionen')handleSystemOptions($u);
         require_once __DIR__.'/ReadOnly.php';
