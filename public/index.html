@@ -243,7 +243,24 @@ aside a{display:flex;align-items:center;gap:11px}aside .nav-icon{width:17px;heig
 .rl-table td:last-child{border-right:1px solid var(--line);border-radius:0 10px 10px 0}
 .rl-table .rl-description{font-weight:650;min-width:200px}
 .rl-table .rl-notes{font-size:13px;color:var(--mut)}
+.rl-guidance{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin:18px 0 22px}
+.rl-guide{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:19px 20px;min-width:0}
+.rl-guide h2{font-size:17px;margin:0 0 12px;display:flex;align-items:center;gap:9px}
+.rl-guide p{margin:0 0 10px;line-height:1.55}
+.rl-guide p:last-child{margin-bottom:0}
+.rl-guide ul,.rl-guide ol{margin:0;padding-left:22px;line-height:1.7}
+.rl-guide li{padding:3px 0}
+.rl-guide--measures{grid-column:1/-1}
+.rl-measures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 28px}
+.rl-guide--notice{border-left:4px solid #e8ab4b}
+.rl-guide--rules{border-left:4px solid #73b76c}
+.rl-guide--measures{border-left:4px solid #73b76c}
+.rl-guide--important{border-left:4px solid #e45c5c;background:color-mix(in srgb,var(--panel) 91%,#9e3434)}
+.rl-guide .rl-pill{font-size:11px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}
+.rl-table-caption{margin:22px 0 10px}
+.rl-table-caption h2{font-size:19px;margin:0 0 4px}
 @media(max-width:700px){.rl-intro{grid-template-columns:1fr}.rl-table{min-width:900px}}
+@media(max-width:700px){.rl-guidance,.rl-measures{grid-template-columns:1fr}.rl-guide--measures{grid-column:auto}}
 .org-top{text-align:center;padding:27px 20px 30px}
 .org-label{display:block;color:var(--mut);font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:9px}
 .org-oberrat{display:inline-block;background:linear-gradient(125deg,#59333e,#8b4d49);border:1px solid #a5756e;
@@ -4494,6 +4511,12 @@ document.addEventListener('click',e=>{
    Referenztabelle – keine Bearbeitungsfunktion war darin enthalten. */
 function vRl() {
   const r = D.richtlinie || {stand:'',zeilen:[]};
+  const massnahmen=[
+    'Mündliche Ermahnung','Schriftliche Verwarnung','Schriftliche Abmahnung',
+    'Degradierung nach PDV §28','Beförderungssperre','Entlassung nach PDV §33',
+    'Anordnung von Weiterbildungskursen','Entziehung abgelegter Prüfungen',
+    'Nicht diensttauglich','Anordnung sportlicher oder erzieherischer Maßnahmen','Suspendierung'
+  ];
   const rows = (r.zeilen || []).map(z => {
     const spalten=[z.pdv||'',z.text_kurz||'',z.mild||'',z.hart||'',z.sonst||'',z.anmerkung||''];
     const search=spalten.join(' ').toLowerCase();
@@ -4506,10 +4529,28 @@ function vRl() {
   }).join('');
   const anzahl=(r.zeilen||[]).length;
   return '<h1>Richtlinie Disziplinarmaßnahmen</h1>'+
-    '<p class="mut">Übersicht der hinterlegten Regelverstöße und möglichen Maßnahmen. Die konkrete Entscheidung erfolgt nach Prüfung des Einzelfalls.</p>'+
+    '<p class="mut">Die Punkte in der Richtlinientabelle beziehen sich auf den Maßnahmenkatalog 1–11. Hier findest du die geltenden Anmerkungen und Vorgaben direkt bei der Tabelle.</p>'+
+    '<div class="rl-guidance">'+
+      '<section class="rl-guide rl-guide--notice"><h2>📌 Anmerkungen</h2>'+
+        '<p>Die Richtlinie ist eine Vorlage und Grundlage für disziplinare Maßnahmen. Sie wurde von der Polizeileitung mit dem Polizeioberrat besprochen, akzeptiert und vorgegeben.</p>'+
+        '<ul><li>Nach jeder Disziplinarmaßnahme muss der POR informiert werden.</li><li>Eine Anhörung des Beschuldigten ist verpflichtend.</li></ul></section>'+
+      '<section class="rl-guide rl-guide--rules"><h2>📋 Weitere Vorgaben</h2><ul>'+
+        '<li>Abmahnungen gelten <strong>4 Wochen</strong>.</li>'+
+        '<li>Die Frist wird verlängert, wenn in dieser Zeit eine weitere Abmahnung hinzukommt.</li>'+
+        '<li><strong>2 Abmahnungen</strong> im selben Paragraphen ergeben eine Degradierung, jedoch nicht ohne Absprache mit POR oder LD.</li>'+
+        '<li><strong>3 Abmahnungen</strong> im selben Paragraphen ergeben automatisch die fristlose Entlassung.</li>'+
+      '</ul></section>'+
+      '<section class="rl-guide rl-guide--measures"><h2>⚖️ Mögliche Disziplinarmaßnahmen · Punkte 1–11</h2>'+
+        '<p class="mut">Die Nummern entsprechen den Punkten in den nachfolgenden Richtlinientabellen.</p>'+
+        '<ol class="rl-measures">'+massnahmen.map(m=>'<li>'+esc(m)+'</li>').join('')+'</ol></section>'+
+      '<section class="rl-guide rl-guide--important"><h2>❗ Beachten</h2>'+
+        '<p>Die Disziplinarmaßnahme ist abhängig von der Art des Verstoßes.</p>'+
+        '<p>Die Strafen sind Vorgaben. Nach Absprache mit dem POR kann von diesen abgewichen werden.</p></section>'+
+    '</div>'+
     '<div class="rl-intro"><div class="rl-stat"><strong>'+anzahl+'</strong><span>Erfasste Regelungen</span></div>'+
     '<div class="rl-stat"><strong>2 Stufen</strong><span>Milde und harte Maßnahmen im Vergleich</span></div>'+
     '<div class="rl-stat"><strong>PDV</strong><span>Nach Vorschriften und Stichworten durchsuchbar</span></div></div>'+
+    '<div class="rl-table-caption"><h2>Richtlinientabelle</h2><p class="mut">Verstöße, mögliche Maßnahmen und zusätzliche Hinweise im Überblick.</p></div>'+
     '<div class="pers-bar"><input id="rlSuche" type="search" aria-label="Disziplinarrichtlinie durchsuchen" '+
     'placeholder="PDV-Nummer, Verstoß oder Maßnahme suchen …">'+
     '<span class="spacer"></span><span class="mut" id="rlAnzahl">'+(r.zeilen||[]).length+' Einträge</span>'+
