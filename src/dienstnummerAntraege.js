@@ -149,9 +149,9 @@ export function registerDienstnummerAntraege(app,db,requireLogin,effektiveRechte
  app.get('/api/dienstnummer-antraege',requireLogin,async(req,res,next)=>{
   try{
    const rights=await effektiveRechte(req.user);
-   if((rights.pers||0)<1&&(rights.por||0)<1)
+   if((rights.pers||0)<1&&(rights.dnfreigabe||0)<1)
     return res.status(403).json({error:'Kein Recht auf Dienstnummern-Anträge'});
-   const all=(rights.por||0)>=1||req.user.rolle==='Administrator';
+   const all=(rights.dnfreigabe||0)>=1||req.user.rolle==='Administrator';
    const where=all?'':'WHERE a.antragsteller_id=$1';
    const result=await db.query(
     "SELECT a.id,a.alt_nr,a.ziel_nr,a.art,a.begruendung,a.status,a.quell_name,a.ziel_name,"+
@@ -160,7 +160,7 @@ export function registerDienstnummerAntraege(app,db,requireLogin,effektiveRechte
     "FROM dienstnummer_antraege a LEFT JOIN users u ON u.id=a.antragsteller_id "+
     "LEFT JOIN users e ON e.id=a.entscheider_id "+where+
     " ORDER BY (a.status='beantragt') DESC,a.erstellt DESC,a.id DESC LIMIT 200",all?[]:[req.user.id]);
-   res.json({antraege:result.rows,darfGenehmigen:(rights.por||0)>=2,darfBeantragen:(rights.pers||0)>=1});
+   res.json({antraege:result.rows,darfGenehmigen:(rights.dnfreigabe||0)>=2,darfBeantragen:(rights.pers||0)>=1});
   }catch(e){next(e)}
  });
  app.post('/api/dienstnummer-antraege',requireLogin,async(req,res,next)=>{
@@ -195,7 +195,7 @@ export function registerDienstnummerAntraege(app,db,requireLogin,effektiveRechte
  app.post('/api/dienstnummer-antraege/:id/entscheidung',requireLogin,async(req,res,next)=>{
   let rights;
   try{rights=await effektiveRechte(req.user)}catch(e){return next(e)}
-  if((rights.por||0)<2)return res.status(403).json({error:'Nur POR-Berechtigte dürfen entscheiden'});
+  if((rights.dnfreigabe||0)<2)return res.status(403).json({error:'Keine Berechtigung, DN-Anträge zu entscheiden'});
   const id=Number(req.params.id),status=String(req.body?.status||''),note=String(req.body?.notiz||'').trim();
   if(!Number.isSafeInteger(id)||id<1||!['genehmigt','abgelehnt'].includes(status)||note.length>1000||
     (status==='abgelehnt'&&note.length<5))
