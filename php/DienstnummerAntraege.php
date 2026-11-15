@@ -116,8 +116,8 @@ function dnReqApply(array $req,array $context,array $u): void {
 function dispatchDNRequests(array $u,string $method,string $uri): bool {
     if($method==='GET'&&$uri==='/api/dienstnummer-antraege'){
         $rights=rights($u);
-        if(($rights['pers']??0)<1&&($rights['por']??0)<1)fail(403,'Kein Recht auf Dienstnummern-Anträge');
-        $all=($rights['por']??0)>=1||$u['rolle']==='Administrator';
+        if(($rights['pers']??0)<1&&($rights['dnfreigabe']??0)<1)fail(403,'Kein Recht auf Dienstnummern-Anträge');
+        $all=($rights['dnfreigabe']??0)>=1||$u['rolle']==='Administrator';
         $rows=sql("SELECT a.id,a.alt_nr,a.ziel_nr,a.art,a.begruendung,a.status,a.quell_name,
                 a.ziel_name,a.entscheidungsnotiz,a.erstellt,a.entschieden_am,a.antragsteller_id,
                 a.entscheider_id,COALESCE(us.anzeigename,'–') AS antragsteller,
@@ -128,7 +128,7 @@ function dispatchDNRequests(array $u,string $method,string $uri): bool {
                 ($all?'':'WHERE a.antragsteller_id=?').
                 " ORDER BY (a.status='beantragt') DESC,a.erstellt DESC,a.id DESC LIMIT 200",
                 $all?[]:[$u['id']]);
-        respond(200,['antraege'=>$rows,'darfGenehmigen'=>($rights['por']??0)>=2,
+        respond(200,['antraege'=>$rows,'darfGenehmigen'=>($rights['dnfreigabe']??0)>=2,
             'darfBeantragen'=>($rights['pers']??0)>=1]);
     }
     if($method==='POST'&&$uri==='/api/dienstnummer-antraege'){
@@ -161,7 +161,7 @@ function dispatchDNRequests(array $u,string $method,string $uri): bool {
         respond(201,['ok'=>true,'id'=>$id,'status'=>'beantragt']);
     }
     if($method==='POST'&&preg_match('#^/api/dienstnummer-antraege/([1-9][0-9]*)/entscheidung$#D',$uri,$m)){
-        needRight($u,'por',2);$id=cleanId($m[1]);$b=body();
+        needRight($u,'dnfreigabe',2);$id=cleanId($m[1]);$b=body();
         $status=(string)($b['status']??'');$note=trim((string)($b['notiz']??''));
         if(!in_array($status,['genehmigt','abgelehnt'],true)||strlen($note)>1000||
             ($status==='abgelehnt'&&strlen($note)<5))
