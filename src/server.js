@@ -908,13 +908,25 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
 /* Nur diese fünf Personalstatus blockieren eine Dienstnummer. */
 const PERSONAL_BELEGTE_STATUS=new Set(['aktiv','abgemeldet','inaktiv','suspendiert']);
 const personalStatusBelegt=status=>PERSONAL_BELEGTE_STATUS.has(String(status??'').trim().toLocaleLowerCase('de-DE'));
+async function archivLoginNachKuendigung(client,nr,actor){
+ const {rows}=await client.query("SELECT id,rolle,dienstnummer FROM users WHERE dienstnummer ~ '^[0-9]{1,8}$' AND dienstnummer::int=$1 FOR UPDATE",[nr]);
+ for(const account of rows){
+  if(account.rolle==='Administrator'){
+   const err=new Error('Administratorzugang kann nicht automatisch archiviert werden');err.httpStatus=409;throw err;
+  }
+  await client.query('UPDATE users SET dienstnummer=$1,gesperrt=true WHERE id=$2',
+   ['archiv-'+nr+'-'+account.id,account.id]);
+  await client.query('DELETE FROM sessions WHERE user_id=$1',[account.id]);
+  await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'edit')",[actor,'Panel-Zugang der ausgeschiedenen DN '+nr+' archiviert und gesperrt']);
+ }
+}
 /* Dienstnummern: 1-50 Hauptberuf, 51-60 Nebenberuf, ab 61 Hauptberuf. */
 const beschaeftigungZuNummer=nr=>Number(nr)>=51&&Number(nr)<=60?'Nebenberuf':'Hauptberuf';
 app.get('/api/personal/freie-nummern',requireLogin,requireRight('pers',2),async(req,res,next)=>{
  try{
   const [akten,konten,kuendigungen]=await Promise.all([
     db.query('SELECT personalnummer,status,administrativ_geloescht_am FROM personal WHERE personalnummer BETWEEN 1 AND 60'),
-    db.query("SELECT dienstnummer::int AS nr FROM users WHERE dienstnummer ~ '^[0-9]{1,8}$' AND dienstnummer::int BETWEEN 1 AND 60"),
+    db.query("SELECT dienstnummer::int AS nr,rolle FROM users WHERE dienstnummer ~ '^[0-9]{1,8}$' AND dienstnummer::int BETWEEN 1 AND 60"),
     db.query(`SELECT DISTINCT k.personalnummer FROM kuendigungen k
       WHERE k.personalnummer BETWEEN 1 AND 60
         AND (NOT EXISTS(SELECT 1 FROM personalnummer_neubelegungen a
@@ -923,13 +935,14 @@ app.get('/api/personal/freie-nummern',requireLogin,requireRight('pers',2),async(
            WHERE a.personalnummer=k.personalnummer))`)
   ]);
   const personen=new Map(akten.rows.map(p=>[Number(p.personalnummer),p]));
-  const loginNummern=new Set(konten.rows.map(k=>Number(k.nr)));
+  const loginNummern=new Map(konten.rows.map(k=>[Number(k.nr),k.rolle]));
   const imKuendigungsmodul=new Set(kuendigungen.rows.map(k=>Number(k.personalnummer)));
   const frei=[];
   for(let nr=1;nr<=60;nr++){
     // Eine bereits verwendete Login-Dienstnummer nicht parallel vergeben.
-    if(loginNummern.has(nr))continue;
     const p=personen.get(nr);
+    const terminated=p&&String(p.status||'').trim().toLowerCase()==='gekündigt'&&imKuendigungsmodul.has(nr);
+    if(loginNummern.has(nr)&&(!terminated||loginNummern.get(nr)==='Administrator'))continue;
     if(!p||p.administrativ_geloescht_am||(!personalStatusBelegt(p.status) &&
       (String(p.status||'').trim().toLowerCase()!=='gekündigt'||imKuendigungsmodul.has(nr))))frei.push(nr);
   }
@@ -1155,6 +1168,7 @@ app.patch('/api/personal/:nr', requireLogin, requireRight('pers', 2), async (req
         await client.query("INSERT INTO log(user_id,aktion,art) VALUES($1,$2,'add')",
           [req.user.id,'Kündigung automatisch angelegt: '+nr+' '+[p.vorname,p.nachname].filter(Boolean).join(' ')]);
       }
+      await archivLoginNachKuendigung(client,nr,req.user.id);
     }
     const auditFelder=['vorname','nachname','status','gruppe','beschaeftigungsart','nebenjob','eintrittsdatum'];
     const geaendert={};
@@ -1220,6 +1234,8 @@ app.post('/api/personal', requireLogin, requireRight('pers', 2), async (req, res
           }
         }
       }
+      if(vorher.length&&String(vorher[0].status||'').trim().toLowerCase()==='gekündigt')
+        await archivLoginNachKuendigung(client,nr,req.user.id);
       const konto=await client.query("SELECT 1 FROM users WHERE dienstnummer ~ '^[0-9]{1,8}$' AND dienstnummer::int=$1 LIMIT 1",[nr]);
       if(konto.rowCount){
         await client.query('ROLLBACK');
