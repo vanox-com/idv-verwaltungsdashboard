@@ -2616,7 +2616,7 @@ async function ladeDienstnummerAntraege(){
    const typ=a.art==='zugang'?'Panel-Zugang wechseln':'Personalakte umnummerieren';
    const ursprung=esc(a.quell_name||'–')+' · '+esc(a.alt_nr)+' → '+esc(a.ziel_nr);
    const ziel=a.ziel_name?' (Zielakte: '+esc(a.ziel_name)+')':'';
-   const eigen=ME.rolle!=='Administrator'&&a.antragsteller_id!==null&&
+   const eigen=!['Administrator','Leitungsdienst'].includes(ME.rolle)&&a.antragsteller_id!==null&&
     String(a.antragsteller_id)===String(ME.id);
    const entscheidbar=antwort.darfGenehmigen===true;
    const actions=entscheidbar?
