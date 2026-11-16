@@ -208,8 +208,9 @@ export function registerDienstnummerAntraege(app,db,requireLogin,effektiveRechte
    if(!application)throw error(404,'Antrag nicht gefunden');
    if(application.status!=='beantragt')throw error(409,'Antrag ist bereits abgeschlossen');
    if(status==='genehmigt'){
-    if(Number(application.antragsteller_id)===Number(req.user.id)&&req.user.rolle!=='Administrator')
-     throw error(403,'Eigene Anträge dürfen nur durch einen anderen POR-Berechtigten entschieden werden');
+    if(Number(application.antragsteller_id)===Number(req.user.id)&&
+       !['Administrator','Leitungsdienst'].includes(req.user.rolle))
+     throw error(403,'Eigene Anträge dürfen nur durch einen anderen Berechtigten entschieden werden');
     const context=await checkNumbers(client,Number(application.alt_nr),Number(application.ziel_nr),application.art,true);
     // PostgreSQL serialisiert jsonb-Objekte in eigener Schlüsselfolge.
     // Nur die tatsächlichen, typnormalisierten Prüfwerte vergleichen.
