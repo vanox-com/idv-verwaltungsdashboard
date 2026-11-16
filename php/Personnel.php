@@ -49,6 +49,7 @@ function personnelLinks(array &$b): void {
 function termMatches(array $p): array {
     $nr=(int)$p['personalnummer'];$entry=$p['eintrittsdatum']??null;
     return sql("SELECT k.id FROM kuendigungen k WHERE k.personalnummer=?
+        AND JSON_EXTRACT(k.personal_snapshot,'$.ruecknahme') IS NULL
         AND LOWER(TRIM(COALESCE(k.vorname,'')))=LOWER(?)
         AND LOWER(TRIM(COALESCE(k.nachname,'')))=LOWER(?)
         AND (k.eintritt <=> ? OR (k.eintritt IS NULL AND ? IS NOT NULL AND k.erfasst_am>=?))
@@ -112,6 +113,7 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
         $logins=[];foreach(sql("SELECT CAST(dienstnummer AS UNSIGNED) AS nr,rolle FROM users WHERE dienstnummer REGEXP '^[0-9]{1,8}$' AND CAST(dienstnummer AS UNSIGNED) BETWEEN 1 AND 60") as $r)
             $logins[(int)$r['nr']]=$r['rolle'];
         $terminations=[];foreach(sql("SELECT DISTINCT k.personalnummer FROM kuendigungen k WHERE k.personalnummer BETWEEN 1 AND 60
+          AND JSON_EXTRACT(k.personal_snapshot,'$.ruecknahme') IS NULL
           AND (NOT EXISTS(SELECT 1 FROM personalnummer_neubelegungen a WHERE a.personalnummer=k.personalnummer)
                OR k.erfasst_am>=(SELECT MAX(a.zeit) FROM personalnummer_neubelegungen a WHERE a.personalnummer=k.personalnummer))") as $r)
             $terminations[(int)$r['personalnummer']]=true;
