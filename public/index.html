@@ -1037,6 +1037,19 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 
 /* Statistikseiten: eigenständiges, breites Raster statt schmaler Dashboard-Widgets. */
 .personalstat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,350px),1fr));gap:18px;margin:22px 0 26px;align-items:stretch}
+.stat-insights{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;margin:20px 0}
+.stat-insights>.box{margin:0;min-width:0}
+.stat-pyramid{display:grid;gap:13px;justify-items:center;margin:20px auto;max-width:590px}
+.stat-pyramid-level{min-height:70px;display:grid;place-items:center;text-align:center;padding:12px 18px;border-radius:10px;border:1px solid #ffffff24;color:#fff;min-width:45%;box-shadow:inset 0 1px 0 #ffffff20}
+.stat-pyramid-level strong{font-size:23px;display:block}
+.stat-pyramid-level span{font-size:13px}
+.stat-pyramid-level.hoch{background:linear-gradient(135deg,#6b547f,#473657)}
+.stat-pyramid-level.gehoben{background:linear-gradient(135deg,#446f9c,#2b4b73)}
+.stat-pyramid-level.mittel{background:linear-gradient(135deg,#397e80,#255b63)}
+.stat-pyramid-footnote{font-size:12px;color:var(--mut);line-height:1.6}
+.stat-promo-value{font-size:30px;font-weight:750;margin:8px 0 3px}
+.stat-promo-label{font-weight:650}
+.stat-promo-meta{font-size:12px;color:var(--mut)}
 .personalstat-grid>.box{margin:0;min-width:0;padding:22px 24px;overflow:hidden}
 .personalstat-grid>.box h3{font-size:17px;line-height:1.35;white-space:normal;overflow-wrap:anywhere;margin:0 0 22px}
 .personalstat-grid .dashboard-group{margin:0 0 19px;min-width:0}
@@ -5503,10 +5516,71 @@ async function ladeDashboardMeldungen(){
    '<div class="dashboard-line idv-mitteilung-eintrag" style="display:block;padding:14px 16px"><button type="button" title="Mitteilung für mich ausblenden" aria-label="Mitteilung ausblenden" data-mit-ausblenden="'+Number(m.id)+'" style="float:right;padding:2px 9px">×</button><strong>'+esc(m.titel)+'</strong><small style="display:block">'+esc(new Date(m.erstellt).toLocaleString('de-DE'))+'</small><p style="white-space:pre-wrap">'+esc(m.inhalt)+'</p></div>').join('')+'</section>':'';
  }catch(e){if(area.isConnected)area.textContent='Mitteilungen konnten nicht geladen werden.';}
 }
+function statLaufbahn(rang){
+ const r=String(rang||'');
+ if(/Polizeipräsident|Polizeivizepräsident|Polizeidirektor|Polizeioberrat|Polizeirat|Polizeiratanwärter|Polizeioberkommissar der Leitung|Polizeirat/i.test(r)||r==='Leitender Polizeidirektor')return 'Höherer Dienst';
+ if(/Kommissar|Kommissaranwärter|Kriminalkommissar/i.test(r))return 'Gehobener Dienst';
+ if(/Meister|Meisteranwärter/i.test(r))return 'Mittlerer Dienst';
+ return 'Nicht zugeordnet';
+}
+function statMedian(values){
+ if(!values.length)return null;
+ const sorted=[...values].sort((a,b)=>a-b),mid=Math.floor(sorted.length/2);
+ return sorted.length%2?sorted[mid]:(sorted[mid-1]+sorted[mid])/2;
+}
+function statBefDauer(events,from,to){
+ const seen=new Set(),values=[];
+ for(const ev of events){
+  if(ev.rang!==from||ev.neu_rang!==to||!Number.isFinite(Number(ev.tage))||Number(ev.tage)<0||Number(ev.tage)>36500)continue;
+  const key=String(ev.personalnummer);
+  if(seen.has(key))continue;
+  seen.add(key);values.push(Number(ev.tage));
+ }
+ return {count:values.length,avg:values.length?values.reduce((a,b)=>a+b,0)/values.length:null,median:statMedian(values)};
+}
+function statErweitert(data){
+ const ranks=data.dienstgrade||[],total=ranks.reduce((a,r)=>a+Number(r.anzahl),0);
+ const counts={'Höherer Dienst':0,'Gehobener Dienst':0,'Mittlerer Dienst':0,'Nicht zugeordnet':0};
+ ranks.forEach(r=>{counts[statLaufbahn(r.rang)]+=Number(r.anzahl)});
+ const max=Math.max(1,counts['Höherer Dienst'],counts['Gehobener Dienst'],counts['Mittlerer Dienst']);
+ const level=(label,cls)=>{
+  const n=counts[label],width=Math.max(45,Math.round(n/max*100));
+  return '<div class="stat-pyramid-level '+cls+'" style="width:'+width+'%"><div><span>'+esc(label)+'</span><strong>'+n+'</strong><span>'+ (total?(n/total*100).toLocaleString('de-DE',{maximumFractionDigits:1}):0)+' %</span></div></div>';
+ };
+ const paths=[['PMA → PM','Polizeimeisteranwärter','Polizeimeister'],
+  ['PKA → PK','Polizeikommissaranwärter','Polizeikommissar'],
+  ['KKA → KK','Kriminalkommissaranwärter','Kriminalkommissar']];
+ const fmtDays=days=>days===null?'Keine Daten':(days/30.4375).toLocaleString('de-DE',{maximumFractionDigits:1})+' Monate';
+ const promo=paths.map(([label,from,to])=>{
+  const s=statBefDauer(data.befoerderungen||[],from,to);
+  return '<section class="box"><div class="stat-promo-label">'+esc(label)+'</div><div class="stat-promo-value">'+fmtDays(s.avg)+'</div>'+
+    '<div class="stat-promo-meta">'+s.count+' auswertbare Beförderung'+(s.count===1?'':'en')+(s.count?' · Median: '+fmtDays(s.median):'')+'</div></section>';
+ }).join('');
+ const tenure=(data.dienstzeiten||[]).map(Number).filter(n=>Number.isFinite(n)&&n>=0);
+ const tenureAvg=tenure.length?tenure.reduce((a,b)=>a+b,0)/tenure.length:null;
+ const tenureBuckets=[['Unter 1 Jahr',0,365],['1–3 Jahre',365,1096],['3–5 Jahre',1096,1827],['Ab 5 Jahren',1827,Infinity]];
+ const topRanks=[...ranks].sort((a,b)=>Number(b.anzahl)-Number(a.anzahl)).slice(0,8);
+ const widthMax=Math.max(1,...topRanks.map(r=>Number(r.anzahl)));
+ return '<h2>Karrierewege &amp; Laufbahnen</h2>'+
+  '<p class="mut">Auswertung dokumentierter Personal- und Beförderungsdaten. Fehlende oder nicht eindeutig zuordenbare Beförderungen werden nicht geschätzt.</p>'+
+  '<div class="stat-insights">'+promo+'</div>'+
+  '<section class="box"><h3>Laufbahnpyramide</h3><p class="mut">Aktueller Personalbestand nach Dienstgrad; gekündigte und administrativ entfernte Akten sind ausgenommen.</p>'+
+  '<div class="stat-pyramid">'+level('Höherer Dienst','hoch')+level('Gehobener Dienst','gehoben')+level('Mittlerer Dienst','mittel')+'</div>'+
+  '<p class="stat-pyramid-footnote">Die Breite jeder Stufe ist proportional zur größten Gruppe; die Reihenfolge entspricht der Laufbahnhierarchie. '+counts['Nicht zugeordnet']+' Personen ohne eindeutige Zuordnung. Basis: '+total+' aktuelle Personalakten.</p></section>'+
+  '<div class="stat-insights"><section class="box"><h3>Dienstzeit der aktiven Beschäftigten</h3>'+
+    '<div class="stat-promo-value">'+(tenureAvg===null?'Keine Daten':(tenureAvg/365.25).toLocaleString('de-DE',{maximumFractionDigits:1})+' Jahre')+'</div>'+
+    '<p class="stat-promo-meta">Durchschnitt aus '+tenure.length+' gültigen Eintrittsdaten · Median: '+(tenure.length?(statMedian(tenure)/365.25).toLocaleString('de-DE',{maximumFractionDigits:1})+' Jahre':'–')+'</p>'+
+    tenureBuckets.map(([name,min,upper])=>'<div class="dashboard-group"><div class="dashboard-group-head"><span>'+name+'</span><strong>'+tenure.filter(n=>n>=min&&n<upper).length+'</strong></div></div>').join('')+'</section>'+
+  '<section class="box"><h3>Beförderungen der letzten 12 Monate</h3><div class="stat-promo-value">'+Number(data.befoerderungen12m||0)+'</div>'+
+    '<p class="stat-promo-meta">Datierte Beförderungsvorgänge im System (nicht zwingend unterschiedliche Personen).</p></section></div>'+
+  '<section class="box"><h3>Häufigste Dienstgrade</h3>'+
+   (topRanks.length?topRanks.map(r=>'<div class="dashboard-group"><div class="dashboard-group-head"><span>'+esc(r.rang)+'</span><strong>'+Number(r.anzahl)+'</strong></div><div class="dashboard-progress"><i style="width:'+Math.round(Number(r.anzahl)/widthMax*100)+'%"></i></div></div>').join(''):'<p class="mut">Keine Dienstgrade vorhanden.</p>')+'</section>'+
+  '<p class="stat-pyramid-footnote">Beförderungsdauer = Zeitraum zwischen dokumentiertem Eintritt und erster eindeutig zuordenbarer Beförderung aus dem jeweiligen Anwärterdienstgrad. Kein vollständiger Nachweis der Ausbildungsdauer. Nur übereinstimmende Personalzuordnungen und gültige Datumswerte werden berücksichtigt.</p>';
+}
 async function ladeStatistik(){
  const el=$('#inhalt');el.innerHTML='<h1>Personalstatistiken</h1><p>Lade Auswertungen …</p>';
  try{
-  const data=await api('/personalstatistik'),items=data.gruppen||[];
+  const [data,extended]=await Promise.all([api('/personalstatistik'),api('/personalstatistik/erweitert')]),items=data.gruppen||[];
   const total=items.reduce((n,x)=>n+Number(x.anzahl),0);
   const sum=fn=>items.filter(fn).reduce((n,x)=>n+Number(x.anzahl),0);
   const gruppen=[...new Set(items.map(x=>x.gruppe))];
@@ -5526,7 +5600,7 @@ async function ladeStatistik(){
     tabelle(['Mitarbeitergruppe','Hauptberuf','Nebenberuf','Gesamt'],gruppen.map(g=>[esc(g),sum(x=>x.gruppe===g&&x.beschaeftigungsart!=='Nebenberuf'),sum(x=>x.gruppe===g&&x.beschaeftigungsart==='Nebenberuf'),sum(x=>x.gruppe===g)]))+'</section>'+
     '<section class="box"><h3>Eintritte der letzten 12 Monate</h3>'+
     chart('Neueinstellungen pro Monat',(data.eintritte||[]).map(x=>[x.monat,Number(x.anzahl)]))+'</section>'+
-    '<div id="statistikEntwicklung"></div>';
+    '<div id="statistikExtra">'+statErweitert(extended)+'</div><div id="statistikEntwicklung"></div>';
   ladeStatistikEntwicklung();
  }catch(err){el.textContent='Personalstatistiken konnten nicht geladen werden: '+err.message;}
 }
