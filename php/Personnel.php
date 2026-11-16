@@ -12,6 +12,44 @@ function personnelStatusAllowed(mixed $value,bool $creating=false): bool {
 function dnOccupied(string $s): bool {
     return in_array(strtolower(trim($s)),['aktiv','abgemeldet','inaktiv','suspendiert'],true);
 }
+/* Historische Beförderungen bleiben auch nach einer DN-Neubelegung der
+   ursprünglichen Person zugeordnet (Snapshots statt aktueller Nummer). */
+function personnelPromotionStats(): array {
+    $staff=[];
+    foreach(sql('SELECT personalnummer,vorname,nachname,eintrittsdatum FROM personal') as $p)
+        $staff[(int)$p['personalnummer']]=$p;
+    $archived=[];
+    foreach(normalizedRows('SELECT id,vorher,folgedaten FROM personalnummer_neubelegungen',[],['vorher','folgedaten']) as $history){
+        $old=$history['vorher']??[];
+        foreach(($history['folgedaten']['befoerderungen']??[]) as $event)
+            if(is_array($event)&&isset($event['id']))$archived[(int)$event['id']]=[
+                'person'=>$old,'key'=>'archiv:'.$history['id']];
+    }
+    $valid=[];$total=0;$unassigned=0;$lastYear=0;
+    $today=gmdate('Y-m-d');$yearAgo=gmdate('Y-m-d',strtotime('-12 months'));
+    foreach(sql('SELECT id,personalnummer,vorname,nachname,rang,neu_rang,am FROM befoerderungen') as $event){
+        $total++;
+        $date=(string)($event['am']??'');
+        $rank=trim((string)($event['rang']??''));$next=trim((string)($event['neu_rang']??''));
+        $history=$archived[(int)$event['id']]??null;
+        $p=$history['person']??($staff[(int)($event['personalnummer']??0)]??null);
+        $key=$history['key']??('aktuell:'.(int)($event['personalnummer']??0));
+        $matches=static fn($person)=>is_array($person)&&
+            strtolower(trim((string)($person['vorname']??'')))===strtolower(trim((string)$event['vorname']))&&
+            strtolower(trim((string)($person['nachname']??'')))===strtolower(trim((string)$event['nachname']));
+        if(!$history&&(!$matches($p)||(string)($p['eintrittsdatum']??'')>$date)){$p=null;$key='';}
+        $entered=(string)($p['eintrittsdatum']??'');
+        if(!$matches($p)||!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$date)||
+           !preg_match('/^\d{4}-\d{2}-\d{2}$/D',$entered)||$date<$entered||$date>$today||
+           $rank===''||$next===''||$rank===$next){$unassigned++;continue;}
+        $days=(int)((strtotime($date.' UTC')-strtotime($entered.' UTC'))/86400);
+        $valid[]=['person_key'=>$key,'rang'=>$rank,'neu_rang'=>$next,'tage'=>$days,'am'=>$date];
+        if($date>=$yearAgo)$lastYear++;
+    }
+    usort($valid,fn($a,$b)=>strcmp($a['am'],$b['am']));
+    return ['befoerderungen'=>$valid,'befoerderungen12m'=>$lastYear,
+        'datenqualitaet'=>['gesamt'=>$total,'zugeordnet'=>count($valid),'nicht_zugeordnet'=>$unassigned]];
+}
 function archiveTerminatedLogin(int $nr,array $u): void {
     $accounts=sql("SELECT id,rolle,dienstnummer FROM users WHERE dienstnummer REGEXP '^[0-9]{1,8}$'
         AND CAST(dienstnummer AS UNSIGNED)=? FOR UPDATE",[$nr]);
@@ -131,31 +169,28 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
     }
     if($method==='GET'&&$uri==='/api/personalstatistik'){
         needRight($u,'pers');
-        $groups=sql("SELECT COALESCE(NULLIF(gruppe,''),'Nicht zugeordnet') AS gruppe,beschaeftigungsart,status,COUNT(*) AS anzahl FROM personal GROUP BY 1,2,3");
+        $groups=sql("SELECT COALESCE(NULLIF(gruppe,''),'Nicht zugeordnet') AS gruppe,beschaeftigungsart,status,COUNT(*) AS anzahl FROM personal WHERE administrativ_geloescht_am IS NULL AND status<>'Gekündigt' GROUP BY 1,2,3");
         $months=sql("SELECT DATE_FORMAT(eintrittsdatum,'%Y-%m') AS monat,COUNT(*) AS anzahl FROM personal
           WHERE eintrittsdatum>=DATE_SUB(UTC_DATE(),INTERVAL 12 MONTH) GROUP BY 1 ORDER BY 1");
         respond(200,['gruppen'=>$groups,'eintritte'=>$months]);
     }
     if($method==='GET'&&$uri==='/api/personalstatistik/erweitert'){
         needRight($u,'pers');
+        db()->exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        db()->beginTransaction();
+        try{
         $ranks=sql("SELECT COALESCE(NULLIF(dienstgrad,''),'Nicht zugeordnet') AS rang,
             COUNT(*) AS anzahl FROM personal WHERE administrativ_geloescht_am IS NULL
             AND status<>'Gekündigt' GROUP BY 1 ORDER BY anzahl DESC,rang");
         $tenure=sql("SELECT DATEDIFF(UTC_DATE(),eintrittsdatum) AS tage FROM personal
             WHERE administrativ_geloescht_am IS NULL AND status='Aktiv'
               AND eintrittsdatum IS NOT NULL AND eintrittsdatum<=UTC_DATE()");
-        $promotions=sql("SELECT b.personalnummer,b.rang,b.neu_rang,
-              DATEDIFF(b.am,p.eintrittsdatum) AS tage,b.am
-            FROM befoerderungen b JOIN personal p ON p.personalnummer=b.personalnummer
-            WHERE b.am IS NOT NULL AND p.eintrittsdatum IS NOT NULL
-              AND b.am>=p.eintrittsdatum AND b.am<=UTC_DATE()
-              AND LOWER(TRIM(COALESCE(b.vorname,'')))=LOWER(TRIM(COALESCE(p.vorname,'')))
-              AND LOWER(TRIM(COALESCE(b.nachname,'')))=LOWER(TRIM(COALESCE(p.nachname,'')))
-            ORDER BY b.am ASC,b.id ASC");
-        $lastYear=sql("SELECT COUNT(*) AS anzahl FROM befoerderungen
-            WHERE am>=DATE_SUB(UTC_DATE(),INTERVAL 12 MONTH) AND am<=UTC_DATE()");
-        respond(200,['dienstgrade'=>$ranks,'dienstzeiten'=>array_column($tenure,'tage'),
-            'befoerderungen'=>$promotions,'befoerderungen12m'=>(int)($lastYear[0]['anzahl']??0)]);
+        $promotions=personnelPromotionStats();
+        $result=['dienstgrade'=>$ranks,'dienstzeiten'=>array_column($tenure,'tage'),'berechnet_am'=>gmdate('c'),
+            ...$promotions];
+        db()->commit();
+        }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
+        respond(200,$result);
     }
     if($method==='POST'&&$uri==='/api/personal'){
         needRight($u,'pers',2);$b=body();sensitiveFields($u,$b);personnelLinks($b);
