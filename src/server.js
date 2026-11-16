@@ -15,6 +15,7 @@ import { registerAktenFeatures } from './aktenFeatures.js';
 import { disziplinTitelErgaenzen } from './disziplinTitel.js';
 import { registerDienstnummerAntraege } from './dienstnummerAntraege.js';
 import { registerDisziplinRichtlinie } from './disziplinRichtlinie.js';
+import { buildPromotionStats } from './personnelPromotionStats.js';
 import { registerKueArchivRoutes,KUE_AKTUELL_BEDINGUNG,KUE_LIST_COLUMNS } from './kuendigungsArchiv.js';
 import { registerAbmeldungenRoutes } from './abmeldungenBot.js';
 import { hashPassword, verifyPassword, newSessionToken, SESSION_HOURS } from './auth.js';
@@ -493,21 +494,24 @@ app.post('/api/mitteilungen/:id/ausblenden',requireLogin,requireRight('mitteilun
 });
 app.get('/api/personalstatistik',requireLogin,requireRight('pers',1),async(req,res,next)=>{
  try{
-  const {rows}=await db.query("SELECT COALESCE(NULLIF(gruppe,''),'Nicht zugeordnet') AS gruppe,beschaeftigungsart,status,COUNT(*)::int AS anzahl FROM personal GROUP BY 1,2,3");
+  const {rows}=await db.query("SELECT COALESCE(NULLIF(gruppe,''),'Nicht zugeordnet') AS gruppe,beschaeftigungsart,status,COUNT(*)::int AS anzahl FROM personal WHERE administrativ_geloescht_am IS NULL AND status<>'Gekündigt' GROUP BY 1,2,3");
   const mon=await db.query("SELECT to_char(eintrittsdatum,'YYYY-MM') AS monat,count(*)::int AS anzahl FROM personal WHERE eintrittsdatum >= CURRENT_DATE - INTERVAL '12 months' GROUP BY 1 ORDER BY 1");
   res.json({gruppen:rows,eintritte:mon.rows});
  }catch(e){next(e)}
 });
 app.get('/api/personalstatistik/erweitert',requireLogin,requireRight('pers',1),async(req,res,next)=>{
+ const client=await db.connect().catch(next);if(!client)return;
  try{
-  const [ranks,tenure,promotions,lastYear]=await Promise.all([
-   db.query("SELECT COALESCE(NULLIF(dienstgrad,''),'Nicht zugeordnet') AS rang,COUNT(*)::int AS anzahl FROM personal WHERE administrativ_geloescht_am IS NULL AND status<>'Gekündigt' GROUP BY 1 ORDER BY anzahl DESC,rang"),
-   db.query("SELECT (CURRENT_DATE-eintrittsdatum)::int AS tage FROM personal WHERE administrativ_geloescht_am IS NULL AND status='Aktiv' AND eintrittsdatum IS NOT NULL AND eintrittsdatum<=CURRENT_DATE"),
-   db.query("SELECT b.personalnummer,b.rang,b.neu_rang,(b.am-p.eintrittsdatum)::int AS tage,b.am FROM befoerderungen b JOIN personal p ON p.personalnummer=b.personalnummer WHERE b.am IS NOT NULL AND p.eintrittsdatum IS NOT NULL AND b.am>=p.eintrittsdatum AND b.am<=CURRENT_DATE AND lower(trim(coalesce(b.vorname,'')))=lower(trim(coalesce(p.vorname,''))) AND lower(trim(coalesce(b.nachname,'')))=lower(trim(coalesce(p.nachname,''))) ORDER BY b.am ASC,b.id ASC"),
-   db.query("SELECT COUNT(*)::int AS anzahl FROM befoerderungen WHERE am>=CURRENT_DATE-INTERVAL '12 months' AND am<=CURRENT_DATE")
-  ]);
-  res.json({dienstgrade:ranks.rows,dienstzeiten:tenure.rows.map(x=>x.tage),befoerderungen:promotions.rows,befoerderungen12m:lastYear.rows[0]?.anzahl||0});
- }catch(e){next(e)}
+  await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+  const ranks=await client.query("SELECT COALESCE(NULLIF(dienstgrad,''),'Nicht zugeordnet') AS rang,COUNT(*)::int AS anzahl FROM personal WHERE administrativ_geloescht_am IS NULL AND status<>'Gekündigt' GROUP BY 1 ORDER BY anzahl DESC,rang");
+  const tenure=await client.query("SELECT (CURRENT_DATE-eintrittsdatum)::int AS tage FROM personal WHERE administrativ_geloescht_am IS NULL AND status='Aktiv' AND eintrittsdatum IS NOT NULL AND eintrittsdatum<=CURRENT_DATE");
+  const promotions=await client.query('SELECT id,personalnummer,vorname,nachname,rang,neu_rang,am FROM befoerderungen');
+  const people=await client.query('SELECT personalnummer,vorname,nachname,eintrittsdatum FROM personal');
+  const history=await client.query('SELECT id,vorher,folgedaten FROM personalnummer_neubelegungen');
+  await client.query('COMMIT');
+  res.json({dienstgrade:ranks.rows,dienstzeiten:tenure.rows.map(x=>x.tage),berechnet_am:new Date().toISOString(),
+   ...buildPromotionStats(promotions.rows,people.rows,history.rows)});
+ }catch(e){await client.query('ROLLBACK').catch(()=>{});next(e)}finally{client.release()}
 });
 
 app.get('/api/backup-status',requireLogin,requireRight('backup',1),async(req,res,next)=>{
