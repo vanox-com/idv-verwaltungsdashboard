@@ -16,6 +16,7 @@ import { disziplinTitelErgaenzen } from './disziplinTitel.js';
 import { registerDienstnummerAntraege } from './dienstnummerAntraege.js';
 import { registerDisziplinRichtlinie } from './disziplinRichtlinie.js';
 import { buildPromotionStats } from './personnelPromotionStats.js';
+import { buildPersonnelMovementStats } from './personnelMovementStats.js';
 import { registerKueArchivRoutes,KUE_AKTUELL_BEDINGUNG,KUE_LIST_COLUMNS } from './kuendigungsArchiv.js';
 import { registerAbmeldungenRoutes } from './abmeldungenBot.js';
 import { hashPassword, verifyPassword, newSessionToken, SESSION_HOURS } from './auth.js';
@@ -508,9 +509,11 @@ app.get('/api/personalstatistik/erweitert',requireLogin,requireRight('pers',1),a
   const promotions=await client.query('SELECT id,personalnummer,vorname,nachname,rang,neu_rang,am FROM befoerderungen');
   const people=await client.query('SELECT personalnummer,vorname,nachname,eintrittsdatum FROM personal');
   const history=await client.query('SELECT id,vorher,folgedaten FROM personalnummer_neubelegungen');
+  const exits=await client.query('SELECT personalnummer,vorname,nachname,eintritt,kuendigungsdatum,personal_snapshot FROM kuendigungen');
   await client.query('COMMIT');
   res.json({dienstgrade:ranks.rows,dienstzeiten:tenure.rows.map(x=>x.tage),berechnet_am:new Date().toISOString(),
-   ...buildPromotionStats(promotions.rows,people.rows,history.rows)});
+   ...buildPromotionStats(promotions.rows,people.rows,history.rows),
+   ...buildPersonnelMovementStats(people.rows,history.rows,exits.rows)});
  }catch(e){await client.query('ROLLBACK').catch(()=>{});next(e)}finally{client.release()}
 });
 
