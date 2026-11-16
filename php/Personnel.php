@@ -10,7 +10,19 @@ function personnelStatusAllowed(mixed $value,bool $creating=false): bool {
 }
 
 function dnOccupied(string $s): bool {
-    return in_array(strtolower(trim($s)),['aktiv','abgemeldet','inaktiv','suspendiert','gekündigt'],true);
+    return in_array(strtolower(trim($s)),['aktiv','abgemeldet','inaktiv','suspendiert'],true);
+}
+function archiveTerminatedLogin(int $nr,array $u): void {
+    $accounts=sql("SELECT id,rolle,dienstnummer FROM users WHERE dienstnummer REGEXP '^[0-9]{1,8}$'
+        AND CAST(dienstnummer AS UNSIGNED)=? FOR UPDATE",[$nr]);
+    foreach($accounts as $a){
+        if($a['rolle']==='Administrator')fail(409,'Administratorzugang kann nicht automatisch archiviert werden');
+        $id=(int)$a['id'];
+        sql('UPDATE users SET dienstnummer=?,gesperrt=1 WHERE id=?',
+            ['archiv-'.$nr.'-'.$id,$id]);
+        sql('DELETE FROM sessions WHERE user_id=?',[$id]);
+        auditAction($u,'Panel-Zugang der ausgeschiedenen DN '.$nr.' archiviert und gesperrt');
+    }
 }
 function sensitiveFields(array $u,array $fields): void {
     $confidential=['geburtsdatum','handy','arbeitsvertrag','ernennungsurkunde',
@@ -97,18 +109,20 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
         needRight($u,'pers',2);
         $people=[];foreach(sql('SELECT personalnummer,status,administrativ_geloescht_am FROM personal WHERE personalnummer BETWEEN 1 AND 60') as $r)
             $people[(int)$r['personalnummer']]=$r;
-        $logins=[];foreach(sql("SELECT CAST(dienstnummer AS UNSIGNED) AS nr FROM users WHERE dienstnummer REGEXP '^[0-9]{1,8}$' AND CAST(dienstnummer AS UNSIGNED) BETWEEN 1 AND 60") as $r)
-            $logins[(int)$r['nr']]=true;
+        $logins=[];foreach(sql("SELECT CAST(dienstnummer AS UNSIGNED) AS nr,rolle FROM users WHERE dienstnummer REGEXP '^[0-9]{1,8}$' AND CAST(dienstnummer AS UNSIGNED) BETWEEN 1 AND 60") as $r)
+            $logins[(int)$r['nr']]=$r['rolle'];
         $terminations=[];foreach(sql("SELECT DISTINCT k.personalnummer FROM kuendigungen k WHERE k.personalnummer BETWEEN 1 AND 60
           AND (NOT EXISTS(SELECT 1 FROM personalnummer_neubelegungen a WHERE a.personalnummer=k.personalnummer)
                OR k.erfasst_am>=(SELECT MAX(a.zeit) FROM personalnummer_neubelegungen a WHERE a.personalnummer=k.personalnummer))") as $r)
             $terminations[(int)$r['personalnummer']]=true;
         $main=[];$side=[];
         for($n=1;$n<=60;$n++){
-            if(isset($logins[$n]))continue;
             $p=$people[$n]??null;
+            $terminated=$p&&strtolower(trim((string)$p['status']))==='gekündigt'&&isset($terminations[$n]);
+            if(isset($logins[$n])&&(!$terminated||$logins[$n]==='Administrator'))continue;
             $free=!$p||$p['administrativ_geloescht_am']!==null||
-                !dnOccupied((string)$p['status']);
+                (!dnOccupied((string)$p['status'])&&
+                 (strtolower(trim((string)$p['status']))!=='gekündigt'||isset($terminations[$n])));
             if($free){if($n<50)$main[]=$n;else $side[]=$n;}
         }
         respond(200,['hauptberuf'=>$main,'nebenberuf'=>$side]);
@@ -156,9 +170,11 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
             if($previous){
                 $p=$previous[0];
                 if($p['administrativ_geloescht_am']===null&&dnOccupied((string)$p['status']))fail(409,'Diese Dienstnummer ist durch ihren Personalstatus belegt.');
-                if($p['administrativ_geloescht_am']===null&&$p['status']==='Gekündigt'&&!termMatches($p))
+                if($p['administrativ_geloescht_am']===null&&strtolower(trim((string)$p['status']))==='gekündigt'&&!termMatches($p))
                     fail(409,'Die Kündigung muss zuerst in die Kündigungsverwaltung übernommen werden.');
             }
+            if($previous&&strtolower(trim((string)$previous[0]['status']))==='gekündigt'&&termMatches($previous[0]))
+                archiveTerminatedLogin($n,$u);
             if(sql("SELECT 1 FROM users WHERE dienstnummer REGEXP '^[0-9]{1,8}$' AND CAST(dienstnummer AS UNSIGNED)=? LIMIT 1",[$n]))
                 fail(409,'Zu dieser Dienstnummer existiert bereits ein Benutzerzugang.');
             if($previous)archivePreviousNumber($n,$previous[0],(int)$u['id']);
@@ -280,6 +296,8 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
                     $saveStep='K03'; // Kündigung protokollieren
                     auditAction($u,'Kündigung automatisch angelegt: '.$n.' '.$applied['vorname'].' '.$applied['nachname'],'add');
                 }
+                $saveStep='K04'; // Ausgeschiedenen Panel-Zugang deaktivieren
+                archiveTerminatedLogin($n,$u);
             }
             $delta=[];
             foreach(['vorname','nachname','status','gruppe','beschaeftigungsart','nebenjob','eintrittsdatum'] as $key)
