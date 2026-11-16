@@ -2612,21 +2612,28 @@ async function ladeDienstnummerAntraege(){
   if(!root.isConnected)return;
   const alle=antwort.antraege||[];
   const offen=alle.filter(x=>x.status==='beantragt'),erledigt=alle.filter(x=>x.status!=='beantragt');
-  const zeile=(a,entscheidbar)=>{
+  const zeile=a=>{
    const typ=a.art==='zugang'?'Panel-Zugang wechseln':'Personalakte umnummerieren';
    const ursprung=esc(a.quell_name||'–')+' · '+esc(a.alt_nr)+' → '+esc(a.ziel_nr);
    const ziel=a.ziel_name?' (Zielakte: '+esc(a.ziel_name)+')':'';
+   const eigen=ME.rolle!=='Administrator'&&a.antragsteller_id!==null&&
+    String(a.antragsteller_id)===String(ME.id);
+   const entscheidbar=antwort.darfGenehmigen===true;
    const actions=entscheidbar?
-    '<button type="button" class="p" data-dn-decision="'+Number(a.id)+'" data-dn-status="genehmigt">Genehmigen</button> '+
-    '<button type="button" data-dn-decision="'+Number(a.id)+'" data-dn-status="abgelehnt">Ablehnen</button>':'';
+    '<button type="button" class="p" data-dn-decision="'+Number(a.id)+'" data-dn-status="genehmigt"'+
+      (eigen?' disabled title="Eigene DN-Anträge dürfen nicht selbst genehmigt werden"':'')+'>Genehmigen</button> '+
+    '<button type="button" data-dn-decision="'+Number(a.id)+'" data-dn-status="abgelehnt">Ablehnen</button>'+
+    (eigen?'<small class="mut">Eigener Antrag: Genehmigung durch eine andere berechtigte Person erforderlich.</small>':''):
+    '<span class="tag warn">Wartet auf Freigabe</span>';
    return [ursprung,esc(typ)+ziel,esc(a.begruendung),esc(a.antragsteller||'–'),fd(a.erstellt),
-      actions||'<span class="tag warn">'+(a.status==='beantragt'?'Wartet auf POR':esc(a.status))+'</span>'];
+      actions];
   };
-  root.innerHTML='<h3>Dienstnummernänderungen · POR <span class="tag '+(offen.length?'warn':'ok')+'">'+offen.length+' offen</span></h3>'+
-   '<p class="mut">Anträge ändern keine Daten, bis ein POR-Berechtigter sie genehmigt. Die Genehmigung prüft Belegung, Identität und Datenversion erneut. Die bisherige Historie bleibt erhalten.</p>'+
+  root.innerHTML='<h3>Dienstnummernänderungen · Freigabe <span class="tag '+(offen.length?'warn':'ok')+'">'+offen.length+' offen</span></h3>'+
+   '<p class="mut">Die Entscheidung erfolgt mit dem Recht „DN-Anträge entscheiden“ (Stufe Bearbeiten). Die Genehmigung prüft Belegung, Identität und Datenversion erneut. Die bisherige Historie bleibt erhalten.</p>'+
+   (!antwort.darfGenehmigen&&can('dnfreigabe',2)?'<p class="fehler">Das Entscheidungsrecht wird vom Server derzeit nicht bestätigt. Bitte neu anmelden oder die individuellen Benutzerrechte prüfen.</p>':'')+
    (antwort.darfBeantragen?'<button type="button" data-dn-request="" class="p">+ Dienstnummernänderung beantragen</button>':'')+
    tabelle(['Person und Dienstnummer','Art','Begründung','Antragsteller','Erstellt','Entscheidung'],
-     offen.map(x=>zeile(x,antwort.darfGenehmigen&&(ME.rolle==='Administrator'||Number(x.antragsteller_id)!==Number(ME.id)))))+
+     offen.map(zeile))+
    '<details><summary>Abgeschlossene Anträge ('+erledigt.length+')</summary>'+
    tabelle(['Person und Dienstnummer','Art','Begründung','Antragsteller','Erstellt','Entscheidung'],
      erledigt.slice(0,40).map(x=>[esc(x.quell_name)+' · '+esc(x.alt_nr)+' → '+esc(x.ziel_nr),
