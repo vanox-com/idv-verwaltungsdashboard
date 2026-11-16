@@ -58,7 +58,7 @@ function personnelMovementStats(): array {
         $m=$start->modify('+'.$i.' months')->format('Y-m');
         $months[$m]=['monat'=>$m,'zugang'=>0,'abgang'=>0];
     }
-    $today=gmdate('Y-m-d');$missingEntries=0;$missingExits=0;$withdrawn=0;
+    $today=gmdate('Y-m-d');$missingEntries=0;$missingExits=0;$withdrawn=0;$missingExitEntry=0;$durations=[];
     $people=sql('SELECT eintrittsdatum FROM personal');
     foreach(normalizedRows('SELECT vorher FROM personalnummer_neubelegungen',[],['vorher']) as $row)
         if(is_array($row['vorher']??null))$people[]=$row['vorher'];
@@ -75,12 +75,26 @@ function personnelMovementStats(): array {
         $key=implode('|',[(string)($k['personalnummer']??''),strtolower(trim((string)($k['vorname']??''))),strtolower(trim((string)($k['nachname']??''))),(string)($k['eintritt']??''),$date]);
         if(isset($used[$key]))continue;$used[$key]=true;
         $m=substr($date,0,7);if(isset($months[$m]))$months[$m]['abgang']++;
+        $joined=(string)($k['eintritt']??'');
+        if(!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$joined)||
+          !checkdate((int)substr($joined,5,2),(int)substr($joined,8,2),(int)substr($joined,0,4))||$joined>$date){$missingExitEntry++;continue;}
+        $durations[]=(int)((strtotime($date.' UTC')-strtotime($joined.' UTC'))/86400);
     }
     $entries=array_sum(array_column($months,'zugang'));
     $exits=array_sum(array_column($months,'abgang'));
+    sort($durations,SORT_NUMERIC);$count=count($durations);$mid=intdiv($count,2);
+    $median=$count?($count%2?$durations[$mid]:($durations[$mid-1]+$durations[$mid])/2):null;
+    $buckets=[];
+    foreach([['Unter 30 Tagen',0,30],['30–89 Tage',30,90],['90–179 Tage',90,180],
+      ['180–364 Tage',180,365],['1–2 Jahre',365,730],['Ab 2 Jahren',730,PHP_INT_MAX]] as [$label,$min,$max]){
+        $buckets[]=['label'=>$label,'anzahl'=>count(array_filter($durations,fn($days)=>$days>=$min&&$days<$max))];
+    }
     return ['personalbewegung'=>array_values($months),
       'bewegung12m'=>['zugang'=>$entries,'abgang'=>$exits,'saldo'=>$entries-$exits],
-      'bewegung_datenqualitaet'=>['eintritte_ohne_datum'=>$missingEntries,'kuendigungen_ohne_datum'=>$missingExits,'zurueckgenommen'=>$withdrawn]];
+      'kuendigungsdienstzeit'=>['anzahl'=>$count,'durchschnitt_tage'=>$count?round(array_sum($durations)/$count,1):null,
+        'median_tage'=>$median,'minimum_tage'=>$count?$durations[0]:null,'maximum_tage'=>$count?$durations[$count-1]:null,'verteilung'=>$buckets],
+      'bewegung_datenqualitaet'=>['eintritte_ohne_datum'=>$missingEntries,'kuendigungen_ohne_datum'=>$missingExits,
+        'kuendigungen_ohne_eintritt'=>$missingExitEntry,'zurueckgenommen'=>$withdrawn]];
 }
 function archiveTerminatedLogin(int $nr,array $u): void {
     $accounts=sql("SELECT id,rolle,dienstnummer FROM users WHERE dienstnummer REGEXP '^[0-9]{1,8}$'
