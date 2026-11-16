@@ -120,6 +120,27 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
           WHERE eintrittsdatum>=DATE_SUB(UTC_DATE(),INTERVAL 12 MONTH) GROUP BY 1 ORDER BY 1");
         respond(200,['gruppen'=>$groups,'eintritte'=>$months]);
     }
+    if($method==='GET'&&$uri==='/api/personalstatistik/erweitert'){
+        needRight($u,'pers');
+        $ranks=sql("SELECT COALESCE(NULLIF(dienstgrad,''),'Nicht zugeordnet') AS rang,
+            COUNT(*) AS anzahl FROM personal WHERE administrativ_geloescht_am IS NULL
+            AND status<>'Gekündigt' GROUP BY 1 ORDER BY anzahl DESC,rang");
+        $tenure=sql("SELECT DATEDIFF(UTC_DATE(),eintrittsdatum) AS tage FROM personal
+            WHERE administrativ_geloescht_am IS NULL AND status='Aktiv'
+              AND eintrittsdatum IS NOT NULL AND eintrittsdatum<=UTC_DATE()");
+        $promotions=sql("SELECT b.personalnummer,b.rang,b.neu_rang,
+              DATEDIFF(b.am,p.eintrittsdatum) AS tage,b.am
+            FROM befoerderungen b JOIN personal p ON p.personalnummer=b.personalnummer
+            WHERE b.am IS NOT NULL AND p.eintrittsdatum IS NOT NULL
+              AND b.am>=p.eintrittsdatum AND b.am<=UTC_DATE()
+              AND LOWER(TRIM(COALESCE(b.vorname,'')))=LOWER(TRIM(COALESCE(p.vorname,'')))
+              AND LOWER(TRIM(COALESCE(b.nachname,'')))=LOWER(TRIM(COALESCE(p.nachname,'')))
+            ORDER BY b.am ASC,b.id ASC");
+        $lastYear=sql("SELECT COUNT(*) AS anzahl FROM befoerderungen
+            WHERE am>=DATE_SUB(UTC_DATE(),INTERVAL 12 MONTH) AND am<=UTC_DATE()");
+        respond(200,['dienstgrade'=>$ranks,'dienstzeiten'=>array_column($tenure,'tage'),
+            'befoerderungen'=>$promotions,'befoerderungen12m'=>(int)($lastYear[0]['anzahl']??0)]);
+    }
     if($method==='POST'&&$uri==='/api/personal'){
         needRight($u,'pers',2);$b=body();sensitiveFields($u,$b);personnelLinks($b);
         $n=filter_var($b['personalnummer']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
