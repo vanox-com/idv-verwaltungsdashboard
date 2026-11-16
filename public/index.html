@@ -1037,6 +1037,11 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 
 /* Statistikseiten: eigenständiges, breites Raster statt schmaler Dashboard-Widgets. */
 .personalstat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,350px),1fr));gap:18px;margin:22px 0 26px;align-items:stretch}
+.stat-nav{display:flex;gap:9px;flex-wrap:wrap;margin:16px 0 24px}.stat-nav a{padding:9px 14px;border-radius:999px;background:var(--panel);border:1px solid var(--border);color:var(--text);text-decoration:none;font-size:13px}.stat-nav a:hover{border-color:var(--accent)}
+.stat-section{margin:30px 0 15px;scroll-margin-top:85px}.stat-section h2{margin:0 0 7px;font-size:22px}.stat-section p{margin:0;color:var(--mut);line-height:1.5}
+.stat-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:13px;margin:17px 0}.stat-kpi{border:1px solid #ffffff24;border-radius:13px;background:linear-gradient(145deg,#ffffff10,#ffffff04);padding:18px;min-width:0}.stat-kpi strong{display:block;font-size:29px;font-variant-numeric:tabular-nums;line-height:1.2}.stat-kpi span{display:block;margin-top:7px;color:var(--mut);font-size:12px}.stat-kpi small{display:block;margin-top:7px;color:var(--mut);font-size:11px}
+.stat-movement-legend{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0 16px;font-size:12px;color:var(--mut)}.stat-movement-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}.stat-movement-row{display:grid;grid-template-columns:74px 1fr 70px;gap:12px;align-items:center;margin:11px 0}.stat-movement-row>span{font-size:12px;color:var(--mut)}.stat-movement-track{height:20px;display:flex;gap:2px;align-items:center;min-width:0}.stat-movement-track i{height:100%;display:block;border-radius:3px;min-width:0}.stat-movement-row strong{text-align:right;font-size:12px;font-variant-numeric:tabular-nums}.stat-movement-row small{font-size:11px;color:var(--mut)}
+@media(max-width:520px){.stat-movement-row{grid-template-columns:59px 1fr 57px;gap:6px}.stat-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .stat-insights{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;margin:20px 0}
 .stat-insights>.box{margin:0;min-width:0}
 .stat-pyramid{display:grid;gap:13px;justify-items:center;margin:20px auto;max-width:590px}
@@ -5562,6 +5567,30 @@ function statBefDauer(events,from,to){
  }
  return {count:values.length,avg:values.length?values.reduce((a,b)=>a+b,0)/values.length:null,median:statMedian(values)};
 }
+function statBewegung(data,bestand){
+ const monthly=data.personalbewegung||[],s=data.bewegung12m||{zugang:0,abgang:0,saldo:0};
+ const quality=data.bewegung_datenqualitaet||{};
+ const sum=Math.max(1,...monthly.map(m=>Number(m.zugang)+Number(m.abgang)));
+ const percent=n=>bestand?(100*n/bestand).toLocaleString('de-DE',{maximumFractionDigits:1})+' %':'–';
+ const item=(title,value,extra)=>'<div class="stat-kpi"><strong>'+esc(String(value))+'</strong><span>'+esc(title)+'</span>'+(extra?'<small>'+esc(extra)+'</small>':'')+'</div>';
+ const rows=monthly.map(m=>{
+  const inCount=Number(m.zugang)||0,outCount=Number(m.abgang)||0;
+  return '<div class="stat-movement-row"><span>'+esc(m.monat)+'</span><div class="stat-movement-track" aria-label="'+inCount+' Zugänge, '+outCount+' Abgänge">'+
+   '<i style="width:'+(inCount/sum*100)+'%;background:#36bda1" title="'+inCount+' Zugänge"></i>'+
+   '<i style="width:'+(outCount/sum*100)+'%;background:#ed8a77" title="'+outCount+' Abgänge"></i></div><strong>+'+inCount+' / −'+outCount+'</strong></div>';
+ }).join('');
+ return '<div class="stat-section" id="stat-bewegung"><h2>Zu- &amp; Abgänge</h2><p>Die letzten zwölf Kalendermonate einschließlich des laufenden Monats.</p></div>'+
+  '<div class="stat-kpi-grid">'+item('Zugänge · 12 Monate',Number(s.zugang),percent(Number(s.zugang))+' vom heutigen Bestand')+
+  item('Abgänge · 12 Monate',Number(s.abgang),percent(Number(s.abgang))+' vom heutigen Bestand')+
+  item('Netto-Veränderung',Number(s.saldo)>0?'+'+s.saldo:Number(s.saldo),'Zugänge abzüglich Abgänge')+
+  item('Abgänge je 100 Beschäftigte',bestand?(100*Number(s.abgang)/bestand).toLocaleString('de-DE',{maximumFractionDigits:1}):'–','Bezugsgröße: aktueller Bestand, keine historische Fluktuationsquote')+'</div>'+
+  '<section class="box"><h3>Personalbewegung im Monatsverlauf</h3><div class="stat-movement-legend"><span><i style="background:#36bda1"></i>Zugänge</span><span><i style="background:#ed8a77"></i>Abgänge</span></div>'+
+  (rows||'<p class="mut">Keine Monatsdaten verfügbar.</p>')+
+  '<p class="stat-pyramid-footnote">Die Balken vergleichen die Anzahl der dokumentierten Personalbewegungen je Monat. Auch Monate ohne Vorgänge werden angezeigt.</p></section>'+
+  '<section class="box"><h3>Monatliche Übersicht</h3>'+tabelle(['Monat','Zugänge','Abgänge','Saldo'],monthly.map(m=>[esc(m.monat),Number(m.zugang),Number(m.abgang),(Number(m.zugang)-Number(m.abgang)>0?'+':'')+(Number(m.zugang)-Number(m.abgang))]))+'</section>'+
+  '<p class="stat-pyramid-footnote">Datenquellen: Eintrittsdaten aktueller und bei DN-Neubelegung archivierter Personen; tatsächliche, datierte Kündigungsvorgänge. Zurückgenommene und identische doppelte Kündigungen werden nicht mitgezählt. '+
+  Number(quality.zurueckgenommen||0)+' zurückgenommene Kündigung(en), '+Number(quality.kuendigungen_ohne_datum||0)+' Kündigung(en) ohne auswertbares Datum und '+Number(quality.eintritte_ohne_datum||0)+' Person(en) ohne gültiges Eintrittsdatum sind nicht nach Monat zugeordnet. Prozentwerte verwenden den heutigen Bestand und sind keine rechnerisch rekonstruierte historische Fluktuationsrate.</p>';
+}
 function statErweitert(data){
  const ranks=data.dienstgrade||[],total=ranks.reduce((a,r)=>a+Number(r.anzahl),0);
  const counts={'Höherer Dienst':0,'Gehobener Dienst':0,'Mittlerer Dienst':0,'Nicht zugeordnet':0};
@@ -5586,7 +5615,7 @@ function statErweitert(data){
  const tenureBuckets=[['Unter 1 Jahr',0,365],['1–3 Jahre',365,1096],['3–5 Jahre',1096,1827],['Ab 5 Jahren',1827,Infinity]];
  const topRanks=[...ranks].sort((a,b)=>Number(b.anzahl)-Number(a.anzahl)).slice(0,8);
  const widthMax=Math.max(1,...topRanks.map(r=>Number(r.anzahl)));
- return '<h2>Karrierewege &amp; Laufbahnen</h2>'+
+ return '<div class="stat-section" id="stat-laufbahn"><h2>Karrierewege &amp; Laufbahnen</h2></div>'+
   '<p class="mut">Auswertung dokumentierter Personal- und Beförderungsdaten. Fehlende oder nicht eindeutig zuordenbare Beförderungen werden nicht geschätzt.</p>'+
   '<div class="stat-insights">'+promo+'</div>'+
   '<section class="box"><h3>Datenqualität der Beförderungshistorie</h3><p class="mut">Datenquelle: Tabelle „Beförderungen“ und bei Neubesetzungen archivierte Personalakten.</p>'+
@@ -5616,23 +5645,24 @@ async function ladeStatistik(){
   const gruppen=[...new Set(items.map(x=>x.gruppe))];
   const status=[...new Set(items.map(x=>x.status))];
   const chart=(title,values)=>{const max=Math.max(1,...values.map(x=>x[1]));return '<section class="box"><h3>'+esc(title)+'</h3>'+values.map(([name,num])=>
-    '<div class="dashboard-group"><div class="dashboard-group-head"><span>'+esc(name)+'</span><strong>'+num+'</strong></div>'+
+    '<div class="dashboard-group"><div class="dashboard-group-head"><span>'+esc(name)+'</span><strong>'+num+' <small class="mut">('+(total?(num/total*100).toLocaleString('de-DE',{maximumFractionDigits:1}):0)+' %)</small></strong></div>'+
     '<div class="dashboard-progress"><i style="width:'+Math.round(num/max*100)+'%"></i></div></div>').join('')+'</section>';};
   const kpi=(label,value)=>'<div class="kachel"><b>'+value+'</b><small>'+esc(label)+'</small></div>';
-  el.innerHTML='<h1>Personalstatistiken</h1><p class="mut">Aktuelle Personalstruktur und Entwicklung – automatisch aus den Personalakten und der Beförderungshistorie berechnet.</p>'+
+  el.innerHTML='<h1>Personalstatistiken</h1><p class="mut">Personalbestand, Zu- und Abgänge, Laufbahnen und Beförderungen – aus den dokumentierten Vorgängen berechnet.</p>'+
     '<div class="rl-actions"><button type="button" data-statistik-refresh>Auswertung jetzt aktualisieren</button><span class="mut">Berechnet: '+esc(new Date(extended.berechnet_am).toLocaleString('de-DE'))+'</span></div>'+
+    '<nav class="stat-nav" aria-label="Statistikbereiche"><a href="#stat-ueberblick">Überblick</a><a href="#stat-bewegung">Zu- &amp; Abgänge</a><a href="#stat-struktur">Personalstruktur</a><a href="#stat-laufbahn">Laufbahnen &amp; Beförderungen</a></nav>'+
+    '<div class="stat-section" id="stat-ueberblick"><h2>Personal im Überblick</h2><p>Aktueller Bestand ohne gekündigte oder administrativ entfernte Personalakten.</p></div>'+
     '<div class="kacheln">'+kpi('Aktueller Personalbestand',total)+kpi('Hauptberuf',sum(x=>x.beschaeftigungsart!=='Nebenberuf'))+
     kpi('Nebenberuf',sum(x=>x.beschaeftigungsart==='Nebenberuf'))+kpi('Aktiv',sum(x=>x.status==='Aktiv'))+
     kpi('Nicht aktiv',sum(x=>x.status!=='Aktiv'))+'</div>'+
+    statBewegung(extended,total)+
+    '<div class="stat-section" id="stat-struktur"><h2>Personalstruktur</h2><p>Verteilung des aktuellen Personalbestands nach Gruppe, Beschäftigungsart und Status.</p></div>'+
     '<div class="personalstat-grid">'+chart('Mitarbeitergruppen',gruppen.map(g=>[g,sum(x=>x.gruppe===g)]))+
     chart('Beschäftigungsarten',[['Hauptberuf',sum(x=>x.beschaeftigungsart!=='Nebenberuf')],['Nebenberuf',sum(x=>x.beschaeftigungsart==='Nebenberuf')]])+
     chart('Personalstatus',status.map(st=>[st,sum(x=>x.status===st)]))+'</div>'+
     '<section class="box"><h3>Verteilung nach Mitarbeitergruppe und Beschäftigung</h3>'+
     tabelle(['Mitarbeitergruppe','Hauptberuf','Nebenberuf','Gesamt'],gruppen.map(g=>[esc(g),sum(x=>x.gruppe===g&&x.beschaeftigungsart!=='Nebenberuf'),sum(x=>x.gruppe===g&&x.beschaeftigungsart==='Nebenberuf'),sum(x=>x.gruppe===g)]))+'</section>'+
-    '<section class="box"><h3>Eintritte der letzten 12 Monate</h3>'+
-    chart('Neueinstellungen pro Monat',(data.eintritte||[]).map(x=>[x.monat,Number(x.anzahl)]))+'</section>'+
-    '<div id="statistikExtra">'+statErweitert(extended)+'</div><div id="statistikEntwicklung"></div>';
-  ladeStatistikEntwicklung();
+    '<div id="statistikExtra">'+statErweitert(extended)+'</div>';
  }catch(err){el.textContent='Personalstatistiken konnten nicht geladen werden: '+err.message;}
 }
 document.addEventListener('click',e=>{
