@@ -1050,6 +1050,11 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 .stat-pyramid-level span{font-size:13px}
 .stat-pyramid-level.hoch{background:linear-gradient(135deg,#6b547f,#473657)}
 .stat-pyramid-level.gehoben{background:linear-gradient(135deg,#446f9c,#2b4b73)}
+.stat-pyramid-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;min-width:55%;max-width:100%}
+.stat-pyramid-branch{padding:13px 8px;border-radius:10px;text-align:center;color:#fff;border:1px solid #ffffff24;background:linear-gradient(135deg,#446f9c,#2b4b73);min-width:0}
+.stat-pyramid-branch.kriminal{background:linear-gradient(135deg,#65568f,#3e365f)}
+.stat-pyramid-branch b{font-size:22px;display:block;line-height:1.4}.stat-pyramid-branch span{font-size:12px;line-height:1.5;display:block;overflow-wrap:anywhere}.stat-pyramid-branch small{font-size:12px;opacity:.88}
+.stat-pyramid-branch-meter{height:5px;border-radius:6px;background:#ffffff35;margin-top:8px;overflow:hidden}.stat-pyramid-branch-meter i{display:block;height:100%;background:#b5ddff;border-radius:6px}
 .stat-pyramid-level.mittel{background:linear-gradient(135deg,#397e80,#255b63)}
 .stat-pyramid-footnote{font-size:12px;color:var(--mut);line-height:1.6}
 .stat-promo-value{font-size:30px;font-weight:750;margin:8px 0 3px}
@@ -5595,11 +5600,15 @@ function statErweitert(data){
  const ranks=data.dienstgrade||[],total=ranks.reduce((a,r)=>a+Number(r.anzahl),0);
  const counts={'Höherer Dienst':0,'Gehobener Dienst':0,'Mittlerer Dienst':0,'Nicht zugeordnet':0};
  ranks.forEach(r=>{counts[statLaufbahn(r.rang)]+=Number(r.anzahl)});
+ const gehobenKriminal=ranks.filter(r=>statLaufbahn(r.rang)==='Gehobener Dienst'&&/Kriminal/i.test(String(r.rang))).reduce((n,r)=>n+Number(r.anzahl),0);
+ const gehobenOperativ=counts['Gehobener Dienst']-gehobenKriminal;
  const max=Math.max(1,counts['Höherer Dienst'],counts['Gehobener Dienst'],counts['Mittlerer Dienst']);
  const level=(label,cls)=>{
   const n=counts[label],width=Math.max(45,Math.round(n/max*100));
   return '<div class="stat-pyramid-level '+cls+'" style="width:'+width+'%"><div><span>'+esc(label)+'</span><strong>'+n+'</strong><span>'+ (total?(n/total*100).toLocaleString('de-DE',{maximumFractionDigits:1}):0)+' %</span></div></div>';
  };
+ const splitWidth=Math.max(55,Math.round(counts['Gehobener Dienst']/max*100));
+ const branch=(label,cls,n)=>'<div class="stat-pyramid-branch '+cls+'"><span>'+esc(label)+'</span><b>'+n+'</b><small>'+(total?(n/total*100).toLocaleString('de-DE',{maximumFractionDigits:1}):0)+' % des Gesamtbestands</small><div class="stat-pyramid-branch-meter"><i style="width:'+(counts['Gehobener Dienst']?n/counts['Gehobener Dienst']*100:0)+'%"></i></div></div>';
  const paths=[['PMA → PM','Polizeimeisteranwärter','Polizeimeister'],
   ['PKA → PK','Polizeikommissaranwärter','Polizeikommissar'],
   ['KKA → KK','Kriminalkommissaranwärter','Kriminalkommissar']];
@@ -5624,8 +5633,10 @@ function statErweitert(data){
    '<div class="kachel"><b>'+Number(quality.nicht_zugeordnet)+'</b><small>Nicht zuordenbar / unvollständig</small></div></div>'+
    '<p class="stat-pyramid-footnote">Nicht eindeutig zugeordnete Beförderungen gehen nicht in die Durchschnittswerte ein. Fehlende Daten werden nicht ergänzt oder geschätzt.</p></section>'+
   '<section class="box"><h3>Laufbahnpyramide</h3><p class="mut">Aktueller Personalbestand nach Dienstgrad; gekündigte und administrativ entfernte Akten sind ausgenommen.</p>'+
-  '<div class="stat-pyramid">'+level('Höherer Dienst','hoch')+level('Gehobener Dienst','gehoben')+level('Mittlerer Dienst','mittel')+'</div>'+
-  '<p class="stat-pyramid-footnote">Die Breite jeder Stufe ist proportional zur größten Gruppe; die Reihenfolge entspricht der Laufbahnhierarchie. '+counts['Nicht zugeordnet']+' Personen ohne eindeutige Zuordnung. Basis: '+total+' aktuelle Personalakten.</p></section>'+
+  '<div class="stat-pyramid">'+level('Höherer Dienst','hoch')+
+  '<div class="stat-pyramid-split" style="width:'+splitWidth+'%">'+branch('Operative Laufbahn','operativ',gehobenOperativ)+branch('Kriminalpolizeilaufbahn','kriminal',gehobenKriminal)+'</div>'+
+  level('Mittlerer Dienst','mittel')+'</div>'+
+  '<p class="stat-pyramid-footnote">Gehobener Dienst gesamt: <strong>'+counts['Gehobener Dienst']+'</strong> Personen. Dienstgrade mit „Kriminal“ im Rangnamen zählen zur Kriminalpolizeilaufbahn, alle übrigen gehobenen Dienstgrade zur operativen Laufbahn. Die kleinen Balken zeigen den jeweiligen Anteil innerhalb des gehobenen Dienstes. Die Stufenbreite orientiert sich an der größten Laufbahn. '+counts['Nicht zugeordnet']+' Personen ohne eindeutige Zuordnung. Basis: '+total+' aktuelle Personalakten.</p></section>'+
   '<div class="stat-insights"><section class="box"><h3>Dienstzeit der aktiven Beschäftigten</h3>'+
     '<div class="stat-promo-value">'+(tenureAvg===null?'Keine Daten':(tenureAvg/365.25).toLocaleString('de-DE',{maximumFractionDigits:1})+' Jahre')+'</div>'+
     '<p class="stat-promo-meta">Durchschnitt aus '+tenure.length+' gültigen Eintrittsdaten · Median: '+(tenure.length?(statMedian(tenure)/365.25).toLocaleString('de-DE',{maximumFractionDigits:1})+' Jahre':'–')+'</p>'+
