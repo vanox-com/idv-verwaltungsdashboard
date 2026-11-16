@@ -498,6 +498,17 @@ app.get('/api/personalstatistik',requireLogin,requireRight('pers',1),async(req,r
   res.json({gruppen:rows,eintritte:mon.rows});
  }catch(e){next(e)}
 });
+app.get('/api/personalstatistik/erweitert',requireLogin,requireRight('pers',1),async(req,res,next)=>{
+ try{
+  const [ranks,tenure,promotions,lastYear]=await Promise.all([
+   db.query("SELECT COALESCE(NULLIF(dienstgrad,''),'Nicht zugeordnet') AS rang,COUNT(*)::int AS anzahl FROM personal WHERE administrativ_geloescht_am IS NULL AND status<>'Gekündigt' GROUP BY 1 ORDER BY anzahl DESC,rang"),
+   db.query("SELECT (CURRENT_DATE-eintrittsdatum)::int AS tage FROM personal WHERE administrativ_geloescht_am IS NULL AND status='Aktiv' AND eintrittsdatum IS NOT NULL AND eintrittsdatum<=CURRENT_DATE"),
+   db.query("SELECT b.personalnummer,b.rang,b.neu_rang,(b.am-p.eintrittsdatum)::int AS tage,b.am FROM befoerderungen b JOIN personal p ON p.personalnummer=b.personalnummer WHERE b.am IS NOT NULL AND p.eintrittsdatum IS NOT NULL AND b.am>=p.eintrittsdatum AND b.am<=CURRENT_DATE AND lower(trim(coalesce(b.vorname,'')))=lower(trim(coalesce(p.vorname,''))) AND lower(trim(coalesce(b.nachname,'')))=lower(trim(coalesce(p.nachname,''))) ORDER BY b.am ASC,b.id ASC"),
+   db.query("SELECT COUNT(*)::int AS anzahl FROM befoerderungen WHERE am>=CURRENT_DATE-INTERVAL '12 months' AND am<=CURRENT_DATE")
+  ]);
+  res.json({dienstgrade:ranks.rows,dienstzeiten:tenure.rows.map(x=>x.tage),befoerderungen:promotions.rows,befoerderungen12m:lastYear.rows[0]?.anzahl||0});
+ }catch(e){next(e)}
+});
 
 app.get('/api/backup-status',requireLogin,requireRight('backup',1),async(req,res,next)=>{
  try{const {rows}=await db.query('SELECT CURRENT_TIMESTAMP AS geprueft_am,pg_database_size(current_database())::bigint AS datenbank_bytes,current_database() AS datenbank,version() AS postgres_version');
