@@ -884,7 +884,7 @@ app.get('/api/bootstrap', requireLogin, async (req, res, next) => {
       }));
     }
 
-    res.json({ user: { dienstnummer: req.user.dienstnummer, anzeigename: await nameFuerDienstnummer(req.user), rolle, rechte, sensibel: !!sensibel }, daten });
+    res.json({ user: { id:req.user.id, dienstnummer: req.user.dienstnummer, anzeigename: await nameFuerDienstnummer(req.user), rolle, rechte, sensibel: !!sensibel }, daten });
     console.log('[dashboard] Datenabfrage erfolgreich, Dauer:', Date.now() - beginn, 'ms');
   } catch (e) {
     console.error('[dashboard] Datenabfrage fehlgeschlagen:', e.code || '', e.message);
