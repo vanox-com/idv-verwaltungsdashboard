@@ -3698,6 +3698,12 @@ function vKue() {
   const hinweis=archiv?'Historische Kündigungen und Vorgänge ohne belegtes Datum. Vorhandene Unterlagen und die gesicherte Personalakte bleiben über „Akte & Dokumente“ abrufbar.':
     'Aktuelle Kündigungen aus den letzten 60 Kalendertagen. Ältere Vorgänge und undatierte Altbestände findest du im berechtigungsgeschützten Archiv.';
   const detailRow=(k,index=0,gesamt=1)=>{
+    const original=(D.personal||[]).find(p=>Number(p.personalnummer)===Number(k.personalnummer)&&
+      p.status==='Gekündigt'&&String(p.vorname||'').trim().toLowerCase()===String(k.vorname||'').trim().toLowerCase()&&
+      String(p.nachname||'').trim().toLowerCase()===String(k.nachname||'').trim().toLowerCase()&&
+      String(p.eintrittsdatum||'').slice(0,10)===String(k.eintritt||'').slice(0,10));
+    const ruecknahme=schreiben&&can('pers',2)&&!k.rueckgenommen_am&&original?
+      '<button type="button" data-kue-ruecknahme="'+Number(k.id)+'">Kündigung zurücknehmen</button> ':'';
     const offen=KUE_STATUS.filter(x=>x[0]!=='anzeige'&&/^(offen)?$/i.test(kueWert(k,x[0]))).length;
     const badges=KUE_STATUS.map(([feld,label])=>{
       const wert=kueWert(k,feld),istOffen=wert==='Offen',cls=istOffen?'warn':wert==='Nein'?'':'ok';
@@ -3707,6 +3713,7 @@ function vKue() {
     }).join(' ');
     const docs='<div class="kue-doc-links">'+['vertrag','urkunde','zeugnis','kuendigung'].map(x=>kueDokument(k[x],x)).join('')+'</div>'+
       '<button type="button" data-kue-akte="'+Number(k.id)+'">Akte &amp; alle Dokumente</button> '+
+      ruecknahme+
       (schreiben?'<button type="button" class="kue-docs-open" data-kue-docs-edit="'+Number(k.id)+'">Dokumente bearbeiten</button> '+
       '<button type="button" data-dg-type="fristgerecht" data-dg-nr="'+Number(k.personalnummer)+'" data-dg-context="'+Number(k.id)+'">Fristgerecht</button> '+
       '<button type="button" data-dg-type="fristlos" data-dg-nr="'+Number(k.personalnummer)+'" data-dg-context="'+Number(k.id)+'">Fristlos</button>':'');
@@ -3714,6 +3721,7 @@ function vKue() {
       k.erfasst_am?'Erfasst: '+fd(k.erfasst_am):
       k.statuswechsel_am?'Statuswechsel: '+fd(k.statuswechsel_am):'Unbekannt';
     return '<td>'+esc(k.personalnummer)+(gesamt>1?'<small class="kue-vorgang-index">Vorgang '+(index+1)+'/'+gesamt+' · #'+Number(k.id)+'</small>':'')+'</td><td><strong>'+esc([k.vorname,k.nachname].filter(Boolean).join(' '))+'</strong> '+
+      (k.rueckgenommen_am?'<span class="tag ok">Zurückgenommen</span> ':'')+
       '<span class="tag '+(offen?'warn':'ok')+'">'+(offen?offen+' offen':'erledigt')+'</span></td>'+
       '<td>'+esc(k.rang||'–')+'</td><td>'+esc(k.grund||'–')+'</td><td>'+esc(date)+'</td>'+
       '<td>'+docs+'</td><td class="kue-statuscell">'+badges+'</td>'+
@@ -3859,6 +3867,20 @@ async function kueLoeschen(id) {
   }
   catch(err){alert('Löschen fehlgeschlagen: '+err.message);}
 }
+async function kueRuecknehmen(id){
+ if(!can('kue',2)||!can('pers',2))return;
+ const k=(KUE_VIEW_MODE==='archiv'?(KUE_ARCHIV_DATEN||[]):(D.kuendigungen||[])).find(x=>Number(x.id)===id);
+ if(!k||k.rueckgenommen_am)return;
+ const grund=prompt('Warum wird die Kündigung von '+[k.vorname,k.nachname].filter(Boolean).join(' ')+' zurückgenommen?\nDie Personalakte wird wieder auf Aktiv gesetzt. Ein bereits gesperrter Panel-Zugang bleibt zunächst gesperrt.');
+ if(grund===null)return;
+ if(grund.trim().length<5){alert('Bitte einen Rücknahmegrund mit mindestens 5 Zeichen angeben.');return;}
+ if(!confirm('Kündigung #'+id+' verbindlich zurücknehmen? Der Vorgang bleibt zur Nachvollziehbarkeit erhalten.'))return;
+ try{
+  await api('/kuendigungen/'+id+'/ruecknahme',{method:'POST',headers:{'If-Match':String(k._revision||'')},body:JSON.stringify({grund:grund.trim()})});
+  KUE_ARCHIV_DATEN=null;await starten();
+  if(tab==='kue'&&KUE_VIEW_MODE==='archiv')void kueArchivLaden();
+ }catch(e){alert('Kündigung konnte nicht zurückgenommen werden: '+e.message);}
+}
 document.addEventListener('click',event=>{
   const switcher=event.target.closest('[data-kue-view]');
   if(switcher){
@@ -3897,6 +3919,8 @@ document.addEventListener('click',event=>{
   }
   const akte=event.target.closest('[data-kue-akte]');
   if(akte){void window.IDVKueArchiv?.akte(Number(akte.dataset.kueAkte));return;}
+  const ruecknahme=event.target.closest('[data-kue-ruecknahme]');
+  if(ruecknahme){void kueRuecknehmen(Number(ruecknahme.dataset.kueRuecknahme));return;}
   if(event.target.closest('[data-kue-alle]')){KUE_FOKUS_NR=null;zeichne();return;}
   if(event.target.closest('#kueNeu')){kueNeuDialog();return;}
   const state=event.target.closest('[data-kue-field]');
