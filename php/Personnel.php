@@ -50,6 +50,38 @@ function personnelPromotionStats(): array {
     return ['befoerderungen'=>$valid,'befoerderungen12m'=>$lastYear,
         'datenqualitaet'=>['gesamt'=>$total,'zugeordnet'=>count($valid),'nicht_zugeordnet'=>$unassigned]];
 }
+function personnelMovementStats(): array {
+    $months=[];
+    $start=new \DateTimeImmutable('first day of this month',new \DateTimeZone('UTC'));
+    $start=$start->modify('-11 months');
+    for($i=0;$i<12;$i++){
+        $m=$start->modify('+'.$i.' months')->format('Y-m');
+        $months[$m]=['monat'=>$m,'zugang'=>0,'abgang'=>0];
+    }
+    $today=gmdate('Y-m-d');$missingEntries=0;$missingExits=0;$withdrawn=0;
+    $people=sql('SELECT eintrittsdatum FROM personal');
+    foreach(normalizedRows('SELECT vorher FROM personalnummer_neubelegungen',[],['vorher']) as $row)
+        if(is_array($row['vorher']??null))$people[]=$row['vorher'];
+    foreach($people as $p){
+        $entry=(string)($p['eintrittsdatum']??'');
+        if(!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$entry)||!checkdate((int)substr($entry,5,2),(int)substr($entry,8,2),(int)substr($entry,0,4))||$entry>$today){$missingEntries++;continue;}
+        $m=substr($entry,0,7);if(isset($months[$m]))$months[$m]['zugang']++;
+    }
+    $used=[];
+    foreach(normalizedRows('SELECT personalnummer,vorname,nachname,eintritt,kuendigungsdatum,personal_snapshot FROM kuendigungen',[],['personal_snapshot']) as $k){
+        if(!empty($k['personal_snapshot']['ruecknahme'])){$withdrawn++;continue;}
+        $date=(string)($k['kuendigungsdatum']??'');
+        if(!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$date)||!checkdate((int)substr($date,5,2),(int)substr($date,8,2),(int)substr($date,0,4))||$date>$today){$missingExits++;continue;}
+        $key=implode('|',[(string)($k['personalnummer']??''),strtolower(trim((string)($k['vorname']??''))),strtolower(trim((string)($k['nachname']??''))),(string)($k['eintritt']??''),$date]);
+        if(isset($used[$key]))continue;$used[$key]=true;
+        $m=substr($date,0,7);if(isset($months[$m]))$months[$m]['abgang']++;
+    }
+    $entries=array_sum(array_column($months,'zugang'));
+    $exits=array_sum(array_column($months,'abgang'));
+    return ['personalbewegung'=>array_values($months),
+      'bewegung12m'=>['zugang'=>$entries,'abgang'=>$exits,'saldo'=>$entries-$exits],
+      'bewegung_datenqualitaet'=>['eintritte_ohne_datum'=>$missingEntries,'kuendigungen_ohne_datum'=>$missingExits,'zurueckgenommen'=>$withdrawn]];
+}
 function archiveTerminatedLogin(int $nr,array $u): void {
     $accounts=sql("SELECT id,rolle,dienstnummer FROM users WHERE dienstnummer REGEXP '^[0-9]{1,8}$'
         AND CAST(dienstnummer AS UNSIGNED)=? FOR UPDATE",[$nr]);
@@ -187,7 +219,7 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
               AND eintrittsdatum IS NOT NULL AND eintrittsdatum<=UTC_DATE()");
         $promotions=personnelPromotionStats();
         $result=['dienstgrade'=>$ranks,'dienstzeiten'=>array_column($tenure,'tage'),'berechnet_am'=>gmdate('c'),
-            ...$promotions];
+            ...$promotions,...personnelMovementStats()];
         db()->commit();
         }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
         respond(200,$result);
