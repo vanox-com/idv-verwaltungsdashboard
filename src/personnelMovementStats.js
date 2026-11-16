@@ -12,7 +12,8 @@ export function buildPersonnelMovementStats(people, reallocations, terminations,
   const byMonth=new Map(months.map(x=>[x.monat,x]));
   const today=now.toISOString().slice(0,10);
   const allPeople=[...people,...reallocations.map(x=>x.vorher).filter(x=>x && typeof x==='object')];
-  let entriesWithoutDate=0, exitsWithoutDate=0,withdrawn=0;
+  let entriesWithoutDate=0, exitsWithoutDate=0,withdrawn=0,exitsWithoutEntry=0;
+  const durations=[];
   for(const p of allPeople){
     const entry=dateText(p.eintrittsdatum);
     if(!day(entry)||entry>today){entriesWithoutDate++;continue;}
@@ -28,8 +29,20 @@ export function buildPersonnelMovementStats(people, reallocations, terminations,
     if(used.has(unique))continue;
     used.add(unique);
     const m=byMonth.get(date.slice(0,7));if(m)m.abgang++;
+    const joined=dateText(record.eintritt);
+    if(!day(joined)||joined>date){exitsWithoutEntry++;continue;}
+    durations.push(Math.round((Date.parse(date+'T00:00:00Z')-Date.parse(joined+'T00:00:00Z'))/86400000));
   }
   const totals=months.reduce((a,m)=>({zugang:a.zugang+m.zugang,abgang:a.abgang+m.abgang}),{zugang:0,abgang:0});
+  durations.sort((a,b)=>a-b);
+  const count=durations.length,mid=Math.floor(count/2);
+  const median=count?(count%2?durations[mid]:(durations[mid-1]+durations[mid])/2):null;
+  const buckets=[['Unter 30 Tagen',0,30],['30–89 Tage',30,90],['90–179 Tage',90,180],
+    ['180–364 Tage',180,365],['1–2 Jahre',365,730],['Ab 2 Jahren',730,Infinity]]
+    .map(([label,min,max])=>({label,anzahl:durations.filter(n=>n>=min&&n<max).length}));
   return {personalbewegung:months,bewegung12m:{...totals,saldo:totals.zugang-totals.abgang},
-    bewegung_datenqualitaet:{eintritte_ohne_datum:entriesWithoutDate,kuendigungen_ohne_datum:exitsWithoutDate,zurueckgenommen:withdrawn}};
+    kuendigungsdienstzeit:{anzahl:count,durchschnitt_tage:count?Math.round(durations.reduce((a,b)=>a+b,0)/count*10)/10:null,
+      median_tage:median,minimum_tage:count?durations[0]:null,maximum_tage:count?durations[count-1]:null,verteilung:buckets},
+    bewegung_datenqualitaet:{eintritte_ohne_datum:entriesWithoutDate,kuendigungen_ohne_datum:exitsWithoutDate,
+      kuendigungen_ohne_eintritt:exitsWithoutEntry,zurueckgenommen:withdrawn}};
 }
