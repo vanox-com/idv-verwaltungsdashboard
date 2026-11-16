@@ -929,6 +929,7 @@ app.get('/api/personal/freie-nummern',requireLogin,requireRight('pers',2),async(
     db.query("SELECT dienstnummer::int AS nr,rolle FROM users WHERE dienstnummer ~ '^[0-9]{1,8}$' AND dienstnummer::int BETWEEN 1 AND 60"),
     db.query(`SELECT DISTINCT k.personalnummer FROM kuendigungen k
       WHERE k.personalnummer BETWEEN 1 AND 60
+        AND k.personal_snapshot->'ruecknahme' IS NULL
         AND (NOT EXISTS(SELECT 1 FROM personalnummer_neubelegungen a
            WHERE a.personalnummer=k.personalnummer)
          OR k.erfasst_am >= (SELECT MAX(a.zeit) FROM personalnummer_neubelegungen a
@@ -991,6 +992,7 @@ async function kuendigungenDieserPerson(client,p){
   const {rows}=await client.query(
     `SELECT k.id FROM kuendigungen k
       WHERE k.personalnummer=$1
+        AND k.personal_snapshot->'ruecknahme' IS NULL
         AND lower(btrim(coalesce(k.vorname,'')))=lower($2)
         AND lower(btrim(coalesce(k.nachname,'')))=lower($3)
         AND (k.eintritt IS NOT DISTINCT FROM $4::date
