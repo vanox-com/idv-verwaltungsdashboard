@@ -172,8 +172,9 @@ function dispatchDNRequests(array $u,string $method,string $uri): bool {
             if(!$r)fail(404,'Antrag nicht gefunden');
             $req=$r[0];if($req['status']!=='beantragt')fail(409,'Antrag ist bereits abgeschlossen');
             if($status==='genehmigt'){
-                if((int)$req['antragsteller_id']===(int)$u['id']&&$u['rolle']!=='Administrator')
-                    fail(403,'Eigene Anträge dürfen nur durch einen anderen POR-Berechtigten entschieden werden');
+                if((int)$req['antragsteller_id']===(int)$u['id']&&
+                   !in_array($u['rolle'],['Administrator','Leitungsdienst'],true))
+                    fail(403,'Eigene Anträge dürfen nur durch einen anderen Berechtigten entschieden werden');
                 $ctx=dnReqCheck((int)$req['alt_nr'],(int)$req['ziel_nr'],$req['art'],true);
                 foreach(['oldRevision','targetRevision','accountId','accountNumber',
                     'oldName','targetName','oldEntry','targetEntry'] as $f)
