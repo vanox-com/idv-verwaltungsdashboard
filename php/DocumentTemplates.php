@@ -73,7 +73,8 @@ function documentFillXml(string $xml,string $type,array $person,array $f): strin
     $signer=preg_split('/\s+/u',trim($f['unterzeichner']));
     $signFirst=array_shift($signer);$signLast=implode(' ',$signer);
     $names=match($type){
-        'abmahnung','praktikum','nebenjob'=>[[$signFirst,$first,$signFirst],[$signLast,$last,$signLast]],
+        'abmahnung','praktikum'=>[[$signFirst,$first,$signFirst],[$signLast,$last,$signLast]],
+        'nebenjob'=>[[$signFirst,$first,$signFirst],[$signLast,$last,$last,$signLast]],
         'fristgerecht','fristlos','praktikumsbestaetigung'=>[[$signFirst,$first,$signFirst],
             [$signLast,$last,$last,$signLast]],
         'hauptvertrag','pmavertrag','nebenvertrag'=>[[$first,$first,$signFirst],
