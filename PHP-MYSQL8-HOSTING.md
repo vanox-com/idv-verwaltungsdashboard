@@ -28,9 +28,17 @@ Im Secret-Store des Hosters (nicht in GitHub) konfigurieren:
 | `MYSQL_SSL_CA` | optional Pfad zur vertrauenswürdigen TLS-CA |
 | `IDV_LOGIN_RATE_SECRET` | sicheres Secret für Login-Drosselung |
 | `IDV_FORCE_HTTPS` | Nur bei HTTPS-Terminierung vor PHP (Reverse Proxy) auf `1` setzen, damit Session-Cookies und Origin-Prüfung zuverlässig HTTPS erzwingen; niemals ungeprüfte `X-Forwarded-Proto`-Header vertrauen |
-| `COPNET_ENCRYPTION_KEY` | derselbe 64-stellige Hex-Schlüssel wie im bisherigen System; erforderlich für bestehende CopNet-Zugänge |
+| `COPNET_ENCRYPTION_KEY` | Originaler 64-stelliger Hex-Schlüssel; zwingend für die Entschlüsselung vorhandener CopNet-Altbestände, nicht für neue v2-Einträge |
+| `IDV_COPNET_KEY_DIRECTORY` | Optional: dauerhaft beschreibbares, nicht öffentlich erreichbares Verzeichnis für automatisch erzeugten CopNet-v2-Schlüssel; Standard ist `private/` außerhalb von `public/` |
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | Google-Webanwendungsclient; Zugangsdaten ausschließlich im Hostersecret speichern |
 | `IDV_GOOGLE_ORIGIN` | Optional für abweichende Domains/Staging; bei nicht gesetztem Wert ist `https://pol-panel.identityvalley.de` die feste HTTPS-Standard-Origin. Explizite Werte müssen exakt und ohne Pfad/abschließenden Slash passen. |
+
+
+### CopNet speichern bei fehlendem Schlüssel am PHP-Hoster
+
+Ab dem CopNet-Fix vom 23.11.2026 kann der Server **neue Zugangsdaten** auch ohne `COPNET_ENCRYPTION_KEY` speichern. Er erzeugt beim ersten Speichern zufällig einen AES-256-GCM-Schlüssel in `private/copnet-v2.key` (bzw. im über `IDV_COPNET_KEY_DIRECTORY` gesetzten privaten Dauerverzeichnis). Der Dateipfad muss dauerhaft beschreibbar sein; die Datei darf niemals in `public/` liegen oder per HTTP ausgeliefert werden. `private/` ist per `.gitignore` ausgeschlossen. **Datei in das sichere Hoster-Backup aufnehmen und bei Deployments erhalten** – bei Verlust lassen sich damit verschlüsselte v2-Werte nicht wiederherstellen. Die Anwendung erzeugt bei vorhandenen v2-Daten keinen stillschweigenden Ersatzschlüssel.
+
+Bestehende, noch mit Node/Render verschlüsselte und **nicht** mit `v2:` markierte Datensätze benötigen weiterhin den **ursprünglichen** `COPNET_ENCRYPTION_KEY`. Neue v2-Einträge bleiben parallel lesbar, sobald der Originalschlüssel später wieder eingerichtet wird. Der Fix liest oder wandelt alte Werte ohne den Originalschlüssel nicht um und zeigt keine Schlüssel im Browser an.
 
 ### Google OAuth auf pol-panel.identityvalley.de (12.11.2026)
 
