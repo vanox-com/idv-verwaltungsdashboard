@@ -28,7 +28,8 @@ function copNetLocalKey(bool $create): string {
     }
     $real=realpath($dir);
     $public=realpath(dirname(__DIR__).'/public');
-    $webRoot=realpath((string)($_SERVER['DOCUMENT_ROOT']??''));
+    $documentRoot=(string)($_SERVER['DOCUMENT_ROOT']??'');
+    $webRoot=$documentRoot!==''?realpath($documentRoot):false;
     foreach([$public,$webRoot] as $exposed){
         if($real===false||($exposed!==false&&($real===$exposed||str_starts_with($real,$exposed.DIRECTORY_SEPARATOR))))
             fail(503,'CopNet-Schlüsselverzeichnis darf nicht öffentlich erreichbar sein');
