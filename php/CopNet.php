@@ -28,8 +28,11 @@ function copNetLocalKey(bool $create): string {
     }
     $real=realpath($dir);
     $public=realpath(dirname(__DIR__).'/public');
-    if($real===false||($public!==false&&($real===$public||str_starts_with($real,$public.DIRECTORY_SEPARATOR))))
-        fail(503,'CopNet-Schlüsselverzeichnis darf nicht öffentlich erreichbar sein');
+    $webRoot=realpath((string)($_SERVER['DOCUMENT_ROOT']??''));
+    foreach([$public,$webRoot] as $exposed){
+        if($real===false||($exposed!==false&&($real===$exposed||str_starts_with($real,$exposed.DIRECTORY_SEPARATOR))))
+            fail(503,'CopNet-Schlüsselverzeichnis darf nicht öffentlich erreichbar sein');
+    }
 
     $path=$real.'/copnet-v2.key';
     $lockPath=$real.'/copnet-v2.lock';
