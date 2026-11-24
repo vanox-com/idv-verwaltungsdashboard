@@ -86,6 +86,25 @@ function dispatchAusbildungSetup(array $u,string $method,string $uri): bool {
         if(ausbildungSchemaStatus()['bereit']){
             respond(200,['ok'=>true,'bereitsEingerichtet'=>true,'schema'=>ausbildungSchemaStatus()]);
         }
+        // A verbal "I made a backup" is not enough. Require an actual
+        // recently created encrypted IDV archive on the private backup disk
+        // before changing the existing MySQL database schema.
+        require_once __DIR__.'/DatabaseBackup.php';
+        $dbName=(string)db()->query('SELECT DATABASE()')->fetchColumn();
+        $hasSafetyBackup=false;
+        foreach(backupList() as $entry){
+            if(($entry['type']??'')!=='idv'||($entry['database']??'')!==$dbName
+                ||!($entry['encrypted']??false))continue;
+            $created=strtotime((string)($entry['created']??''));
+            if($created===false||time()-$created>24*3600||$created>time()+300)continue;
+            $path=backupFile((string)$entry['id']);
+            if(is_file($path)&&hash_equals((string)($entry['sha256']??''),
+                hash_file('sha256',$path))){$hasSafetyBackup=true;break;}
+        }
+        if(!$hasSafetyBackup)
+            fail(428,'Vor der Einrichtung muss eine aktuelle verschlüsselte Datenbanksicherung '
+                .'in Administration → Backup-Übersicht erstellt und sicher heruntergeladen werden. '
+                .'Für Schema-Rollbacks zusätzlich ein vollständiges SQL-Backup beim Hoster anfertigen.');
         $pdo=db();
         $lock=sql("SELECT GET_LOCK('idv_ausbildung_schema_v1',10) AS ok");
         if((int)($lock[0]['ok']??0)!==1)fail(503,'Ausbildungsdatenbank wird bereits eingerichtet');
