@@ -37,12 +37,40 @@ function portalDesignInput(): array {
     }
     return [$data['akzent'],$data['schleier'],$data['hintergrund'],json_encode($extras,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)];
 }
+/** Preserve the authors of training records while permanently revoking their login. */
+function ausbildungsZugangArchiviert(string $dn): bool {
+    return str_starts_with(strtolower($dn),'archiv-aus-');
+}
+function ausbildungsZugangTabellen(): array {
+    return array_column(sql("SELECT TABLE_NAME FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('ausbildung_ausbilder','ausbildung_stimmen','ausbildung_abschluesse','ausbildung_unterricht')"),'TABLE_NAME');
+}
+function ausbildungsZugangHatHistorie(int $id,array $tables): bool {
+    foreach(['ausbildung_ausbilder'=>'user_id','ausbildung_stimmen'=>'ausbilder_user_id',
+        'ausbildung_abschluesse'=>'ausbilder_user_id','ausbildung_unterricht'=>'ausbilder_user_id'] as $table=>$column){
+        if(in_array($table,$tables,true)&&sql("SELECT 1 FROM ".$table." WHERE ".$column."=? LIMIT 1",[$id]))return true;
+    }
+    return false;
+}
+/** Caller must hold a transaction and the target user's row lock. */
+function ausbildungsZugangArchivieren(int $id,array $tables): void {
+    if(in_array('ausbildung_ausbilder',$tables,true))
+        sql('UPDATE ausbildung_ausbilder SET aktiv=0,revision=revision+1,aktualisiert=UTC_TIMESTAMP(6) WHERE user_id=? AND aktiv=1',[$id]);
+    if(in_array('ausbildung_unterricht',$tables,true))
+        sql('UPDATE ausbildung_unterricht SET beendet=1,angebot=NULL,antwort=NULL,aktualisiert=UTC_TIMESTAMP(6) WHERE ausbilder_user_id=? AND beendet=0',[$id]);
+    // Keep the original display name, role and ID for module/stimm records.
+    // Release the original login name; never allow the archived account to log in.
+    $archiv='archiv-aus-'.$id.'-'.bin2hex(random_bytes(6));
+    $hash=password_hash(bin2hex(random_bytes(32)),PASSWORD_BCRYPT,['cost'=>12]);
+    sql('UPDATE users SET dienstnummer=?,gesperrt=1,passwort_hash=?,muss_passwort_aendern=1 WHERE id=?',[$archiv,$hash,$id]);
+    sql('DELETE FROM sessions WHERE user_id=?',[$id]);
+}
 function dispatchSettings(array $u,string $method,string $uri): bool {
     if($method==='GET'&&$uri==='/api/users'){
         needAdmin($u);
         ensureDNApprovalPermissions();
         respond(200,[
-            'users'=>normalizedRows('SELECT id,dienstnummer,anzeigename,rolle,muss_passwort_aendern,gesperrt,erstellt FROM users ORDER BY dienstnummer'),
+            'users'=>normalizedRows("SELECT id,dienstnummer,anzeigename,rolle,muss_passwort_aendern,gesperrt,erstellt FROM users WHERE LOWER(dienstnummer) NOT LIKE 'archiv-aus-%' ORDER BY dienstnummer"),
             'rollen'=>normalizedRows('SELECT name,farbe,sensibel FROM roles ORDER BY name'),
             'perms'=>normalizedRows('SELECT rolle,modul,stufe FROM role_perms'),
             'userPerms'=>normalizedRows('SELECT user_id,modul,stufe FROM user_perms ORDER BY user_id,modul')
@@ -52,6 +80,7 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
         needAdmin($u);$b=body();
         $num=trim((string)($b['dienstnummer']??''));$name=trim((string)($b['anzeigename']??''));
         $role=(string)($b['rolle']??'');$pass=(string)($b['startpasswort']??'');
+        if(ausbildungsZugangArchiviert($num))fail(400,'Diese Dienstnummer ist für archivierte Zugänge reserviert');
         if($num===''||strlen($num)>32||$name===''||strlen($name)>200||!sql('SELECT 1 FROM roles WHERE name=?',[$role]))
             fail(400,'Dienstnummer, gültiger Name und Rolle nötig');
         if(strlen($pass)<8||strlen($pass)>4096)fail(400,'Startpasswort min. 8 Zeichen');
@@ -65,6 +94,8 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
     if(preg_match('#^/api/users/([1-9][0-9]*)$#D',$uri,$m)){
         needAdmin($u);$id=cleanId($m[1]);
         if($method==='PATCH'){
+            $target=sql('SELECT dienstnummer FROM users WHERE id=?',[$id]);
+            if(!$target||ausbildungsZugangArchiviert((string)$target[0]['dienstnummer']))fail(404,'Aktiver Zugang nicht gefunden');
             $b=body();$fields=[];$args=[];
             if(($b['gesperrt']??null)===true&&$id==(int)$u['id'])fail(400,'Eigenen Administratorzugang nicht sperren oder herabstufen');
             if(array_key_exists('rolle',$b)&&$b['rolle']!==null){
@@ -87,11 +118,24 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
         }
         if($method==='DELETE'){
             if($id==(int)$u['id'])fail(400,'Der eigene Zugang kann nicht gelöscht werden');
-            $old=sql('SELECT dienstnummer FROM users WHERE id=?',[$id]);
-            if(!$old)fail(404,'Zugang nicht gefunden');
-            sql('DELETE FROM users WHERE id=?',[$id]);
-            auditAction($u,'Zugang gelöscht: '.$old[0]['dienstnummer'],'del');
-            respond(200,['ok'=>true]);
+            $tables=ausbildungsZugangTabellen();
+            $archived=false;
+            db()->beginTransaction();
+            try{
+                $old=sql('SELECT dienstnummer,rolle FROM users WHERE id=? FOR UPDATE',[$id]);
+                if(!$old||ausbildungsZugangArchiviert((string)$old[0]['dienstnummer']))fail(404,'Aktiver Zugang nicht gefunden');
+                $archived=ausbildungsZugangHatHistorie($id,$tables)||in_array($old[0]['rolle'],['Ausbilder','Ausbildungsleitung'],true);
+                if($archived)ausbildungsZugangArchivieren($id,$tables);
+                else sql('DELETE FROM users WHERE id=?',[$id]);
+                auditAction($u,($archived?'Zugang entzogen (Ausbildungshistorie erhalten): ':'Zugang gelöscht: ').$old[0]['dienstnummer'],'del');
+                db()->commit();
+            }catch(\PDOException $e){
+                if(db()->inTransaction())db()->rollBack();
+                if((int)($e->errorInfo[1]??0)===1451)
+                    fail(409,'Dieser Zugang ist mit weiteren Datensätzen verknüpft. Bitte zunächst sperren; die Historie bleibt erhalten.');
+                throw $e;
+            }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
+            respond(200,['ok'=>true,'archiviert'=>$archived]);
         }
     }
     $allowed=['dash','pers','bef','rout','routarchiv','praktika','sonder','dis','kue','chk','rl','rlbearb','org','sperr','geb','jub','bl','log','por','dnfreigabe','ranghistorie','befricht','texte','rechtesimulator','design','backup','mitteilungen','papierkorb','kuearchiv','abm','botcfg','ausbildung'];
@@ -108,7 +152,7 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
         needAdmin($u);$id=cleanId($m[1]);$mod=rawurldecode($m[2]);$b=body();
         if(!array_key_exists('stufe',$b)||!in_array($mod,$allowed,true)||!in_array($b['stufe'],[null,0,1,2],true))fail(400,'Ungültige Berechtigung');
         $target=sql('SELECT rolle,dienstnummer FROM users WHERE id=?',[$id]);
-        if(!$target)fail(404,'Konto nicht gefunden');
+        if(!$target||ausbildungsZugangArchiviert((string)$target[0]['dienstnummer']))fail(404,'Aktiver Zugang nicht gefunden');
         if($target[0]['rolle']==='Administrator')fail(403,'Administratorrechte sind fest');
         if($b['stufe']===null)sql('DELETE FROM user_perms WHERE user_id=? AND modul=?',[$id,$mod]);
         else sql('INSERT INTO user_perms(user_id,modul,stufe) VALUES(?,?,?) ON DUPLICATE KEY UPDATE stufe=VALUES(stufe)',[$id,$mod,$b['stufe']]);

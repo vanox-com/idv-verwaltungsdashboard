@@ -390,7 +390,7 @@ shadow.addEventListener('click',async(e)=>{
  });return}
  if(mode==='create-link'){await act(async()=>{const r=await request('anwaerter/'+selected.anwaerter.id+'/link',{method:'POST',body:'{}'});const target=el('#createdLink');target.textContent='';const p=document.createElement('p');p.textContent='Neuer Link (bitte sicher an den Anwärter weitergeben):';const inp=document.createElement('input');inp.readOnly=true;inp.value=location.origin+r.pfad;target.append(p,inp);inp.select();message('Neuer externer Zugangslink erzeugt; ältere Links sind ungültig.')});return}
  if(mode==='remove-link'){if(!confirm('Externen Zugangslink wirklich sperren?'))return;await act(async()=>{await request('anwaerter/'+selected.anwaerter.id+'/link',{method:'DELETE'});message('Externer Link deaktiviert.')});return}
- if(mode==='remove-trainer'){if(!confirm('Ausbilderzugang entziehen? Das bestehende Polizeikonto bleibt erhalten.'))return;await act(async()=>{await request('ausbilder/'+id,{method:'DELETE'});await load();message('Ausbilderzugang entzogen.')});return}
+ if(mode==='remove-trainer'){if(!confirm('Ausbilderzugang endgültig entziehen? Die Ausbildungs-Dienstnummer wird wieder frei. Polizeikonto, Stimmen und Modulabschlüsse bleiben erhalten.'))return;await act(async()=>{await request('ausbilder/'+id,{method:'DELETE'});await load();message('Ausbilderzugang entzogen.')});return}
  if(mode==='public-material'){
    const next=btn.dataset.active!=='1';
    if(next&&!confirm('Diese Unterlage wirklich OHNE LOGIN im AuLK veröffentlichen? Nur freigegebene, nicht vertrauliche Inhalte auswählen.'))return;

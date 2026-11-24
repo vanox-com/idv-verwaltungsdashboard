@@ -354,13 +354,13 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         if($method==='DELETE'){
             if($target===(int)$u['id']||$row[0]['rolle']!=='Ausbilder')
                 fail(403,'Bestehende Polizeikonten werden von der Ausbildungsverwaltung nicht verändert');
+            $tables=ausbildungsZugangTabellen();
             db()->beginTransaction();
             try {
-                sql('UPDATE ausbildung_ausbilder SET aktiv=0,revision=revision+1 WHERE id=?',[$id]);
-                // Sperrt ausschließlich neu angelegte, reine Ausbilderkonten.
-                // Rollen und Berechtigungen bestehender Polizeikonten bleiben unangetastet.
-                sql('UPDATE users SET gesperrt=1 WHERE id=? AND rolle=\'Ausbilder\'',[$target]);
-                sql('DELETE FROM sessions WHERE user_id=?',[$target]);
+                $locked=sql('SELECT dienstnummer,rolle FROM users WHERE id=? FOR UPDATE',[$target]);
+                if(!$locked||$locked[0]['rolle']!=='Ausbilder'||ausbildungsZugangArchiviert((string)$locked[0]['dienstnummer']))
+                    fail(409,'Dieser Ausbilderzugang wurde bereits geändert oder entzogen.');
+                ausbildungsZugangArchivieren($target,$tables);
                 auditAction($u,'Ausbilderzugang entzogen: ID '.$target,'del');
                 db()->commit();
             }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}

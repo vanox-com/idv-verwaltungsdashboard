@@ -5384,8 +5384,8 @@ async function userLoeschen(id) {
   if(ME.rolle!=='Administrator'||!USER_ADMIN)return;
   const u=USER_ADMIN.users.find(x=>Number(x.id)===id);
   if(!u||u.dienstnummer===ME.dienstnummer)return;
-  if(!confirm('Zugang für '+u.anzeigename+' (Dienstnummer '+u.dienstnummer+') endgültig löschen?'))return;
-  try{await api('/users/'+id,{method:'DELETE'});await ladeBenutzer();}
+  if(!confirm('Zugang für '+u.anzeigename+' (Dienstnummer '+u.dienstnummer+') endgültig entfernen? Vorhandene Ausbildungsnachweise bleiben erhalten.'))return;
+  try{const result=await api('/users/'+id,{method:'DELETE'});await ladeBenutzer();if(result?.archiviert)alert('Zugang entfernt. Anmeldung gesperrt, Dienstnummer freigegeben und Ausbildungshistorie erhalten.');}
   catch(err){alert('Löschen fehlgeschlagen: '+err.message);}
 }
 
@@ -6475,6 +6475,6 @@ document.addEventListener('click',async e=>{
 <script src="/abmeldungen.js"></script>
 <script src="/botKonfiguration.js"></script>
 <script src="/responsiveNav.js"></script>
-<script src="/assets/ausbildung-panel.js?v=20261125-5" defer></script>
+<script src="/assets/ausbildung-panel.js?v=20261125-6" defer></script>
 </body>
 </html>
