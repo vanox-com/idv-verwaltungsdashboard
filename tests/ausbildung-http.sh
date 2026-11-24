@@ -152,6 +152,49 @@ code="$(curl -sS -o "$temp/closed" -w '%{http_code}' -H 'Content-Type: applicati
   --data "{\"token\":\"$token\",\"client\":\"$client\"}" "$base/api/unterricht/status")"
 [[ "$code" == 410 ]] || { echo "Revoked lesson still accessible: $code";exit 1; }
 
+# Prüfen: Namensänderungen im zentralen Personalstamm behalten den Ausbildungsstand.
+mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "
+ UPDATE personal SET vorname='Updated' WHERE personalnummer=999997"
+updated="$(req "$temp/lead" GET /api/ausbildung/bootstrap)"
+printf '%s' "$updated" | php -r '
+$d=json_decode(stream_get_contents(STDIN),true);
+foreach($d["anwaerter"]??[] as $p){
+ if($p["personalnummer"]==999997){
+  if($p["name"]!=="Updated Anwärter"||$p["fortschritt"]["status"]!=="Zugelassen")exit(2);
+  exit(0);
+ }
+}exit(1);'
+# Keine unbefugte Anzeige der individuellen Laufbahnhistorie nach einer Beförderung.
+link="$(req "$temp/lead" POST "/api/ausbildung/anwaerter/$id/link" '{}')"
+careerToken="$(printf '%s' "$link" | php -r '$d=json_decode(stream_get_contents(STDIN),true);echo explode("#",$d["pfad"]??"")[1]??"";')"
+mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "
+ UPDATE personal SET dienstgrad='Polizeimeister' WHERE personalnummer=999997"
+promoted="$(req "$temp/lead" GET /api/ausbildung/bootstrap)"
+printf '%s' "$promoted" | php -r '$d=json_decode(stream_get_contents(STDIN),true);foreach($d["anwaerter"]??[] as $p)if($p["personalnummer"]==999997)exit(1);'
+code="$(curl -sS -o "$temp/old-career" -w '%{http_code}' -H 'Content-Type: application/json'   -X POST --data "{\"token\":\"$careerToken\"}" "$base/api/ausbildung-extern/status")"
+[[ "$code" == 404 ]] || { echo "Former trainee status remained public: $code";exit 1; }
+# Nach Rückkehr in den Anwärterdienst ist dieselbe Person wieder mit dem alten
+# Ausbildungsstand sichtbar – eine Beförderung vernichtet keine Module.
+mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "
+ UPDATE personal SET dienstgrad='Polizeimeisteranwärter' WHERE personalnummer=999997"
+restored="$(req "$temp/lead" GET /api/ausbildung/bootstrap)"
+printf '%s' "$restored" | php -r '$d=json_decode(stream_get_contents(STDIN),true);foreach($d["anwaerter"]??[] as $p)if($p["personalnummer"]==999997){if($p["fortschritt"]["status"]!=="Zugelassen")exit(1);exit(0);}exit(1);'
+# DN-Neubelegung: neu eingestellte Person darf nie die alten Modulabschlüsse
+# oder den externen Statuslink des vorherigen Mitarbeiters übernehmen.
+mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "
+ INSERT INTO personalnummer_neubelegungen(personalnummer,vergeben_von,vorher,folgedaten)
+ SELECT 999997,id,'{}','{}' FROM users WHERE dienstnummer='TLEAD' LIMIT 1;
+ UPDATE personal SET vorname='Another',nachname='Recruit',eintrittsdatum='2026-11-25'
+ WHERE personalnummer=999997;"
+newperson="$(req "$temp/lead" GET /api/ausbildung/bootstrap)"
+printf '%s' "$newperson" | php -r '
+$d=json_decode(stream_get_contents(STDIN),true);foreach($d["anwaerter"]??[] as $p)if($p["personalnummer"]==999997){
+ if($p["name"]!=="Another Recruit"||$p["fortschritt"]["moduleFertig"]!==0||$p["fortschritt"]["bereit"]!==false)exit(1);
+ if($p["personal_quelle"]!=="personal:999997:1")exit(2);exit(0);
+}exit(3);'
+code="$(curl -sS -o "$temp/reused-number" -w '%{http_code}' -H 'Content-Type: application/json'  -X POST --data "{\"token\":\"$careerToken\"}" "$base/api/ausbildung-extern/status")"
+[[ "$code" == 404 ]] || { echo "Old external token reached reused DN: $code";exit 1; }
+
 trainerId="$(req "$temp/lead" GET /api/ausbildung/bootstrap | php -r '$d=json_decode(stream_get_contents(STDIN),true);echo $d["ausbilder"][0]["id"]??"";')"
 req "$temp/lead" DELETE "/api/ausbildung/ausbilder/$trainerId" '{}' >/dev/null
 code="$(curl -sS -o "$temp/revokeduser" -w '%{http_code}' -b "$temp/trainer" "$base/api/me")"
