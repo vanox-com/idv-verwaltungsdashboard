@@ -1749,7 +1749,7 @@ body{overflow-x:clip}
 <script>
 const MODS = [
   ['dash','Dashboard','📊'],['pers','Personal','👥'],['bef','Beförderungen','⭐'],
-  ['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
+  ['ausbildung','Ausbildungsportal','🎓'],['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],['abm','Abmeldungen','📅'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
@@ -1759,6 +1759,7 @@ const MODS = [
    Ein aktives Modul hält seine Kategorie immer geöffnet. */
 const NAV_GRUPPEN = [
   {id:'uebersicht',titel:'Übersicht',module:['dash']},
+  {id:'ausbildung',titel:'Ausbildung',module:['ausbildung']},
   {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','praktika','rout','abm','geb','jub' ,'statistik']},
   {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
@@ -2016,6 +2017,12 @@ $('#pw').addEventListener('keydown', function (e) {
    nach erneuter, serverseitiger Authentifizierung über /api/me. */
 async function starten() {
   const bereitsOffen=Boolean(ME&&D&&!$('#app').classList.contains('hide'));
+  // Ausbildungsrollen arbeiten ausschließlich im separaten, geschützten Portal.
+  const angemeldet=await api('/me').catch(()=>null);
+  if(angemeldet&&['Ausbildungsleitung','Ausbilder'].includes(angemeldet.rolle)){
+    location.assign('/ausbildung.html');
+    return true;
+  }
   const letzteRechte=bereitsOffen?JSON.stringify(ME.rechte||{}):'';
   try {
     const antwort = await api('/bootstrap');
@@ -2092,6 +2099,7 @@ function navIcon(id) {
     bef: '<path d="M12 3 14.8 9l6.5 1-4.7 4.5 1.1 6.5L12 18l-5.7 3 1.1-6.5L2.7 10l6.5-1z"/>',
     befricht: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h6M8 15h5M14 15l2 2 3-4"/>',
     sonder: '<path d="M12 2 20 6v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/><path d="m8 12 3 3 5-6"/>',
+    ausbildung: '<path d="m2 10 10-5 10 5-10 5z"/><path d="M6 12v5c3.5 3 8.5 3 12 0v-5M22 10v7"/>',
     praktika: '<path d="m2 10 10-5 10 5-10 5z"/><path d="M6 12v5c3.5 3 8.5 3 12 0v-5M22 10v7"/>',
     kue: '<path d="M13 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M13 3v5h5M10 13h11m-4-4 4 4-4 4"/>',
     dis: '<path d="M12 3v18M4 7h16M5 7l-3 7h6L5 7zM19 7l-3 7h6l-3-7zM8 21h8"/>',
@@ -2121,6 +2129,7 @@ function navIcon(id) {
 
 function wechsleZuModul(id,optionen={}){
   if(!MODS.some(m=>m[0]===id)||!can(id))return false;
+  if(id==='ausbildung'){location.assign('/ausbildung.html');return true;}
   if(id==='kue'&&!optionen.fokus){KUE_FOKUS_NR=null;KUE_VIEW_MODE='aktuell';}
   tab=id;
   const gruppe=NAV_GRUPPEN.find(g=>g.module.includes(id));
