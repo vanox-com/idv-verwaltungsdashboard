@@ -6,8 +6,12 @@
 *{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#0a1421,#1c3550);font:15px/1.5 system-ui,"Segoe UI",sans-serif;color:var(--txt);min-height:100dvh;padding:24px}
 main{max-width:720px;margin:5vh auto;background:var(--panel);border:1px solid var(--edge);padding:clamp(22px,5vw,44px);border-radius:17px;box-shadow:0 24px 65px #0005}
 img{width:185px;max-width:90%;height:auto}h1{font-size:clamp(24px,5vw,31px);margin:14px 0 4px}h2{font-size:17px;margin:20px 0 8px}p,small{color:var(--mut)}
-#status{display:inline-block;margin:15px 0;border:1px solid var(--edge);padding:8px 14px;border-radius:99px}
-#status.good{color:var(--good);border-color:#5ba987}
+#status{display:block;margin:6px 0 18px;border:1px solid #997c42;padding:18px 20px;border-radius:12px;font-size:clamp(23px,5vw,34px);font-weight:800;line-height:1.2;color:#f4d28f;background:#57452555}
+#status.good{color:var(--good);border-color:#5ba987;background:#245a4055}
+.status-label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);font-weight:700}
+.vote-total{margin:18px 0;border:1px solid var(--edge);background:#142438;border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:14px}
+.vote-total strong{font-size:30px;color:var(--txt);font-variant-numeric:tabular-nums}
+.vote-total span{color:var(--mut)}
 .progress{height:11px;border-radius:10px;background:#42536b;overflow:hidden}.progress i{height:100%;display:block;background:linear-gradient(90deg,#67a6e6,#78d6b3)}
 .row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 2px;border-bottom:1px solid #ffffff19}
 .code{font-weight:700;color:#aacbed;min-width:58px}.label{flex:1}.state{white-space:nowrap;font-size:13px}footer{color:var(--mut);font-size:12px;margin-top:28px;border-top:1px solid var(--edge);padding-top:15px}
@@ -35,13 +39,19 @@ async function refresh(){
   if(!r.ok)throw Error(d.error||'Der Link ist ungültig oder wurde deaktiviert.');
   box.replaceChildren();
   box.append(make('h2','',d.laufbahn+'-Monitor'));
+  box.append(make('div','status-label','Aktueller Prüfungsstatus'));
   const badge=make('div',d.bereit?'good':'',d.status);badge.id='status';box.append(badge);
   const summary=make('p','',d.moduleFertig+' von '+d.moduleGesamt+' Modulen abgeschlossen');
   box.append(summary);
   const bar=make('div','progress');const inner=make('i');inner.style.width=(d.moduleGesamt?d.moduleFertig/d.moduleGesamt*100:0)+'%';bar.append(inner);box.append(bar);
+  if(d.laufbahn==='PMA'){
+    const votes=make('div','vote-total');
+    votes.append(make('strong','',Number.isFinite(d.stimmenAnzahl)?d.stimmenAnzahl:'—'),make('span','','Abgegebene Stimmen insgesamt'));
+    box.append(votes);
+  }
   box.append(make('h2','','Ausbildungsmodule'));
   (d.module||[]).forEach(m=>{const row=make('div','row');row.append(make('span','code',m.code),make('span','label',m.titel),make('span','state',m.abgeschlossen?'✓ Abgeschlossen':'Offen'));box.append(row)});
-  box.append(make('small','','Keine Personalakten, Namen, Ausbilderstimmen oder internen Kommentare werden hier angezeigt.'));
+  box.append(make('small','','Nur die Gesamtzahl der Stimmen wird angezeigt. Keine Personalakten, Namen, Einzelstimmen, Punktzahlen oder internen Kommentare.'));
  }catch(e){box.replaceChildren(make('p','','Abruf nicht möglich: '+e.message))}
 }
 document.querySelector('#reload').addEventListener('click',refresh);refresh();

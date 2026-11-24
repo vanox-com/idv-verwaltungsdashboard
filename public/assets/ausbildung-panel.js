@@ -20,6 +20,14 @@ const el=(q)=>shadow.querySelector(q);
 const esc=(s)=>String(s==null?'':s).replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const json=(s)=>{if(Array.isArray(s))return s;try{return JSON.parse(s||'[]')}catch{return []}};
 const fmt=(v)=>v?String(v).slice(0,10).split('-').reverse().join('.'):'—';
+// MySQL stores UTC; explicitly parse it as UTC and present German local time.
+const fmtTimestamp=v=>{
+ if(!v)return '—';
+ const raw=String(v).trim();
+ const iso=raw.replace(' ','T').replace(/\.(\d{3})\d+/,' .$1'.trim());
+ const date=new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(iso)?iso:iso+'Z');
+ return Number.isNaN(date.getTime())?'—':date.toLocaleString('de-DE',{timeZone:'Europe/Berlin',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' Uhr';
+};
 const modName=(m)=>m.code+' · '+m.titel;
 const pill=(s)=>'<span class="pill '+(s==='Zugelassen'?'good':s==='Nicht bereit'?'warn':'')+'">'+esc(s)+'</span>';
 const meter=(n,d)=>'<div class="meter" title="'+n+' von '+d+'"><i style="width:'+Math.min(100,Math.max(0,d?n/d*100:0))+'%"></i></div>';
@@ -188,7 +196,8 @@ function traineeDetails(d){
       ).join(' ')+'</div>':
       '<div class="muted" style="font-size:12px">Noch keine AuLK-Präsentation zugeordnet'+
       (data.leitung?' · <button type="button" class="compact" data-action="link-module" data-code="'+esc(m.code)+'">Google-Link hinterlegen</button>':'')+'</div>';
-   return '<div class="modrow"><b>'+esc(m.code)+'</b><div><b>'+esc(m.titel)+'</b><div class="muted">'+(m.abgeschlossen?'Abgeschlossen':'Offen')+'</div>'+presentation+'</div>'+
+   const completion=m.abgeschlossen?'<div class="muted" style="margin-top:5px"><b>Abgeschlossen durch: '+esc(m.ausbilderName||(m.bearbeitetVon?'Ausbilderkonto #'+m.bearbeitetVon:'Nicht dokumentiert'))+'</b><br>'+esc(fmtTimestamp(m.aktualisiert))+'</div>':'';
+   return '<div class="modrow"><b>'+esc(m.code)+'</b><div><b>'+esc(m.titel)+'</b><div class="muted">'+(m.abgeschlossen?'Abgeschlossen':'Offen')+'</div>'+completion+presentation+'</div>'+
     '<button type="button" class="compact" data-action="module" data-code="'+esc(m.code)+'" data-done="'+(m.abgeschlossen?'1':'0')+'" '+''+'>'+
     (m.abgeschlossen?'↶ Zurücksetzen':'✓ Abschließen')+'</button></div>';
  }).join('');
@@ -197,7 +206,7 @@ function traineeDetails(d){
  '<h3>Ausbildungsmodule</h3>'+modules+
  (a.laufbahn==='PMA'?voteSection(p,myVoteRecord,canEdit):'')+
  '<div class="flex" style="margin-top:20px">'+'<button data-action="edit-trainee">Ausbildungsnotiz bearbeiten</button><button data-action="create-link" class="primary">Externen Link erzeugen / erneuern</button><button data-action="remove-link" class="danger">Externen Link sperren</button>'+'</div>'+
- '<p class="muted">Externe Links zeigen nur Modulfortschritte und Prüfungsstatus, keine Namen oder internen Bewertungen.</p><div id="createdLink"></div>'+
+ '<p class="muted">Externe Links zeigen Modulfortschritte, PMA-Stimmenanzahl und Prüfungsstatus, keine Namen oder internen Bewertungen.</p><div id="createdLink"></div>'+
  '</section>';
 }
 function voteSection(p,record,canEdit){
@@ -216,8 +225,8 @@ function voteSection(p,record,canEdit){
  '<label class="full" id="noteWrap"><span id="voteNoteLabel">Bemerkung</span><textarea id="voteNote" rows="3" maxlength="2000" placeholder="Informationen zur Stimmabgabe">'+esc(record?.bemerkung||'')+'</textarea></label>'+
  '<div class="full flex"><button class="primary" type="button" data-action="vote" '+(!canEdit||!ready?'disabled':'')+'>Stimme mit Anlass speichern</button></div></div>'+
  '<h3>Abgegebene Stimmen · nur intern</h3>'+
- '<div class="tablewrap"><table><thead><tr><th>Ausbilder</th><th>Stimme</th><th>Gewicht</th><th>Anlass</th><th>Streifenfahrt</th><th>Bemerkung</th><th>Aktualisiert</th></tr></thead><tbody>'+
- (p.stimmen||[]).map(v=>'<tr><td>'+esc(v.anzeigename)+'</td><td>'+esc(v.stimme)+'</td><td>'+Number(v.gewicht).toLocaleString('de-DE')+' P.</td><td>'+esc(v.anlass||'Alteintrag')+'</td><td>'+fmt(v.streifenfahrt_datum)+'</td><td style="white-space:pre-wrap;min-width:170px;max-width:330px">'+esc(v.bemerkung||'—')+'</td><td>'+fmt(v.aktualisiert)+'</td></tr>').join('')+
+ '<div class="tablewrap"><table><thead><tr><th>Ausbilder</th><th>Stimme</th><th>Gewicht</th><th>Anlass</th><th>Streifenfahrt</th><th>Bemerkung</th><th>Stimmabgabe (Datum &amp; Uhrzeit)</th></tr></thead><tbody>'+
+ (p.stimmen||[]).map(v=>'<tr><td>'+esc(v.anzeigename)+'</td><td>'+esc(v.stimme)+'</td><td>'+Number(v.gewicht).toLocaleString('de-DE')+' P.</td><td>'+esc(v.anlass||'Alteintrag')+'</td><td>'+fmt(v.streifenfahrt_datum)+'</td><td style="white-space:pre-wrap;min-width:170px;max-width:330px">'+esc(v.bemerkung||'—')+'</td><td>'+esc(fmtTimestamp(v.aktualisiert))+'</td></tr>').join('')+
  '</tbody></table></div></section>';
 }
 function updateVoteForm(){

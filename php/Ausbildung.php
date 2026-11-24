@@ -102,13 +102,18 @@ function ausbildungStatus(string $laufbahn,array $required,array $completed,arra
 function ausbildungFortschritt(array $a,bool $details=false): array {
     $id=(int)$a['id'];
     $modules=ausbildungModule((string)$a['laufbahn']);
-    $doneRows=sql('SELECT modul_code,abgeschlossen,ausbilder_user_id,aktualisiert FROM ausbildung_abschluesse WHERE anwaerter_id=?',[$id]);
+    $doneRows=sql("SELECT c.modul_code,c.abgeschlossen,c.ausbilder_user_id,c.aktualisiert,
+        COALESCE(NULLIF(t.name,''),NULLIF(u.anzeigename,'')) AS ausbilder_name
+        FROM ausbildung_abschluesse c
+        LEFT JOIN users u ON u.id=c.ausbilder_user_id
+        LEFT JOIN ausbildung_ausbilder t ON t.user_id=c.ausbilder_user_id
+        WHERE c.anwaerter_id=?",[$id]);
     $done=array_values(array_map(fn($x)=>(string)$x['modul_code'],array_filter($doneRows,fn($x)=>(int)$x['abgeschlossen']===1)));
     $stimmfelder=ausbildungStimmenDetailsVerfuegbar()
         ? 's.anlass,s.streifenfahrt_datum,s.bemerkung'
         : 'NULL AS anlass,NULL AS streifenfahrt_datum,NULL AS bemerkung';
     $votes=sql('SELECT s.stimme,s.gewicht AS gespeichert_gewicht,s.ausbilder_user_id,
-        s.aktualisiert,u.anzeigename,u.rolle,t.funktion,'.$stimmfelder.'
+        s.aktualisiert,COALESCE(NULLIF(t.name,\'\'),u.anzeigename) AS anzeigename,u.rolle,t.funktion,'.$stimmfelder.'
         FROM ausbildung_stimmen s
         JOIN users u ON u.id=s.ausbilder_user_id
         LEFT JOIN ausbildung_ausbilder t ON t.user_id=s.ausbilder_user_id
@@ -125,6 +130,7 @@ function ausbildungFortschritt(array $a,bool $details=false): array {
             return ['code'=>$m['code'],'titel'=>$m['titel'],
                 'abgeschlossen'=>(int)($record['abgeschlossen']??0)===1,
                 'bearbeitetVon'=>$record['ausbilder_user_id']??null,
+                'ausbilderName'=>$record['ausbilder_name']??null,
                 'aktualisiert'=>$record['aktualisiert']??null];
         },$modules);
         $s['stimmen']=$votes;
@@ -233,9 +239,11 @@ function ausbildungExtern(): never {
     $s=ausbildungFortschritt($a,true);
     $modules=array_map(fn($m)=>['code'=>$m['code'],'titel'=>$m['titel'],'abgeschlossen'=>$m['abgeschlossen']],$s['module']);
     header('X-Robots-Tag: noindex, nofollow');
-    respond(200,['laufbahn'=>$a['laufbahn'],'status'=>$s['status'],'bereit'=>$s['bereit'],
+    $result=['laufbahn'=>$a['laufbahn'],'status'=>$s['status'],'bereit'=>$s['bereit'],
         'moduleGesamt'=>$s['moduleGesamt'],'moduleFertig'=>$s['moduleFertig'],
-        'module'=>$modules,'aktualisiert'=>gmdate('c')]);
+        'module'=>$modules,'aktualisiert'=>gmdate('c')];
+    if($a['laufbahn']==='PMA')$result['stimmenAnzahl']=$s['stimmenJa']+$s['stimmenNein'];
+    respond(200,$result);
 }
 /** Only explicitly approved AuLK materials may be seen without a login. */
 function ausbildungOeffentlicheMaterialien(): never {
@@ -390,7 +398,7 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             $a=ausbildungAnwaerter($id,true);ausbildungPruefeRevision($a,$b['revision']??null);
             if(!in_array($code,array_column(ausbildungModule((string)$a['laufbahn']),'code'),true))
                 fail(400,'Modul gehört nicht zu dieser Laufbahn');
-            sql('INSERT INTO ausbildung_abschluesse(anwaerter_id,modul_code,ausbilder_user_id,abgeschlossen) VALUES(?,?,?,?)
+            sql('INSERT INTO ausbildung_abschluesse(anwaerter_id,modul_code,ausbilder_user_id,abgeschlossen,aktualisiert) VALUES(?,?,?,?,UTC_TIMESTAMP(6))
                 ON DUPLICATE KEY UPDATE ausbilder_user_id=VALUES(ausbilder_user_id),abgeschlossen=VALUES(abgeschlossen),aktualisiert=UTC_TIMESTAMP(6)',
                 [$id,$code,(int)$u['id'],$b['abgeschlossen']?1:0]);
             sql('UPDATE ausbildung_anwaerter SET revision=revision+1,aktualisiert=UTC_TIMESTAMP(6) WHERE id=?',[$id]);
@@ -414,8 +422,8 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             $a=ausbildungAnwaerter($id,true);ausbildungPruefeRevision($a,$b['revision']??null);
             if($a['laufbahn']!=='PMA')fail(400,'Der Excel-Stimmenmonitor gilt nur für PMA');
             if($vote===null)sql('DELETE FROM ausbildung_stimmen WHERE anwaerter_id=? AND ausbilder_user_id=?',[$id,(int)$u['id']]);
-            else sql('INSERT INTO ausbildung_stimmen(anwaerter_id,ausbilder_user_id,stimme,gewicht,anlass,streifenfahrt_datum,bemerkung)
-                VALUES(?,?,?,?,?,?,?)
+            else sql('INSERT INTO ausbildung_stimmen(anwaerter_id,ausbilder_user_id,stimme,gewicht,anlass,streifenfahrt_datum,bemerkung,aktualisiert)
+                VALUES(?,?,?,?,?,?,?,UTC_TIMESTAMP(6))
                 ON DUPLICATE KEY UPDATE stimme=VALUES(stimme),gewicht=VALUES(gewicht),
                   anlass=VALUES(anlass),streifenfahrt_datum=VALUES(streifenfahrt_datum),
                   bemerkung=VALUES(bemerkung),aktualisiert=UTC_TIMESTAMP(6)',
