@@ -71,6 +71,26 @@ if(!classroom.includes('id="aktualisieren"') ||
    !roomScript.includes('fresh.searchParams.set("idv_reload"') ||
    !classroom.includes('id="sendestatus"'))
  throw Error('Google Slides reload and simplified teaching-status UI missing');
+if(!classroom.includes('body.presentation-locked{height:100dvh') ||
+   !classroom.includes('body.presentation-locked #tafel{') ||
+   !classroom.includes('body.presentation-locked aside{min-height:0;overflow-y:auto') ||
+   !classroom.includes('overscroll-behavior:contain'))
+ throw Error('The 16:9 Region-Capture board must remain pinned while instructor tools scroll independently');
+if(!roomScript.includes('document.body.classList.add("presentation-locked")') ||
+   !roomScript.includes('document.body.classList.remove("presentation-locked")') ||
+   !roomScript.includes('pinPresentation();') ||
+   !roomScript.includes('unpinPresentation();'))
+ throw Error('Pinned presentation mode must activate on sharing and reset when stream ends');
+if(roomScript.indexOf('pinPresentation();')>roomScript.indexOf('display=await navigator.mediaDevices.getDisplayMedia(') ||
+   roomScript.indexOf('await cropOwnBoard(display)')>roomScript.indexOf('peer.addTrack(video,display)'))
+ throw Error('The capture must be pinned and cropped before its first WebRTC transmission');
+if(!roomScript.includes('video.contentHint="detail"') ||
+   !roomScript.includes('maxBitrate=4500000') ||
+   !roomScript.includes('scaleResolutionDownBy=1') ||
+   !roomScript.includes('degradationPreference="maintain-resolution"') ||
+   !roomScript.includes('frameRate:{ideal:24,max:24}'))
+ throw Error('Slide stream needs text-focused quality, consistent aspect ratio and bounded 24fps');
+
 if(!embedded.includes('<th>Erstellt von</th>') || !embedded.includes("esc(r.erstellt_von||'Unbekannter Ausbilder')"))
  throw Error('Classroom dashboard must display the recorded creator of each room');
 const signaling=readFileSync('php/AusbildungUnterricht.php','utf8');
