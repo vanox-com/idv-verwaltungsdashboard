@@ -31,6 +31,23 @@ foreach(['PKA','KKA'] as $track){
 }
 checkAus(IDV\ausbildungStufe('Ausbildungsleitung')===2.0,'lead weight');
 checkAus(IDV\ausbildungStufe('Leitungsdienst')===1.5,'Leitungsdienst weight');
-checkAus(IDV\ausbildungStufe('Ausbilder gehobener Dienst')===1.0,'GD weight');
-checkAus(IDV\ausbildungStufe('Ausbilder mittlerer Dienst')===0.5,'MD weight');
+checkAus(IDV\ausbildungStufe('stv. Ausbildungsleitung')===2.0,'deputy lead weight');
+checkAus(IDV\ausbildungStufe('Ausbilder gehobener Dienst')===1.0,'regular GD weight');
+checkAus(IDV\ausbildungStufe('Ausbilder mittlerer Dienst')===1.0,'regular MD weight');
+checkAus(IDV\ausbildungStufe('Ausbilder auf Probe')===0.5,'probation weight');
+checkAus(IDV\ausbildungStufe('Ausbilder')===1.0,'normal trainer weight');
+checkAus(IDV\ausbildungStimmgewicht(['funktion'=>'Ausbilder mittlerer Dienst','gewicht'=>0.5])===1.0,
+  'old vote stored as 0.5 must count as 1 for normal trainer without changing record');
+checkAus(IDV\ausbildungStimmgewicht(['funktion'=>'Ausbilder auf Probe','gewicht'=>1.0])===0.5,
+  'role function always determines current weight');
+checkAus(IDV\ausbildungStimmgewicht(['rolle'=>'Leitungsdienst','gewicht'=>2.0])===1.5,
+  'Leitungsdienst account without own trainer profile');
+$weighted=IDV\ausbildungStatus('PMA',$modules,$modules,[
+  ['stimme'=>'Ja','gewicht'=>2.0],
+  ['stimme'=>'Ja','gewicht'=>1.0],
+  ['stimme'=>'Nein','gewicht'=>0.5]
+]);
+checkAus($weighted['stimmenSaldo']===2.5 && $weighted['jaPunkte']===3.0 &&
+ $weighted['neinPunkte']===0.5 && $weighted['stimmenJa']===2 && $weighted['stimmenNein']===1,
+ 'PMA weight sum and counts displayed separately');
 echo "Ausbildung: isolated roles, PMA votes, PKA/KKA module rules OK\n";
