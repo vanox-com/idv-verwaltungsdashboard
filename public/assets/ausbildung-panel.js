@@ -42,6 +42,7 @@ async function load(){
    el('#account').textContent=data.user.name+' · '+data.user.rolle;
    if(!['Ausbilder','Ausbildungsleitung'].includes(data.user.rolle))el('#back').classList.remove('hidden');
    el('#notice').style.display='none';
+   if(window.IDVTrainerPreset){tab='ausbilder';editing={type:'trainer',id:null,personal:window.IDVTrainerPreset};selected=null;window.IDVTrainerPreset=null;}
    render();
  }catch(e){
    data=null;
@@ -155,15 +156,16 @@ function trainers(){
  return out;
 }
 function trainerForm(t){
+ const preset=(!t&&editing?.personal)||{};
  const codes=data.module.map(m=>m.code),current=json(t?.kompetenzen);
  const funcs=['Ausbildungsleitung','stv. Ausbildungsleitung','Leitungsdienst','Ausbilder gehobener Dienst','Ausbilder mittlerer Dienst','Ausbilder auf Probe'];
- return '<div class="card"><h2>'+(t?'Ausbilder bearbeiten':'Neuen Ausbilderzugang anlegen')+'</h2><p class="muted">Für jeden Ausbilder wird ein neuer, eigenständiger Login erstellt: AUS-&lt;Dienstnummer&gt;. Beispielsweise bekommt die Ausbildungs-DN 13 den Login AUS-13. Vorhandene Polizeikonten, Dienstnummern, Passwörter und Berechtigungen bleiben unverändert.</p><form id="trainerForm" class="formgrid">'+
- '<label>Dienstnummer<input name="dienstnummer" required maxlength="32" value="'+esc(t?.dienstnummer||'')+'" '+(t?'readonly':'')+'></label>'+
- '<label>Name<input name="name" required maxlength="180" value="'+esc(t?.name||'')+'"></label>'+
- '<label>Kürzel<input name="kuerzel" maxlength="16" required value="'+esc(t?.kuerzel||'')+'"></label>'+
- '<label>Rang<input name="rang" maxlength="120" value="'+esc(t?.rang||'')+'"></label>'+
+ return '<div class="card"><h2>'+(t?'Ausbilder bearbeiten':'Neuen Ausbilderzugang anlegen')+'</h2><p class="muted">Die Personalakte bleibt unverändert. Für jeden Ausbilder wird ein neuer, eigenständiger Login erstellt: AUS-&lt;Dienstnummer&gt;. Beispielsweise bekommt die Ausbildungs-DN 13 den Login AUS-13. Vorhandene Polizeikonten, Dienstnummern, Passwörter und Berechtigungen bleiben unverändert.</p><form id="trainerForm" class="formgrid">'+
+ '<label>Dienstnummer<input name="dienstnummer" required maxlength="32" value="'+esc(t?.dienstnummer||preset.dienstnummer||'')+'" '+(t?'readonly':'')+'></label>'+
+ '<label>Name<input name="name" required maxlength="180" value="'+esc(t?.name||preset.name||'')+'"></label>'+
+ '<label>Kürzel<input name="kuerzel" maxlength="16" required value="'+esc(t?.kuerzel||preset.kuerzel||'')+'"></label>'+
+ '<label>Rang<input name="rang" maxlength="120" value="'+esc(t?.rang||preset.rang||'')+'"></label>'+
  '<label>Funktion<select name="funktion">'+funcs.map(x=>'<option '+(x===(t?.funktion||'Ausbilder auf Probe')?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select></label>'+
- '<label>Eintritt<input name="eintritt" type="date" value="'+esc((t?.eintritt||'').slice(0,10))+'"></label>'+
+ '<label>Eintritt<input name="eintritt" type="date" value="'+esc((t?.eintritt||preset.eintritt||'').slice(0,10))+'"></label>'+
  '<label>E-Mail<input type="email" name="email" maxlength="254" value="'+esc(t?.email||'')+'"></label>'+
  (!t?'<label>Startpasswort (nur bei neuem Konto Pflicht)<input type="password" name="startpasswort" autocomplete="new-password" minlength="8"></label>':'')+
  '<label class="full">Interne Anmerkung<textarea name="notiz" rows="2">'+esc(t?.notiz||'')+'</textarea></label>'+
