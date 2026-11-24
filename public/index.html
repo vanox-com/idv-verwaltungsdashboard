@@ -5296,7 +5296,7 @@ document.addEventListener('click',e=>{
   if(btn)textbausteinKopieren(btn);
 });
 
-const RECHTE_MODULE=[...MODS.filter(m=>!['users','system','statistik','meldungen'].includes(m[0])),['kuearchiv','Kündigungsarchiv',''],['mitteilungen','Mitteilungen verwalten',''],['por','POR-Freigabe',''],['dnfreigabe','DN-Anträge entscheiden',''],['rlbearb','Disziplinarrichtlinien bearbeiten',''],['ranghistorie','Rangänderungs-Historie',''],['routarchiv','Routinearchiv','']];
+const RECHTE_MODULE=[...MODS.filter(m=>!m[0].startsWith('ausbildung-')&&!['users','system','statistik','meldungen'].includes(m[0])).map(m=>m[0]==='ausbildung'?['ausbildung','Ausbildung',m[2]]:m),['kuearchiv','Kündigungsarchiv',''],['mitteilungen','Mitteilungen verwalten',''],['por','POR-Freigabe',''],['dnfreigabe','DN-Anträge entscheiden',''],['rlbearb','Disziplinarrichtlinien bearbeiten',''],['ranghistorie','Rangänderungs-Historie',''],['routarchiv','Routinearchiv','']];
 /* Bedeutung der Stufen, wo sie vom üblichen Lesen/Bearbeiten abweicht (Matrix + Einzelrechte). */
 const RECHTE_HINWEISE={abm:'Lesen = Abmeldungen ansehen · Bearbeiten = annehmen/ablehnen',dnfreigabe:'Lesen = alle DN-Anträge ansehen · Bearbeiten = DN-Anträge annehmen/ablehnen',rlbearb:'Bearbeiten = Richtlinieneinträge und Maßnahmenkatalog ändern · Lesen über separates Richtlinienrecht',botcfg:'Lesen = Konfiguration ansehen · Bearbeiten = ändern (Bot startet danach neu)'};
 let USER_ADMIN=null;

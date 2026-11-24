@@ -11,7 +11,7 @@ for(const file of pages){
 const embedded=readFileSync('public/assets/ausbildung-panel.js','utf8');
 new Script(embedded,{filename:'ausbildung-panel.js'});
 const index=readFileSync('public/index.html','utf8');
-if(!index.includes("window.IDVAusbildung.laden($('#inhalt'))"))
+if(!index.includes("window.IDVAusbildung.laden($('#inhalt'),AUSB_NAV[tab]"))
  throw Error('Native Ausbildung module missing from existing dashboard');
 if(!index.includes('/assets/ausbildung-panel.js'))
  throw Error('Embedded module script not loaded by police panel');
@@ -54,7 +54,7 @@ if(!embedded.includes("data-action=\"start-lesson\"") ||
 // Datenschutz: NEVER send an unrestricted desktop or another browser tab.
 // Region Capture is mandatory and the crop must finish BEFORE pc.addTrack().
 if(!roomScript.includes('CropTarget.fromElement($("tafel"))') ||
-   !roomScript.includes('await video.cropTo(target)') ||
+   !roomScript.includes('await video.cropTo(await CropTarget.fromElement($("tafel")))') ||
    !roomScript.includes('await cropOwnBoard(display)') ||
    !roomScript.includes('peer.addTrack(video,display)') ||
    !roomScript.includes('getDisplayMedia(') ||
@@ -71,11 +71,11 @@ if(!classroom.includes('id="aktualisieren"') ||
    !roomScript.includes('fresh.searchParams.set("idv_reload"') ||
    !classroom.includes('id="sendestatus"'))
  throw Error('Google Slides reload and simplified teaching-status UI missing');
-if(!classroom.includes('body.presentation-locked{height:100dvh') ||
+if(classroom.includes('body.presentation-locked{height:100dvh') ||
    !classroom.includes('body.presentation-locked #tafel{') ||
-   !classroom.includes('body.presentation-locked aside{min-height:0;overflow-y:auto') ||
-   !classroom.includes('overscroll-behavior:contain'))
- throw Error('The 16:9 Region-Capture board must remain pinned while instructor tools scroll independently');
+   !classroom.includes('body.presentation-locked .workspace-main{position:sticky') ||
+   !classroom.includes('class="board-tools"'))
+ throw Error('The 16:9 board must stay pinned, with accessible moderation tools and no document scroll lock');
 if(!roomScript.includes('document.body.classList.add("presentation-locked")') ||
    !roomScript.includes('document.body.classList.remove("presentation-locked")') ||
    !roomScript.includes('pinPresentation();') ||
@@ -85,11 +85,11 @@ if(roomScript.indexOf('pinPresentation();')>roomScript.indexOf('display=await na
    roomScript.indexOf('await cropOwnBoard(display)')>roomScript.indexOf('peer.addTrack(video,display)'))
  throw Error('The capture must be pinned and cropped before its first WebRTC transmission');
 if(!roomScript.includes('video.contentHint="detail"') ||
-   !roomScript.includes('maxBitrate=4500000') ||
+   !roomScript.includes('maxBitrate=12000000') ||
    !roomScript.includes('scaleResolutionDownBy=1') ||
    !roomScript.includes('degradationPreference="maintain-resolution"') ||
-   !roomScript.includes('frameRate:{ideal:24,max:24}'))
- throw Error('Slide stream needs text-focused quality, consistent aspect ratio and bounded 24fps');
+   !roomScript.includes('frameRate:{ideal:15,max:15}'))
+ throw Error('Slide stream needs text-focused quality, consistent aspect ratio and bounded 15fps');
 
 if(!embedded.includes('<th>Erstellt von</th>') || !embedded.includes("esc(r.erstellt_von||'Unbekannter Ausbilder')"))
  throw Error('Classroom dashboard must display the recorded creator of each room');
@@ -102,3 +102,9 @@ if(!migration.includes('CREATE TABLE IF NOT EXISTS ausbildung_unterricht'))
   throw Error('Additive lesson migration missing');
 
 console.log('Ausbildung native integration, no extra admin page and public AuLK catalog: OK');
+
+for(const key of ['ausbildung-pma','ausbildung-pka','ausbildung-kka','ausbildung-ausbilder','ausbildung-materialien','ausbildung-unterricht']){
+ if(!navigation.includes("'"+key+"'"))throw Error('Missing sidebar item '+key);
+}
+if(!embedded.includes('allowedRoute')||!embedded.includes("['ausbilder','materialien'].includes(next)")||!index.includes("m==='dash'||m==='design'"))
+ throw Error('Training administration visibility and personal design access must be role-aware');
