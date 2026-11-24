@@ -414,9 +414,12 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             fail(503,'Für neue Stimmabgaben müssen zuerst die zusätzlichen Felder für Anlass, Datum und Bemerkung nach einer Datenbanksicherung eingerichtet werden.');
         $details=$vote===null?null:ausbildungStimmDetailsPruefen($b,$vote);
         $trainer=ausbildungTrainer($u);
-        if(!$trainer&&!ausbildungLeitung($u))fail(403,'Nur aktive Ausbilder stimmen ab');
+        // Explicit training access also supports existing police accounts without
+        // a duplicate AUS profile. Keep the established Leitungsdienst weight.
+        ausbildungRecht($u);
         $weight=$trainer?ausbildungStufe((string)$trainer['funktion']):
-            ausbildungStufe((string)($u['rolle']==='Leitungsdienst'?'Leitungsdienst':'Ausbildungsleitung'));
+            ausbildungStufe($u['rolle']==='Leitungsdienst'?'Leitungsdienst':
+                (ausbildungLeitung($u)?'Ausbildungsleitung':'Ausbilder'));
         db()->beginTransaction();
         try {
             $a=ausbildungAnwaerter($id,true);ausbildungPruefeRevision($a,$b['revision']??null);

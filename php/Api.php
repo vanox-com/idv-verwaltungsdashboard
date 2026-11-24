@@ -127,6 +127,15 @@ function ausbildungLeitungsprofil(array $u): bool {
         return in_array($row[0]['funktion']??'',['Ausbildungsleitung','stv. Ausbildungsleitung'],true);
     }catch(Throwable $e){return false;}
 }
+/** Role defaults are deliberately limited; an administrator's explicit user override
+ * can grant training leadership to an existing police account. */
+function ausbildungRechtsstufe(string $rolle,int $rollenstufe,?int $einzelrecht,bool $leitungsprofil=false): int {
+    if(in_array($rolle,['Administrator','Leitungsdienst'],true))return 2;
+    if($rolle==='Ausbildungsleitung')return 2;
+    if($rolle==='Ausbilder')return $leitungsprofil?2:1;
+    if($einzelrecht!==null)return max(0,min(2,$einzelrecht));
+    return $leitungsprofil?2:max(0,min(1,$rollenstufe));
+}
 function rights(array $u): array {
     if(in_array($u['rolle'],['Ausbilder','Ausbildungsleitung'],true))
         return ['ausbildung'=>ausbildungLeitungsprofil($u)?2:1,'dash'=>1,'design'=>1];
@@ -134,14 +143,16 @@ function rights(array $u): array {
     $rights=[];
     foreach(sql("SELECT modul,stufe FROM role_perms WHERE rolle=?",[$u['rolle']]) as $row)
         $rights[$row['modul']] = (int)$row['stufe'];
+    $ausbildungRolle=(int)($rights['ausbildung']??0);
+    $ausbildungEinzel=null;
     if ($u['rolle']!=='Administrator') {
-        foreach(sql("SELECT modul,stufe FROM user_perms WHERE user_id=?",[$u['id']]) as $row)
+        foreach(sql("SELECT modul,stufe FROM user_perms WHERE user_id=?",[$u['id']]) as $row){
             $rights[$row['modul']] = (int)$row['stufe'];
+            if($row['modul']==='ausbildung')$ausbildungEinzel=(int)$row['stufe'];
+        }
     }
-    // Administratoren müssen die Ausbildung unabhängig vom importierten
-    // Rollen-Seed sehen; der Fachbereich meldet ggf. noch fehlendes SQL.
-    if($u['rolle']==='Administrator')$rights['ausbildung']=2;
-    elseif(($rights['ausbildung']??0)>=2&&!ausbildungLeitungsprofil($u))$rights['ausbildung']=1;
+    $rights['ausbildung']=ausbildungRechtsstufe((string)$u['rolle'],$ausbildungRolle,$ausbildungEinzel,
+        !in_array($u['rolle'],['Administrator','Leitungsdienst'],true)&&$ausbildungEinzel===null&&ausbildungLeitungsprofil($u));
     return $rights;
 }
 /* Neues, eigenständiges Entscheidungsrecht. Fügt fehlende Rollenstandards hinzu,

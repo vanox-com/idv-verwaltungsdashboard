@@ -143,6 +143,10 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
         needAdmin($u);$role=rawurldecode($m[1]);$mod=rawurldecode($m[2]);$b=body();$level=$b['stufe']??null;
         if($role==='Administrator')fail(403,'Administratorrechte sind fest');
         if(!in_array($mod,$allowed,true)||!in_array($level,[0,1,2],true))fail(400,'Ungültiges Modul oder Berechtigungsstufe');
+        if($mod==='ausbildung'){
+            if(in_array($role,['Leitungsdienst','Ausbildungsleitung','Ausbilder'],true))fail(403,'Ausbildungsrollenrechte sind fest bzw. werden über die Ausbilderfunktion bestimmt');
+            if($level===2)fail(400,'Ausbildungsleitungsrechte bitte gezielt über Einzelrechte vergeben');
+        }
         if(!sql('SELECT 1 FROM roles WHERE name=?',[$role]))fail(404,'Rolle nicht vorhanden');
         sql('INSERT INTO role_perms(rolle,modul,stufe) VALUES(?,?,?) ON DUPLICATE KEY UPDATE stufe=VALUES(stufe)',[$role,$mod,$level]);
         auditAction($u,'Rollenrecht geändert: '.$role.'/'.$mod.' → '.$level);
@@ -154,6 +158,8 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
         $target=sql('SELECT rolle,dienstnummer FROM users WHERE id=?',[$id]);
         if(!$target||ausbildungsZugangArchiviert((string)$target[0]['dienstnummer']))fail(404,'Aktiver Zugang nicht gefunden');
         if($target[0]['rolle']==='Administrator')fail(403,'Administratorrechte sind fest');
+        if($mod==='ausbildung'&&in_array($target[0]['rolle'],['Leitungsdienst','Ausbildungsleitung','Ausbilder'],true))
+            fail(403,'Ausbildungsrechte dieses Kontos sind fest bzw. werden über die Ausbilderfunktion bestimmt');
         if($b['stufe']===null)sql('DELETE FROM user_perms WHERE user_id=? AND modul=?',[$id,$mod]);
         else sql('INSERT INTO user_perms(user_id,modul,stufe) VALUES(?,?,?) ON DUPLICATE KEY UPDATE stufe=VALUES(stufe)',[$id,$mod,$b['stufe']]);
         auditAction($u,'Individuelles Recht '.$target[0]['dienstnummer'].'/'.$mod.' → '.($b['stufe']===null?'Rolle':$b['stufe']));
