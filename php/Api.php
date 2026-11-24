@@ -133,6 +133,9 @@ function rights(array $u): array {
         foreach(sql("SELECT modul,stufe FROM user_perms WHERE user_id=?",[$u['id']]) as $row)
             $rights[$row['modul']] = (int)$row['stufe'];
     }
+    // Administratoren müssen die Ausbildung unabhängig vom importierten
+    // Rollen-Seed sehen; der Fachbereich meldet ggf. noch fehlendes SQL.
+    if($u['rolle']==='Administrator')$rights['ausbildung']=2;
     return $rights;
 }
 /* Neues, eigenständiges Entscheidungsrecht. Fügt fehlende Rollenstandards hinzu,
@@ -246,6 +249,15 @@ function run(): void {
             require_once __DIR__.'/Ausbildung.php';
             ausbildungExtern();
         }
+        if($method==='GET'&&$uri==='/api/ausbildung-oeffentlich'){
+            require_once __DIR__.'/Ausbildung.php';
+            ausbildungOeffentlicheMaterialien();
+        }
+        if($method==='GET'&&preg_match('#^/api/ausbildung-oeffentlich/datei/([1-9]\\d*)$#D',$uri,$publicFile)){
+            require_once __DIR__.'/Ausbildung.php';
+            require_once __DIR__.'/AusbildungFiles.php';
+            ausbildungOeffentlicheDatei((int)$publicFile[1]);
+        }
         if($method==='POST'&&$uri==='/api/login')handleLogin();
         if($method==='POST'&&$uri==='/api/logout')handleLogout();
         if($method==='GET'&&$uri==='/api/me'){
@@ -256,8 +268,16 @@ function run(): void {
         // Unknown routes must fail closed, and no PHP code may delegate to PostgreSQL.
         $u=requireLogin();
         // Nur Ausbildungs-APIs sind für die isolierten Ausbildungsrollen zulässig.
-        if(in_array($u['rolle'],['Ausbildungsleitung','Ausbilder'],true)&&!str_starts_with($uri,'/api/ausbildung/'))
-            fail(403,'Dieser Zugang ist nur für die Ausbildungsabteilung freigegeben');
+        if(in_array($u['rolle'],['Ausbildungsleitung','Ausbilder'],true)){
+            if($method==='GET'&&$uri==='/api/bootstrap'){
+                // Minimales Dashboard-Grundgerüst – keinerlei Personal-,
+                // Polizeirat-, Disziplinar- oder sonstige Verwaltungsdaten.
+                respond(200,['user'=>sessionApiUser($u),'daten'=>['dashboard'=>['summary'=>new \\stdClass(),
+                    'layout'=>['items'=>[],'version'=>0]]]]);
+            }
+            if(!str_starts_with($uri,'/api/ausbildung/'))
+                fail(403,'Dieser Zugang ist nur für die Ausbildungsabteilung freigegeben');
+        }
         // Make authenticated actor available to MySQL audit triggers on every route.
         sql('SET @idv_actor = ?',[(int)$u['id']]);
         // Ausbildung benötigt cleanId() und auditAction() aus Settings.php.
