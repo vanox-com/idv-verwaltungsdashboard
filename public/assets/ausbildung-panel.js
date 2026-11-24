@@ -23,8 +23,8 @@ const fmt=(v)=>v?String(v).slice(0,10).split('-').reverse().join('.'):'—';
 const modName=(m)=>m.code+' · '+m.titel;
 const pill=(s)=>'<span class="pill '+(s==='Zugelassen'?'good':s==='Nicht bereit'?'warn':'')+'">'+esc(s)+'</span>';
 const meter=(n,d)=>'<div class="meter" title="'+n+' von '+d+'"><i style="width:'+Math.min(100,Math.max(0,d?n/d*100:0))+'%"></i></div>';
-let data=null,tab='uebersicht',track='PMA',selected=null,editing=null,busy=false;
-const ROUTES=[['uebersicht','Übersicht'],['monitore','PMA- / PKA- / KKA-Monitor'],['ausbilder','Ausbilderverwaltung'],['materialien','Ausbildungsunterlagen']];
+let data=null,tab='uebersicht',track='PMA',selected=null,editing=null,busy=false,lessonInvite=null;
+const ROUTES=[['uebersicht','Übersicht'],['monitore','PMA- / PKA- / KKA-Monitor'],['ausbilder','Ausbilderverwaltung'],['materialien','Ausbildungsunterlagen'],['unterricht','Unterrichtsräume']];
 async function request(path,opt={}){
  const headers={'Accept':'application/json'};
  if(opt.body!==undefined)headers['Content-Type']='application/json';
@@ -39,6 +39,9 @@ function setTab(next){tab=next;selected=null;editing=null;render();}
 async function load(){
  try{
    data=await request('bootstrap');
+   if(data.unterrichtBereit){
+     try{data.raeume=(await request('unterricht')).raeume||[]}catch(_){data.raeume=[]}
+   }else data.raeume=[];
    el('#account').textContent=data.user.name+' · '+data.user.rolle;
    if(!['Ausbilder','Ausbildungsleitung'].includes(data.user.rolle))el('#back').classList.remove('hidden');
    el('#notice').style.display='none';
@@ -91,10 +94,12 @@ function render(){
  if(tab==='monitore')r.innerHTML=monitors();
  if(tab==='ausbilder')r.innerHTML=trainers();
  if(tab==='materialien')r.innerHTML=materials();
+ if(tab==='unterricht')r.innerHTML=classroom();
 }
 function overview(){
  const a=data.anwaerter;const n=a.filter(x=>x.fortschritt.bereit).length;
- return '<div class="kpis"><div class="kpi"><strong>'+a.length+'</strong><span>Anwärter insgesamt</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='PMA').length+'</strong><span>PMA</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn!=='PMA').length+'</strong><span>PKA / KKA</span></div><div class="kpi"><strong>'+n+'</strong><span>Zur Prüfung zugelassen</span></div></div>'+
+ return '<p class="callout">Die normale Personaltabelle ist der Hauptdatenstamm. Anwärter werden anhand ihres aktuellen Dienstgrades automatisch PMA, PKA oder KKA zugeordnet. Die Ausbildungsübersicht speichert nur ergänzende Modul- und Prüfungsdaten.</p>'+
+ '<div class="kpis"><div class="kpi"><strong>'+a.length+'</strong><span>Anwärter insgesamt</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='PMA').length+'</strong><span>PMA</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn!=='PMA').length+'</strong><span>PKA / KKA</span></div><div class="kpi"><strong>'+n+'</strong><span>Zur Prüfung zugelassen</span></div></div>'+
  '<div class="grid"><section class="card"><h2>Prüfungsstand</h2>'+a.slice(0,12).map(x=>'<div class="flex space" style="border-bottom:1px solid #ffffff18;padding:9px 0"><span><b>'+esc(x.name)+'</b><br><small>'+esc(x.laufbahn)+' · '+x.fortschritt.moduleFertig+'/'+x.fortschritt.moduleGesamt+' Module</small></span>'+pill(x.fortschritt.status)+'</div>').join('')+
  (a.length?'':'<p class="muted">Noch keine Anwärter angelegt.</p>')+
  '</section><section class="card"><h2>Ausbildungsstruktur</h2><p>Die sieben PMA-Module stammen aus der Excel-Vorlage. Die PMA-Prüfungsbereitschaft setzt vollständige Module und mindestens <b>2,5 gewichtete Stimmenpunkte</b> voraus.</p><p>PKA und KKA verwenden derzeit PK.1–PK.4. Hier gilt laut Vorlage: alle vier Module abgeschlossen = zugelassen.</p><p class="muted">PK.5, PK.7 und PM.7 sind in der Kompetenzmatrix beziehungsweise Übersicht genannt, aber mangels eindeutiger Bewertungsregel noch keine Pflichtmodule.</p><button data-tab="monitore" class="primary">Zu den Monitoren</button></section></div>';
@@ -102,25 +107,19 @@ function overview(){
 function monitors(){
  let list=data.anwaerter.filter(a=>a.laufbahn===track);
  let html='<div class="card"><div class="flex space"><div class="flex">'+['PMA','PKA','KKA'].map(t=>'<button data-track="'+t+'" class="'+(track===t?'primary':'')+'">'+t+' ('+data.anwaerter.filter(x=>x.laufbahn===t).length+')</button>').join('')+'</div>'+
- (data.leitung?'<button data-action="new-trainee" class="primary">+ Anwärter anlegen</button>':'')+'</div><div class="tablewrap"><table><thead><tr><th>Dienstnr.</th><th>Anwärter</th><th>Beginn</th><th>Module</th><th>Prüfungsstand</th><th></th></tr></thead><tbody>'+
+ '<span class="pill good">Live aus dem zentralen Personalstamm</span></div><div class="tablewrap"><table><thead><tr><th>Dienstnr.</th><th>Anwärter</th><th>Beginn</th><th>Module</th><th>Prüfungsstand</th><th></th></tr></thead><tbody>'+
  list.map(x=>'<tr><td>'+esc(x.personalnummer??'—')+'</td><td><b>'+esc(x.name)+'</b><br><small>'+esc(x.nebenberuf||'')+'</small></td><td>'+fmt(x.beginn)+'</td><td>'+x.fortschritt.moduleFertig+'/'+x.fortschritt.moduleGesamt+meter(x.fortschritt.moduleFertig,x.fortschritt.moduleGesamt)+'</td><td>'+pill(x.fortschritt.status)+'</td><td><button class="compact" data-action="open" data-id="'+x.id+'">Öffnen</button></td></tr>').join('')+
  '</tbody></table></div>'+(list.length?'':'<p class="muted">Für diese Laufbahn sind noch keine Datensätze angelegt.</p>')+'</div>';
- if(editing?.type==='trainee-new')html+=traineeForm();
+ // Anwärter werden nur im Personalstamm angelegt.
  if(selected?.anwaerter && selected.anwaerter.laufbahn===track)html+=traineeDetails(selected);
  if(editing?.type==='trainee-edit')html+=traineeForm(selected?.anwaerter);
  return html;
 }
 function traineeForm(a){
- const existing=!!a;
- return '<section class="card"><h2>'+(existing?'Anwärter bearbeiten':'Anwärter anlegen')+'</h2><form id="traineeForm" class="formgrid">'+
- '<label>Name<input name="name" required maxlength="180" value="'+esc(a?.name||'')+'"></label>'+
- (!existing?'<label>Laufbahn<select name="laufbahn">'+['PMA','PKA','KKA'].map(x=>'<option '+(x===track?'selected':'')+'>'+x+'</option>').join('')+'</select></label>':'')+
- (!existing?'<label>Dienstnummer<input type="number" name="personalnummer" min="1" max="9999999" value=""></label>':'')+
- '<label>Nebenberuf / Kennung<input name="nebenberuf" maxlength="60" value="'+esc(a?.nebenberuf||'')+'"></label>'+
- '<label>Beginn<input name="beginn" type="date" value="'+esc((a?.beginn||'').slice(0,10))+'"></label>'+
- (existing?'<label>RSA<span class="flex"><input type="checkbox" name="rsa" '+(Number(a.rsa)?'checked':'')+'> vorhanden</span></label>':'')+
- '<label class="full">Interne Bemerkung<textarea name="bemerkung" maxlength="2000" rows="2">'+esc(a?.bemerkung||'')+'</textarea></label>'+
- '<div class="full flex"><button class="primary" type="submit">Speichern</button><button data-action="cancel-edit" type="button">Abbrechen</button></div></form></section>';
+ return '<section class="card"><h2>Ausbildungsnotiz bearbeiten</h2><p class="muted">Name, Dienstgrad, Laufbahn, Dienstnummer, Eintrittsdatum und RSA werden aus der normalen Personalakte übernommen. Änderungen sind ausschließlich dort möglich.</p>'+
+ '<p><b>'+esc(a?.name||'')+'</b> · '+esc(a?.laufbahn||'')+' · Dienstnummer '+esc(a?.personalnummer||'—')+'</p>'+
+ '<form id="traineeForm" class="formgrid"><label class="full">Interne Ausbildungsbemerkung<textarea name="bemerkung" maxlength="2000" rows="3">'+esc(a?.bemerkung||'')+'</textarea></label>'+
+ '<div class="full flex"><button type="submit" class="primary">Ausbildungsnotiz speichern</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></section>';
 }
 function traineeDetails(d){
  const a=d.anwaerter,p=d.fortschritt;
@@ -215,7 +214,6 @@ shadow.addEventListener('click',async(e)=>{
  }
  if(!data)return;
  if(mode==='cancel-edit'){editing=null;render();return}
- if(mode==='new-trainee'){editing={type:'trainee-new'};selected=null;render();return}
  if(mode==='new-trainer'){editing={type:'trainer',id:null};render();return}
  if(mode==='edit-trainer'){editing={type:'trainer',id};render();return}
  if(mode==='import-aulk'){
@@ -271,15 +269,9 @@ shadow.addEventListener('submit',async(e)=>{
    const id=editing.id;
    await request(id?'ausbilder/'+id:'ausbilder',{method:id?'PATCH':'POST',body:JSON.stringify(b)});
   }else if(f.id==='traineeForm'){
-   if(editing.type==='trainee-edit'){
-    b.revision=Number(selected.anwaerter.revision);b.rsa=f.elements.rsa.checked;
+    b.revision=Number(selected.anwaerter.revision);
     await request('anwaerter/'+selected.anwaerter.id,{method:'PATCH',body:JSON.stringify(b)});
     selected=await request('anwaerter/'+selected.anwaerter.id);
-   }else{
-    b.personalnummer=b.personalnummer?Number(b.personalnummer):null;
-    const created=await request('anwaerter',{method:'POST',body:JSON.stringify(b)});
-    selected=await request('anwaerter/'+created.id);track=b.laufbahn;
-   }
   }else await request('materialien',{method:'POST',body:JSON.stringify(b)});
   editing=null;await load();message('Änderung erfolgreich gespeichert.');
  });
