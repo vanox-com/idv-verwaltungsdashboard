@@ -1772,7 +1772,7 @@ let copnetGeladen = null, copnetNummer = null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fd = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('.') : '';
-const can = (m, l = 1) => ME && (m === 'design' ? true : m === 'favoriten' ? true : m === 'entwicklung' ? (ME.rechte.pers || 0) >= l : m === 'system' ? ME.rolle === 'Administrator' : m === 'meldungen' ? (ME.rechte.mitteilungen || 0) >= 2 : m === 'statistik' ? (ME.rechte.pers || 0) >= l : (ME.rechte[m] || 0) >= l);
+const can = (m, l = 1) => ME && (['Ausbilder','Ausbildungsleitung'].includes(ME.rolle) ? (m==='ausbildung'&&(ME.rechte?.ausbildung||0)>=l) : (m === 'design' ? true : m === 'favoriten' ? true : m === 'entwicklung' ? (ME.rechte.pers || 0) >= l : m === 'system' ? ME.rolle === 'Administrator' : m === 'meldungen' ? (ME.rechte.mitteilungen || 0) >= 2 : m === 'statistik' ? (ME.rechte.pers || 0) >= l : (ME.rechte[m] || 0) >= l));
 
 /* Dienstgradabzeichen: dunkles texturiertes Schulterstück, farbige Rangsterne.
    Die drei RP-Führungsränge zeigen stilisiertes hessisches Gold-Eichenlaub
