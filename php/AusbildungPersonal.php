@@ -133,12 +133,26 @@ function ausbildungOeffentlicheMonitore(): never {
         $key=ausbildungPersonalQuelle((int)$p['personalnummer'],(int)$p['belegungen']);
         $active[$key]=$t;
     }
-    $stats=sql("SELECT a.personal_quelle,a.laufbahn,
+    $stats=sql("SELECT a.id,a.personal_quelle,a.laufbahn,
           COALESCE((SELECT COUNT(*) FROM ausbildung_abschluesse m
-                    WHERE m.anwaerter_id=a.id AND m.abgeschlossen=1),0) AS fertig,
-          COALESCE((SELECT SUM(CASE WHEN stimme='Ja' THEN gewicht ELSE -gewicht END)
-                    FROM ausbildung_stimmen s WHERE s.anwaerter_id=a.id),0) AS stimmen
+                    WHERE m.anwaerter_id=a.id AND m.abgeschlossen=1),0) AS fertig
        FROM ausbildung_anwaerter a WHERE a.personal_quelle IS NOT NULL");
+    // Dieselbe rollengestützte Gewichtung wie im internen PMA-Monitor:
+    // nicht den eventuell veralteten Wert aus historischen Stimmen summieren.
+    $voteRows=sql("SELECT s.anwaerter_id,s.stimme,s.gewicht AS gespeichert_gewicht,
+           u.rolle,t.funktion
+        FROM ausbildung_stimmen s
+        JOIN ausbildung_anwaerter a ON a.id=s.anwaerter_id
+        JOIN users u ON u.id=s.ausbilder_user_id
+        LEFT JOIN ausbildung_ausbilder t ON t.user_id=s.ausbilder_user_id
+        WHERE a.personal_quelle IS NOT NULL");
+    $weightedVotes=[];
+    foreach($voteRows as $vote){
+        $id=(int)$vote['anwaerter_id'];
+        $weight=ausbildungStimmgewicht($vote);
+        $weightedVotes[$id]=($weightedVotes[$id]??0.0)
+            +($vote['stimme']==='Ja'?$weight:-$weight);
+    }
     $req=[];
     foreach(sql("SELECT laufbahn,COUNT(*) AS anzahl FROM ausbildung_module WHERE aktiv=1 GROUP BY laufbahn") as $m)
         $req[$m['laufbahn']]=(int)$m['anzahl'];
@@ -148,7 +162,7 @@ function ausbildungOeffentlicheMonitore(): never {
         $total=$req[$t==='PMA'?'PMA':'PKA']??0;
         $done=min($total,(int)$a['fertig']);
         $progress[$t]+=$done;
-        if($total>0 && $done===$total && ($t!=='PMA'||(float)$a['stimmen']>=2.5))
+        if($total>0 && $done===$total && ($t!=='PMA'||($weightedVotes[(int)$a['id']]??0.0)>=2.5))
             $ready[$t]++;
     }
     $out=[];
