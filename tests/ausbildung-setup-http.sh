@@ -57,7 +57,7 @@ police_after="$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_ausbil
 ")"
 [[ "$police_before" == "$police_after" ]] || { echo "Existing police records/roles/permissions changed during setup";exit 1; }
 after="$(curl -sS -b "$temp/admin.cookies" "$base/api/ausbildung/setup-status")"
-[[ "$after" == *'"bereit":true'* && "$after" == *'"ausbildungsmodule":11'* ]] || { echo "Schema incomplete: $after";exit 1; }
+[[ "$after" == *'"bereit":true'* && "$after" == *'"ausbildungsmodule":11'* && "$after" == *'"personalbindungBereit":true'* ]] || { echo "Schema incomplete: $after";exit 1; }
 twice="$(curl -sS -b "$temp/admin.cookies" -H 'Content-Type: application/json' -X POST \
  --data '{"bestaetigung":"BACKUP_ERSTELLT_AUSBILDUNG"}' "$base/api/ausbildung/setup")"
 [[ "$twice" == *'"bereitsEingerichtet":true'* ]] || { echo "Setup not idempotent: $twice";exit 1; }
@@ -65,6 +65,8 @@ bootstrap="$(curl -sS -b "$temp/admin.cookies" "$base/api/ausbildung/bootstrap")
 [[ "$bootstrap" == *'"module"'* && "$bootstrap" == *'"anwaerter":[]'* ]] || { echo "Bootstrap failed after setup: $bootstrap";exit 1; }
 public="$(curl -sS "$base/api/ausbildung-oeffentlich")"
 [[ "$public" == *'"materialien":[]'* ]] || { echo "Public catalog not private-by-default: $public";exit 1; }
+anon="$(curl -sS "$base/api/ausbildung-oeffentlich/monitore")"
+[[ "$anon" == *'"laufbahn":"PMA"'* && "$anon" == *'"laufbahn":"PKA"'* && "$anon" == *'"laufbahn":"KKA"'* ]] || { echo "Anonymous monitor endpoint failed: $anon";exit 1; }
 people="$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_ausbildung_setup_ci -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='personal'")"
 [[ "$people" == 1 ]] || { echo "Existing personal table vanished";exit 1; }
 echo 'Ausbildung setup passed: additive tables only; byte-identical existing users, roles, role rights and personal counts; no original records changed'
