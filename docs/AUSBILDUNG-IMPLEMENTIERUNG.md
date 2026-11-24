@@ -33,11 +33,25 @@ Die Seite `public/aulk.html` erläutert jede Laufbahn einschließlich Module, Vo
 
 ## 3. Externe Übersicht und Datenschutz
 
-- `/aulk.html` enthält neben dem Laufbahnkonzept **drei öffentlich namentliche Live-Monitore**: PMA, PKA und KKA. Ohne Anmeldung werden **für jeden aktiven Anwärter sein Name, jedes Pflichtmodul (offen/abgeschlossen), der Modulfortschritt und der Zulassungsstatus** dargestellt. Nur beim PMA kommen **Anzahl der abgegebenen Stimmen** und **gewichteter Punktesaldo gegen die 2,5-Punkte-Schwelle** hinzu. Einzelstimmen (Ja/Nein), Ausbilder- und Prüferidentitäten, Dienstnummern, Personalakten, interne Bewertungen, Anmerkungen oder Zugangs-IDs werden **nicht** veröffentlicht. Die öffentliche API `GET /api/ausbildung-oeffentlich/monitore` liest den Personalstamm direkt, ohne neue Ausbildungsdatensätze anzulegen oder bestehende zu ändern. Die Seitenaktualisierung erfolgt alle 30 Sekunden. **Da die Seite ohne Anmeldung erreichbar ist, sind die gezeigten Anwärternamen und Ausbildungsstände für alle Besucher einsehbar.**
+- `/aulk.html` enthält neben dem Laufbahnkonzept **drei öffentlich namentliche Live-Monitore**: PMA, PKA und KKA. Ohne Anmeldung werden **für jeden aktiven Anwärter sein Name, jedes Pflichtmodul (offen/abgeschlossen), der Modulfortschritt und der Zulassungsstatus** dargestellt. Nur beim PMA kommt die **Anzahl der abgegebenen Stimmen** hinzu. **Individuelle Punktzahlen werden öffentlich nicht angezeigt**; der Server errechnet die Mindestschwelle nur intern für den Zulassungsstatus. Einzelstimmen (Ja/Nein), Ausbilder- und Prüferidentitäten, Dienstnummern, Personalakten, interne Bewertungen, Anmerkungen oder Zugangs-IDs werden **nicht** veröffentlicht. Die öffentliche API `GET /api/ausbildung-oeffentlich/monitore` liest den Personalstamm direkt, ohne neue Ausbildungsdatensätze anzulegen oder bestehende zu ändern. Die Seitenaktualisierung erfolgt alle 30 Sekunden. **Da die Seite ohne Anmeldung erreichbar ist, sind die gezeigten Anwärternamen und Ausbildungsstände für alle Besucher einsehbar.**
 - `/ausbildung-status.html#<geheimer-token>` zeigt einem **individuell freigegebenen** Anwärter ohne Anmeldung seine persönlichen Modulstände und den Zulassungsstatus, ebenfalls ohne Namen oder interne Kommentare. Nach Kündigung, falscher Quellenbindung oder Deaktivierung wird der Abruf verweigert.
 - Die öffentliche AuLK-Bibliothek zeigt ausschließlich explizit freigegebene Unterlagen. Private Google-Präsentationen werden nicht automatisch veröffentlicht. Google Drive kann zusätzliche Berechtigungen erfordern.
 
 **PMA-Zulassung in zwei Schritten:** Solange ein Modul offen ist, lautet der öffentliche Status `Module ausstehend`. Sind alle PM.0–PM.6 abgeschlossen, aber der gewichtete Saldo noch unter +2,5, lautet er `Module abgeschlossen – Stimmen fehlen`. Erst mit allen Pflichtmodulen **und** mindestens +2,5 Punkten erscheint `Zur Prüfung zugelassen`. PKA und KKA bleiben gemäß der bisherigen Fachregel nach Abschluss der vier PK-Pflichtmodule zugelassen; eine zusätzliche Stimmenhürde ist für diese Laufbahnen nicht hinterlegt.
+
+## Interne Stimmabgabe – Herkunftsnachweis
+
+Jede **neue** PMA-Stimme muss einen **Anlass** haben: `Streifenfahrt` oder `Sonstige Leistungen`. Zusätzlich kann eine Bemerkung hinterlegt werden. Bei **Nein** ist eine nicht leere **Begründung/Bemerkung zwingend**. Bei **Ja** mit Anlass `Streifenfahrt` muss ein gültiges **Datum der Streifenfahrt** erfasst werden. Diese Pflichtfelder werden sowohl im Formular als auch serverseitig überprüft.
+
+Die private Ausbildungsakte zeigt Ausbilder, Ja/Nein, Gewicht, Anlass, gegebenenfalls Streifenfahrt-Datum, Bemerkung und Aktualisierungsdatum. **Nichts davon erscheint auf der öffentlich zugänglichen AuLK-Seite außer der bloßen Anzahl abgegebener Stimmen und dem resultierenden Zulassungsstatus.**
+
+Das additive SQL `2026-11-24-ausbildung-vote-details.sql` ergänzt drei nullable Spalten; historische Stimmen bleiben ohne Veränderung erhalten. Bei Altstimmen wird der Anlass intern als `Alteintrag` angezeigt. Die Stimmenwertung bleibt +0,5/+1/+1,5/+2 beziehungsweise negativ bei Nein, wird aber außen nicht als Punktesumme offengelegt.
+
+## Automatische Präsentationsübernahme aus der eingereichten ZIP
+
+Die ursprüngliche Datei `AUSBILDER-20261124T175747Z-1-001.zip` und die zusätzliche `AuLK_Freigegebene_Externe_Praesentationen.zip` wurden anhand ihrer internen PPTX-Dateinamen ausgewertet. Für die zwölf PM-/PK-Hauptfolien einschließlich zusätzlicher PM.1-Funkpräsentation sowie vier Zusatzschulungen wurden gleichnamige **bereits im verbundenen Google Drive vorhandene** native Google-Präsentationen gefunden und abgeglichen.
+
+Die PHP-Funktion `ausbildungSeedZipDecks` in `php/AusbildungDecks.php` legt beim ersten Öffnen der Ausbildungsübersicht durch eine **Ausbildungsleitung/Administrator** nur fehlende Verweise in `ausbildung_materialien` an (16 sichere Referenzen, Standard `public_aktiv=0`). Bestehende Datensätze bleiben unverändert, die Aktion ist idempotent und benötigt **keinen manuellen Einzelupload**. Entwürfe, Testpräsentationen, Blankovorlagen und interne Prüfungslisten aus dem ZIP werden nicht automatisch veröffentlicht. Die Funktion lädt bewusst **nicht die binären PPTX-Dateien auf den PHP-Hoster**: Der Ausbildungsraum und die Bibliothek nutzen die vorhandenen Google-Slides-Versionen. Die normalen Google-Zugriffsrechte gelten weiter; zum Liveunterricht kann der Ausbilder unabhängig davon seinen Bildschirm freigeben.
 
 ## 4. Unterrichtsräume: einfacher Ablauf
 
@@ -58,12 +72,13 @@ Die Ausbilder verwenden ausschließlich ihre bestehende, eigenständige `AUS-...
 
 **Vor Änderungen:** Verschlüsseltes Datenbankbackup in der Backup-Übersicht erstellen, sicher herunterladen und ergänzend vollständiges SQL-Backup beim Hoster anfertigen. Die Setup-Routine führt Änderungen nur nach Prüfung eines aktuellen gesicherten Backups aus.
 
-Auf bestehendem MySQL8 werden **nur diese vier** idempotenten Erweiterungen, in dieser Reihenfolge, angewendet:
+Auf bestehendem MySQL8 werden **nur diese fünf** idempotenten Erweiterungen, in dieser Reihenfolge, angewendet:
 
 1. `scripts/mysql/2026-11-24-ausbildung.sql` – Grundtabellen, Berechtigungen und Module;
 2. `scripts/mysql/2026-11-24-aulk-public.sql` – explizite Freigabe für Materialien;
 3. `scripts/mysql/2026-11-24-ausbildung-unterricht.sql` – Unterrichtsräume;
-4. `scripts/mysql/2026-11-24-ausbildung-personal.sql` – neue eindeutige Verbindung zum zentralen Personalstamm.
+4. `scripts/mysql/2026-11-24-ausbildung-personal.sql` – neue eindeutige Verbindung zum zentralen Personalstamm;
+5. `scripts/mysql/2026-11-24-ausbildung-vote-details.sql` – Anlass, Streifenfahrt-Datum und Begründung in der internen Stimmenverwaltung.
 
 **Nicht** die vollständige `IDV-MySQL8-phpMyAdmin-SETUP.sql` auf die bestehende Produktivdatenbank erneut anwenden. Personalakten werden von den Migrationen nicht gelöscht, geändert oder importiert. Neue Tabellen/Spalten unterstützen lediglich den späteren, getrennten Ausbildungsabgleich.
 
@@ -76,6 +91,6 @@ Danach den PMA-, PKA- und KKA-Monitor öffnen: vorhandene aktive Personen müsse
 GitHub Actions:
 - `MySQL 8 / PHP backend syntax checks` lintet PHP/JavaScript und testet Rangzuordnung und Neubelegung.
 - `Ausbildung / Rollen, Monitore und MySQL-Erweiterung` installiert die vier additiven Migrationen wiederholt auf echtem MySQL 8, prüft Login-Isolierung, den **automatischen Einstieg aus dem regulären Personalstamm**, Modulvoten, Tokens und Einladungen.
-- `Ausbildung – geprüftes Deployment-Paket` baut ein datenfreies ZIP mit beiden PHP- und Public-Bestandteilen und den **vier** Migrationen.
+- `Ausbildung – geprüftes Deployment-Paket` baut ein datenfreies ZIP mit beiden PHP- und Public-Bestandteilen und den **fünf** Migrationen.
 
 Die bestehenden öffentlichen und internen Anwärterdaten sowie alle Polizeikonten werden nicht in GitHub eingecheckt. Es werden keine produktiven MySQL-Sätze oder Passwörter hierher kopiert. Das GitHub-Arbeitsbranch hat **keinen direkten Schreibzugriff auf die produktive Datenbank des externen Hosters**; Code-Commits und CI-Erfolge bedeuten nicht, dass der Live-Server bereits aktualisiert wurde.
