@@ -22,7 +22,7 @@
   function close(){if(toast)toast.hidden=true;}
   function ensureToast(){
     if(toast?.isConnected)return toast;
-    toast=document.createElement('aside');
+    toast=document.createElement('div');
     toast.id='idvPorHinweis';
     toast.setAttribute('role','status');
     toast.setAttribute('aria-live','polite');

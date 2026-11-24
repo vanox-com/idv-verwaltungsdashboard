@@ -1528,30 +1528,33 @@ color:#eaf0f8;border:1px solid #56718f;border-radius:12px;padding:23px;box-shado
   padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700;vertical-align:middle;
 }
 #personalRangantraege .por-pending-summary{color:#f7d2a4;margin:8px 0 12px;font-size:13px;}
+/* Eigenständiger Toast, unabhängig vom Sidebar-Layout. */
 #idvPorHinweis{
-  position:fixed;right:18px;bottom:100px;z-index:10020;
-  max-width:min(420px,calc(100vw - 36px));width:360px;box-sizing:border-box;
-  display:flex;align-items:flex-start;gap:11px;
-  padding:15px 14px;border:1px solid #cf9559;border-radius:11px;
+  position:fixed;inset:16px 18px auto auto;z-index:10020;
+  width:350px;max-width:calc(100vw - 36px);height:auto;min-height:0;
+  max-height:calc(100dvh - 32px);overflow-y:auto;box-sizing:border-box;
+  display:grid;grid-template-columns:26px minmax(0,1fr) 22px;
+  align-items:start;align-content:start;gap:10px;
+  padding:12px;border:1px solid #cf9559;border-radius:10px;
   background:linear-gradient(120deg,#483322,#352b29 75%,#27272c);
-  color:#fff1dd;box-shadow:0 14px 38px #0008;
-  font:13px/1.45 system-ui,sans-serif;
+  color:#fff1dd;box-shadow:0 8px 24px #0006;
+  font:13px/1.4 system-ui,sans-serif;
 }
 #idvPorHinweis[hidden]{display:none!important;}
 #idvPorHinweis .idv-por-notify-icon{
-  flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:8px;
-  border:1px solid #e8ad69;background:#a76c2e;color:#fff2df;font-size:18px;font-weight:800;
+  display:grid;place-items:center;width:26px;height:26px;border-radius:7px;
+  border:1px solid #e8ad69;background:#a76c2e;color:#fff2df;font-size:17px;font-weight:800;
 }
-#idvPorHinweis .idv-por-notify-body{display:flex;flex:1;flex-direction:column;gap:4px;min-width:0;}
-#idvPorHinweis .idv-por-notify-body strong{font-size:14px;color:#ffe2ba;}
-#idvPorHinweis .idv-por-notify-body span{color:#f1d7b7;}
-#idvPorHinweisOeffnen{align-self:flex-start;margin-top:5px;border:1px solid #d59a59;
-  color:#fff0d9;background:#8f5c28;border-radius:7px;padding:6px 10px;cursor:pointer;}
+#idvPorHinweis .idv-por-notify-body{display:flex;flex-direction:column;gap:4px;min-width:0;}
+#idvPorHinweis .idv-por-notify-body strong{font-size:13px;color:#ffe2ba;overflow-wrap:anywhere;}
+#idvPorHinweis .idv-por-notify-body span{color:#f1d7b7;overflow-wrap:anywhere;}
+#idvPorHinweisOeffnen{align-self:flex-start;width:auto;min-height:0;height:auto;margin:5px 0 0;border:1px solid #d59a59;
+  color:#fff0d9;background:#8f5c28;border-radius:7px;padding:5px 9px;cursor:pointer;font-size:12px;}
 #idvPorHinweisOeffnen:hover{background:#a56b30;}
 #idvPorHinweisOeffnen[hidden]{display:none!important;}
-#idvPorHinweisSchliessen{border:0;background:transparent;color:#e3c9aa;
-  cursor:pointer;padding:0 3px;font-size:22px;line-height:1;}
-@media(max-width:600px){#idvPorHinweis{bottom:94px;right:12px;max-width:calc(100vw - 24px);width:360px;}}
+#idvPorHinweisSchliessen{align-self:start;justify-self:end;width:22px;height:22px;min-height:0;margin:0;
+  border:0;background:transparent;color:#e3c9aa;cursor:pointer;padding:0;font-size:20px;line-height:1;}
+@media(max-width:600px){#idvPorHinweis{inset:12px 12px auto auto;max-width:calc(100vw - 24px);width:350px;}}
 
 /* Berufsgruppen: klare, aber zurückhaltende visuelle Differenzierung. */
 .pers-row-neben td:first-child{background:repeating-linear-gradient(135deg,rgba(218,179,115,.12) 0 4px,rgba(218,179,115,.02) 4px 10px)}
@@ -6409,7 +6412,7 @@ document.addEventListener('click',async e=>{
 <script src="/dokumentUI.js"></script>
 <script src="/befRichtUI.js"></script>
 <script src="/liveUpdates.js"></script>
-<script src="/porHinweise.js"></script>
+<script src="/porHinweise.js?v=20261125-1"></script>
 <script src="/aktenFeatures.js"></script>
 <script src="/kuendigungsArchiv.js"></script>
 <script src="/abmeldungen.js"></script>
