@@ -177,7 +177,7 @@ function materials(){
    return '<div class="modrow"><b>'+esc(m.code)+'</b><div><strong>'+esc(m.titel)+'</strong><div class="flex" style="margin-top:5px">'+(decks.length?decks.map(d=>'<a href="'+esc(d.url)+'" target="_blank" rel="noopener noreferrer">'+esc(d.titel)+' ↗</a> '+(mayPresent?'<button class="compact" data-action="start-lesson" data-code="'+esc(m.code)+'" data-id="'+Number(d.id)+'">Unterricht starten</button>':'' )).join(' '):'<small class="muted">Noch kein Präsentationslink gespeichert.</small>')+'</div></div>'+(data.leitung?'<button class="compact" data-action="link-module" data-code="'+esc(m.code)+'">+ Zuordnen</button>':'')+'</div>';
  }).join('')+'</section>';
  return moduleLinks+'<div class="card"><h2>Ausbildungsbibliothek</h2><p>Hier werden die Google-Präsentationen, Ausbilderleitfäden und Ausbildungsdokumente verlinkt. Der Zugriff auf diese Übersicht erfordert einen Ausbilderzugang; die Freigaben innerhalb von Google Drive gelten zusätzlich.</p>'+
- '<div class="flex space"><a href="/aulk.html" target="_blank" rel="noopener noreferrer">Öffentliche AuLK-Bibliothek öffnen ↗</a><a href="https://sites.google.com/view/aulk2026/startseite" rel="noopener noreferrer" target="_blank">Bisherige Google-Site ↗</a>'+(data.leitung?'<button data-action="new-material" class="primary">+ Google-Link</button><button data-action="upload-material" class="primary">+ Datei hochladen</button>':'')+'</div></div>'+
+ '<div class="flex space"><a href="/aulk.html" target="_blank" rel="noopener noreferrer">Öffentliche AuLK-Bibliothek öffnen ↗</a><a href="https://sites.google.com/view/aulk2026/startseite" rel="noopener noreferrer" target="_blank">Bisherige Google-Site ↗</a>'+(data.leitung?'<button data-action="new-material" class="primary">+ Google-Link</button><button data-action="import-aulk" class="primary">AuLK-Zuordnungen importieren</button><button data-action="upload-material" class="primary">+ Datei hochladen</button>':'')+'</div></div>'+
  '<div class="card"><div class="tablewrap"><table><thead><tr><th>Modul</th><th>Unterlage</th><th>Typ</th><th></th></tr></thead><tbody>'+
  data.materialien.map(m=>'<tr><td>'+esc(m.modul_code||'Allgemein')+'</td><td>'+esc(m.titel)+'</td><td>'+esc(m.typ)+'</td><td>'+(Number(m.datei)?'<a href="/api/ausbildung/materialien/'+m.id+'/datei">Geschützt herunterladen ↘</a>':'<a href="'+esc(m.url)+'" target="_blank" rel="noopener noreferrer">Öffnen ↗</a>')+' '+(/^https:\/\/docs\.google\.com\/presentation\//.test(m.url||'')&&(data.leitung||data.eigeneKompetenzen.includes(m.modul_code))?'<button class="compact primary" data-action="start-lesson" data-code="'+esc(m.modul_code)+'" data-id="'+Number(m.id)+'">Unterricht</button> ':'')+(data.leitung?'<button class="compact" data-action="public-material" data-id="'+m.id+'" data-active="'+Number(m.public_aktiv)+'">'+(Number(m.public_aktiv)?'Öffentlich ✓':'Öffentlich freigeben')+'</button> <button class="compact danger" data-action="remove-material" data-id="'+m.id+'">Entfernen</button>':'')+'</td></tr>').join('')+
  '</tbody></table></div>'+(data.materialien.length?'':'<p class="muted">Noch keine Einzelverknüpfungen hinterlegt. Die hochgeladene ZIP ist nicht automatisch öffentlich veröffentlicht worden.</p>')+'</div>'+
@@ -215,6 +215,23 @@ shadow.addEventListener('click',async(e)=>{
  if(mode==='new-trainee'){editing={type:'trainee-new'};selected=null;render();return}
  if(mode==='new-trainer'){editing={type:'trainer',id:null};render();return}
  if(mode==='edit-trainer'){editing={type:'trainer',id};render();return}
+ if(mode==='import-aulk'){
+   if(!data.leitung)return;
+   const filePicker=document.createElement('input');filePicker.type='file';filePicker.accept='.json,application/json';
+   filePicker.addEventListener('change',async()=>{
+     if(!filePicker.files?.length)return;
+     await act(async()=>{
+       const raw=await filePicker.files[0].text();
+       if(raw.length>100000)throw Error('Die Zuordnungsdatei ist zu groß.');
+       let payload;try{payload=JSON.parse(raw)}catch{throw Error('Ungültige JSON-Datei');}
+       if(!Array.isArray(payload.eintraege))throw Error('Die Datei enthält keine AuLK-Einträge.');
+       if(!confirm('Bis zu '+payload.eintraege.length+' AuLK-Verknüpfungen PRIVAT ergänzen? Bestehende Einträge bleiben unberührt, keine automatische öffentliche Freigabe.'))return;
+       const result=await request('materialien/import',{method:'POST',body:JSON.stringify({...payload,bestaetigung:'AULK_PRIVAT_IMPORT'})});
+       await load();message('AuLK-Zuordnungen: '+result.neu+' neu, '+result.vorhanden+' bereits vorhanden. Nichts öffentlich geschaltet.');
+     });
+   },{once:true});
+   filePicker.click();return;
+ }
  if(mode==='new-material'){editing={type:'material',module:''};render();return}
  if(mode==='link-module'){tab='materialien';editing={type:'material',module:btn.dataset.code};render();return}
  if(mode==='start-lesson'){await act(async()=>{const r=await request('unterricht',{method:'POST',body:JSON.stringify({modul_code:btn.dataset.code,material_id:id})});sessionStorage.setItem('idvLesson:'+r.id,location.origin+r.einladung);location.assign('/unterricht.html?raum='+r.id)});return}
