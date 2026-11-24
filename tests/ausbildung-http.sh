@@ -23,6 +23,10 @@ lead="$(curl -sS -c "$temp/lead" -H 'Content-Type: application/json' -X POST --d
 [[ "$lead" == *'"ok":true'* ]] || { echo "$lead";cat "$temp/php.log";exit 1; }
 # Existing police account with exactly the same displayed DN must not be touched.
 hash_police="$(php -r 'echo password_hash("Original-Police-2026!",PASSWORD_BCRYPT);')"
+# Minimal CI fixture does not always have every police role pre-seeded.
+# This role is part of the fixture BEFORE Ausbildung account creation, not
+# inserted by the real migration.
+mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "INSERT IGNORE INTO roles(name,farbe,sensibel) VALUES('Polizeirat','#6885a1',1)"
 mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern,gesperrt) VALUES('TRAIN1','Existing police user','Polizeirat','$hash_police',0,0)"
 original_before="$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT CONCAT_WS('::',id,dienstnummer,anzeigename,rolle,passwort_hash,gesperrt) FROM users WHERE dienstnummer='TRAIN1'")"
 trainer='{"dienstnummer":"TRAIN1","name":"Synthetic Ausbilder","kuerzel":"SA","rang":"Test-Rang","funktion":"Ausbilder mittlerer Dienst","eintritt":"2026-11-24","email":"","notiz":"","kompetenzen":["PM.0","PM.1","PM.2","PM.3","PM.4","PM.5","PM.6"],"startpasswort":"Trainer-Test-2026!"}'
