@@ -38,7 +38,11 @@ function ausbildungSchemaStatus(): array {
     $binding=sql("SELECT COUNT(*) AS n FROM information_schema.COLUMNS
         WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='ausbildung_anwaerter'
           AND COLUMN_NAME='personal_quelle'");
-    $personalReady=(int)($binding[0]['n']??0)>0;
+    $bindingIndex=sql("SELECT COUNT(*) AS n FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='ausbildung_anwaerter'
+          AND INDEX_NAME='ausbildung_anwaerter_quelle_uq' AND NON_UNIQUE=0");
+    $personalReady=(int)($binding[0]['n']??0)>0
+        && (int)($bindingIndex[0]['n']??0)>0;
     $criticalMissing=array_values(array_diff($missing,['ausbildung_unterricht']));
     $ready=$criticalMissing===[] && $column && $moduleCount>=11
         && in_array('Ausbildungsleitung',$roleNames,true)
