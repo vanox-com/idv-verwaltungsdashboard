@@ -2616,6 +2616,7 @@ function vPers() {
     const bearbeitung = schreiben ? '<button type="button" class="pers-edit-btn" data-edit-person="'+nummer+'" aria-label="Personalakte von '+name+' bearbeiten" title="Personalakte bearbeiten">'+
       '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16 5 3 3M4 20l4.5-1 10.8-10.8a2.12 2.12 0 0 0-3-3L5.5 16 4 20z"/><path d="M4 20h16"/></svg>'+
       '<span>Bearbeiten</span></button>' : '';
+    const ausbilderZugang=(schreiben&&can('ausbildung',2)&&/ausbilder[\s-]*team/i.test(String(p.gruppe||'')))?'<button type="button" class="pers-trainer-access" data-create-trainer-from-person="'+nummer+'" title="Eigenständigen AUS-Zugang anlegen, ohne die Personalakte zu ändern">🎓 Ausbildungszugang erstellen</button> ':'';
     const nummernAntrag=(can('pers',2)||(can('pers')&&Number(ME.dienstnummer)===nummer))?'<button type="button" data-dn-request="'+nummer+'" title="Dienstnummernwechsel beim POR beantragen">DN beantragen</button> ':'';
     const entfernen=ME.rolle==='Administrator'?
       '<button type="button" class="pers-admin-remove" data-pers-admin-remove="'+nummer+
@@ -2625,7 +2626,7 @@ function vPers() {
       '<td><button class="pers-link" type="button" data-show-person="' + nummer + '">' + name + '</button></td>' +
       '<td>' + rangMitAbzeichen(p.dienstgrad) + '</td><td>' + esc(p.gruppe || '–') + '</td><td>' + esc(personalArt(nummer)) + '</td>' +
       '<td>' + fd(p.eintrittsdatum) + '</td><td>' + handy + '</td>' +
-      '<td>' + status + '</td><td class="pers-action-cell">' + bearbeitung + nummernAntrag + entfernen + personalKuendigungButton(p) + '</td></tr>';
+      '<td>' + status + '</td><td class="pers-action-cell">' + bearbeitung + ausbilderZugang + nummernAntrag + entfernen + personalKuendigungButton(p) + '</td></tr>';
   }).join('');
   const auswahl = (werte) => '<option value="">Alle</option>' + werte.map(v => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
   return '<h1>Personalverwaltung</h1><p class="mut">Dienstnummern <span class="dienstnummer-pill haupt">1–50</span> Hauptberuf · <span class="dienstnummer-pill neben">51–60</span> Nebenberuf · ab 61 wieder Hauptberuf.</p>' + '<section id="personalRangantraege" class="box"><h3>Offene Rangänderungen – POR-Freigabe</h3><p class="mut">Lade …</p></section>' +
@@ -2794,6 +2795,22 @@ async function personalAdminEntfernen(nr,button){
     alert('Administrative Bereinigung fehlgeschlagen: '+err.message);
   }finally{button.disabled=false;}
 }
+document.addEventListener('click',event=>{
+  const button=event.target.closest('[data-create-trainer-from-person]');
+  if(!button)return;
+  if(!can('pers',2)||!can('ausbildung',2))return;
+  const nummer=Number(button.dataset.createTrainerFromPerson);
+  const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nummer);
+  if(!p||!/ausbilder[\s-]*team/i.test(String(p.gruppe||'')))return;
+  // Nur eine Formularvorbelegung, keine Änderung an Personaldaten oder Konten.
+  const vorname=String(p.vorname||'').trim(),nachname=String(p.nachname||'').trim();
+  window.IDVTrainerPreset={
+    dienstnummer:String(nummer),name:[vorname,nachname].filter(Boolean).join(' '),
+    kuerzel:(vorname.slice(0,1)+nachname.slice(0,2)).toUpperCase(),
+    rang:String(p.dienstgrad||''),eintritt:String(p.eintrittsdatum||'').slice(0,10)
+  };
+  wechsleZuModul('ausbildung');
+});
 document.addEventListener('click',event=>{
   const entfernen=event.target.closest('[data-pers-admin-remove]');
   if(entfernen){
@@ -3046,7 +3063,7 @@ function personalBearbeiten(nr) {
   const used = (D.personal || []).map(x => Number(x.personalnummer));
   const vorschlag = Array.from({length:60},(_,i)=>i+1).find(n=>!used.includes(n))||Math.max(60,...used)+1;
   const raenge = (D.raenge || []).map(r => r.name).filter(Boolean);
-  const gruppen = [...new Set([...(D.systemOptionen?.mitarbeitergruppen||['Mittlerer Dienst','Gehobener Dienst','Polizeirat','Leitungsdienst','Nicht zugeordnet']),...(D.personal||[]).map(x=>x.gruppe).filter(Boolean)])];
+  const gruppen = [...new Set([...(D.systemOptionen?.mitarbeitergruppen||['Mittlerer Dienst','Gehobener Dienst','Polizeirat','Leitungsdienst','Nicht zugeordnet']),'Ausbilder-Team',...(D.personal||[]).map(x=>x.gruppe).filter(Boolean)])];
   // Malformed values stored by the old create route are never valid status choices.
   const statusAlle = ['Aktiv','Abgemeldet','Inaktiv','Suspendiert','Gekündigt','freihalten'];
   const status = neu ? statusAlle.filter(x => x !== 'Gekündigt') : statusAlle;
