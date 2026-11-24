@@ -41,10 +41,36 @@ async function load(){
    data=await request('bootstrap');
    el('#account').textContent=data.user.name+' · '+data.user.rolle;
    if(!['Ausbilder','Ausbildungsleitung'].includes(data.user.rolle))el('#back').classList.remove('hidden');
+   el('#notice').style.display='none';
    render();
  }catch(e){
-   if(e.status===401){location.replace('/');return}
-   el('#root').innerHTML='<div class="card"><h2>Ausbildung nicht verfügbar</h2><p>'+esc(e.message)+'</p><a href="/">Zum Login</a></div>';
+   data=null;
+   if(e.status===401){
+     el('#root').innerHTML='<div class="card"><h2>Deine Sitzung ist abgelaufen</h2>'+
+       '<p>Bitte melde dich über das normale Polizeipanel erneut an. Du musst dafür keine zweite Ausbildungsanmeldung durchführen.</p>'+
+       '<a href="/">Zur normalen Panel-Anmeldung</a></div>';
+     message('Sitzung abgelaufen',true);return;
+   }
+   let setup=null;
+   if(e.status===503||e.status===500){
+     try{setup=await request('setup-status')}catch(_){/* Keine Administratorrechte oder Serverproblem */}
+   }
+   if(setup && !setup.bereit){
+     const missing=(setup.fehlendeTabellen||[]).map(esc).join(', ');
+     el('#root').innerHTML='<div class="card"><h2>Ausbildungsdatenbank noch nicht eingerichtet</h2>'+
+       '<p>Dein bestehender Panel-Login funktioniert. Es fehlen die neuen Ausbildungstabellen oder die AuLK-Erweiterung in MySQL 8.</p>'+
+       (missing?'<p><b>Fehlende Tabellen:</b> '+missing+'</p>':'')+
+       (!setup.oeffentlicheFreigabeSpalte?'<p>Die öffentliche AuLK-Dokumentfreigabe fehlt noch.</p>':'')+
+       '<div class="callout"><b>Vor dem Einrichten:</b> Eine vollständige Sicherung der bestehenden Datenbank erstellen. Die Einrichtung ergänzt nur Ausbildungsstrukturen; sie löscht keine Personalakten.</div>'+
+       '<button data-action="setup-schema" class="primary">Ausbildungsdatenbank einrichten</button>'+
+       '<p class="muted">Nur Administratoren. Falls der Hoster keine Datenbank-Strukturänderungen durch PHP erlaubt, können die beiden additiven SQL-Dateien stattdessen über phpMyAdmin importiert werden.</p></div>';
+     message('Ausbildungsdatenbank noch nicht eingerichtet',true);
+     return;
+   }
+   el('#root').innerHTML='<div class="card"><h2>Ausbildung konnte nicht geladen werden</h2>'+
+     '<p>'+esc(e.message)+'</p>'+
+     '<p>Du bist weiterhin im Polizeipanel angemeldet. Bitte aktualisiere den Ausbildungsbereich. Wenn der Fehler bleibt, muss der Datenbankfehler am Hoster geprüft werden.</p>'+
+     '<button data-action="retry-bootstrap" class="primary">Erneut laden</button></div>';
    message(e.message,true);
  }
 }
@@ -152,8 +178,23 @@ async function act(fn){
 shadow.addEventListener('click',async(e)=>{
  const tabBtn=e.target.closest('[data-tab]');if(tabBtn){setTab(tabBtn.dataset.tab);return}
  const trackBtn=e.target.closest('[data-track]');if(trackBtn){track=trackBtn.dataset.track;selected=null;editing=null;render();return}
- const btn=e.target.closest('[data-action]');if(!btn||!data)return;
+ const btn=e.target.closest('[data-action]');if(!btn)return;
  const mode=btn.dataset.action,id=Number(btn.dataset.id);
+ if(mode==='retry-bootstrap'){await load();return}
+ if(mode==='setup-schema'){
+   if(!confirm('Hast du die bestehende MySQL-Datenbank vor dieser Einrichtung vollständig gesichert? Die beiden Ausbildungs-SQL-Erweiterungen werden jetzt additiv ausgeführt.'))return;
+   if(!confirm('Nur fortfahren, wenn ein Datenbank-Backup vorhanden ist. Ausbildungstabellen und Rollen jetzt ergänzen?'))return;
+   btn.disabled=true;btn.textContent='Datenbank wird eingerichtet …';
+   try{
+     await request('setup',{method:'POST',body:JSON.stringify({bestaetigung:'BACKUP_ERSTELLT_AUSBILDUNG'})});
+     await load();message('Ausbildungsdatenbank erfolgreich eingerichtet.');
+   }catch(err){
+     message(err.message,true);
+     btn.disabled=false;btn.textContent='Einrichtung erneut versuchen';
+   }
+   return;
+ }
+ if(!data)return;
  if(mode==='cancel-edit'){editing=null;render();return}
  if(mode==='new-trainee'){editing={type:'trainee-new'};selected=null;render();return}
  if(mode==='new-trainer'){editing={type:'trainer',id:null};render();return}
