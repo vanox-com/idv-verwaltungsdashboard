@@ -120,11 +120,16 @@ function requireLogin(bool $allowPasswordChange=false): array {
     if (!$u) fail(401,'Nicht angemeldet');
     return $u;
 }
+function ausbildungLeitungsprofil(array $u): bool {
+    if(in_array($u['rolle']??'',['Administrator','Ausbildungsleitung'],true))return true;
+    try{
+        $row=sql("SELECT funktion FROM ausbildung_ausbilder WHERE user_id=? AND aktiv=1 LIMIT 1",[(int)$u['id']]);
+        return in_array($row[0]['funktion']??'',['Ausbildungsleitung','stv. Ausbildungsleitung'],true);
+    }catch(Throwable $e){return false;}
+}
 function rights(array $u): array {
-    // Ausbildungsrollen sind auf den Ausbildungsbereich beschränkt, selbst wenn
-    // alte Rollen- oder Einzelrechte in der Datenbank noch weiter reichen.
-    if($u['rolle']==='Ausbilder')return ['ausbildung'=>1];
-    if($u['rolle']==='Ausbildungsleitung')return ['ausbildung'=>2];
+    if(in_array($u['rolle'],['Ausbilder','Ausbildungsleitung'],true))
+        return ['ausbildung'=>ausbildungLeitungsprofil($u)?2:1,'dash'=>1,'design'=>1];
     ensureDNApprovalPermissions();
     $rights=[];
     foreach(sql("SELECT modul,stufe FROM role_perms WHERE rolle=?",[$u['rolle']]) as $row)
@@ -136,6 +141,7 @@ function rights(array $u): array {
     // Administratoren müssen die Ausbildung unabhängig vom importierten
     // Rollen-Seed sehen; der Fachbereich meldet ggf. noch fehlendes SQL.
     if($u['rolle']==='Administrator')$rights['ausbildung']=2;
+    elseif(($rights['ausbildung']??0)>=2&&!ausbildungLeitungsprofil($u))$rights['ausbildung']=1;
     return $rights;
 }
 /* Neues, eigenständiges Entscheidungsrecht. Fügt fehlende Rollenstandards hinzu,
@@ -294,8 +300,10 @@ function run(): void {
                 respond(200,['user'=>sessionApiUser($u),'daten'=>['dashboard'=>['summary'=>new \stdClass(),
                     'layout'=>['items'=>[],'version'=>0]]]]);
             }
-            if(!str_starts_with($uri,'/api/ausbildung/'))
-                fail(403,'Dieser Zugang ist nur für die Ausbildungsabteilung freigegeben');
+            $personalDesign=($method==='GET'&&$uri==='/api/portal-design')
+                ||(in_array($method,['PUT','DELETE'],true)&&$uri==='/api/portal-design/personal');
+            if(!str_starts_with($uri,'/api/ausbildung/')&&!$personalDesign)
+                fail(403,'Dieser Zugang ist nur für die Ausbildungsabteilung und das eigene Design freigegeben');
         }
         // Make authenticated actor available to MySQL audit triggers on every route.
         sql('SET @idv_actor = ?',[(int)$u['id']]);

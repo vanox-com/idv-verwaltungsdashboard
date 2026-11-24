@@ -7,7 +7,7 @@
   const template="\n <div id=\"ausbildungWorkspace\">\n  <div class=\"top\"><div><span class=\"eyebrow\">IDV / Ausbildungsabteilung</span><h1 id=\"heading\">Ausbildung</h1></div>\n   <div class=\"flex\"><a href=\"/aulk.html\" target=\"_blank\" rel=\"noopener noreferrer\">AuLK-Unterlagen öffentlich ↗</a><button id=\"reload\" type=\"button\">Aktualisieren</button></div>\n  </div>\n  <nav id=\"nav\" aria-label=\"Ausbildungsnavigation\"></nav>\n  <div id=\"notice\" class=\"notice\" role=\"status\" aria-live=\"polite\"></div>\n  <div id=\"root\"><div class=\"card\">Ausbildungsdaten werden geladen…</div></div>\n  <div id=\"account\" class=\"hidden\"></div>\n  <a id=\"back\" class=\"hidden\" href=\"/\"></a>\n </div>";
   const css="\n:root{color-scheme:dark;--bg:#0e1622;--panel:#192536;--panel2:#223146;--edge:#34455c;--text:#e7eef7;--mut:#9caec3;--blue:#80b7ed;--ok:#51c99d;--bad:#f48b8b}\n*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top right,#193750,#0e1622 55%);color:var(--text);font:14px/1.5 system-ui,\"Segoe UI\",sans-serif}\nbutton,input,select,textarea{font:inherit}button{cursor:pointer;border:1px solid var(--edge);border-radius:8px;background:var(--panel2);padding:9px 13px;color:var(--text)}button:hover{border-color:var(--blue)}button:disabled{opacity:.45;cursor:not-allowed}\nbutton.primary{background:#37699e;border-color:#579ad4}button.danger{background:#562f3a;border-color:#ab6570}\ninput,select,textarea{width:100%;padding:10px;background:#101b2a;color:var(--text);border:1px solid var(--edge);border-radius:7px}input[type=checkbox]{width:auto;accent-color:#76b9f4}label{display:grid;gap:5px;font-size:12px;color:var(--mut)}a{color:#abd4ff}\n.shell{display:grid;grid-template-columns:255px minmax(0,1fr);min-height:100dvh}\naside{padding:22px 15px;background:#101926;border-right:1px solid var(--edge);display:flex;flex-direction:column;gap:22px}\n.brand img{max-width:160px;height:auto;display:block;margin:5px 0 12px}.brand strong{display:block;letter-spacing:.1em;font-size:13px}.brand small{color:var(--mut)}\nnav{display:grid;gap:8px}nav button{width:100%;text-align:left;background:transparent;border-color:transparent;padding:11px 12px}nav button.on,nav button:hover{background:#26384f;border-color:#425b78}\nnav small{color:var(--mut);margin:15px 8px 0}.sidebar-foot{margin-top:auto;display:grid;gap:12px;color:var(--mut);font-size:12px}\nmain{min-width:0;padding:22px clamp(16px,3vw,46px) 60px;max-width:1600px;width:100%;margin:auto}\n.top{display:flex;gap:14px;justify-content:space-between;align-items:center;margin-bottom:22px;padding-bottom:17px;border-bottom:1px solid var(--edge);flex-wrap:wrap}\nh1{margin:0;font-size:clamp(23px,3vw,30px);letter-spacing:-.02em}h2{margin:0 0 14px;font-size:19px}h3{margin:0 0 10px;font-size:15px}\n.muted,small{color:var(--mut)}p{margin:8px 0 16px}.eyebrow{color:#8db9e6;font-size:11px;text-transform:uppercase;letter-spacing:.13em}\n.card{background:rgba(25,37,54,.91);border:1px solid var(--edge);border-radius:13px;padding:20px;margin-bottom:17px}\n.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin-bottom:17px}.kpi{background:rgba(32,48,69,.9);border:1px solid var(--edge);padding:17px;border-radius:11px}.kpi strong{display:block;font-size:29px}.kpi span{color:var(--mut)}\n.flex{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.space{justify-content:space-between}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.formgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin:14px 0}.full{grid-column:1/-1}\n.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:660px}th,td{padding:11px 9px;text-align:left;border-bottom:1px solid #ffffff16;vertical-align:middle}th{color:var(--mut);font-size:11px;letter-spacing:.04em}tr:hover td{background:#ffffff05}\n.pill{display:inline-block;padding:4px 9px;border-radius:99px;font-size:11px;border:1px solid #a9bbca4d;background:#ffffff0b}.pill.good{color:#a4ffdb;border-color:#388969}.pill.warn{color:#ffdb9f;border-color:#91704b}\n.meter{height:7px;background:#36465a;border-radius:9px;overflow:hidden;min-width:80px}.meter i{display:block;height:100%;background:linear-gradient(90deg,#4b8ac6,#5bd6ac)}\n.callout{padding:12px 14px;border:1px solid #487299;border-radius:9px;background:#24415a5e;margin-bottom:18px}\n.notice{display:none;margin-bottom:18px;padding:11px;border-radius:9px;border:1px solid #427b64;background:#23534250}.notice.bad{border-color:#8e5757;background:#733b3b55}\n.modrow{display:grid;grid-template-columns:70px minmax(0,1fr) 130px;gap:10px;align-items:center;border-bottom:1px solid #ffffff17;padding:9px 0}\n.competence{display:flex;align-items:center;gap:5px;flex-wrap:wrap}.competence label{display:flex;align-items:center;gap:6px;border:1px solid var(--edge);border-radius:8px;padding:7px 9px}\n.compact{padding:6px 9px;font-size:12px}code{font-size:12px;color:#b4d9f4}.hidden{display:none!important}\n@media(max-width:1000px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.formgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}\n@media(max-width:700px){.shell{display:block}aside{position:static;padding:12px}aside .brand img{max-width:112px;float:left;margin:0 12px 0 0}.brand{min-height:51px}.sidebar-foot{display:none}nav{display:flex;overflow-x:auto}nav small{display:none}nav button{white-space:nowrap;width:auto}main{padding:18px 12px 50px}.kpis{grid-template-columns:repeat(2,1fr)}.grid,.formgrid{grid-template-columns:1fr}.modrow{grid-template-columns:64px 1fr}.modrow button{grid-column:2;justify-self:start}}\n\n:host {display:block;color:var(--text,#e6edf6);font:14px/1.5 system-ui,\"Segoe UI\",sans-serif;--panel:#192536;--panel2:#223146;--edge:#34455c;--text:#e7eef7;--mut:#9caec3;--blue:#80b7ed}\n#ausbildungWorkspace {width:100%;max-width:1600px;margin:0 auto}\n#ausbildungWorkspace .top {margin:0 0 18px;padding:14px 0 16px}\n#ausbildungWorkspace nav {display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;margin-bottom:20px}\n#ausbildungWorkspace nav button {width:auto;white-space:normal;border-color:var(--edge);background:var(--panel);padding:9px 13px}\n#ausbildungWorkspace nav button.on {background:#31577e;border-color:#649bd1}\n#ausbildungWorkspace .card{max-width:100%;overflow:visible}\n#ausbildungWorkspace .tablewrap{max-width:100%;overflow:auto}\n#ausbildungWorkspace .kpis{grid-template-columns:repeat(auto-fit,minmax(155px,1fr))}\n@media(max-width:700px){#ausbildungWorkspace nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}#ausbildungWorkspace nav button{width:100%}}\n";
   let instance=null;
-  function create(container) {
+  function create(container, initial={}, onNavigate=null) {
     const host=document.createElement('div');
     host.id='idvAusbildungModule';
     container.append(host);
@@ -23,7 +23,7 @@ const fmt=(v)=>v?String(v).slice(0,10).split('-').reverse().join('.'):'—';
 const modName=(m)=>m.code+' · '+m.titel;
 const pill=(s)=>'<span class="pill '+(s==='Zugelassen'?'good':s==='Nicht bereit'?'warn':'')+'">'+esc(s)+'</span>';
 const meter=(n,d)=>'<div class="meter" title="'+n+' von '+d+'"><i style="width:'+Math.min(100,Math.max(0,d?n/d*100:0))+'%"></i></div>';
-let data=null,tab='uebersicht',track='PMA',selected=null,editing=null,busy=false,lessonInvite=null;
+let data=null,tab=initial.route||'uebersicht',track=initial.track||'PMA',selected=null,editing=null,busy=false,lessonInvite=null;
 try{
  if(sessionStorage.getItem('idvAusbildungReturn')==='unterricht'){
    sessionStorage.removeItem('idvAusbildungReturn');
@@ -41,7 +41,12 @@ async function request(path,opt={}){
 }
 function message(v,bad=false){const e=el('#notice');e.textContent=v;e.className='notice'+(bad?' bad':'');e.style.display='block';}
 function formObj(f){return Object.fromEntries(new FormData(f).entries())}
-function setTab(next){tab=next;selected=null;editing=null;render();}
+function allowedRoute(next){return !['ausbilder','materialien'].includes(next)||Boolean(data?.leitung);}
+function setTab(next,nextTrack){
+ if(!allowedRoute(next)&&data)return;
+ if(tab!==next||(nextTrack&&track!==nextTrack)){tab=next;if(nextTrack)track=nextTrack;selected=null;editing=null;}
+ render();
+}
 async function load(){
  try{
    data=await request('bootstrap');
@@ -59,7 +64,7 @@ async function load(){
    el('#account').textContent=data.user.name+' · '+data.user.rolle;
    if(!['Ausbilder','Ausbildungsleitung'].includes(data.user.rolle))el('#back').classList.remove('hidden');
    el('#notice').style.display='none';
-   if(window.IDVTrainerPreset){tab='ausbilder';editing={type:'trainer',id:null,personal:window.IDVTrainerPreset};selected=null;window.IDVTrainerPreset=null;}
+   if(window.IDVTrainerPreset){if(data.leitung){tab='ausbilder';editing={type:'trainer',id:null,personal:window.IDVTrainerPreset};selected=null;}window.IDVTrainerPreset=null;}
    render();
  }catch(e){
    data=null;
@@ -121,11 +126,14 @@ async function refreshSelected(){
  await load();
 }
 function navRender(){
- el('#nav').innerHTML=ROUTES.map(([key,label])=>'<button type="button" data-tab="'+key+'" class="'+(tab===key?'on':'')+'">'+esc(label)+'</button>').join('');
+ el('#nav').innerHTML=ROUTES.filter(([key])=>allowedRoute(key)).map(([key,label])=>'<button type="button" data-tab="'+key+'" class="'+(tab===key?'on':'')+'">'+esc(label)+'</button>').join('');
+ el('#nav').classList.toggle('hidden',Boolean(onNavigate));
+ onNavigate?.(tab,track);
  el('#heading').textContent=ROUTES.find(x=>x[0]===tab)?.[1]||'Ausbildung';
 }
 function render(){
  if(!data)return;
+ if(!allowedRoute(tab)){tab='uebersicht';selected=null;editing=null;}
  navRender();
  const r=el('#root');
  if(tab==='uebersicht')r.innerHTML=overview();
@@ -168,7 +176,7 @@ function traineeForm(a){
 }
 function traineeDetails(d){
  const a=d.anwaerter,p=d.fortschritt;
- const canEdit=data.leitung||data.eigeneKompetenzen.length>0;
+ const canEdit=true;
  const myVoteRecord=p.stimmen?.find(v=>Number(v.ausbilder_user_id)===Number(data.user.id))||null;
  const modules=p.module.map(m=>{
    const decks=(data.materialien||[]).filter(x=>x.modul_code===m.code && /^https:\/\/docs\.google\.com\/presentation\//.test(x.url||''));
@@ -181,14 +189,14 @@ function traineeDetails(d){
       '<div class="muted" style="font-size:12px">Noch keine AuLK-Präsentation zugeordnet'+
       (data.leitung?' · <button type="button" class="compact" data-action="link-module" data-code="'+esc(m.code)+'">Google-Link hinterlegen</button>':'')+'</div>';
    return '<div class="modrow"><b>'+esc(m.code)+'</b><div><b>'+esc(m.titel)+'</b><div class="muted">'+(m.abgeschlossen?'Abgeschlossen':'Offen')+'</div>'+presentation+'</div>'+
-    '<button type="button" class="compact" data-action="module" data-code="'+esc(m.code)+'" data-done="'+(m.abgeschlossen?'1':'0')+'" '+(!mayPresent?'disabled title="Keine Modulkompetenz"':'')+'>'+
+    '<button type="button" class="compact" data-action="module" data-code="'+esc(m.code)+'" data-done="'+(m.abgeschlossen?'1':'0')+'" '+''+'>'+
     (m.abgeschlossen?'↶ Zurücksetzen':'✓ Abschließen')+'</button></div>';
  }).join('');
  return '<section class="card" id="details"><div class="flex space"><div><span class="eyebrow">'+esc(a.laufbahn)+' · Dienstnummer '+esc(a.personalnummer||'—')+'</span><h2>'+esc(a.name)+'</h2></div><div class="flex">'+pill(p.status)+'<button data-action="close">Schließen</button></div></div>'+
  '<div class="kpis"><div class="kpi"><strong>'+p.moduleFertig+' / '+p.moduleGesamt+'</strong><span>Module abgeschlossen</span></div><div class="kpi"><strong>'+Number(p.stimmenSaldo).toLocaleString('de-DE')+'</strong><span>Punktesaldo</span></div><div class="kpi"><strong>'+Number(p.jaPunkte).toLocaleString('de-DE')+'</strong><span>Ja-Punkte ('+p.stimmenJa+' Stimmen)</span></div><div class="kpi"><strong>'+Number(p.neinPunkte).toLocaleString('de-DE')+'</strong><span>Nein-Punkte ('+p.stimmenNein+' Stimmen)</span></div></div>'+
  '<h3>Ausbildungsmodule</h3>'+modules+
  (a.laufbahn==='PMA'?voteSection(p,myVoteRecord,canEdit):'')+
- '<div class="flex" style="margin-top:20px">'+(data.leitung?'<button data-action="edit-trainee">Stammdaten bearbeiten</button><button data-action="create-link" class="primary">Externen Link erzeugen / erneuern</button><button data-action="remove-link" class="danger">Externen Link sperren</button>':'')+'</div>'+
+ '<div class="flex" style="margin-top:20px">'+'<button data-action="edit-trainee">Ausbildungsnotiz bearbeiten</button><button data-action="create-link" class="primary">Externen Link erzeugen / erneuern</button><button data-action="remove-link" class="danger">Externen Link sperren</button>'+'</div>'+
  '<p class="muted">Externe Links zeigen nur Modulfortschritte und Prüfungsstatus, keine Namen oder internen Bewertungen.</p><div id="createdLink"></div>'+
  '</section>';
 }
@@ -280,10 +288,10 @@ function classroom(){
  '<p>Erstelle die Sitzung erst nach Auswahl einer Präsentation. Der Einladungslink funktioniert ohne Anmeldung, gilt maximal zwei Stunden und lässt einen Anwärter zu. Nur der angemeldete Ausbilder kann den Bildschirm freigeben und steuern.</p>'+
  '<div class="callout"><b>So funktioniert es:</b> Präsentation wählen → Raum erzeugen → Link kopieren → Ausbildertafel öffnen → Browser-Bildschirmfreigabe erlauben → nach dem Unterricht beenden.</div>';
  if(!ready)out+='<p class="muted">Ein Administrator muss nach einer verschlüsselten Datenbanksicherung die Unterrichtstabelle ergänzen.</p>';
- else if(!decks.length)out+='<p class="muted">Für deine Modulberechtigungen ist noch keine Google-Präsentation gespeichert. Bitte zuerst in den Ausbildungsunterlagen zuordnen.</p>';
+ else if(!decks.length)out+='<p class="muted">Für deine Modulberechtigungen ist noch keine Google-Präsentation gespeichert. Bitte die Ausbildungsleitung um Zuordnung einer Präsentation bitten.</p>';
  else out+='<form id="lessonCreateForm" class="formgrid"><label class="full">Modul / Präsentation<select id="lessonDeck" required>'+
  decks.map(d=>'<option value="'+Number(d.id)+'" data-code="'+esc(d.modul_code)+'" '+(Number(editing?.material)===Number(d.id)?'selected':'')+'>'+esc(d.modul_code+' · '+d.titel)+'</option>').join('')+
- '</select></label><div class="full flex"><button type="submit" class="primary">+ Unterrichtsraum erstellen</button><button type="button" data-tab="materialien">Unterlagen verwalten</button></div></form>';
+ '</select></label><div class="full flex"><button type="submit" class="primary">+ Unterrichtsraum erstellen</button>'+(data.leitung?'<button type="button" data-tab="materialien">Unterlagen verwalten</button>':'')+'</div></form>';
  if(lessonInvite)out+='<section class="card" style="margin-top:16px;border-color:#5b9bc8"><h3>Neuer Unterrichtsraum · '+esc(lessonInvite.modul_code)+'</h3>'+
  '<p>Dieser persönliche Einladungslink ist jetzt für den Anwärter freigegeben. Nicht öffentlich veröffentlichen.</p>'+
  '<label>Einladung ohne Login<input id="lessonLink" readonly value="'+esc(lessonInvite.link)+'"></label>'+
@@ -324,6 +332,7 @@ shadow.addEventListener('click',async(e)=>{
    return;
  }
  if(!data)return;
+ if(!data.leitung&&['new-trainer','edit-trainer','remove-trainer','import-aulk','new-material','link-module','upload-material','public-material','remove-material'].includes(mode))return;
  if(mode==='cancel-edit'){editing=null;render();return}
  if(mode==='new-trainer'){editing={type:'trainer',id:null};render();return}
  if(mode==='edit-trainer'){editing={type:'trainer',id};render();return}
@@ -435,17 +444,19 @@ const refreshTimer=setInterval(()=>{
    void load();
 },25000);
 
-    return {host,refresh:load,destroy:()=>clearInterval(refreshTimer)};
+    return {host,refresh:load,navigate:setTab,destroy:()=>clearInterval(refreshTimer)};
   }
   window.IDVAusbildung={
-    laden(container){
+    laden(container,initial={},onNavigate=null){
       if(!container)return;
       if(instance&&instance.host.isConnected&&instance.host.parentElement===container){
-        void instance.refresh();return;
+        instance.navigate(initial.route||'uebersicht',initial.track);
+        if(window.IDVTrainerPreset)void instance.refresh();
+        return;
       }
       instance?.destroy?.();
       container.replaceChildren();
-      instance=create(container);
+      instance=create(container,initial,onNavigate);
     }
   };
 })();

@@ -1752,7 +1752,7 @@ body{overflow-x:clip}
 <script>
 const MODS = [
   ['dash','Dashboard','📊'],['pers','Personal','👥'],['bef','Beförderungen','⭐'],
-  ['ausbildung','Ausbildung','🎓'],['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
+  ['ausbildung','Übersicht','🎓'],['ausbildung-pma','PMA-Monitor','📋'],['ausbildung-pka','PKA-Monitor','📋'],['ausbildung-kka','KKA-Monitor','📋'],['ausbildung-ausbilder','Ausbilderverwaltung','👥'],['ausbildung-materialien','Ausbildungsunterlagen','📚'],['ausbildung-unterricht','Unterrichtsräume','📽️'],['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],['abm','Abmeldungen','📅'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
@@ -1766,7 +1766,7 @@ const NAV_GRUPPEN = [
   {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
   {id:'verwaltung',titel:'Administration',module:['users','befricht','system','botcfg','meldungen','rechtesimulator','design','backup','log','papierkorb']},
-  {id:'ausbildung',titel:'Ausbildung',module:['ausbildung']}
+  {id:'ausbildung',titel:'Ausbildung',module:['ausbildung','ausbildung-pma','ausbildung-pka','ausbildung-kka','ausbildung-ausbilder','ausbildung-materialien','ausbildung-unterricht']}
 ];
 const NAV_OFFEN = new Set(['uebersicht','personal','ausbildung']);
 let ME = null, D = null, tab = 'dash';
@@ -1775,7 +1775,16 @@ let copnetGeladen = null, copnetNummer = null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fd = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('.') : '';
-const can = (m, l = 1) => ME && (['Ausbilder','Ausbildungsleitung'].includes(ME.rolle) ? (m==='ausbildung'&&(ME.rechte?.ausbildung||0)>=l) : (m === 'design' ? true : m === 'favoriten' ? true : m === 'entwicklung' ? (ME.rechte.pers || 0) >= l : m === 'system' ? ME.rolle === 'Administrator' : m === 'meldungen' ? (ME.rechte.mitteilungen || 0) >= 2 : m === 'statistik' ? (ME.rechte.pers || 0) >= l : (ME.rechte[m] || 0) >= l));
+const AUSB_NAV={
+  ausbildung:{route:'uebersicht'},'ausbildung-pma':{route:'monitore',track:'PMA'},'ausbildung-pka':{route:'monitore',track:'PKA'},'ausbildung-kka':{route:'monitore',track:'KKA'},'ausbildung-ausbilder':{route:'ausbilder',leitung:true},'ausbildung-materialien':{route:'materialien',leitung:true},'ausbildung-unterricht':{route:'unterricht'}
+};
+const ausbildungKonto=()=>['Ausbilder','Ausbildungsleitung'].includes(ME?.rolle);
+const can = (m,l=1) => {
+  if(!ME)return false;
+  if(Object.hasOwn(AUSB_NAV,m))return (ME.rechte?.ausbildung||0)>=Math.max(l,AUSB_NAV[m].leitung?2:1);
+  if(ausbildungKonto())return (m==='dash'||m==='design')&&l<=1;
+  return m==='design'||m==='favoriten'?true:m==='entwicklung'?(ME.rechte.pers||0)>=l:m==='system'?ME.rolle==='Administrator':m==='meldungen'?(ME.rechte.mitteilungen||0)>=2:m==='statistik'?(ME.rechte.pers||0)>=l:(ME.rechte[m]||0)>=l;
+};
 
 /* Dienstgradabzeichen: dunkles texturiertes Schulterstück, farbige Rangsterne.
    Die drei RP-Führungsränge zeigen stilisiertes hessisches Gold-Eichenlaub
@@ -2029,10 +2038,15 @@ async function starten() {
     ME = antwort.user;
     D = antwort.daten;
     // Ausbildung wird wie jedes andere Modul im Hauptpanel gerendert.
-    if(['Ausbilder','Ausbildungsleitung'].includes(ME.rolle) ||
-       (location.hash==='#ausbildung'&&can('ausbildung')) || !can(tab)){
-      tab=can('ausbildung')?'ausbildung':MODS.find(m=>can(m[0]))?.[0]||'dash';
+    if(!bereitsOffen){
+      const requested=location.hash.slice(1);
+      let returnRoom=false;
+      try{returnRoom=sessionStorage.getItem('idvAusbildungReturn')==='unterricht';}catch(_){}
+      if(returnRoom&&can('ausbildung-unterricht'))tab='ausbildung-unterricht';
+      else if(Object.hasOwn(AUSB_NAV,requested)&&can(requested))tab=requested;
+      else if(ausbildungKonto()&&can('ausbildung'))tab='ausbildung';
     }
+    if(!can(tab))tab=can('ausbildung')?'ausbildung':MODS.find(m=>can(m[0]))?.[0]||'dash';
 
     // Persönliche Gestaltung vor dem Anzeigen des Dashboards aus der DB holen.
     // Ein Fehler darf den Login nicht blockieren, wird aber nicht mehr verschluckt.
@@ -2106,6 +2120,12 @@ function navIcon(id) {
     befricht: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h6M8 15h5M14 15l2 2 3-4"/>',
     sonder: '<path d="M12 2 20 6v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/><path d="m8 12 3 3 5-6"/>',
     ausbildung: '<path d="m2 10 10-5 10 5-10 5z"/><path d="M6 12v5c3.5 3 8.5 3 12 0v-5M22 10v7"/>',
+    'ausbildung-pma':'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v4H9zM8 12h8M8 16h5"/>',
+    'ausbildung-pka':'<path d="M12 3 4 6v6c0 5 4 8 8 10 4-2 8-5 8-10V6zM9 12l2 2 4-5"/>',
+    'ausbildung-kka':'<circle cx="10" cy="10" r="6"/><path d="m15 15 6 6M8 10h4M10 8v4"/>',
+    'ausbildung-ausbilder':'<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 7a3 3 0 0 1 0 6M17 15a5 5 0 0 1 4 5"/>',
+    'ausbildung-materialien':'<path d="M4 4h6a3 3 0 0 1 2 2 3 3 0 0 1 2-2h6v15h-6a3 3 0 0 0-2 2-3-2H4zM12 6v15"/>',
+    'ausbildung-unterricht':'<rect x="3" y="3" width="18" height="13" rx="2"/><path d="m12 16-5 5m5-5 5 5M10 7l5 3-5 3z"/>',
     praktika: '<path d="m2 10 10-5 10 5-10 5z"/><path d="M6 12v5c3.5 3 8.5 3 12 0v-5M22 10v7"/>',
     kue: '<path d="M13 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M13 3v5h5M10 13h11m-4-4 4 4-4 4"/>',
     dis: '<path d="M12 3v18M4 7h16M5 7l-3 7h6L5 7zM19 7l-3 7h6l-3-7zM8 21h8"/>',
@@ -2190,10 +2210,18 @@ function zeichneMenue() {
 }
 
 function zeichne() {
-  if(tab==='ausbildung'){
-    if(!can('ausbildung')){$('#inhalt').innerHTML='<p>Kein Ausbildungsrecht für dieses Konto.</p>';return;}
+  if(Object.hasOwn(AUSB_NAV,tab)){
+    if(!can(tab)){$('#inhalt').innerHTML='<p>Kein Ausbildungsrecht für dieses Konto.</p>';return;}
     if(!window.IDVAusbildung){$('#inhalt').innerHTML='<p>Ausbildungsmodul konnte nicht geladen werden. Bitte Seite neu laden.</p>';return;}
-    window.IDVAusbildung.laden($('#inhalt'));
+    window.IDVAusbildung.laden($('#inhalt'),AUSB_NAV[tab],(route,track)=>{
+      const id=Object.keys(AUSB_NAV).find(k=>AUSB_NAV[k].route===route&&(route!=='monitore'||AUSB_NAV[k].track===track));
+      if(id&&can(id)&&tab!==id){tab=id;NAV_OFFEN.add('ausbildung');zeichneMenue();}
+    });
+    return;
+  }
+  if(tab==='dash'&&ausbildungKonto()){
+    $('#inhalt').innerHTML='<section class="hello"><span class="eyebrow">IdentityValley · Ausbildungsabteilung</span><h1>Willkommen, '+esc(ME.anzeigename||'Ausbilder')+'.</h1><p>Dein Zugang ist für die Ausbildungsabteilung freigegeben.</p></section><div class="box"><h3>Ausbildung</h3><p>Öffne die Übersicht, die Anwärtermonitore oder deine Unterrichtsräume über die Navigation.</p><button class="p" id="ausbildungDashboardOpen">Zur Ausbildungsübersicht</button></div>';
+    $('#ausbildungDashboardOpen').onclick=()=>wechsleZuModul('ausbildung');
     return;
   }
   if (tab==='papierkorb') { window.IDVAkten?.papierkorb(); return; }
@@ -6447,6 +6475,6 @@ document.addEventListener('click',async e=>{
 <script src="/abmeldungen.js"></script>
 <script src="/botKonfiguration.js"></script>
 <script src="/responsiveNav.js"></script>
-<script src="/assets/ausbildung-panel.js?v=20261125-3" defer></script>
+<script src="/assets/ausbildung-panel.js?v=20261125-4" defer></script>
 </body>
 </html>

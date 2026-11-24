@@ -23,7 +23,7 @@ function ausbildungDateiverzeichnis(): string {
     return $real;
 }
 function ausbildungDateiDownload(array $u,int $id): never {
-    ausbildungRecht($u);
+    ausbildungRecht($u,2);
     $r=sql('SELECT dateipfad,titel FROM ausbildung_materialien WHERE id=? AND aktiv=1 LIMIT 1',[$id]);
     if(!$r||!is_string($r[0]['dateipfad']??null))
         fail(404,'Unterlage nicht verfügbar');

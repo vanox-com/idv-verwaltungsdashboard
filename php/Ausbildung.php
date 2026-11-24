@@ -10,9 +10,7 @@ require_once __DIR__.'/AusbildungPersonal.php';
  * Alle personenbezogenen Werte bleiben ausschließlich in MySQL beim Hoster.
  */
 function ausbildungLeitung(array $u): bool {
-    return ($u['rolle']??'')==='Ausbildungsleitung' ||
-        ($u['rolle']??'')==='Administrator' ||
-        (int)(rights($u)['ausbildung']??0)>=2;
+    return (int)(rights($u)['ausbildung']??0)>=2;
 }
 function ausbildungRecht(array $u,int $level=1): void {
     if((int)(rights($u)['ausbildung']??0)<$level)
@@ -283,6 +281,12 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         }
         $materials=sql('SELECT id,modul_code,titel,typ,url,public_aktiv,CASE WHEN dateipfad IS NULL THEN 0 ELSE 1 END AS datei FROM ausbildung_materialien WHERE aktiv=1 ORDER BY modul_code,titel');
         $me=ausbildungTrainer($u);
+        if(!$leitung){
+            $trainers=[];
+            $kompetenzen=json_decode((string)($me['kompetenzen']??'[]'),true)??[];
+            $materials=array_values(array_filter($materials,fn($m)=>in_array($m['modul_code'],$kompetenzen,true)
+                &&preg_match('#^https://docs\.google\.com/presentation/#D',(string)$m['url'])));
+        }
         respond(200,['leitung'=>$leitung,'user'=>['id'=>(int)$u['id'],'rolle'=>$u['rolle'],
             'name'=>userName($u)],'module'=>$module,'ausbilder'=>$trainers,
             'anwaerter'=>$trainees,'materialien'=>$materials,
@@ -364,7 +368,7 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             respond(200,['anwaerter'=>$a,'fortschritt'=>ausbildungFortschritt($a,true)]);
         }
         if($method==='PATCH'){
-            ausbildungRecht($u,2);$b=body();$a=ausbildungAnwaerter($id);
+            ausbildungRecht($u);$b=body();$a=ausbildungAnwaerter($id);
             ausbildungPruefeRevision($a,$b['revision']??null);
             // Name, Laufbahn, DN, Beginn und RSA stammen ausschließlich aus personal.
             $bem=ausbildungString($b['bemerkung']??'',2000,'Bemerkung');
@@ -378,7 +382,9 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
     if(preg_match('#^/api/ausbildung/anwaerter/([1-9]\d*)/modul/([A-Z]{2}\.[0-9]+)$#D',$uri,$m)&&$method==='PUT'){
         $id=cleanId($m[1]);$code=$m[2];$b=body();
         if(!is_bool($b['abgeschlossen']??null))fail(400,'Abschluss muss Ja oder Nein sein');
-        ausbildungDarfModul($u,$code);
+        // Monitorpflege ist für alle Ausbilder erlaubt; Unterrichtskompetenzen
+        // bleiben separat bei der Anlage eines Unterrichtsraums geprüft.
+        ausbildungRecht($u);
         db()->beginTransaction();
         try {
             $a=ausbildungAnwaerter($id,true);ausbildungPruefeRevision($a,$b['revision']??null);
@@ -421,7 +427,7 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         respond(200,['ok'=>true]);
     }
     if(preg_match('#^/api/ausbildung/anwaerter/([1-9]\d*)/link$#D',$uri,$m)){
-        ausbildungRecht($u,2);$id=cleanId($m[1]);
+        ausbildungRecht($u);$id=cleanId($m[1]);
         if($method==='POST'){
             $a=ausbildungAnwaerter($id);
             $token=bin2hex(random_bytes(32));
