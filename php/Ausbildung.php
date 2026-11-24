@@ -331,6 +331,45 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             respond(200,['ok'=>true]);
         }
     }
+    // Private AuLK-URL-Zuordnung aus einem lokalen JSON-Import. Nur neue Einträge.
+    // Keine Veröffentlichung, keine Änderung oder Löschung bestehender Unterlagen.
+    if($method==='POST'&&$uri==='/api/ausbildung/materialien/import'){
+        ausbildungRecht($u,2);
+        $b=body();$items=$b['eintraege']??null;
+        if(($b['bestaetigung']??null)!=='AULK_PRIVAT_IMPORT'
+            ||!is_array($items)||!array_is_list($items)||count($items)<1||count($items)>60)
+            fail(400,'Gültige AuLK-Importdatei mit höchstens 60 Einträgen erforderlich');
+        $validModules=array_column(sql('SELECT code FROM ausbildung_module WHERE aktiv=1'),'code');
+        $records=[];
+        foreach($items as $item){
+            if(!is_array($item))fail(400,'Ungültiger AuLK-Eintrag');
+            $code=ausbildungString($item['modul_code']??null,12,'Modulcode',true);
+            $title=ausbildungString($item['titel']??null,200,'Titel',true);
+            $url=ausbildungLink($item['url']??null);
+            if(!in_array($code,$validModules,true)
+                ||!preg_match('#^https://docs\.google\.com/presentation/d/[a-zA-Z0-9_-]+/#D',$url))
+                fail(400,'Nur vorhandene Module und Google-Slides-Präsentationen importieren');
+            $records[]=[$code,$title,$url];
+        }
+        $locked=sql("SELECT GET_LOCK('idv_ausbildung_aulk_import',10) AS ok");
+        if((int)($locked[0]['ok']??0)!==1)fail(503,'Ein weiterer AuLK-Import läuft gerade');
+        $created=0;$skipped=0;
+        try{
+            db()->beginTransaction();
+            foreach($records as [$code,$title,$url]){
+                if(sql('SELECT id FROM ausbildung_materialien WHERE modul_code=? AND url=? LIMIT 1',[$code,$url])){
+                    $skipped++;continue;
+                }
+                sql("INSERT INTO ausbildung_materialien(modul_code,titel,typ,url,public_aktiv,aktiv)
+                    VALUES(?,?,'Präsentation',?,0,1)",[$code,$title,$url]);
+                $created++;
+            }
+            auditAction($u,'Private AuLK-Präsentationen importiert: '.$created.' neu, '.$skipped.' übersprungen','add');
+            db()->commit();
+        }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
+        finally{sql("SELECT RELEASE_LOCK('idv_ausbildung_aulk_import')");}
+        respond(200,['ok'=>true,'neu'=>$created,'vorhanden'=>$skipped]);
+    }
     if($method==='POST'&&$uri==='/api/ausbildung/materialien/upload'){
         require_once __DIR__.'/AusbildungFiles.php';
         ausbildungDateiUpload($u);
