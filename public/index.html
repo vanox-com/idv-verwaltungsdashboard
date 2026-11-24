@@ -2223,7 +2223,7 @@ function zeichne() {
     if(tab === 'backup') ladeBackup();
     if(tab === 'rechtesimulator') ladeRechteSimulator();
     if(tab === 'design') ladeDesign();
-    if(tab === 'bef') { ladeRangantraege(); void urkundenAuthVorbereiten(); void ladeDienstnummerAntraege(); }
+    if(tab === 'bef') { ladeRangantraege(); void ladeBefPorOffen(); void urkundenAuthVorbereiten(); void ladeDienstnummerAntraege(); }
     if(tab === 'befricht') void befRichtLaden();
     if(tab === 'rl') void ladeDisziplinRichtlinie();
     if(tab === 'pers') { ladePersonalRangantraege(); void ladeDienstnummerAntraege(); }
@@ -3380,7 +3380,7 @@ function vBef() {
       const key=x=>x.anwaerter?(x.pruefung?'0000-01-01':'9999-12-31'):x.termin;
       return key(a).localeCompare(key(b));
     });
-  const wartet = (D.personal || []).filter(p => p.por_status === 'beantragt' && p.status !== 'Gekündigt').length;
+  const porOffen = (D.personal || []).filter(p => p.por_status === 'beantragt' && p.status !== 'Gekündigt' && !p.administrativ_geloescht_am);
   const rows = liste.map(({p,next,termin,anwaerter,pruefung,pruefungstyp}) => {
     const nr = Number(p.personalnummer), days=anwaerter?null:Math.round((Date.parse(termin+'T00:00:00Z')-Date.parse(heute+'T00:00:00Z'))/86400000);
     const status=anwaerter?(pruefungstyp+'-Prüfung '+(pruefung?'bestanden':'notwendig')):days<=0?'fällig seit '+(-days)+' Tagen':'in '+days+' Tagen';
@@ -3440,7 +3440,8 @@ function vBef() {
       '<td>'+esc(regel?regel.code+'-Prüfung bestanden':r.grund||'')+'</td></tr>';
   }).join('');
   return '<h1>Beförderungen</h1><p class="mut">PM-, PK- und KK-Anwärter haben keine Mindestzeit. Nach bestandener jeweiliger Prüfung ist eine Beförderung mit POR-Freigabe sofort möglich. Für die übrigen Dienstgrade gelten die festgelegten Fristen.</p>' +
-    (wartet ? '<div class="box idv-warnung"><b>'+wartet+'</b> POR-Anträge warten auf eine Entscheidung.</div>' : '') +
+    '<div id="befPorGesamt" class="box idv-warnung" data-regular="'+porOffen.length+'" data-rank="" hidden></div>' +
+    '<section id="befPorOffen" class="box">'+befPorListeHTML(porOffen)+'</section>' +
     '<div id="rangantraegeBereich" class="box"><h3>Offene Rangänderungsanträge</h3><p class="mut">Lade Anträge …</p></div>'+ 
     ((can('dnfreigabe')||can('pers'))?'<section id="dnAntraegeBereich" class="box"><h3>Dienstnummern-Anträge · Freigabe</h3><p class="mut">Lade …</p></section>':'')+
     ((can('por',1)||can('ranghistorie',1))?'<section class="box" id="ranghistorieBereich"><div class="ranghist-top"><div><h3>Rangänderungs-Historie</h3><p class="mut">Abgeschlossene POR-Entscheidungen – nur für Berechtigte einsehbar.</p></div><button type="button" data-ranghistorie-toggle aria-expanded="false">Historie anzeigen</button></div><div id="ranghistorieListe" hidden></div></section>':'')+ 
@@ -3460,10 +3461,42 @@ function vBef() {
     ['Dienstgrad','Abk.','Nächster Rang','Wartezeit','Bemerkung','Grund'].map(t=>'<th>'+t+'</th>').join('')+
     '</tr></thead><tbody>'+ranks+'</tbody></table></div></div>';
 }
+let befPorCache=[];
+function befPorListeHTML(items){
+  return '<h3>Offene POR-Beförderungsfreigaben <span class="tag '+(items.length?'warn':'ok')+'">'+items.length+' offen</span></h3>'+
+    '<p class="mut">Normale Beförderungsfreigaben, unabhängig von Rangänderungsanträgen und Beförderungsfristen.</p>'+
+    (items.length?items.map(p=>{
+      const nr=Number(p.nr??p.personalnummer);
+      const name=[p.vorname,p.nachname].filter(Boolean).join(' ')||('Personalnummer '+nr);
+      return '<div class="dashboard-line ranghist-entry"><div><strong>'+esc(name)+'</strong> · Nr. '+nr+
+        '<p>'+esc(p.dienstgrad||'')+' <span class="tag warn">Wartet auf POR</span></p>'+
+        (p.por_notiz?'<small>Notiz: '+esc(p.por_notiz)+'</small>':'')+'</div>'+
+        (can('por',2)?'<div class="actions"><button class="p" type="button" data-por-person="'+nr+'">Entscheidung treffen</button></div>':'')+'</div>';
+    }).join(''):'<p class="mut">Keine offenen POR-Beförderungsfreigaben.</p>');
+}
+function befPorGesamtAktualisieren(art,anzahl){
+  const box=document.getElementById('befPorGesamt');if(!box)return;
+  box.dataset[art]=String(anzahl);
+  const regular=Number(box.dataset.regular)||0,rank=Number(box.dataset.rank)||0;
+  const total=regular+rank;
+  box.hidden=!total;
+  box.innerHTML='<b>'+total+'</b> offene POR-Anträge · '+regular+' Beförderungsfreigaben · '+rank+' Rangänderungen'+(box.dataset.rank===''?' (Rangänderungen werden noch geladen)':'');
+}
+async function ladeBefPorOffen(vorhanden=null){
+  const area=document.getElementById('befPorOffen');if(!area||!can('bef'))return;
+  try{
+    const list=can('por',2)?(vorhanden??await api('/por/offen')):(D.personal||[]).filter(p=>p.por_status==='beantragt'&&p.status!=='Gekündigt'&&!p.administrativ_geloescht_am);
+    if(!area.isConnected)return;
+    befPorCache=list;
+    area.innerHTML=befPorListeHTML(list);
+    befPorGesamtAktualisieren('regular',list.length);
+    if(can('por',2))window.IDVPOR?.observeRegular(list);
+  }catch(e){if(area.isConnected)area.innerHTML='<h3>Offene POR-Beförderungsfreigaben</h3><p class="fehler">Freigaben konnten nicht geladen werden: '+esc(e.message)+'</p>';}
+}
 function aktBem(name) { const r = (D.raenge||[]).find(x=>x.name===name); return r ? r.bemerkung||'' : ''; }
 function porBearbeiten(nr) {
   if(!can('bef',1)||(!can('por',2)&&!can('bef',2)&&ME?.rolle!=='Polizeirat'))return;
-  const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nr);if(!p)return;
+  const p=befPorCache.find(x=>Number(x.nr??x.personalnummer)===nr)||(D.personal||[]).find(x=>Number(x.personalnummer)===nr);if(!p)return;
   const d=$('#porDialog');
   const nurBeantragen=ME?.rolle==='Polizeirat'&&!can('por',2)&&!can('bef',2);
   const options=POR_STATUS.filter(([status])=>can('por',2)||(nurBeantragen?status==='beantragt':['offen','beantragt'].includes(status))).map(([status,label])=>'<option value="'+status+'"'+((nurBeantragen?'beantragt':p.por_status||'offen')===status?' selected':'')+'>'+label+'</option>').join('');
@@ -6282,6 +6315,7 @@ async function ladeRangantraege(vorhanden=null){
  try{
   const list=vorhanden??await api('/rangantraege');if(!area.isConnected)return;
   window.IDVPOR?.observe(list);
+  befPorGesamtAktualisieren('rank',list.length);
   area.innerHTML='<h3>Offene Rangänderungsanträge <span class="tag warn">'+list.length+'</span></h3>'+
    '<p class="mut">Hier erscheinen ausschließlich Anträge, über die der POR noch nicht entschieden hat. Genehmigte Änderungen werden bei der Entscheidung sofort in der Personalakte übernommen.</p>'+
    (list.length?list.map(a=>'<div class="dashboard-line ranghist-entry"><div><strong>'+esc(rangAntragName(a))+'</strong> · Nr. '+Number(a.personalnummer)+
@@ -6412,7 +6446,7 @@ document.addEventListener('click',async e=>{
 <script src="/dokumentUI.js"></script>
 <script src="/befRichtUI.js"></script>
 <script src="/liveUpdates.js"></script>
-<script src="/porHinweise.js?v=20261125-1"></script>
+<script src="/porHinweise.js?v=20261125-2"></script>
 <script src="/aktenFeatures.js"></script>
 <script src="/kuendigungsArchiv.js"></script>
 <script src="/abmeldungen.js"></script>

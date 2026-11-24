@@ -95,12 +95,12 @@ function dispatchPromotion(array $u,string $method,string $uri): bool {
     }
     if($method==='GET'&&$uri==='/api/por/offen'){
         needRight($u,'por',2);
-        $rows=sql("SELECT p.personalnummer,
+         $rows=sql("SELECT p.personalnummer,p.vorname,p.nachname,p.dienstgrad,p.por_notiz,p.por_am,p.por_status,
           COALESCE((SELECT CAST(MAX(l.id) AS CHAR) FROM log l
             WHERE l.aktion=CONCAT('POR-Freigabe bei ',p.personalnummer,': beantragt')),'bestand') AS revision
           FROM personal p WHERE p.por_status='beantragt' AND p.status<>'Gekündigt'
           AND p.administrativ_geloescht_am IS NULL ORDER BY p.personalnummer");
-        respond(200,array_map(fn($r)=>['nr'=>(int)$r['personalnummer'],'revision'=>(string)$r['revision']],$rows));
+        respond(200,array_map(fn($r)=>['nr'=>(int)$r['personalnummer'],'revision'=>(string)$r['revision'],'vorname'=>$r['vorname'],'nachname'=>$r['nachname'],'dienstgrad'=>$r['dienstgrad'],'por_notiz'=>$r['por_notiz'],'por_am'=>$r['por_am'],'por_status'=>$r['por_status']],$rows));
     }
     if($method==='PATCH'&&preg_match('#^/api/por/([1-9][0-9]*)$#D',$uri,$m)){
         needRight($u,'bef');$nr=cleanId($m[1]);$b=body();

@@ -1,25 +1,23 @@
 /* POR-Freigaben: diskrete orange Echtzeit-Hinweise nur für berechtigte Entscheider.
-   Bekannte IDs werden pro Konto und Browser-Tab gemerkt, damit es kein
-   erneutes Aufpoppen bei jedem Rendern oder Seitenwechsel gibt. */
+   Offene Anträge werden bei einem neuen Seitenaufruf erneut angezeigt.
+   Innerhalb der Seite bleibt eine explizit geschlossene Meldung geschlossen. */
 (()=>{
   let inFlight=false,again=false,account='',seen=null,toast=null,lastChecked=0,regularIds=[],rankIds=[];
   const eligible=()=>Boolean(typeof can==='function'&&can('por',2));
-  const key=()=> 'idv-por-bekannt-'+String(ME?.dienstnummer||'unbekannt');
+  const key=()=> String(ME?.dienstnummer||'unbekannt');
   function loadSeen(){
     const id=key();
     if(account===id&&seen)return seen;
-    account=id;
-    try{
-      const raw=JSON.parse(sessionStorage.getItem(id)||'[]');
-      seen=new Set(Array.isArray(raw)?raw.map(x=>typeof x==='number'?'r:'+x:String(x)).filter(Boolean):[]);
-    }catch{seen=new Set();}
+    account=id;seen=new Set();regularIds=[];rankIds=[];
+    close();
     return seen;
   }
-  function persist(){
-    const latest=[...seen].slice(-250);
-    try{sessionStorage.setItem(account,JSON.stringify(latest));}catch{}
-  }
   function close(){if(toast)toast.hidden=true;}
+  function dismiss(){
+    const known=loadSeen();
+    [...regularIds,...rankIds].forEach(id=>known.add(id));
+    close();
+  }
   function ensureToast(){
     if(toast?.isConnected)return toast;
     toast=document.createElement('div');
@@ -32,49 +30,44 @@
       '<button type="button" id="idvPorHinweisOeffnen">Anträge ansehen</button></div>'+
       '<button type="button" id="idvPorHinweisSchliessen" aria-label="POR-Hinweis schließen">×</button>';
     document.body.append(toast);
-    toast.querySelector('#idvPorHinweisSchliessen').addEventListener('click',close);
+    toast.querySelector('#idvPorHinweisSchliessen').addEventListener('click',dismiss);
     toast.querySelector('#idvPorHinweisOeffnen').addEventListener('click',()=>{
+      const regular=regularIds.length>0;
       if(can('bef'))wechsleZuModul('bef');
-      else if(can('pers'))wechsleZuModul('pers');
+      else if(can('pers')&&rankIds.length)wechsleZuModul('pers');
       else return;
-      close();
-      const ziel=document.querySelector('#inhalt>.idv-warnung')||document.getElementById(can('bef')?'rangantraegeBereich':'personalRangantraege');
+      dismiss();
+      const ziel=document.getElementById(can('bef')?(regular?'befPorOffen':'rangantraegeBereich'):'personalRangantraege');
       ziel?.scrollIntoView({block:'start',behavior:'smooth'});
     });
     return toast;
   }
-  function notify(neu,gesamt){
+  function updateToast(){
+    const known=loadSeen();
+    const ids=[...rankIds,...regularIds];
+    for(const id of known)if(!ids.includes(id))known.delete(id);
+    const newer=ids.filter(id=>!known.has(id));
+    if(!newer.length){close();return;}
     const box=ensureToast();
-    box.querySelector('#idvPorHinweisTitel').textContent=
-      neu===1?'Neue POR-Freigabeanfrage':'Neue POR-Freigabeanfragen';
+    box.querySelector('#idvPorHinweisTitel').textContent=ids.length===1?'Offene POR-Freigabeanfrage':'Offene POR-Freigabeanfragen';
     box.querySelector('#idvPorHinweisText').textContent=
-      neu===1?'1 neue POR-Freigabeanfrage wartet auf Entscheidung.':
-      neu+' neue POR-Freigabeanfragen warten auf Entscheidung.';
-    if(gesamt>neu)box.querySelector('#idvPorHinweisText').textContent+=' Insgesamt '+gesamt+' offen.';
-    const open=box.querySelector('#idvPorHinweisOeffnen');
-    open.hidden=!(can('bef')||can('pers'));
+      [regularIds.length?regularIds.length+' Beförderungsfreigabe(n)':null,rankIds.length?rankIds.length+' Rangänderungsantrag/-anträge':null].filter(Boolean).join(' · ')+' warten auf Entscheidung.';
+    box.querySelector('#idvPorHinweisOeffnen').hidden=!(can('bef')||(can('pers')&&rankIds.length));
     box.hidden=false;
   }
   function observe(items){
     if(!eligible()){close();return;}
-    const known=loadSeen();
+    loadSeen();
     const offen=Array.isArray(items)?items.filter(a=>a?.status==='beantragt'):[];
     rankIds=[...new Set(offen.map(x=>Number(x.id)).filter(x=>Number.isSafeInteger(x)&&x>0).map(id=>'r:'+id))];
-    const newer=rankIds.filter(id=>!known.has(id));
-    rankIds.forEach(id=>known.add(id));
-    if(newer.length){persist();notify(newer.length,rankIds.length+regularIds.length);}
-    if(!rankIds.length&&!regularIds.length)close();
-    lastChecked=Date.now();
+    updateToast();
   }
   function observeRegular(items){
     if(!eligible()){close();return;}
-    const known=loadSeen();
-    regularIds=[...new Set((Array.isArray(items)?items:[]).filter(x=>Number.isSafeInteger(x?.nr)&&x.nr>0)
-       .map(x=>'p:'+x.nr+':'+String(x.revision||'')))];
-    const newer=regularIds.filter(id=>!known.has(id));
-    regularIds.forEach(id=>known.add(id));
-    if(newer.length){persist();notify(newer.length,rankIds.length+regularIds.length);}
-    if(!rankIds.length&&!regularIds.length)close();
+    loadSeen();
+    regularIds=[...new Set((Array.isArray(items)?items:[]).filter(x=>Number.isSafeInteger(Number(x?.nr))&&Number(x.nr)>0)
+       .map(x=>'p:'+Number(x.nr)+':'+String(x.revision||'')))];
+    updateToast();
   }
   async function refresh(){
     if(!eligible()){close();return;}
@@ -83,12 +76,14 @@
     try{
       const [list,regular]=await Promise.all([api('/rangantraege'),api('/por/offen')]);
       if(!eligible())return;
-      observe(list);observeRegular(regular);
+      observe(list);observeRegular(regular);lastChecked=Date.now();
       // Nur den jeweiligen POR-Bereich auffrischen, nie die ganze Seite.
       if(tab==='pers'&&document.getElementById('personalRangantraege'))
         await ladePersonalRangantraege(list);
-      else if(tab==='bef'&&document.getElementById('rangantraegeBereich'))
+      else if(tab==='bef'&&document.getElementById('rangantraegeBereich')){
         await ladeRangantraege(list);
+        await ladeBefPorOffen(regular);
+      }
     }catch(err){
       console.warn('IDV: POR-Benachrichtigung konnte nicht geprüft werden',err);
     }finally{
@@ -108,5 +103,5 @@
   document.addEventListener('visibilitychange',()=>{
     if(!document.hidden&&eligible()&&Date.now()-lastChecked>10000)void refresh();
   });
-  window.IDVPOR={observe,refresh,changed,start};
+  window.IDVPOR={observe,observeRegular,refresh,changed,start};
 })();
