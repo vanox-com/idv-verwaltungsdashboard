@@ -56,6 +56,29 @@ function ausbildungStimmgewicht(array $stimme): float {
     // gespeicherte Gewichtung, statt einen unbekannten Rang zu unterstellen.
     return (float)($stimme['gespeichert_gewicht']??$stimme['gewicht']??0);
 }
+/** Verhindert Fehler bei schrittweise bereitgestellten MySQL-Migrationen. */
+function ausbildungStimmenDetailsVerfuegbar(): bool {
+    static $bereit=null;
+    if($bereit!==null)return $bereit;
+    $row=sql("SELECT COUNT(DISTINCT COLUMN_NAME) AS n FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='ausbildung_stimmen'
+          AND COLUMN_NAME IN ('anlass','streifenfahrt_datum','bemerkung')");
+    return $bereit=(int)($row[0]['n']??0)===3;
+}
+/** Validierung für neue Stimmen; die Altstimmen bleiben ohne Umschreiben gültig. */
+function ausbildungStimmDetailsPruefen(array $body,string $vote): array {
+    $anlass=ausbildungString($body['anlass']??null,32,'Anlass',true);
+    if(!in_array($anlass,['Streifenfahrt','Sonstige Leistungen'],true))
+        fail(400,'Bitte Streifenfahrt oder Sonstige Leistungen als Anlass wählen.');
+    $bemerkung=ausbildungString($body['bemerkung']??'',2000,'Bemerkung');
+    if($vote==='Nein'&&$bemerkung==='')
+        fail(400,'Bei einer Nein-Stimme ist eine Bemerkung mit Begründung verpflichtend.');
+    $date=ausbildungDatum($body['streifenfahrt_datum']??null);
+    if($vote==='Ja'&&$anlass==='Streifenfahrt'&&$date===null)
+        fail(400,'Bei einer Ja-Stimme für eine Streifenfahrt muss deren Datum angegeben werden.');
+    if($anlass!=='Streifenfahrt')$date=null;
+    return ['anlass'=>$anlass,'streifenfahrt_datum'=>$date,'bemerkung'=>$bemerkung];
+}
 function ausbildungModule(string $laufbahn): array {
     $track=$laufbahn==='PMA'?'PMA':'PKA';
     return sql('SELECT code,titel,laufbahn FROM ausbildung_module WHERE laufbahn=? AND aktiv=1 ORDER BY sortierung,code',[$track]);
@@ -83,8 +106,11 @@ function ausbildungFortschritt(array $a,bool $details=false): array {
     $modules=ausbildungModule((string)$a['laufbahn']);
     $doneRows=sql('SELECT modul_code,abgeschlossen,ausbilder_user_id,aktualisiert FROM ausbildung_abschluesse WHERE anwaerter_id=?',[$id]);
     $done=array_values(array_map(fn($x)=>(string)$x['modul_code'],array_filter($doneRows,fn($x)=>(int)$x['abgeschlossen']===1)));
+    $stimmfelder=ausbildungStimmenDetailsVerfuegbar()
+        ? 's.anlass,s.streifenfahrt_datum,s.bemerkung'
+        : 'NULL AS anlass,NULL AS streifenfahrt_datum,NULL AS bemerkung';
     $votes=sql('SELECT s.stimme,s.gewicht AS gespeichert_gewicht,s.ausbilder_user_id,
-        s.aktualisiert,u.anzeigename,u.rolle,t.funktion
+        s.aktualisiert,u.anzeigename,u.rolle,t.funktion,'.$stimmfelder.'
         FROM ausbildung_stimmen s
         JOIN users u ON u.id=s.ausbilder_user_id
         LEFT JOIN ausbildung_ausbilder t ON t.user_id=s.ausbilder_user_id
@@ -215,12 +241,20 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         unset($t);
         $trainees=ausbildungAktuelleAnwaerter();
         foreach($trainees as &$a)$a['fortschritt']=ausbildungFortschritt($a);unset($a);
+        // Kein erneuter Datei-Upload: die Präsentationen aus der gelieferten ZIP
+        // sind mit den bereits vorhandenen Google-Slides-Originalen abgeglichen.
+        // Ergänzt nur fehlende, private Verweise (kein Überschreiben/Freigeben).
+        if($leitung){
+            require_once __DIR__.'/AusbildungDecks.php';
+            ausbildungSeedZipDecks($u);
+        }
         $materials=sql('SELECT id,modul_code,titel,typ,url,public_aktiv,CASE WHEN dateipfad IS NULL THEN 0 ELSE 1 END AS datei FROM ausbildung_materialien WHERE aktiv=1 ORDER BY modul_code,titel');
         $me=ausbildungTrainer($u);
         respond(200,['leitung'=>$leitung,'user'=>['id'=>(int)$u['id'],'rolle'=>$u['rolle'],
             'name'=>userName($u)],'module'=>$module,'ausbilder'=>$trainers,
             'anwaerter'=>$trainees,'materialien'=>$materials,
             'unterrichtBereit'=>ausbildungSchemaStatus()['unterrichtBereit'],
+            'stimmenDetailsBereit'=>ausbildungStimmenDetailsVerfuegbar(),
             'eigeneKompetenzen'=>json_decode((string)($me['kompetenzen']??'[]'),true)??[]]);
     }
     if($uri==='/api/ausbildung/ausbilder'&&$method==='POST'){
@@ -321,6 +355,9 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
     if(preg_match('#^/api/ausbildung/anwaerter/([1-9]\d*)/stimme$#D',$uri,$m)&&$method==='PUT'){
         $id=cleanId($m[1]);$b=body();$vote=$b['stimme']??null;
         if(!in_array($vote,['Ja','Nein',null],true))fail(400,'Ungültige Stimme');
+        if(!ausbildungStimmenDetailsVerfuegbar())
+            fail(503,'Für neue Stimmabgaben müssen zuerst die zusätzlichen Felder für Anlass, Datum und Bemerkung nach einer Datenbanksicherung eingerichtet werden.');
+        $details=$vote===null?null:ausbildungStimmDetailsPruefen($b,$vote);
         $trainer=ausbildungTrainer($u);
         if(!$trainer&&!ausbildungLeitung($u))fail(403,'Nur aktive Ausbilder stimmen ab');
         $weight=$trainer?ausbildungStufe((string)$trainer['funktion']):
@@ -330,9 +367,12 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             $a=ausbildungAnwaerter($id,true);ausbildungPruefeRevision($a,$b['revision']??null);
             if($a['laufbahn']!=='PMA')fail(400,'Der Excel-Stimmenmonitor gilt nur für PMA');
             if($vote===null)sql('DELETE FROM ausbildung_stimmen WHERE anwaerter_id=? AND ausbilder_user_id=?',[$id,(int)$u['id']]);
-            else sql('INSERT INTO ausbildung_stimmen(anwaerter_id,ausbilder_user_id,stimme,gewicht) VALUES(?,?,?,?)
-                ON DUPLICATE KEY UPDATE stimme=VALUES(stimme),gewicht=VALUES(gewicht),aktualisiert=UTC_TIMESTAMP(6)',
-                [$id,(int)$u['id'],$vote,$weight]);
+            else sql('INSERT INTO ausbildung_stimmen(anwaerter_id,ausbilder_user_id,stimme,gewicht,anlass,streifenfahrt_datum,bemerkung)
+                VALUES(?,?,?,?,?,?,?)
+                ON DUPLICATE KEY UPDATE stimme=VALUES(stimme),gewicht=VALUES(gewicht),
+                  anlass=VALUES(anlass),streifenfahrt_datum=VALUES(streifenfahrt_datum),
+                  bemerkung=VALUES(bemerkung),aktualisiert=UTC_TIMESTAMP(6)',
+                [$id,(int)$u['id'],$vote,$weight,$details['anlass'],$details['streifenfahrt_datum'],$details['bemerkung']]);
             sql('UPDATE ausbildung_anwaerter SET revision=revision+1,aktualisiert=UTC_TIMESTAMP(6) WHERE id=?',[$id]);
             auditAction($u,'PMA-Stimme aktualisiert: Anwärter-ID '.$id);
             db()->commit();
