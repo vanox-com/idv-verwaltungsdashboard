@@ -24,6 +24,12 @@ const modName=(m)=>m.code+' · '+m.titel;
 const pill=(s)=>'<span class="pill '+(s==='Zugelassen'?'good':s==='Nicht bereit'?'warn':'')+'">'+esc(s)+'</span>';
 const meter=(n,d)=>'<div class="meter" title="'+n+' von '+d+'"><i style="width:'+Math.min(100,Math.max(0,d?n/d*100:0))+'%"></i></div>';
 let data=null,tab='uebersicht',track='PMA',selected=null,editing=null,busy=false,lessonInvite=null;
+try{
+ if(sessionStorage.getItem('idvAusbildungReturn')==='unterricht'){
+   sessionStorage.removeItem('idvAusbildungReturn');
+   tab='unterricht';
+ }
+}catch(_){/* Standardansicht ohne sessionStorage. */}
 const ROUTES=[['uebersicht','Übersicht'],['monitore','PMA- / PKA- / KKA-Monitor'],['ausbilder','Ausbilderverwaltung'],['materialien','Ausbildungsunterlagen'],['unterricht','Unterrichtsräume']];
 async function request(path,opt={}){
  const headers={'Accept':'application/json'};

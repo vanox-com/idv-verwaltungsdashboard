@@ -378,8 +378,24 @@
     };
     $("ende").onclick=async()=>{
       if(!confirm("Unterricht für den Anwärter beenden? Der Link wird damit ungültig."))return;
-      try{await trainerApi("beenden",{});closed=true;stopLocal();shareState("Unterricht beendet",false);notice("Unterricht beendet.");$("teilen").disabled=true;}
-      catch(err){notice(err.message,true);}
+      const endButton=$("ende");
+      endButton.disabled=true;
+      try{
+        await trainerApi("beenden",{});
+        closed=true;
+        stopLocal();
+        $("teilen").disabled=true;
+        shareState("Unterricht beendet",false);
+        notice("Unterricht beendet. Zurück zur Ausbildungsverwaltung …");
+        try{
+          sessionStorage.removeItem("idvLesson:"+room);
+          sessionStorage.setItem("idvAusbildungReturn","unterricht");
+        }catch(_){/* Navigation funktioniert auch ohne sessionStorage. */}
+        location.replace($("zurueck").href);
+      }catch(err){
+        endButton.disabled=false;
+        notice("Unterricht konnte nicht beendet werden: "+err.message,true);
+      }
     };
   }
   async function watch() {
