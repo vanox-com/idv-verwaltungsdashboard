@@ -5,6 +5,8 @@ on:
       - migration/mysql8-php-cutover-2026-11-10
     paths:
       - 'php/Ausbildung.php'
+      - 'php/AusbildungSetup.php'
+      - 'public/assets/ausbildung-panel.js'
       - 'php/Api.php'
       - 'public/ausbildung*.html'
       - 'public/aulk.html'
@@ -55,3 +57,5 @@ jobs:
           test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM role_perms WHERE modul='ausbildung' AND stufe>0")" -eq 4
       - name: Exercise login, roles, module completion, votes and public link
         run: bash tests/ausbildung-http.sh
+      - name: Exercise guarded additive setup from unchanged existing MySQL schema
+        run: bash tests/ausbildung-setup-http.sh
