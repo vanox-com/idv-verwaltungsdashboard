@@ -272,7 +272,7 @@ function run(): void {
             if($method==='GET'&&$uri==='/api/bootstrap'){
                 // Minimales Dashboard-Grundgerüst – keinerlei Personal-,
                 // Polizeirat-, Disziplinar- oder sonstige Verwaltungsdaten.
-                respond(200,['user'=>sessionApiUser($u),'daten'=>['dashboard'=>['summary'=>new \\stdClass(),
+                respond(200,['user'=>sessionApiUser($u),'daten'=>['dashboard'=>['summary'=>new \stdClass(),
                     'layout'=>['items'=>[],'version'=>0]]]]);
             }
             if(!str_starts_with($uri,'/api/ausbildung/'))
