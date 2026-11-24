@@ -333,7 +333,7 @@ function run(): void {
         error_log('[IDV PHP] Database failure: '.$e->getCode());
         fail(500,'Interner Datenbankfehler');
     }catch(Throwable $e){
-        error_log('[IDV PHP] Unhandled '.$e::class);
+        error_log('[IDV PHP] Unhandled '.$e::class.' at '.basename($e->getFile()).':'.$e->getLine());
         fail(500,'Interner Fehler');
     }
 }
