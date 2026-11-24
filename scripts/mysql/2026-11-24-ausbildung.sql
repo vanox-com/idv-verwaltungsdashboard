@@ -2,6 +2,10 @@
 -- Auf dem PHP-Hoster EINMAL per phpMyAdmin einspielen; keine vorhandenen Tabellen löschen.
 -- Keine realen Ausbilder-/Anwärterdaten, E-Mails, Passwörter oder Dokumentinhalte in GitHub.
 SET NAMES utf8mb4;
+INSERT IGNORE INTO roles(name,farbe,sensibel) VALUES
+ ('Administrator','#607b99',1),
+ ('Leitungsdienst','#597898',1),
+ ('Polizeirat','#6885a1',1);
 INSERT INTO roles(name,farbe,sensibel) VALUES
  ('Ausbildungsleitung','#5aa7d8',0),
  ('Ausbilder','#5a8a9c',0)
@@ -97,6 +101,7 @@ CREATE TABLE IF NOT EXISTS ausbildung_materialien (
  titel VARCHAR(200) NOT NULL,
  typ VARCHAR(50) NOT NULL DEFAULT 'Präsentation',
  url VARCHAR(2048) NOT NULL DEFAULT '',
+ dateipfad VARCHAR(120) NULL,
  aktiv TINYINT(1) NOT NULL DEFAULT 1,
  aktualisiert DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  CONSTRAINT ausbildung_materialien_modul_fk FOREIGN KEY(modul_code) REFERENCES ausbildung_module(code) ON DELETE SET NULL,
