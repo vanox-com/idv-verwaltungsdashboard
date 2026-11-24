@@ -383,7 +383,7 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
                 archiveTerminatedLogin($n,$u);
             }
             $delta=[];
-            foreach(['vorname','nachname','status','gruppe','beschaeftigungsart','nebenjob','eintrittsdatum'] as $key)
+            foreach(['vorname','nachname','status','gruppe','beschaeftigungsart','nebenjob','eintrittsdatum','rsa'] as $key)
                 if(array_key_exists($key,$changes)&&(string)($before[$key]??'')!==(string)($changes[$key]??''))
                     $delta[$key]=['alt'=>$before[$key]??null,'neu'=>$changes[$key]??null];
             $saveStep='P04'; // Änderungen protokollieren

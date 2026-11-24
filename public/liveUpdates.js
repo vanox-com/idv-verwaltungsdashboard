@@ -146,6 +146,8 @@
     loading=true;const marker=pending;
     try{
       const before=tabSnapshot(D);
+      const rsaSnapshot=d=>JSON.stringify((d?.personal||[]).map(p=>[p.personalnummer,p.rsa??'']));
+      const rsaBefore=rsaSnapshot(D);
       const previousRights=JSON.stringify(ME.rechte||{});
       const result=await api('/bootstrap');
       if(!result?.user||!result?.daten)throw Error('Unvollständige Verwaltungsdaten');
@@ -156,7 +158,12 @@
       const name=node('#meName'),role=node('#meRolle');
       if(name)name.textContent=ME.anzeigename||'Dienstkonto';
       if(role)role.textContent=ME.rolle+(ME.sensibel?' · Personaldaten':'');
-      if(changed||conflictFlag)show();
+      const rsaChanged=rsaSnapshot(D)!==rsaBefore;
+      // Only update the personnel list automatically if there is no open editor.
+      // Existing conflict handling remains in force for personal forms.
+      if(changed&&rsaChanged&&tab==='pers'&&!editorOpen()&&!conflictFlag){
+        if(updateView())hide();else show();
+      }else if(changed||conflictFlag)show();
       pending=Math.max(0,pending-marker);
     }catch(err){
       console.warn('IDV: Hintergrundabgleich fehlgeschlagen',err);

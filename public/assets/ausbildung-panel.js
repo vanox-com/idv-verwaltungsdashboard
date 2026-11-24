@@ -129,9 +129,43 @@ async function load(){
    message(e.message,true);
  }
 }
+function voteDraftDirty(){
+ const v=el('#vote'),reason=el('#voteReason'),date=el('#votePatrolDate'),note=el('#voteNote');
+ if(!v||!reason||!date||!note||!selected)return false;
+ const old=selected.fortschritt.stimmen?.find(x=>Number(x.ausbilder_user_id)===Number(data?.user.id));
+ return v.value!==(old?.stimme||'')||reason.value!==(old?.anlass||'')||
+   date.value!==String(old?.streifenfahrt_datum||'').slice(0,10)||note.value!==(old?.bemerkung||'');
+}
 async function refreshSelected(){
  if(selected){const d=await request('anwaerter/'+selected.anwaerter.id);selected=d;}
  await load();
+}
+let selectedSyncing=false;
+async function syncOpenTrainee(){
+ if(selectedSyncing||busy||editing||!selected||tab!=='monitore'||!host.isConnected)return;
+ const original=selected;
+ selectedSyncing=true;
+ try{
+   const fresh=await request('anwaerter/'+original.anwaerter.id);
+   if(!host.isConnected||busy||editing||selected!==original||tab!=='monitore')return;
+   if(JSON.stringify(fresh)===JSON.stringify(original))return;
+   if(voteDraftDirty()){
+     if(fresh.fortschritt.rsa!==original.fortschritt.rsa)
+       message('RSA wurde im Personalstamm geändert. Ungespeicherte Stimmangaben bleiben erhalten; bitte vor dem Speichern den neuen Stand prüfen.',true);
+     return;
+   }
+   const scroll=window.scrollY;
+   selected=fresh;
+   const row=data.anwaerter.find(x=>Number(x.id)===Number(fresh.anwaerter.id));
+   if(row)Object.assign(row,fresh.anwaerter,{fortschritt:fresh.fortschritt});
+   render();
+   window.scrollTo({top:scroll,behavior:'instant'});
+   if(fresh.fortschritt.rsa!==original.fortschritt.rsa)message('RSA und Prüfungsstatus aus dem Personalstamm aktualisiert.');
+ }catch(e){
+   if(e.status===404&&selected===original&&!busy&&!editing&&!voteDraftDirty()){
+     selected=null;await load();
+   }
+ }finally{selectedSyncing=false;}
 }
 function navRender(){
  el('#nav').innerHTML=ROUTES.filter(([key])=>allowedRoute(key)).map(([key,label])=>'<button type="button" data-tab="'+key+'" class="'+(tab===key?'on':'')+'">'+esc(label)+'</button>').join('');
@@ -454,7 +488,10 @@ shadow.addEventListener('submit',async(e)=>{
   editing=null;await load();message('Änderung erfolgreich gespeichert.');
  });
 });
-el('#reload').addEventListener('click',()=>act(load));
+el('#reload').addEventListener('click',()=>{
+ if(voteDraftDirty()&&!confirm('Nicht gespeicherte Stimmangaben verwerfen und aktuelle Daten laden?'))return;
+ void act(refreshSelected);
+});
 shadow.addEventListener('change',e=>{
  if(['vote','voteReason'].includes(e.target?.id))updateVoteForm();
  if(e.target?.id==='trainerPerson'){
@@ -473,8 +510,11 @@ const refreshTimer=setInterval(()=>{
  if(host.isConnected && document.visibilityState==='visible' && !busy && !editing && !selected && ['uebersicht','monitore','unterricht'].includes(tab))
    void load();
 },25000);
+const selectedTimer=setInterval(()=>{
+ if(document.visibilityState==='visible')void syncOpenTrainee();
+},10000);
 
-    return {host,refresh:load,navigate:setTab,destroy:()=>clearInterval(refreshTimer)};
+    return {host,refresh:load,navigate:setTab,destroy:()=>{clearInterval(refreshTimer);clearInterval(selectedTimer);}};
   }
   window.IDVAusbildung={
     laden(container,initial={},onNavigate=null){
