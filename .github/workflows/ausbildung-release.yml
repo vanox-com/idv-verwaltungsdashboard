@@ -9,6 +9,7 @@ on:
       - 'public/**'
       - 'scripts/mysql/2026-11-24-ausbildung.sql'
       - 'scripts/mysql/2026-11-24-aulk-public.sql'
+      - 'scripts/mysql/2026-11-24-ausbildung-unterricht.sql'
       - 'tests/ausbildung-*'
       - 'docs/AUSBILDUNG-IMPLEMENTIERUNG.md'
       - 'docs/DATENBANK-BACKUP-SICHER-RESTORE.md'
@@ -33,6 +34,10 @@ jobs:
           node tests/ausbildung-static.mjs
           test -f scripts/mysql/2026-11-24-ausbildung.sql
           test -f scripts/mysql/2026-11-24-aulk-public.sql
+          test -f scripts/mysql/2026-11-24-ausbildung-unterricht.sql
+          test -f public/unterricht.html
+          test -f public/assets/unterricht-raum.js
+          test -f php/AusbildungUnterricht.php
           test -f public/aulk.html
           test -f public/assets/ausbildung-panel.js
       - name: Datenfreies Deployment-Paket erstellen
@@ -43,6 +48,7 @@ jobs:
             public php \
             scripts/mysql/2026-11-24-ausbildung.sql \
             scripts/mysql/2026-11-24-aulk-public.sql \
+            scripts/mysql/2026-11-24-ausbildung-unterricht.sql \
             docs/AUSBILDUNG-IMPLEMENTIERUNG.md \
             docs/DATENBANK-BACKUP-SICHER-RESTORE.md
           unzip -tq migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip
@@ -56,6 +62,10 @@ jobs:
           grep -Fqx php/AusbildungFiles.php migration-output/entries.txt
           grep -Fqx scripts/mysql/2026-11-24-ausbildung.sql migration-output/entries.txt
           grep -Fqx scripts/mysql/2026-11-24-aulk-public.sql migration-output/entries.txt
+          grep -Fqx scripts/mysql/2026-11-24-ausbildung-unterricht.sql migration-output/entries.txt
+          grep -Fqx public/unterricht.html migration-output/entries.txt
+          grep -Fqx public/assets/unterricht-raum.js migration-output/entries.txt
+          grep -Fqx php/AusbildungUnterricht.php migration-output/entries.txt
           sha256sum migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip > migration-output/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
