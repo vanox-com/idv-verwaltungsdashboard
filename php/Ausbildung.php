@@ -167,7 +167,7 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
     if($method==='GET'&&$uri==='/api/ausbildung/bootstrap'){
         $leitung=ausbildungLeitung($u);
         $module=sql('SELECT code,laufbahn,titel FROM ausbildung_module WHERE aktiv=1 ORDER BY laufbahn,sortierung');
-        $trainers=sql('SELECT a.*,u.gesperrt,u.rolle FROM ausbildung_ausbilder a JOIN users u ON u.id=a.user_id WHERE a.aktiv=1 ORDER BY a.name');
+        $trainers=sql('SELECT a.*,u.gesperrt,u.rolle,u.dienstnummer AS login_dienstnummer FROM ausbildung_ausbilder a JOIN users u ON u.id=a.user_id WHERE a.aktiv=1 ORDER BY a.name');
         if(!$leitung)foreach($trainers as &$t){unset($t['email'],$t['notiz']);}unset($t);
         $trainees=sql('SELECT * FROM ausbildung_anwaerter ORDER BY laufbahn,name,id');
         foreach($trainees as &$a)$a['fortschritt']=ausbildungFortschritt($a);unset($a);
