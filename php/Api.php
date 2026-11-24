@@ -255,6 +255,9 @@ function run(): void {
                 fail(503,'Datenbank wird gerade wiederhergestellt. Schreibzugriffe sind vorübergehend gesperrt.');
         }
         require_once __DIR__.'/RateLimit.php';
+        // Einmalige, tokengebundene Schülersitzung; keine Anmeldung in die Personalverwaltung.
+        require_once __DIR__.'/AusbildungUnterricht.php';
+        if(dispatchUnterrichtGast($method,$uri))return;
         if($method==='POST'&&$uri==='/api/ausbildung-extern/status'){
             require_once __DIR__.'/Ausbildung.php';
             ausbildungExtern();
