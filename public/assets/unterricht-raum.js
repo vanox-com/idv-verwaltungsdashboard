@@ -226,7 +226,6 @@
       return;
     }
     $("aktualisieren").onclick=()=>{
-      if(!confirm("Aktuelle Änderungen aus Google Slides neu laden? Die vorhandenen Markierungen werden dabei gelöscht."))return;
       strokes=[];current=null;laser=null;paint();
       const fresh=new URL(embed);
       fresh.searchParams.set("idv_reload",String(Date.now()));
