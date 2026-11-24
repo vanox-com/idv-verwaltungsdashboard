@@ -5737,19 +5737,170 @@ document.addEventListener('click',async e=>{
 });
 
 
+/* Datenbanksicherung: AES-256-ZIP und kontrollierte Wiederherstellung.
+   Passwort bleibt nur im Formular; keine Speicherung in localStorage/Logs. */
+let BACKUP_RESTORE_PRUEFUNG=null;
+let BACKUP_CURRENT_DATABASE='';
 async function ladeBackup(){
- const el=$('#inhalt');el.innerHTML='<h1>Backup-Übersicht</h1><p>Lade Datenbankstatus …</p>';
+ const area=$('#inhalt');
+ area.innerHTML='<h1>Backup-Übersicht</h1><p>Datenbank und Sicherungen werden geprüft …</p>';
  try{
-  const x=await api('/backup-status');
-  el.innerHTML='<h1>Backup-Übersicht</h1><section class="box"><h3>Datenbankstatus</h3>'+
-   '<p><b>Datenbank:</b> '+esc(x.datenbank)+'</p><p><b>Tarif:</b> '+esc(x.plan)+'</p>'+
-   '<p><b>Größe:</b> '+(Number(x.bytes)/1048576).toFixed(2)+' MiB</p>'+
-   '<p><b>Ablaufdatum:</b> '+esc(x.ablauf_am)+'</p><p><b>Automatische Sicherungen:</b> '+esc(x.automatische_sicherungen)+'</p>'+
-   '<p><b>Wiederherstellung:</b> '+esc(x.wiederherstellung)+'</p><p class="fehler">'+esc(x.hinweis)+'</p>'+
-   '<p class="mut">Letzte Datenbankabfrage: '+esc(new Date(x.geprueft_am).toLocaleString('de-DE'))+'</p></section>';
- }catch(e){el.textContent='Datenbankstatus konnte nicht geladen werden: '+e.message;}
+  const [status,liste]=await Promise.all([api('/backup-status'),api('/backup/liste')]);
+  BACKUP_CURRENT_DATABASE=status.datenbank;
+  const backups=Array.isArray(liste.backups)?liste.backups:[];
+  const size=bytes=>((Number(bytes)||0)/1048576).toFixed(2)+' MiB';
+  const row=backups.map(b=>'<tr>'+
+    '<td><b>'+esc(b.label||'Ohne Bezeichnung')+'</b><br><small>'+esc(b.id)+'</small></td>'+
+    '<td>'+esc(b.created||'—')+'</td>'+
+    '<td>'+size(b.size)+'</td>'+
+    '<td>'+(b.rows===null||b.rows===undefined?'Noch nicht geprüft':esc(b.rows)+' Datensätze')+'</td>'+
+    '<td><span style="color:#72d9a9">AES-256</span></td>'+
+    '<td style="white-space:nowrap"><a class="btn" href="/api/backup/'+encodeURIComponent(b.id)+'/download" download>Herunterladen</a> '+
+    '<button type="button" data-backup-preview="'+esc(b.id)+'">Wiederherstellung prüfen</button></td>'+
+    '</tr>').join('');
+  area.innerHTML='<h1>Backup-Übersicht</h1><p class="mut">Verschlüsselte Datenbanksicherungen erstellen, herunterladen und nach einer Sicherheitsprüfung kontrolliert wiederherstellen. Nur für Administratoren.</p>'+
+   '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">'+
+   '<section class="box"><h3>Aktuelle Datenbank</h3><p><b>'+esc(status.datenbank)+'</b></p>'+
+   '<p>Erfasste DB-Größe: '+size(status.bytes)+'</p>'+
+   '<p>Letzte Abfrage: '+esc(status.geprueft_am||'—')+'</p>'+
+   '<p class="mut">Die Sicherung enthält alle InnoDB-Tabellen und Schema-Metadaten. Dateien auf dem Hoster (z. B. hochgeladene PDF/DOCX-Dateien oder Verschlüsselungsschlüssel) müssen separat gesichert werden.</p></section>'+
+   '<section class="box"><h3>Neue Datenbanksicherung</h3>'+
+   '<form id="backupErstellenForm" autocomplete="off">'+
+   '<label for="backupBezeichnung">Bezeichnung</label><input id="backupBezeichnung" name="bezeichnung" maxlength="100" value="Manuelle Sicherung" required>'+
+   '<label for="backupPasswort">Verschlüsselungspasswort (mindestens 14 Zeichen)</label>'+
+   '<input type="password" id="backupPasswort" name="passwort" minlength="14" maxlength="256" autocomplete="new-password" required>'+
+   '<label for="backupPasswort2">Passwort wiederholen</label>'+
+   '<input type="password" id="backupPasswort2" name="wiederholung" minlength="14" maxlength="256" autocomplete="new-password" required>'+
+   '<p class="mut">Das Passwort wird nicht gespeichert. Ohne dieses Passwort lässt sich die ZIP-Sicherung nicht wiederherstellen. Bewahre es getrennt und sicher auf.</p>'+
+   '<button type="submit" class="p">Verschlüsselte Sicherung erstellen</button>'+
+   '</form></section></div>'+
+   '<section class="box" style="margin-top:14px"><h3>Vorhandene Sicherungen</h3>'+
+   '<p class="mut">Backup-Dateien liegen außerhalb des öffentlichen Webverzeichnisses. Lade wichtige Sicherungen zusätzlich auf einen sicheren Speicher herunter.</p>'+
+   '<div style="overflow:auto"><table><thead><tr><th>Backup</th><th>Erstellt (UTC)</th><th>Größe</th><th>Inhalt</th><th>Schutz</th><th>Aktionen</th></tr></thead>'+
+   '<tbody>'+(row||'<tr><td colspan="6">Noch keine Sicherungen vorhanden.</td></tr>')+'</tbody></table></div></section>'+
+   '<section class="box"><h3>Lokales Backup hochladen</h3>'+
+   '<p class="mut">Falls der Hoster die Sicherung nicht mehr gespeichert hat, kannst du eine vorher heruntergeladene IDV-ZIP hier zur Prüfung hochladen. Maximal 256 MiB; größere Dateien benötigen passende PHP-Uploadlimits.</p>'+
+   '<form id="backupUploadForm" enctype="multipart/form-data">'+
+   '<input type="file" name="datei" id="backupUploadDatei" accept=".zip" required>'+
+   '<button type="submit">Verschlüsselte Sicherung hochladen</button></form></section>'+
+   '<div id="backupPruefung"></div>'+
+   '<div id="backupMeldung" role="status" aria-live="polite"></div>'+
+   '<section class="box"><h3>Wichtige Schutzmechanismen</h3>'+
+   '<p>Die Wiederherstellung beginnt erst nach Passwortprüfung, vollständiger Prüfsummen-Kontrolle, identischem Datenbankschema, zusätzlicher Sicherheitskopie und erneuter Eingabe des Administratorpassworts.</p>'+
+   '<p class="mut">Ein Wiederherstellen ersetzt bewusst die aktuellen Datenbankinhalte durch den Sicherungsstand. Schlägt die Transaktion fehl, werden die Datenänderungen zurückgerollt. Wurde das Schema zwischenzeitlich verändert, wird die Wiederherstellung im Panel verweigert. Für eine komplette Schema-Rücksetzung muss der Hoster herangezogen werden.</p>'+
+   '<p class="mut">Automatische tägliche Offsite-Backups sind hiermit nicht eingerichtet. Die Sicherung auf demselben Hoster schützt allein nicht vor einem vollständigen Serverausfall.</p></section>';
+ }catch(e){
+  area.innerHTML='<h1>Backup-Übersicht</h1><section class="box"><h3>Backup-Funktion nicht verfügbar</h3>'+
+   '<p class="fehler">'+esc(e.message)+'</p>'+
+   '<p>Überprüfe deine Administratorrechte, die PHP-Module ZipArchive/AES-256 und den privaten Backup-Speicherpfad auf dem Hoster.</p></section>';
+ }
 }
-
+function backupHinweis(text,fehler=false){
+ const e=$('#backupMeldung');
+ if(!e)return;
+ e.textContent=text;e.className=fehler?'fehler':'mut';
+}
+document.addEventListener('submit',async event=>{
+ const form=event.target;
+ if(!['backupErstellenForm','backupUploadForm'].includes(form.id))return;
+ event.preventDefault();
+ const button=form.querySelector('[type="submit"]');if(button.disabled)return;
+ button.disabled=true;
+ try{
+  if(form.id==='backupErstellenForm'){
+   const pass=$('#backupPasswort').value;
+   if(pass.length<14||pass!==$('#backupPasswort2').value)
+    throw new Error('Die beiden Backup-Passwörter müssen identisch sein und mindestens 14 Zeichen haben.');
+   backupHinweis('Die verschlüsselte Datenbanksicherung wird erstellt. Bitte warten …');
+   const result=await api('/backup/erstellen',{method:'POST',body:JSON.stringify({
+    bezeichnung:$('#backupBezeichnung').value,passwort:pass
+   })});
+   form.reset();
+   await ladeBackup();
+   backupHinweis('Verschlüsselte Sicherung erstellt: '+result.backup.id+'. Lade sie jetzt herunter und bewahre das Passwort sicher auf.');
+  }else{
+   const selected=$('#backupUploadDatei')?.files?.[0];
+   if(!selected)throw new Error('Bitte zuerst eine Sicherungsdatei auswählen.');
+   if(selected.size>268435456)throw new Error('Backup zu groß (maximal 256 MiB).');
+   backupHinweis('Die verschlüsselte Sicherung wird hochgeladen …');
+   const response=await fetch('/api/backup/upload',{
+     method:'POST',credentials:'same-origin',cache:'no-store',body:new FormData(form)
+   });
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok)throw new Error(result.error||'Backup-Upload fehlgeschlagen');
+   await ladeBackup();backupHinweis('Backup wurde sicher hochgeladen. Vor der Wiederherstellung muss es vollständig geprüft werden.');
+  }
+ }catch(e){backupHinweis(e.message,true);}
+ finally{button.disabled=false;}
+});
+document.addEventListener('click',async event=>{
+ const btn=event.target.closest('[data-backup-preview],[data-backup-restore]');
+ if(!btn)return;
+ if(btn.dataset.backupPreview){
+  BACKUP_RESTORE_PRUEFUNG=null;
+  const id=btn.dataset.backupPreview;
+  const target=$('#backupPruefung');if(!target)return;
+  target.innerHTML='<section class="box"><h3>Wiederherstellung: '+esc(id)+'</h3>'+
+   '<p>Gib das Verschlüsselungspasswort dieser Sicherung ein. Die Prüfung verändert noch keine Daten.</p>'+
+   '<label>Backup-Passwort</label><input id="backupRestorePass" type="password" minlength="14" maxlength="256" autocomplete="off">'+
+   '<button type="button" data-backup-restore="pruefen" data-id="'+esc(id)+'">Integrität und Datenbank vergleichen</button>'+
+   '<div id="backupRestoreDetails"></div></section>';
+  target.scrollIntoView({behavior:'smooth',block:'nearest'});return;
+ }
+ const id=btn.dataset.id;
+ const pass=$('#backupRestorePass')?.value||'';
+ const target=$('#backupRestoreDetails');
+ if(!target)return;
+ btn.disabled=true;
+ try{
+  if(btn.dataset.backupRestore==='pruefen'){
+   target.textContent='Das verschlüsselte Archiv wird vollständig überprüft …';
+   const r=await api('/backup/'+encodeURIComponent(id)+'/pruefen',{
+     method:'POST',body:JSON.stringify({passwort:pass})
+   });
+   const p=r.pruefung;
+   if(!p.valid)throw new Error('Prüfung fehlgeschlagen');
+   if(!p.schema_identisch){
+    target.innerHTML='<p class="fehler"><b>Wiederherstellung im Panel gesperrt:</b> '+
+       esc(p.hinweis||'Die Datenbankstruktur unterscheidet sich von der Sicherung.')+'</p>';
+    return;
+   }
+   BACKUP_RESTORE_PRUEFUNG={id,freigabe:p.freigabe};
+   target.innerHTML='<p style="color:#89ddb1"><b>Backup erfolgreich geprüft</b>: '+esc(p.tables)+
+     ' Tabellen und '+esc(p.rows)+' Datensätze. Datenbankschema identisch.</p>'+
+     '<p class="fehler"><b>Achtung:</b> Die Wiederherstellung ersetzt die aktuellen Datensätze! Vorher wird automatisch eine zusätzliche verschlüsselte Sicherheitskopie erstellt.</p>'+
+     '<label for="backupRestoreAdmin">Aktuelles Administratorpasswort</label>'+
+     '<input type="password" id="backupRestoreAdmin" autocomplete="current-password">'+
+     '<label for="backupRestoreConfirm">Zur Bestätigung exakt eingeben: WIEDERHERSTELLEN '+esc(p.database)+'</label>'+
+     '<input id="backupRestoreConfirm" type="text" autocomplete="off" spellcheck="false">'+
+     '<button type="button" class="warn" data-backup-restore="starten" data-id="'+esc(id)+'">Geprüfte Sicherung wiederherstellen</button>';
+   return;
+  }
+  if(btn.dataset.backupRestore==='starten'){
+   if(!BACKUP_RESTORE_PRUEFUNG||BACKUP_RESTORE_PRUEFUNG.id!==id)
+    throw new Error('Bitte zunächst die Sicherung erneut prüfen.');
+   const typed=$('#backupRestoreConfirm')?.value||'';
+   const admin=$('#backupRestoreAdmin')?.value||'';
+   if(typed!=='WIEDERHERSTELLEN '+BACKUP_CURRENT_DATABASE)
+    throw new Error('Bitte den vollständigen Bestätigungssatz inklusive Datenbanknamen eingeben.');
+   if(!admin)throw new Error('Bitte dein Administratorpasswort eingeben.');
+   if(!confirm('Die aktuellen Datensätze werden durch den Sicherungsstand ERSETZT. Fortfahren?'))return;
+   if(!confirm('Letzte Bestätigung: Die Datenbank wird nach einer zusätzlichen Sicherheitskopie wiederhergestellt. Wirklich starten?'))return;
+   target.textContent='Sicherheitskopie wird erstellt, danach läuft die transaktionale Wiederherstellung. Bitte nicht neu laden …';
+   const result=await api('/backup/wiederherstellen',{method:'POST',body:JSON.stringify({
+    id,passwort:pass,admin_passwort:admin,freigabe:BACKUP_RESTORE_PRUEFUNG.freigabe,
+    bestaetigung:typed
+   })});
+   BACKUP_RESTORE_PRUEFUNG=null;
+   target.innerHTML='<p style="color:#89ddb1"><b>Wiederherstellung abgeschlossen.</b></p>'+
+     '<p>Vorherige Live-Daten als Sicherheitsbackup: '+esc(result.safety_backup||'—')+'</p>'+
+     '<p>Alle bisherigen Sessions wurden vorsorglich abgemeldet. Bitte melde dich erneut an.</p>'+
+     '<a href="/">Zum Login</a>';
+   return;
+  }
+ }catch(e){target.textContent='Wiederherstellung/Prüfung nicht möglich: '+e.message;target.className='fehler';}
+ finally{btn.disabled=false;}
+});
 /* Spielerischer, nur dekorativer Partikelschleier im Florimodus. */
 function idvThemePartikelAktualisieren(){
  const preset=document.documentElement.dataset.designPreset;
