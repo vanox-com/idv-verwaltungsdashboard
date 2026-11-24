@@ -80,7 +80,7 @@ function backupSchema(): array {
         $columnNames=[];
         foreach($columns as $col){
             backupIdentifierSql((string)$col['name']);
-            if(str_contains(strtoupper((string)$col['extra']),'GENERATED'))
+            if(preg_match('/(?:VIRTUAL|STORED)\s+GENERATED/i',(string)$col['extra']))
                 throw new \RuntimeException('Generierte Spalte nicht unterstützt: '.$name);
             $columnNames[]=(string)$col['name'];
         }
