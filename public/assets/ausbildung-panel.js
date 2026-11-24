@@ -127,6 +127,13 @@ function render(){
  if(tab==='ausbilder')r.innerHTML=trainers();
  if(tab==='materialien')r.innerHTML=materials();
  if(tab==='unterricht')r.innerHTML=classroom();
+ if(data.stimmenDetailsBereit===false){
+   const warning='<section class="card" style="border-color:#aa8051"><h3>Erweiterung für Stimmabgaben fehlt noch</h3>'+
+     '<p>Für die neuen Pflichtangaben (Streifenfahrt, Datum, sonstige Leistungen, Bemerkung) muss ein Administrator nach einer gesicherten Datenbanksicherung eine rein additive SQL-Erweiterung installieren. Bestehende Stimmen bleiben erhalten.</p>'+
+     (data.user.rolle==='Administrator'?'<button data-action="setup-schema" class="primary">Neue Stimmabgabe-Felder sicher einrichten</button>':'<p class="muted">Bitte einen Administrator informieren.</p>')+
+     '</section>';
+   r.insertAdjacentHTML('afterbegin',warning);
+ }
 }
 function overview(){
  const a=data.anwaerter;const n=a.filter(x=>x.fortschritt.bereit).length;
@@ -293,11 +300,11 @@ shadow.addEventListener('click',async(e)=>{
  if(mode==='retry-bootstrap'){await load();return}
  if(mode==='setup-schema'){
    if(!confirm('Bitte vorher unter Administration → Backup-Übersicht eine aktuelle verschlüsselte Datenbanksicherung erstellen UND herunterladen. Hast du zusätzlich ein vollständiges SQL-Backup beim Hoster?'))return;
-   if(!confirm('Jetzt ausschließlich die additiven Ausbildungs-SQL-Erweiterungen installieren? Vorhandene Polizeipersonal-Datensätze werden nicht bearbeitet. Der Server lehnt den Vorgang ohne gültiges aktuelles Backup ab.'))return;
+   if(!confirm('Jetzt ausschließlich fehlende additive Ausbildungsfelder (unter anderem Anlass, Streifenfahrt-Datum, Bemerkung) installieren? Bestehende Personal- und Stimmabgabedaten werden nicht überschrieben. Der Server prüft das Backup.'))return;
    btn.disabled=true;btn.textContent='Geschützte Nachinstallation läuft …';
    try{
      const result=await request('setup',{method:'POST',body:JSON.stringify({bestaetigung:'BACKUP_ERSTELLT_AUSBILDUNG'})});
-     if(!result?.schema?.personalbindungBereit)throw Error('Die Personalstamm-Verbindung ist nach der Einrichtung noch nicht verfügbar.');
+     if(!result?.schema?.personalbindungBereit||!result?.schema?.stimmenDetailsBereit)throw Error('Die erforderlichen Datenbankfelder sind nach der Einrichtung noch nicht verfügbar.');
      await load();message('Ausbildungsdatenbank und zentraler Personalstamm sind jetzt verbunden.');
    }catch(err){
      message(err.message,true);
