@@ -2,6 +2,8 @@
 declare(strict_types=1);
 namespace IDV;
 
+require_once __DIR__.'/AusbildungPersonal.php';
+
 /**
  * Ausbildung – eigenständiger API-Bereich (PHP 8.2/MySQL8).
  * Ausbilder-Rollen erhalten niemals Zugriff auf Polizeirat-/Personal-APIs.
@@ -79,7 +81,8 @@ function ausbildungFortschritt(array $a,bool $details=false): array {
 }
 function ausbildungAnwaerter(int $id,bool $lock=false): array {
     $rows=sql('SELECT * FROM ausbildung_anwaerter WHERE id=?'.($lock?' FOR UPDATE':''),[$id]);
-    if(!$rows)fail(404,'Anwärter nicht gefunden');
+    if(!$rows || !ausbildungPersonalQuelleGueltig($rows[0]))
+        fail(404,'Anwärter nicht mehr im aktiven Personalstamm vorhanden');
     return $rows[0];
 }
 function ausbildungPruefeRevision(array $a,$version): void {
@@ -140,7 +143,9 @@ function ausbildungExtern(): never {
     $rows=sql('SELECT id,laufbahn FROM ausbildung_anwaerter WHERE public_hash=? AND public_aktiv=1 LIMIT 1',
         [hash('sha256',strtolower($token))]);
     if(!$rows)fail(404,'Ansicht nicht verfügbar');
-    $a=$rows[0];$s=ausbildungFortschritt($a,true);
+    $a=$rows[0];
+    if(!ausbildungPersonalQuelleGueltig($a))fail(404,'Diese Ausbildungsansicht ist nicht mehr aktiv');
+    $s=ausbildungFortschritt($a,true);
     $modules=array_map(fn($m)=>['code'=>$m['code'],'titel'=>$m['titel'],'abgeschlossen'=>$m['abgeschlossen']],$s['module']);
     header('X-Robots-Tag: noindex, nofollow');
     respond(200,['laufbahn'=>$a['laufbahn'],'status'=>$s['status'],'bereit'=>$s['bereit'],
@@ -164,6 +169,10 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
     if(!ausbildungSchemaStatus()['bereit'])
         fail(503,'Die Ausbildungsdatenbank ist noch nicht vollständig eingerichtet. '
             .'Ein Administrator kann sie im Ausbildungsbereich nach einer Sicherung einrichten.');
+    if(!ausbildungSchemaStatus()['personalbindungBereit'])
+        fail(503,'Die Verbindung zum zentralen Personalstamm muss nach einer Datenbanksicherung noch eingerichtet werden.');
+    if($uri==='/api/ausbildung/bootstrap'||str_starts_with($uri,'/api/ausbildung/anwaerter/'))
+        ausbildungSynchronisierePersonal();
     // Unterrichtssitzungen sind innerhalb der geschützten Ausbildungs-API.
     require_once __DIR__.'/AusbildungUnterricht.php';
     if(dispatchUnterrichtTrainer($u,$method,$uri))return true;
@@ -172,7 +181,7 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         $module=sql('SELECT code,laufbahn,titel FROM ausbildung_module WHERE aktiv=1 ORDER BY laufbahn,sortierung');
         $trainers=sql('SELECT a.*,u.gesperrt,u.rolle,u.dienstnummer AS login_dienstnummer FROM ausbildung_ausbilder a JOIN users u ON u.id=a.user_id WHERE a.aktiv=1 ORDER BY a.name');
         if(!$leitung)foreach($trainers as &$t){unset($t['email'],$t['notiz']);}unset($t);
-        $trainees=sql('SELECT * FROM ausbildung_anwaerter ORDER BY laufbahn,name,id');
+        $trainees=ausbildungAktuelleAnwaerter();
         foreach($trainees as &$a)$a['fortschritt']=ausbildungFortschritt($a);unset($a);
         $materials=sql('SELECT id,modul_code,titel,typ,url,public_aktiv,CASE WHEN dateipfad IS NULL THEN 0 ELSE 1 END AS datei FROM ausbildung_materialien WHERE aktiv=1 ORDER BY modul_code,titel');
         $me=ausbildungTrainer($u);
@@ -239,22 +248,8 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             respond(200,['ok'=>true]);
         }
     }
-    if($uri==='/api/ausbildung/anwaerter'&&$method==='POST'){
-        ausbildungRecht($u,2);$b=body();
-        $name=ausbildungString($b['name']??null,180,'Name',true);
-        $laufbahn=(string)($b['laufbahn']??'');
-        if(!in_array($laufbahn,['PMA','PKA','KKA'],true))fail(400,'Ungültige Laufbahn');
-        $nr=$b['personalnummer']??null;
-        if($nr!==null&&(!is_int($nr)||$nr<1||$nr>9999999))fail(400,'Ungültige Dienstnummer');
-        $neben=ausbildungString($b['nebenberuf']??'',60,'Nebenberuf');
-        $beginn=ausbildungDatum($b['beginn']??null);
-        $bem=ausbildungString($b['bemerkung']??'',2000,'Bemerkung');
-        sql('INSERT INTO ausbildung_anwaerter(personalnummer,name,laufbahn,nebenberuf,beginn,bemerkung,erstellt_von) VALUES(?,?,?,?,?,?,?)',
-            [$nr,$name,$laufbahn,$neben,$beginn,$bem,(int)$u['id']]);
-        $id=(int)db()->lastInsertId();
-        auditAction($u,'Anwärter angelegt: ID '.$id,'add');
-        respond(200,['id'=>$id]);
-    }
+    if($uri==='/api/ausbildung/anwaerter'&&$method==='POST')
+        fail(409,'Anwärter werden ausschließlich im Personalstamm angelegt und automatisch ihrem Ausbildungsmonitor zugeordnet.');
     if(preg_match('#^/api/ausbildung/anwaerter/([1-9]\d*)$#D',$uri,$m)){
         $id=cleanId($m[1]);
         if($method==='GET'){
@@ -264,14 +259,10 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         if($method==='PATCH'){
             ausbildungRecht($u,2);$b=body();$a=ausbildungAnwaerter($id);
             ausbildungPruefeRevision($a,$b['revision']??null);
-            $name=ausbildungString($b['name']??null,180,'Name',true);
-            $neben=ausbildungString($b['nebenberuf']??'',60,'Nebenberuf');
-            $beg=ausbildungDatum($b['beginn']??null);
+            // Name, Laufbahn, DN, Beginn und RSA stammen ausschließlich aus personal.
             $bem=ausbildungString($b['bemerkung']??'',2000,'Bemerkung');
-            $rsa=$b['rsa']??false;
-            if(!is_bool($rsa))fail(400,'Ungültiger RSA-Status');
-            $stmt=db()->prepare('UPDATE ausbildung_anwaerter SET name=?,nebenberuf=?,beginn=?,bemerkung=?,rsa=?,revision=revision+1,aktualisiert=UTC_TIMESTAMP(6) WHERE id=? AND revision=?');
-            $stmt->execute([$name,$neben,$beg,$bem,$rsa?1:0,$id,$b['revision']]);
+            $stmt=db()->prepare('UPDATE ausbildung_anwaerter SET bemerkung=?,revision=revision+1,aktualisiert=UTC_TIMESTAMP(6) WHERE id=? AND revision=?');
+            $stmt->execute([$bem,$id,$b['revision']]);
             if($stmt->rowCount()!==1)fail(409,'Anwärter wurde zwischenzeitlich geändert');
             auditAction($u,'Anwärter aktualisiert: ID '.$id);
             respond(200,['ok'=>true]);
