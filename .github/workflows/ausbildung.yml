@@ -47,3 +47,5 @@ jobs:
           test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='idv_train_ci' AND table_name LIKE 'ausbildung_%'")" -eq 6
           test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM ausbildung_module")" -eq 11
           test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM role_perms WHERE modul='ausbildung' AND stufe>0")" -eq 3
+      - name: Exercise login, roles, module completion, votes and public link
+        run: bash tests/ausbildung-http.sh
