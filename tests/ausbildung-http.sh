@@ -47,10 +47,34 @@ code="$(curl -sS -o "$temp/restricted" -w '%{http_code}' -b "$temp/trainer" "$ba
 [[ "$code" == 403 ]] || { echo "Trainer reached user administration: $code";exit 1; }
 code="$(curl -sS -o "$temp/restricted" -w '%{http_code}' -b "$temp/trainer" -H 'Content-Type: application/json' -X POST --data "$trainer" "$base/api/ausbildung/ausbilder")"
 [[ "$code" == 403 ]] || { echo "Privilege escalation: $code";exit 1; }
-candidate="$(req "$temp/lead" POST /api/ausbildung/anwaerter '{"name":"Synthetic Anwärter","laufbahn":"PMA","personalnummer":999997,"beginn":"2026-11-24","nebenberuf":"","bemerkung":""}')"
-id="$(printf '%s' "$candidate" | parse id)"
-[[ "$id" =~ ^[0-9]+$ ]] || { echo "Trainee create: $candidate";exit 1; }
+# Der normale Personalstamm ist maßgeblich – neue Dienstgrade erzeugen
+# beim nächsten Monitor-Abruf automatisch verknüpfte Ausbildungsakten.
+mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "
+ INSERT INTO personal(personalnummer,vorname,nachname,dienstgrad,status,beschaeftigungsart,eintrittsdatum)
+ VALUES
+ (999997,'Synthetic','Anwärter','Polizeimeisteranwärter','Aktiv','Hauptberuf','2026-11-24'),
+ (999998,'Synthetic','PKA','Polizeikommissaranwärter','Aktiv','Hauptberuf','2026-11-24'),
+ (999999,'Synthetic','KKA','Kriminalkommissaranwärter','Aktiv','Hauptberuf','2026-11-24'),
+ (999996,'Synthetic','Normalkraft','Polizeimeister','Aktiv','Hauptberuf','2026-11-24');"
+candidates="$(req "$temp/lead" GET /api/ausbildung/bootstrap)"
+id="$(printf '%s' "$candidates" | php -r '$d=json_decode(stream_get_contents(STDIN),true);foreach($d["anwaerter"]??[] as $p)if($p["personalnummer"]==999997)echo $p["id"];')"
+[[ "$id" =~ ^[0-9]+$ ]] || { echo "PMA not automatically linked: $candidates";exit 1; }
+printf '%s' "$candidates" | php -r '
+$d=json_decode(stream_get_contents(STDIN),true);
+$roles=[];foreach($d["anwaerter"]??[] as $p)$roles[$p["personalnummer"]]=$p["laufbahn"];
+if(($roles[999997]??null)!=="PMA"||($roles[999998]??null)!=="PKA"||
+   ($roles[999999]??null)!=="KKA"||isset($roles[999996])||count($roles)!==3)exit(1);'
 [[ "$(status "$id")" == 'Module unvollständig' ]] || exit 1
+# Ein zweiter Ausbildungs-Personalstamm darf nicht aufgebaut werden.
+code="$(curl -sS -o "$temp/no-duplicate" -w '%{http_code}' -b "$temp/lead" -H 'Content-Type: application/json' -X POST --data '{"name":"Duplicate","laufbahn":"PMA"}' "$base/api/ausbildung/anwaerter")"
+[[ "$code" == 409 ]] || { echo "Duplicate trainee creation accepted: $code";exit 1; }
+publicMonitors="$(curl -sS "$base/api/ausbildung-oeffentlich/monitore")"
+printf '%s' "$publicMonitors" | php -r '
+$d=json_decode(stream_get_contents(STDIN),true);
+$counts=[];foreach($d["monitore"]??[] as $r)$counts[$r["laufbahn"]]=$r["anzahl"];
+if(($counts["PMA"]??0)!==1||($counts["PKA"]??0)!==1||($counts["KKA"]??0)!==1)exit(1);
+if(str_contains(json_encode($d),"Synthetic")||str_contains(json_encode($d),"personalnummer"))exit(1);'
+
 for module in PM.0 PM.1 PM.2 PM.3 PM.4 PM.5 PM.6;do
  rev="$(revision "$id")"
  answer="$(req "$temp/trainer" PUT "/api/ausbildung/anwaerter/$id/modul/$module" "{\"abgeschlossen\":true,\"revision\":$rev}")"
@@ -132,4 +156,4 @@ trainerId="$(req "$temp/lead" GET /api/ausbildung/bootstrap | php -r '$d=json_de
 req "$temp/lead" DELETE "/api/ausbildung/ausbilder/$trainerId" '{}' >/dev/null
 code="$(curl -sS -o "$temp/revokeduser" -w '%{http_code}' -b "$temp/trainer" "$base/api/me")"
 [[ "$code" == 401 ]] || { echo "Trainer session still valid: $code";exit 1; }
-echo 'Ausbildung HTTP tests passed: role isolation, trainer lifecycle, PMA score, revision, private link'
+echo 'Ausbildung HTTP tests passed: canonical police personnel, automatic PMA/PKA/KKA, role isolation, private links and class rooms'
