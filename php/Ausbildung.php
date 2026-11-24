@@ -147,6 +147,15 @@ function ausbildungExtern(): never {
         'moduleGesamt'=>$s['moduleGesamt'],'moduleFertig'=>$s['moduleFertig'],
         'module'=>$modules,'aktualisiert'=>gmdate('c')]);
 }
+/** Only explicitly approved AuLK materials may be seen without a login. */
+function ausbildungOeffentlicheMaterialien(): never {
+    header('X-Robots-Tag: noindex, nofollow');
+    $rows=sql("SELECT id,modul_code,titel,typ,url,
+        CASE WHEN dateipfad IS NULL THEN 0 ELSE 1 END AS datei
+        FROM ausbildung_materialien WHERE aktiv=1 AND public_aktiv=1
+        ORDER BY modul_code,titel,id");
+    respond(200,['materialien'=>$rows]);
+}
 function dispatchAusbildung(array $u,string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/ausbildung/'))return false;
     ausbildungRecht($u);
@@ -157,7 +166,7 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         if(!$leitung)foreach($trainers as &$t){unset($t['email'],$t['notiz']);}unset($t);
         $trainees=sql('SELECT * FROM ausbildung_anwaerter ORDER BY laufbahn,name,id');
         foreach($trainees as &$a)$a['fortschritt']=ausbildungFortschritt($a);unset($a);
-        $materials=sql('SELECT id,modul_code,titel,typ,url,CASE WHEN dateipfad IS NULL THEN 0 ELSE 1 END AS datei FROM ausbildung_materialien WHERE aktiv=1 ORDER BY modul_code,titel');
+        $materials=sql('SELECT id,modul_code,titel,typ,url,public_aktiv,CASE WHEN dateipfad IS NULL THEN 0 ELSE 1 END AS datei FROM ausbildung_materialien WHERE aktiv=1 ORDER BY modul_code,titel');
         $me=ausbildungTrainer($u);
         respond(200,['leitung'=>$leitung,'user'=>['id'=>(int)$u['id'],'rolle'=>$u['rolle'],
             'name'=>userName($u)],'module'=>$module,'ausbilder'=>$trainers,
@@ -353,6 +362,18 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         if($url==='')fail(400,'Bitte einen Google-Dokumentlink hinterlegen');
         sql('INSERT INTO ausbildung_materialien(modul_code,titel,typ,url) VALUES(?,?,?,?)',[$code,$titel,$typ,$url]);
         auditAction($u,'Ausbildungsunterlage verlinkt: '.$titel,'add');
+        respond(200,['ok'=>true]);
+    }
+    if(preg_match('#^/api/ausbildung/materialien/([1-9]\\d*)/freigabe$#D',$uri,$m)&&$method==='PATCH'){
+        ausbildungRecht($u,2);
+        $id=cleanId($m[1]);
+        $b=body();
+        if(!is_bool($b['public_aktiv']??null))fail(400,'Freigabe muss Ja oder Nein sein');
+        if(!sql('SELECT 1 FROM ausbildung_materialien WHERE id=? AND aktiv=1',[$id]))
+            fail(404,'Ausbildungsunterlage nicht gefunden');
+        sql('UPDATE ausbildung_materialien SET public_aktiv=?,aktualisiert=UTC_TIMESTAMP(6) WHERE id=?',
+            [$b['public_aktiv']?1:0,$id]);
+        auditAction($u,'AuLK-Unterlage '.($b['public_aktiv']?'öffentlich freigegeben':'gesperrt').': ID '.$id);
         respond(200,['ok'=>true]);
     }
     if(preg_match('#^/api/ausbildung/materialien/([1-9]\d*)$#D',$uri,$m)&&$method==='DELETE'){
