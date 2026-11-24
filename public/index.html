@@ -1699,6 +1699,11 @@ body{overflow-x:clip}
   #app>aside,.nav-backdrop{transition:none!important}
 }
 </style>
+<style>
+#appSidebar .sidebar-legal{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 12px;margin-top:10px;padding:8px 0 0;border-top:1px solid var(--line, #ffffff18)}
+#appSidebar .sidebar-legal a{display:inline-flex;flex:0 0 auto;align-items:center;width:auto;min-height:0;margin:0;padding:3px 0;border:0;border-radius:0;background:transparent;color:var(--mut);font-size:11px;line-height:1.5;text-decoration:none}
+#appSidebar .sidebar-legal a:hover,#appSidebar .sidebar-legal a:focus-visible{color:var(--txt);text-decoration:underline}
+</style>
 </head>
 <body>
 
@@ -1741,7 +1746,7 @@ body{overflow-x:clip}
     <div class="me">
       <b id="meName"></b><span id="meRolle"></span>
       <button style="width:100%;margin-top:10px" id="abmelden">Abmelden</button>
-      <div style="margin-top:12px;font-size:11px"><a href="/datenschutz" target="_blank" rel="noopener noreferrer">Datenschutz</a> · <a href="/start" target="_blank" rel="noopener noreferrer">Über das Portal</a></div>
+      <div class="sidebar-legal" aria-label="Portalinformationen"><a href="/datenschutz" target="_blank" rel="noopener noreferrer">Datenschutz</a><a href="/start" target="_blank" rel="noopener noreferrer">Über das Portal</a></div>
     </div>
   </aside>
   <div class="nav-backdrop" id="navBackdrop" aria-hidden="true"></div>
@@ -6481,6 +6486,6 @@ document.addEventListener('click',async e=>{
 <script src="/abmeldungen.js"></script>
 <script src="/botKonfiguration.js"></script>
 <script src="/responsiveNav.js"></script>
-<script src="/assets/ausbildung-panel.js?v=20261125-6" defer></script>
+<script src="/assets/ausbildung-panel.js?v=20261125-7" defer></script>
 </body>
 </html>

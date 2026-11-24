@@ -12,7 +12,7 @@
     host.id='idvAusbildungModule';
     container.append(host);
     const shadow=host.attachShadow({mode:'open'});
-    const style=document.createElement('style');style.textContent=css;
+    const style=document.createElement('style');style.textContent=css+"\n.exam-list{display:grid;gap:10px}\n.exam-row{--track:#83a9e3;--track-bg:#264266;--track-border:#486c9d;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 14px;border:1px solid #ffffff18;border-left:3px solid var(--track);border-radius:10px;background:linear-gradient(110deg,var(--track-bg),#192536 48%);transition:border-color .15s,background-color .15s}\n.exam-row.pka{--track:#6ddccc;--track-bg:#173f42;--track-border:#387a79}\n.exam-row.kka{--track:#c1a4f4;--track-bg:#342b51;--track-border:#725b9c}\n.exam-row:hover{border-color:var(--track)}\n.exam-name{font-size:14px;font-weight:750;overflow-wrap:anywhere;color:#eff5fc}\n.exam-meta{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:5px;font-size:12px;color:#b6c5d7}\n.exam-track{display:inline-block;color:var(--track);background:var(--track-bg);border:1px solid var(--track-border);border-radius:5px;padding:1px 7px;font-size:11px;font-weight:800;letter-spacing:.05em}\n.exam-meter{height:6px;background:#ffffff13;border-radius:99px;margin-top:9px;overflow:hidden;max-width:310px}\n.exam-meter i{display:block;height:100%;border-radius:99px;background:var(--track)}\n.exam-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid;border-radius:7px;font-size:11px;font-weight:700;line-height:1.4;max-width:150px}\n.exam-status::before{content:\"\";height:6px;width:6px;border-radius:50%;background:currentColor;flex-shrink:0}\n.exam-status.incomplete{color:#ffd28c;background:#61451f55;border-color:#936b39}\n.exam-status.ready{color:#9ce8bc;background:#235a3b66;border-color:#4a9168}\n.exam-status.not-ready{color:#ffb1b1;background:#682d3766;border-color:#a75d66}\n.exam-status.unknown{color:#c7d2df;background:#37475b55;border-color:#65788d}\n@media(max-width:540px){.exam-row{grid-template-columns:1fr;gap:8px}.exam-status{justify-self:start;max-width:none}}\n";
     shadow.append(style);
     const surface=document.createElement('div');surface.innerHTML=template;
     shadow.append(surface);
@@ -157,11 +157,22 @@ function render(){
    r.insertAdjacentHTML('afterbegin',warning);
  }
 }
+function examOverviewRow(x){
+ const f=x.fortschritt||{};
+ const track=['PMA','PKA','KKA'].includes(x.laufbahn)?x.laufbahn:'';
+ const total=Math.max(0,Number(f.moduleGesamt)||0),done=Math.max(0,Math.min(total,Number(f.moduleFertig)||0));
+ const pct=total?Math.round(done/total*100):0;
+ const state=f.status==='Zugelassen'?'ready':f.status==='Nicht bereit'?'not-ready':f.status==='Module unvollständig'?'incomplete':'unknown';
+ return '<div class="exam-row '+track.toLowerCase()+'"><div><div class="exam-name">'+esc(x.name)+'</div>'+
+ '<div class="exam-meta"><span class="exam-track">'+esc(track||x.laufbahn)+'</span><span>'+done+' / '+total+' Module</span><span>'+pct+' %</span></div>'+
+ '<div class="exam-meter" role="progressbar" aria-label="Modulfortschritt" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+pct+'"><i style="width:'+pct+'%"></i></div></div>'+
+ '<span class="exam-status '+state+'">'+esc(f.status||'Unbekannt')+'</span></div>';
+}
 function overview(){
  const a=data.anwaerter;const n=a.filter(x=>x.fortschritt.bereit).length;
  return '<p class="callout">Die normale Personaltabelle ist der Hauptdatenstamm. Anwärter werden anhand ihres aktuellen Dienstgrades automatisch PMA, PKA oder KKA zugeordnet. Die Ausbildungsübersicht speichert nur ergänzende Modul- und Prüfungsdaten.</p>'+
  '<div class="kpis"><div class="kpi"><strong>'+a.length+'</strong><span>Anwärter insgesamt</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='PMA').length+'</strong><span>PMA</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='PKA').length+'</strong><span>PKA</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='KKA').length+'</strong><span>KKA</span></div><div class="kpi"><strong>'+n+'</strong><span>Zur Prüfung zugelassen</span></div></div>'+
- '<div class="grid"><section class="card"><h2>Prüfungsstand</h2>'+a.slice(0,12).map(x=>'<div class="flex space" style="border-bottom:1px solid #ffffff18;padding:9px 0"><span><b>'+esc(x.name)+'</b><br><small>'+esc(x.laufbahn)+' · '+x.fortschritt.moduleFertig+'/'+x.fortschritt.moduleGesamt+' Module</small></span>'+pill(x.fortschritt.status)+'</div>').join('')+
+ '<div class="grid"><section class="card"><h2>Prüfungsstand</h2>'+'<div class="exam-list">'+a.slice(0,12).map(examOverviewRow).join('')+'</div>'+
  (a.length?'':'<p class="muted">Noch keine Anwärter angelegt.</p>')+
  '</section><section class="card"><h2>Ausbildungsstruktur</h2><p>Die sieben PMA-Module stammen aus der Excel-Vorlage. Die PMA-Prüfungsbereitschaft setzt vollständige Module und mindestens <b>2,5 gewichtete Stimmenpunkte</b> voraus.</p><p>PKA und KKA verwenden derzeit PK.1–PK.4. Hier gilt laut Vorlage: alle vier Module abgeschlossen = zugelassen.</p><p class="muted">PK.5, PK.7 und PM.7 sind in der Kompetenzmatrix beziehungsweise Übersicht genannt, aber mangels eindeutiger Bewertungsregel noch keine Pflichtmodule.</p><button data-tab="monitore" class="primary">Zu den Monitoren</button></section></div>';
 }
