@@ -1749,7 +1749,7 @@ body{overflow-x:clip}
 <script>
 const MODS = [
   ['dash','Dashboard','📊'],['pers','Personal','👥'],['bef','Beförderungen','⭐'],
-  ['ausbildung','Ausbildungsportal','🎓'],['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
+  ['ausbildung','Ausbildung','🎓'],['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],['abm','Abmeldungen','📅'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
@@ -1765,7 +1765,7 @@ const NAV_GRUPPEN = [
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
   {id:'verwaltung',titel:'Administration',module:['users','befricht','system','botcfg','meldungen','rechtesimulator','design','backup','log','papierkorb']}
 ];
-const NAV_OFFEN = new Set(['uebersicht','personal']);
+const NAV_OFFEN = new Set(['uebersicht','personal','ausbildung']);
 let ME = null, D = null, tab = 'dash';
 let copnetGeladen = null, copnetNummer = null;
 
@@ -2017,12 +2017,6 @@ $('#pw').addEventListener('keydown', function (e) {
    nach erneuter, serverseitiger Authentifizierung über /api/me. */
 async function starten() {
   const bereitsOffen=Boolean(ME&&D&&!$('#app').classList.contains('hide'));
-  // Ausbildungsrollen arbeiten ausschließlich im separaten, geschützten Portal.
-  const angemeldet=await api('/me').catch(()=>null);
-  if(angemeldet&&['Ausbildungsleitung','Ausbilder'].includes(angemeldet.rolle)){
-    location.assign('/ausbildung.html');
-    return true;
-  }
   const letzteRechte=bereitsOffen?JSON.stringify(ME.rechte||{}):'';
   try {
     const antwort = await api('/bootstrap');
@@ -2031,6 +2025,12 @@ async function starten() {
     }
     ME = antwort.user;
     D = antwort.daten;
+    // Ausbildung wird wie jedes andere Modul im Hauptpanel gerendert.
+    if(['Ausbilder','Ausbildungsleitung'].includes(ME.rolle) ||
+       (location.hash==='#ausbildung'&&can('ausbildung')) || !can(tab)){
+      tab=can('ausbildung')?'ausbildung':MODS.find(m=>can(m[0]))?.[0]||'dash';
+    }
+
     // Persönliche Gestaltung vor dem Anzeigen des Dashboards aus der DB holen.
     // Ein Fehler darf den Login nicht blockieren, wird aber nicht mehr verschluckt.
     if(!bereitsOffen){
@@ -2048,9 +2048,12 @@ async function starten() {
     $('#app').classList.remove('hide');
     if(!bereitsOffen||JSON.stringify(ME.rechte||{})!==letzteRechte)zeichneMenue();
     if(!bereitsOffen||!window.IDVLive?.updateView?.())zeichne();
-    window.IDVLive?.synced();
-    window.IDVLive?.connect();
-    window.IDVPOR?.start();
+    // Isolierte Ausbildungsrollen dürfen keine Live-Personal-APIs abfragen.
+    if(!['Ausbilder','Ausbildungsleitung'].includes(ME.rolle)){
+      window.IDVLive?.synced();
+      window.IDVLive?.connect();
+      window.IDVPOR?.start();
+    }
     return true;
   } catch (err) {
     console.error('Portalaufbau fehlgeschlagen:', err);
@@ -2129,7 +2132,6 @@ function navIcon(id) {
 
 function wechsleZuModul(id,optionen={}){
   if(!MODS.some(m=>m[0]===id)||!can(id))return false;
-  if(id==='ausbildung'){location.assign('/ausbildung.html');return true;}
   if(id==='kue'&&!optionen.fokus){KUE_FOKUS_NR=null;KUE_VIEW_MODE='aktuell';}
   tab=id;
   const gruppe=NAV_GRUPPEN.find(g=>g.module.includes(id));
@@ -2185,6 +2187,12 @@ function zeichneMenue() {
 }
 
 function zeichne() {
+  if(tab==='ausbildung'){
+    if(!can('ausbildung')){$('#inhalt').innerHTML='<p>Kein Ausbildungsrecht für dieses Konto.</p>';return;}
+    if(!window.IDVAusbildung){$('#inhalt').innerHTML='<p>Ausbildungsmodul konnte nicht geladen werden. Bitte Seite neu laden.</p>';return;}
+    window.IDVAusbildung.laden($('#inhalt'));
+    return;
+  }
   if (tab==='papierkorb') { window.IDVAkten?.papierkorb(); return; }
   if (tab==='org') { ladeOrganigramm(); return; }
   if (tab==='texte') { ladeTextbausteine(); return; }
@@ -6239,5 +6247,6 @@ document.addEventListener('click',async e=>{
 <script src="/abmeldungen.js"></script>
 <script src="/botKonfiguration.js"></script>
 <script src="/responsiveNav.js"></script>
+<script src="/assets/ausbildung-panel.js?v=20261124-3" defer></script>
 </body>
 </html>
