@@ -123,7 +123,7 @@ function render(){
  navRender();
  const r=el('#root');
  if(tab==='uebersicht')r.innerHTML=overview();
- if(tab==='monitore')r.innerHTML=monitors();
+ if(tab==='monitore'){r.innerHTML=monitors();updateVoteForm();}
  if(tab==='ausbilder')r.innerHTML=trainers();
  if(tab==='materialien')r.innerHTML=materials();
  if(tab==='unterricht')r.innerHTML=classroom();
@@ -156,7 +156,7 @@ function traineeForm(a){
 function traineeDetails(d){
  const a=d.anwaerter,p=d.fortschritt;
  const canEdit=data.leitung||data.eigeneKompetenzen.length>0;
- const myVote=p.stimmen?.find(v=>Number(v.ausbilder_user_id)===Number(data.user.id))?.stimme||'';
+ const myVoteRecord=p.stimmen?.find(v=>Number(v.ausbilder_user_id)===Number(data.user.id))||null;
  const modules=p.module.map(m=>{
    const decks=(data.materialien||[]).filter(x=>x.modul_code===m.code && /^https:\/\/docs\.google\.com\/presentation\//.test(x.url||''));
    const mayPresent=data.leitung||data.eigeneKompetenzen.includes(m.code);
@@ -174,7 +174,7 @@ function traineeDetails(d){
  return '<section class="card" id="details"><div class="flex space"><div><span class="eyebrow">'+esc(a.laufbahn)+' · Dienstnummer '+esc(a.personalnummer||'—')+'</span><h2>'+esc(a.name)+'</h2></div><div class="flex">'+pill(p.status)+'<button data-action="close">Schließen</button></div></div>'+
  '<div class="kpis"><div class="kpi"><strong>'+p.moduleFertig+' / '+p.moduleGesamt+'</strong><span>Module abgeschlossen</span></div><div class="kpi"><strong>'+Number(p.stimmenSaldo).toLocaleString('de-DE')+'</strong><span>Punktesaldo</span></div><div class="kpi"><strong>'+Number(p.jaPunkte).toLocaleString('de-DE')+'</strong><span>Ja-Punkte ('+p.stimmenJa+' Stimmen)</span></div><div class="kpi"><strong>'+Number(p.neinPunkte).toLocaleString('de-DE')+'</strong><span>Nein-Punkte ('+p.stimmenNein+' Stimmen)</span></div></div>'+
  '<h3>Ausbildungsmodule</h3>'+modules+
- (a.laufbahn==='PMA'?'<div class="card" style="margin-top:16px"><h3>PMA-Prüfungsabstimmung (Gewichtung nach Ausbildungsfunktion)</h3><p class="muted"><b>Gewichtung:</b> Ausbilder auf Probe = 0,5 · normaler Ausbilder = 1 · Leitungsdienst = 1,5 · Ausbildungsleitung = 2 Punkte. Ja zählt positiv, Nein negativ. <b>Zulassung:</b> alle sieben PM-Module abgeschlossen und mindestens +2,5 Punkte. Jede berechtigte Person hat eine aktuelle Stimme.</p><div class="flex"><select id="vote" style="max-width:220px"><option value="">Stimme zurückziehen</option><option '+(myVote==='Ja'?'selected':'')+'>Ja</option><option '+(myVote==='Nein'?'selected':'')+'>Nein</option></select><button class="primary" data-action="vote" '+(!canEdit?'disabled':'')+'>Stimme speichern</button></div><div class="tablewrap"><table><thead><tr><th>Ausbilder</th><th>Stimme</th><th>Gewicht</th><th>Datum</th></tr></thead><tbody>'+p.stimmen.map(v=>'<tr><td>'+esc(v.anzeigename)+'</td><td>'+esc(v.stimme)+'</td><td>'+Number(v.gewicht).toLocaleString('de-DE')+' P.</td><td>'+fmt(v.aktualisiert)+'</td></tr>').join('')+'</tbody></table></div></div>':'')+
+ (a.laufbahn==='PMA'?voteSection(p,myVoteRecord,canEdit):'')+
  '<div class="flex" style="margin-top:20px">'+(data.leitung?'<button data-action="edit-trainee">Stammdaten bearbeiten</button><button data-action="create-link" class="primary">Externen Link erzeugen / erneuern</button><button data-action="remove-link" class="danger">Externen Link sperren</button>':'')+'</div>'+
  '<p class="muted">Externe Links zeigen nur Modulfortschritte und Prüfungsstatus, keine Namen oder internen Bewertungen.</p><div id="createdLink"></div>'+
  '</section>';
