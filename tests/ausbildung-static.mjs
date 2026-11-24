@@ -23,6 +23,10 @@ if(navigation.indexOf("id:'ausbildung'")<=navigation.indexOf("id:'verwaltung'"))
 if(embedded.includes('Zum Login</a>'))throw Error('Training database failure must not redirect to Login');
 if(!embedded.includes('setup-status')||!embedded.includes('setup-schema'))
  throw Error('Administrator backup-gated database recovery missing from Ausbildung UI');
+if(!embedded.includes('!setup.personalbindungBereit') ||
+   !embedded.includes('Ausbildungs-Erweiterung einrichten') ||
+   !embedded.includes('Administration → Backup-Übersicht'))
+ throw Error('A finished training schema with only missing personnel binding must offer a backup-gated repair instead of a generic error');
 if(!embedded.includes('attachShadow')||!embedded.includes('public-material'))
  throw Error('Native isolated module or public document approval control missing');
 const old=readFileSync('public/ausbildung.html','utf8');
