@@ -179,48 +179,26 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             'eigeneKompetenzen'=>json_decode((string)($me['kompetenzen']??'[]'),true)??[]]);
     }
     if($uri==='/api/ausbildung/ausbilder'&&$method==='POST'){
-        ausbildungRecht($u,2);$b=body();$v=ausbildungTrainerInput($b);
+        ausbildungRecht($u,2);
+        $b=body();$v=ausbildungTrainerInput($b);
         $pw=$b['startpasswort']??'';
-        if(!is_string($pw)||strlen($pw)>4096)fail(400,'Ungültiges Startpasswort');
-        $existing=sql('SELECT id,rolle,gesperrt FROM users WHERE dienstnummer=? LIMIT 1',[$v['nr']]);
-        if(!$existing&&strlen($pw)<8)fail(400,'Neues Konto benötigt ein Startpasswort mit mindestens 8 Zeichen');
+        if(!is_string($pw)||strlen($pw)<8||strlen($pw)>4096)
+            fail(400,'Für jeden neuen Ausbilderzugang ist ein Startpasswort mit mindestens 8 Zeichen erforderlich');
+        // Bestandsdaten bleiben strikt unberührt. Eine bereits vergebene
+        // Dienstnummer darf kein bestehendes Polizeikonto umwidmen oder entsperren.
+        if(sql('SELECT id FROM users WHERE dienstnummer=? LIMIT 1',[$v['nr']]))
+            fail(409,'Diese Dienstnummer gehört bereits zu einem bestehenden Konto. '
+                .'Bitte für den eigenständigen Ausbildungszugang eine freie Kennung wählen; '
+                .'bestehende Benutzer werden nicht verändert.');
         db()->beginTransaction();
-        try {
-            if($existing){
-                $uid=(int)$existing[0]['id'];
-                if(in_array($existing[0]['rolle'],['Administrator','Ausbildungsleitung'],true))
-                    fail(400,'Administrations- und Ausbildungsleitungskonten können hier nicht neu zugeordnet werden');
-                if(sql('SELECT id FROM ausbildung_ausbilder WHERE user_id=? AND aktiv=1',[$uid]))
-                    fail(409,'Diese Person ist bereits Ausbilder');
-                if($existing[0]['rolle']==='Ausbilder'){
-                    sql('UPDATE users SET gesperrt=0 WHERE id=?',[$uid]);
-                    if($pw!==''){
-                        if(strlen($pw)<8)fail(400,'Startpasswort min. 8 Zeichen');
-                        sql('UPDATE users SET passwort_hash=?,muss_passwort_aendern=1 WHERE id=?',
-                            [password_hash($pw,PASSWORD_BCRYPT,['cost'=>12]),$uid]);
-                    }
-                }elseif(!hasPanelLoginRole((string)$existing[0]['rolle'])){
-                    // Alte Mitarbeiterkonten ohne Verwaltungslogin können zu reinen
-                    // Ausbilderkonten werden; bestehende Polizeizugänge bleiben unberührt.
-                    sql('UPDATE users SET rolle=\'Ausbilder\',gesperrt=0 WHERE id=?',[$uid]);
-                    if($pw!==''){
-                        if(strlen($pw)<8)fail(400,'Startpasswort min. 8 Zeichen');
-                        sql('UPDATE users SET passwort_hash=?,muss_passwort_aendern=1 WHERE id=?',
-                            [password_hash($pw,PASSWORD_BCRYPT,['cost'=>12]),$uid]);
-                    }
-                }else sql('INSERT INTO user_perms(user_id,modul,stufe) VALUES(?,\'ausbildung\',1) ON DUPLICATE KEY UPDATE stufe=GREATEST(stufe,VALUES(stufe))',[$uid]);
-            }else {
-                sql('INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern,gesperrt) VALUES(?,?,\'Ausbilder\',?,1,0)',
-                    [$v['nr'],$v['name'],password_hash($pw,PASSWORD_BCRYPT,['cost'=>12])]);
-                $uid=(int)db()->lastInsertId();
-            }
-            sql('INSERT INTO ausbildung_ausbilder(user_id,dienstnummer,name,kuerzel,rang,funktion,eintritt,email,notiz,gewicht,kompetenzen,aktiv) VALUES(?,?,?,?,?,?,?,?,?,?,?,1)
-                ON DUPLICATE KEY UPDATE dienstnummer=VALUES(dienstnummer),name=VALUES(name),kuerzel=VALUES(kuerzel),
-                rang=VALUES(rang),funktion=VALUES(funktion),eintritt=VALUES(eintritt),email=VALUES(email),notiz=VALUES(notiz),
-                gewicht=VALUES(gewicht),kompetenzen=VALUES(kompetenzen),aktiv=1,revision=revision+1,aktualisiert=UTC_TIMESTAMP(6)',
+        try{
+            sql('INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern,gesperrt) VALUES(?,?,\'Ausbilder\',?,1,0)',
+                [$v['nr'],$v['name'],password_hash($pw,PASSWORD_BCRYPT,['cost'=>12])]);
+            $uid=(int)db()->lastInsertId();
+            sql('INSERT INTO ausbildung_ausbilder(user_id,dienstnummer,name,kuerzel,rang,funktion,eintritt,email,notiz,gewicht,kompetenzen,aktiv) VALUES(?,?,?,?,?,?,?,?,?,?,?,1)',
                 [$uid,$v['nr'],$v['name'],$v['kuerzel'],$v['rang'],$v['funktion'],$v['beginn'],$v['email'],$v['notiz'],
                  ausbildungStufe($v['funktion']),json_encode($v['kompetenzen'],JSON_THROW_ON_ERROR)]);
-            auditAction($u,'Ausbilderzugang eingerichtet: ID '.$uid,'add');
+            auditAction($u,'Neuen eigenständigen Ausbilderzugang angelegt: ID '.$uid,'add');
             db()->commit();
         }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
         respond(200,['ok'=>true]);
@@ -240,14 +218,14 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             respond(200,['ok'=>true]);
         }
         if($method==='DELETE'){
-            if($target===(int)$u['id']||$row[0]['rolle']==='Ausbildungsleitung'||$row[0]['rolle']==='Administrator')
-                fail(403,'Leitungskonto kann hier nicht entzogen werden');
+            if($target===(int)$u['id']||$row[0]['rolle']!=='Ausbilder')
+                fail(403,'Bestehende Polizeikonten werden von der Ausbildungsverwaltung nicht verändert');
             db()->beginTransaction();
             try {
                 sql('UPDATE ausbildung_ausbilder SET aktiv=0,revision=revision+1 WHERE id=?',[$id]);
-                if($row[0]['rolle']==='Ausbilder')
-                    sql('UPDATE users SET gesperrt=1 WHERE id=?',[$target]);
-                else sql('DELETE FROM user_perms WHERE user_id=? AND modul=\'ausbildung\'',[$target]);
+                // Sperrt ausschließlich neu angelegte, reine Ausbilderkonten.
+                // Rollen und Berechtigungen bestehender Polizeikonten bleiben unangetastet.
+                sql('UPDATE users SET gesperrt=1 WHERE id=? AND rolle=\'Ausbilder\'',[$target]);
                 sql('DELETE FROM sessions WHERE user_id=?',[$target]);
                 auditAction($u,'Ausbilderzugang entzogen: ID '.$target,'del');
                 db()->commit();
