@@ -56,7 +56,7 @@ footer{border-top:1px solid var(--edge);padding:22px 0;font-size:12px;color:var(
 <div class="eyebrow">IdentityValley · GTA Roleplay · Ausbildung</div>
 <h1>Ausbildungs- und Laufbahnkonzept 2026</h1>
 <p class="intro">Die zentrale Übersicht für den Weg vom Anwärter zur Prüfungszulassung. Drei Laufbahnen, klare Modulanforderungen und live berechnete Ausbildungsmonitore. Die Daten stammen aus dem regulären Personalstamm der fiktiven Polizeiverwaltung.</p>
-<div class="actions"><a class="link" href="#monitore">PMA-, PKA- und KKA-Monitore ansehen</a><a class="link alt" href="#laufbahnen">Laufbahnkonzept lesen</a><a class="link alt" href="https://sites.google.com/view/aulk2026/startseite" target="_blank" rel="noopener noreferrer">Bisherige AuLK-Google-Site</a></div>
+<div class="actions"><a class="link" href="#monitore">PMA- und gemeinsamer PKA-/KKA-Monitor ansehen</a><a class="link alt" href="#laufbahnen">Laufbahnkonzept lesen</a><a class="link alt" href="https://sites.google.com/view/aulk2026/startseite" target="_blank" rel="noopener noreferrer">Bisherige AuLK-Google-Site</a></div>
 <section id="laufbahnen" class="anchor" aria-labelledby="laufbahnTitel">
 <div class="section-head"><div class="eyebrow">Ausbildungsweg</div><h2 id="laufbahnTitel">Die drei Laufbahnen und ihre Voraussetzungen</h2><p>Die Regeln unten entsprechen der aktuellen Berechnung des Ausbildungsmonitors. Eine Prüfungszulassung ist noch kein bestandener Prüfungsabschluss.</p></div>
 <div class="grid">
@@ -86,7 +86,7 @@ footer{border-top:1px solid var(--edge);padding:22px 0;font-size:12px;color:var(
 </article></div>
 <p class="notice">Weitere in Kompetenzunterlagen erwähnte Module (beispielsweise PM.7, PK.5 und PK.7) sind derzeit nicht Bestandteil der verbindlichen Modulberechnung. Konkrete Bestehensnoten, praktische Prüfungsformen oder Wiederholungsregeln sind in der derzeitigen Monitorlogik nicht definiert und werden hier deshalb nicht erfunden.</p>
 </section>
-<section class="anchor" id="monitore" aria-labelledby="monitorTitel"><div class="section-head"><div class="eyebrow">Automatisch mit dem Personalstamm verbunden</div><h2 id="monitorTitel">PMA-, PKA- und KKA-Monitore</h2><p>Alle aktuellen Anwärter einzeln, direkt aus dem zentralen Personalstamm. Jedes Pflichtmodul und der jeweilige Zulassungsstatus werden automatisch aktualisiert.</p></div>
+<section class="anchor" id="monitore" aria-labelledby="monitorTitel"><div class="section-head"><div class="eyebrow">Automatisch mit dem Personalstamm verbunden</div><h2 id="monitorTitel">PMA- und gemeinsamer PKA-/KKA-Monitor</h2><p>Alle aktuellen Anwärter einzeln, direkt aus dem zentralen Personalstamm. Jedes Pflichtmodul und der jeweilige Zulassungsstatus werden automatisch aktualisiert.</p></div>
 <div class="search-monitors"><label for="monitorSuche">Anwärter suchen</label><input id="monitorSuche" type="search" placeholder="Name eingeben …" autocomplete="off" aria-label="Öffentliche Ausbildungsmonitore durchsuchen"></div>
 <div class="monitor-gruppen" id="monitorKarten" aria-live="polite"><div class="card">Monitore werden geladen …</div></div>
 <p class="notice">Öffentlich sichtbar sind der Anwärtername, die abgeschlossenen und offenen Pflichtmodule und beim PMA ausschließlich die <b>Anzahl der abgegebenen Stimmen</b> sowie die <b>Prüfungszulassung</b>. Punktestände und einzelne Entscheidungen bleiben ausschließlich im internen Ausbildungsbereich. Dienstnummern und Personalakten werden nicht veröffentlicht.</p>
@@ -128,7 +128,13 @@ function renderMonitors(){
  const area=document.querySelector('#monitorKarten');
  const search=document.querySelector('#monitorSuche').value.trim().toLocaleLowerCase('de-DE');
  area.replaceChildren();
- for(const group of currentMonitors){
+ const pma=currentMonitors.filter(g=>g.laufbahn==='PMA');
+ const pk=currentMonitors.filter(g=>['PKA','KKA'].includes(g.laufbahn));
+ const combined={laufbahn:'PKA / KKA',anzahl:pk.reduce((n,g)=>n+Number(g.anzahl||0),0),
+   zurPruefungZugelassen:pk.reduce((n,g)=>n+Number(g.zurPruefungZugelassen||0),0),
+   moduleProPerson:pk[0]?.moduleProPerson||4,
+   personen:pk.flatMap(g=>(g.personen||[]).map(p=>({...p,laufbahn:g.laufbahn}))).sort((a,b)=>String(a.name).localeCompare(String(b.name),'de'))};
+ for(const group of [...pma,...(pk.length?[combined]:[])]){
   const section=make('section',undefined,'card monitor-gruppe');
   const head=make('div',undefined,'monitor-head');
   const title=make('div');
@@ -143,6 +149,7 @@ function renderMonitors(){
    const top=make('div',undefined,'person-top');
    const title=make('div');
    title.append(make('h4',person.name||'Unbekannter Anwärter'));
+   if(person.laufbahn)title.append(make('span',person.laufbahn,'tag'));
    const state=make('span',person.status||'Module ausstehend','state'+(person.zurPruefungZugelassen?' ready':person.moduleAbgeschlossen?' wait':''));
    top.append(title,state);
    box.append(top);

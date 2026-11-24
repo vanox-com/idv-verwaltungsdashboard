@@ -103,8 +103,13 @@ if(!migration.includes('CREATE TABLE IF NOT EXISTS ausbildung_unterricht'))
 
 console.log('Ausbildung native integration, no extra admin page and public AuLK catalog: OK');
 
-for(const key of ['ausbildung-pma','ausbildung-pka','ausbildung-kka','ausbildung-ausbilder','ausbildung-materialien','ausbildung-unterricht']){
+for(const key of ['ausbildung-pma','ausbildung-pka','ausbildung-ausbilder','ausbildung-materialien','ausbildung-unterricht']){
  if(!navigation.includes("'"+key+"'"))throw Error('Missing sidebar item '+key);
 }
 if(!embedded.includes('allowedRoute')||!embedded.includes("['ausbilder','materialien'].includes(next)")||!index.includes("m==='dash'||m==='design'"))
  throw Error('Training administration visibility and personal design access must be role-aware');
+
+if(navigation.includes("'ausbildung-kka'")||!index.includes("track:'PKA-KKA'")||!embedded.includes("monitorMatches(selected.anwaerter.laufbahn,track)")||!embedded.includes('<th>Laufbahn</th>'))
+ throw Error('PKA and KKA must share a monitor while retaining their track identity and detail views');
+if(!embedded.includes('data-action="rsa"')||!embedded.includes("a.laufbahn==='PMA'")||!aulk.includes('RSA-Schulung (Pflicht)'))
+ throw Error('PMA RSA control or public status missing');

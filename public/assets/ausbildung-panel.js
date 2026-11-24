@@ -38,7 +38,7 @@ try{
    tab='unterricht';
  }
 }catch(_){/* Standardansicht ohne sessionStorage. */}
-const ROUTES=[['uebersicht','Übersicht'],['monitore','PMA- / PKA- / KKA-Monitor'],['ausbilder','Ausbilderverwaltung'],['materialien','Ausbildungsunterlagen'],['unterricht','Unterrichtsräume']];
+const ROUTES=[['uebersicht','Übersicht'],['monitore','Anwärtermonitore'],['ausbilder','Ausbilderverwaltung'],['materialien','Ausbildungsunterlagen'],['unterricht','Unterrichtsräume']];
 async function request(path,opt={}){
  const headers={'Accept':'application/json'};
  if(opt.body!==undefined)headers['Content-Type']='application/json';
@@ -137,7 +137,7 @@ function navRender(){
  el('#nav').innerHTML=ROUTES.filter(([key])=>allowedRoute(key)).map(([key,label])=>'<button type="button" data-tab="'+key+'" class="'+(tab===key?'on':'')+'">'+esc(label)+'</button>').join('');
  el('#nav').classList.toggle('hidden',Boolean(onNavigate));
  onNavigate?.(tab,track);
- el('#heading').textContent=ROUTES.find(x=>x[0]===tab)?.[1]||'Ausbildung';
+ el('#heading').textContent=tab==='monitore'?(track==='PMA'?'PMA-Monitor':'PKA-/KKA-Monitor'):(ROUTES.find(x=>x[0]===tab)?.[1]||'Ausbildung');
 }
 function render(){
  if(!data)return;
@@ -176,14 +176,17 @@ function overview(){
  (a.length?'':'<p class="muted">Noch keine Anwärter angelegt.</p>')+
  '</section><section class="card"><h2>Ausbildungsstruktur</h2><p>Die sieben PMA-Module stammen aus der Excel-Vorlage. Die PMA-Prüfungsbereitschaft setzt vollständige Module, die <b>RSA-Schulung</b> und mindestens <b>2,5 gewichtete Stimmenpunkte</b> voraus.</p><p>PKA und KKA verwenden derzeit PK.1–PK.4. Hier gilt laut Vorlage: alle vier Module abgeschlossen = zugelassen.</p><p class="muted">PK.5, PK.7 und PM.7 sind in der Kompetenzmatrix beziehungsweise Übersicht genannt, aber mangels eindeutiger Bewertungsregel noch keine Pflichtmodule.</p><button data-tab="monitore" class="primary">Zu den Monitoren</button></section></div>';
 }
+function monitorMatches(laufbahn,monitor){
+ return monitor==='PMA'?laufbahn==='PMA':['PKA','KKA'].includes(laufbahn);
+}
 function monitors(){
- let list=data.anwaerter.filter(a=>a.laufbahn===track);
- let html='<div class="card"><div class="flex space"><div class="flex">'+['PMA','PKA','KKA'].map(t=>'<button data-track="'+t+'" class="'+(track===t?'primary':'')+'">'+t+' ('+data.anwaerter.filter(x=>x.laufbahn===t).length+')</button>').join('')+'</div>'+
- '<span class="pill good">Live aus dem zentralen Personalstamm</span></div><div class="tablewrap"><table><thead><tr><th>Dienstnr.</th><th>Anwärter</th><th>Beginn</th><th>Module</th>'+(track==='PMA'?'<th>RSA</th>':'')+'<th>Prüfungsstand</th><th></th></tr></thead><tbody>'+
- list.map(x=>'<tr><td>'+esc(x.personalnummer??'—')+'</td><td><b>'+esc(x.name)+'</b><br><small>'+esc(x.nebenberuf||'')+'</small></td><td>'+fmt(x.beginn)+'</td><td>'+x.fortschritt.moduleFertig+'/'+x.fortschritt.moduleGesamt+meter(x.fortschritt.moduleFertig,x.fortschritt.moduleGesamt)+'</td>'+(track==='PMA'?'<td><span class="exam-status '+(x.fortschritt.rsa?'ready':'incomplete')+'">'+(x.fortschritt.rsa?'Erhalten':'Offen')+'</span></td>':'')+'<td>'+pill(x.fortschritt.status)+'</td><td><button class="compact" data-action="open" data-id="'+x.id+'">Öffnen</button></td></tr>').join('')+
+ let list=data.anwaerter.filter(a=>monitorMatches(a.laufbahn,track)).sort((a,b)=>String(a.name).localeCompare(String(b.name),'de'));
+ let html='<div class="card"><div class="flex space"><div class="flex">'+['PMA','PKA-KKA'].map(t=>'<button data-track="'+t+'" class="'+(track===t?'primary':'')+'">'+(t==='PMA'?'PMA':'PKA / KKA')+' ('+data.anwaerter.filter(x=>monitorMatches(x.laufbahn,t)).length+')</button>').join('')+'</div>'+
+ '<span class="pill good">Live aus dem zentralen Personalstamm</span></div><div class="tablewrap"><table><thead><tr><th>Dienstnr.</th><th>Anwärter</th>'+(track!=='PMA'?'<th>Laufbahn</th>':'')+'<th>Beginn</th><th>Module</th>'+(track==='PMA'?'<th>RSA</th>':'')+'<th>Prüfungsstand</th><th></th></tr></thead><tbody>'+
+ list.map(x=>'<tr><td>'+esc(x.personalnummer??'—')+'</td><td><b>'+esc(x.name)+'</b><br><small>'+esc(x.nebenberuf||'')+'</small></td>'+(track!=='PMA'?'<td><span class="exam-row '+esc(x.laufbahn.toLowerCase())+'" style="display:inline-block;padding:0;border:0;background:none"><span class="exam-track">'+esc(x.laufbahn)+'</span></span></td>':'')+'<td>'+fmt(x.beginn)+'</td><td>'+x.fortschritt.moduleFertig+'/'+x.fortschritt.moduleGesamt+meter(x.fortschritt.moduleFertig,x.fortschritt.moduleGesamt)+'</td>'+(track==='PMA'?'<td><span class="exam-status '+(x.fortschritt.rsa?'ready':'incomplete')+'">'+(x.fortschritt.rsa?'Erhalten':'Offen')+'</span></td>':'')+'<td>'+pill(x.fortschritt.status)+'</td><td><button class="compact" data-action="open" data-id="'+x.id+'">Öffnen</button></td></tr>').join('')+
  '</tbody></table></div>'+(list.length?'':'<p class="muted">Für diese Laufbahn sind noch keine Datensätze angelegt.</p>')+'</div>';
  // Anwärter werden nur im Personalstamm angelegt.
- if(selected?.anwaerter && selected.anwaerter.laufbahn===track)html+=traineeDetails(selected);
+ if(selected?.anwaerter && monitorMatches(selected.anwaerter.laufbahn,track))html+=traineeDetails(selected);
  if(editing?.type==='trainee-edit')html+=traineeForm(selected?.anwaerter);
  return html;
 }

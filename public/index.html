@@ -1757,7 +1757,7 @@ body{overflow-x:clip}
 <script>
 const MODS = [
   ['dash','Dashboard','📊'],['pers','Personal','👥'],['bef','Beförderungen','⭐'],
-  ['ausbildung','Übersicht','🎓'],['ausbildung-pma','PMA-Monitor','📋'],['ausbildung-pka','PKA-Monitor','📋'],['ausbildung-kka','KKA-Monitor','📋'],['ausbildung-ausbilder','Ausbilderverwaltung','👥'],['ausbildung-materialien','Ausbildungsunterlagen','📚'],['ausbildung-unterricht','Unterrichtsräume','📽️'],['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
+  ['ausbildung','Übersicht','🎓'],['ausbildung-pma','PMA-Monitor','📋'],['ausbildung-pka','PKA-/KKA-Monitor','📋'],['ausbildung-ausbilder','Ausbilderverwaltung','👥'],['ausbildung-materialien','Ausbildungsunterlagen','📚'],['ausbildung-unterricht','Unterrichtsräume','📽️'],['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],['abm','Abmeldungen','📅'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
@@ -1770,7 +1770,7 @@ const NAV_GRUPPEN = [
   {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','praktika','rout','abm','geb','jub' ,'statistik']},
   {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
-  {id:'ausbildung',titel:'Ausbildung',module:['ausbildung','ausbildung-pma','ausbildung-pka','ausbildung-kka','ausbildung-ausbilder','ausbildung-materialien','ausbildung-unterricht']},
+  {id:'ausbildung',titel:'Ausbildung',module:['ausbildung','ausbildung-pma','ausbildung-pka','ausbildung-ausbilder','ausbildung-materialien','ausbildung-unterricht']},
   {id:'verwaltung',titel:'Administration',module:['users','befricht','system','botcfg','meldungen','rechtesimulator','design','backup','log','papierkorb']}
 ];
 const NAV_OFFEN = new Set(['uebersicht','personal','ausbildung']);
@@ -1781,7 +1781,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fd = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('.') : '';
 const AUSB_NAV={
-  ausbildung:{route:'uebersicht'},'ausbildung-pma':{route:'monitore',track:'PMA'},'ausbildung-pka':{route:'monitore',track:'PKA'},'ausbildung-kka':{route:'monitore',track:'KKA'},'ausbildung-ausbilder':{route:'ausbilder',leitung:true},'ausbildung-materialien':{route:'materialien',leitung:true},'ausbildung-unterricht':{route:'unterricht'}
+  ausbildung:{route:'uebersicht'},'ausbildung-pma':{route:'monitore',track:'PMA'},'ausbildung-pka':{route:'monitore',track:'PKA-KKA'},'ausbildung-ausbilder':{route:'ausbilder',leitung:true},'ausbildung-materialien':{route:'materialien',leitung:true},'ausbildung-unterricht':{route:'unterricht'}
 };
 const ausbildungKonto=()=>['Ausbilder','Ausbildungsleitung'].includes(ME?.rolle);
 const can = (m,l=1) => {
@@ -2044,7 +2044,7 @@ async function starten() {
     D = antwort.daten;
     // Ausbildung wird wie jedes andere Modul im Hauptpanel gerendert.
     if(!bereitsOffen){
-      const requested=location.hash.slice(1);
+      const requested=location.hash==='#ausbildung-kka'?'ausbildung-pka':location.hash.slice(1);
       let returnRoom=false;
       try{returnRoom=sessionStorage.getItem('idvAusbildungReturn')==='unterricht';}catch(_){}
       if(returnRoom&&can('ausbildung-unterricht'))tab='ausbildung-unterricht';
@@ -6486,6 +6486,6 @@ document.addEventListener('click',async e=>{
 <script src="/abmeldungen.js"></script>
 <script src="/botKonfiguration.js"></script>
 <script src="/responsiveNav.js"></script>
-<script src="/assets/ausbildung-panel.js?v=20261125-8" defer></script>
+<script src="/assets/ausbildung-panel.js?v=20261125-9" defer></script>
 </body>
 </html>
