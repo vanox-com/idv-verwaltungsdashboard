@@ -88,10 +88,12 @@ function dispatchUnterrichtTrainer(array $u,string $method,string $uri): bool {
         fail(503,'Die Unterrichtsdatenbank fehlt. Bitte als Administrator zuerst eine verschlüsselte Sicherung erstellen und anschließend im Ausbildungsbereich die Ergänzung einrichten.');
     if($uri==='/api/ausbildung/unterricht'&&$method==='GET'){
         $rows=sql("SELECT i.id,i.modul_code,m.titel,i.erstellt,i.ablauf,
+                    COALESCE(NULLIF(TRIM(ersteller.anzeigename),''),'Unbekannter Ausbilder') AS erstellt_von,
                     CASE WHEN i.teilnehmer_hash IS NOT NULL THEN 1 ELSE 0 END AS teilnehmer,
                     CASE WHEN i.beendet=0 AND i.ablauf>UTC_TIMESTAMP() THEN 1 ELSE 0 END AS aktiv
                 FROM ausbildung_unterricht i
                 JOIN ausbildung_materialien m ON m.id=i.material_id
+                LEFT JOIN users ersteller ON ersteller.id=i.ausbilder_user_id
                 WHERE i.ausbilder_user_id=?
                 ORDER BY i.erstellt DESC LIMIT 40",[(int)$u['id']]);
         respond(200,['raeume'=>$rows]);
