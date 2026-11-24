@@ -125,9 +125,20 @@ function traineeDetails(d){
  const a=d.anwaerter,p=d.fortschritt;
  const canEdit=data.leitung||data.eigeneKompetenzen.length>0;
  const myVote=p.stimmen?.find(v=>Number(v.ausbilder_user_id)===Number(data.user.id))?.stimme||'';
- const modules=p.module.map(m=>'<div class="modrow"><b>'+esc(m.code)+'</b><div><b>'+esc(m.titel)+'</b><div class="muted">'+(m.abgeschlossen?'Abgeschlossen':'Offen')+'</div></div>'+
- '<button type="button" class="compact" data-action="module" data-code="'+esc(m.code)+'" data-done="'+(m.abgeschlossen?'1':'0')+'" '+(!data.leitung&&!data.eigeneKompetenzen.includes(m.code)?'disabled title="Keine Modulkompetenz"':'')+'>'+
- (m.abgeschlossen?'↶ Zurücksetzen':'✓ Abschließen')+'</button></div>').join('');
+ const modules=p.module.map(m=>{
+   const decks=(data.materialien||[]).filter(x=>x.modul_code===m.code && /^https:\/\/docs\.google\.com\/presentation\//.test(x.url||''));
+   const mayPresent=data.leitung||data.eigeneKompetenzen.includes(m.code);
+   const presentation=decks.length?
+      '<div class="flex" style="margin-top:7px">'+decks.map(deck=>
+        '<a href="'+esc(deck.url)+'" target="_blank" rel="noopener noreferrer">📽 '+esc(deck.titel)+' ↗</a>'+
+        (mayPresent?' <button type="button" class="compact primary" data-action="start-lesson" data-id="'+Number(deck.id)+'" data-code="'+esc(m.code)+'">Gemeinsamen Unterricht starten</button>':'')
+      ).join(' ')+'</div>':
+      '<div class="muted" style="font-size:12px">Noch keine AuLK-Präsentation zugeordnet'+
+      (data.leitung?' · <button type="button" class="compact" data-action="link-module" data-code="'+esc(m.code)+'">Google-Link hinterlegen</button>':'')+'</div>';
+   return '<div class="modrow"><b>'+esc(m.code)+'</b><div><b>'+esc(m.titel)+'</b><div class="muted">'+(m.abgeschlossen?'Abgeschlossen':'Offen')+'</div>'+presentation+'</div>'+
+    '<button type="button" class="compact" data-action="module" data-code="'+esc(m.code)+'" data-done="'+(m.abgeschlossen?'1':'0')+'" '+(!mayPresent?'disabled title="Keine Modulkompetenz"':'')+'>'+
+    (m.abgeschlossen?'↶ Zurücksetzen':'✓ Abschließen')+'</button></div>';
+ }).join('');
  return '<section class="card" id="details"><div class="flex space"><div><span class="eyebrow">'+esc(a.laufbahn)+' · Dienstnummer '+esc(a.personalnummer||'—')+'</span><h2>'+esc(a.name)+'</h2></div><div class="flex">'+pill(p.status)+'<button data-action="close">Schließen</button></div></div>'+
  '<div class="kpis"><div class="kpi"><strong>'+p.moduleFertig+' / '+p.moduleGesamt+'</strong><span>Module abgeschlossen</span></div><div class="kpi"><strong>'+p.stimmenSaldo+'</strong><span>Stimmenbilanz</span></div><div class="kpi"><strong>'+p.stimmenJa+'</strong><span>Ja-Stimmen</span></div><div class="kpi"><strong>'+p.stimmenNein+'</strong><span>Nein-Stimmen</span></div></div>'+
  '<h3>Ausbildungsmodule</h3>'+modules+
@@ -160,12 +171,17 @@ function trainerForm(t){
  '<div class="full flex"><button type="submit" class="primary">Speichern</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></div>';
 }
 function materials(){
- return '<div class="card"><h2>Ausbildungsbibliothek</h2><p>Hier werden die Google-Präsentationen, Ausbilderleitfäden und Ausbildungsdokumente verlinkt. Der Zugriff auf diese Übersicht erfordert einen Ausbilderzugang; die Freigaben innerhalb von Google Drive gelten zusätzlich.</p>'+
+ const moduleLinks='<section class="card"><h2>AuLK nach Ausbildungsmodul</h2><p>Google-Präsentationen direkt aufrufen oder für einen Anwärter eine gemeinsame Bildschirmübertragung starten.</p>'+data.module.map(m=>{
+   const decks=(data.materialien||[]).filter(x=>x.modul_code===m.code&&/^https:\/\/docs\.google\.com\/presentation\//.test(x.url||''));
+   const mayPresent=data.leitung||data.eigeneKompetenzen.includes(m.code);
+   return '<div class="modrow"><b>'+esc(m.code)+'</b><div><strong>'+esc(m.titel)+'</strong><div class="flex" style="margin-top:5px">'+(decks.length?decks.map(d=>'<a href="'+esc(d.url)+'" target="_blank" rel="noopener noreferrer">'+esc(d.titel)+' ↗</a> '+(mayPresent?'<button class="compact" data-action="start-lesson" data-code="'+esc(m.code)+'" data-id="'+Number(d.id)+'">Unterricht starten</button>':'' )).join(' '):'<small class="muted">Noch kein Präsentationslink gespeichert.</small>')+'</div></div>'+(data.leitung?'<button class="compact" data-action="link-module" data-code="'+esc(m.code)+'">+ Zuordnen</button>':'')+'</div>';
+ }).join('')+'</section>';
+ return moduleLinks+'<div class="card"><h2>Ausbildungsbibliothek</h2><p>Hier werden die Google-Präsentationen, Ausbilderleitfäden und Ausbildungsdokumente verlinkt. Der Zugriff auf diese Übersicht erfordert einen Ausbilderzugang; die Freigaben innerhalb von Google Drive gelten zusätzlich.</p>'+
  '<div class="flex space"><a href="/aulk.html" target="_blank" rel="noopener noreferrer">Öffentliche AuLK-Bibliothek öffnen ↗</a><a href="https://sites.google.com/view/aulk2026/startseite" rel="noopener noreferrer" target="_blank">Bisherige Google-Site ↗</a>'+(data.leitung?'<button data-action="new-material" class="primary">+ Google-Link</button><button data-action="upload-material" class="primary">+ Datei hochladen</button>':'')+'</div></div>'+
  '<div class="card"><div class="tablewrap"><table><thead><tr><th>Modul</th><th>Unterlage</th><th>Typ</th><th></th></tr></thead><tbody>'+
- data.materialien.map(m=>'<tr><td>'+esc(m.modul_code||'Allgemein')+'</td><td>'+esc(m.titel)+'</td><td>'+esc(m.typ)+'</td><td>'+(Number(m.datei)?'<a href="/api/ausbildung/materialien/'+m.id+'/datei">Geschützt herunterladen ↘</a>':'<a href="'+esc(m.url)+'" target="_blank" rel="noopener noreferrer">Öffnen ↗</a>')+' '+(data.leitung?'<button class="compact" data-action="public-material" data-id="'+m.id+'" data-active="'+Number(m.public_aktiv)+'">'+(Number(m.public_aktiv)?'Öffentlich ✓':'Öffentlich freigeben')+'</button> <button class="compact danger" data-action="remove-material" data-id="'+m.id+'">Entfernen</button>':'')+'</td></tr>').join('')+
+ data.materialien.map(m=>'<tr><td>'+esc(m.modul_code||'Allgemein')+'</td><td>'+esc(m.titel)+'</td><td>'+esc(m.typ)+'</td><td>'+(Number(m.datei)?'<a href="/api/ausbildung/materialien/'+m.id+'/datei">Geschützt herunterladen ↘</a>':'<a href="'+esc(m.url)+'" target="_blank" rel="noopener noreferrer">Öffnen ↗</a>')+' '+(/^https:\/\/docs\.google\.com\/presentation\//.test(m.url||'')&&(data.leitung||data.eigeneKompetenzen.includes(m.modul_code))?'<button class="compact primary" data-action="start-lesson" data-code="'+esc(m.modul_code)+'" data-id="'+Number(m.id)+'">Unterricht</button> ':'')+(data.leitung?'<button class="compact" data-action="public-material" data-id="'+m.id+'" data-active="'+Number(m.public_aktiv)+'">'+(Number(m.public_aktiv)?'Öffentlich ✓':'Öffentlich freigeben')+'</button> <button class="compact danger" data-action="remove-material" data-id="'+m.id+'">Entfernen</button>':'')+'</td></tr>').join('')+
  '</tbody></table></div>'+(data.materialien.length?'':'<p class="muted">Noch keine Einzelverknüpfungen hinterlegt. Die hochgeladene ZIP ist nicht automatisch öffentlich veröffentlicht worden.</p>')+'</div>'+
- (editing?.type==='material'?'<div class="card"><h2>Google-Unterlage hinzufügen</h2><form id="materialForm" class="formgrid"><label>Modul<select name="modul_code"><option value="">Allgemein / Weiterbildung</option>'+data.module.map(m=>'<option value="'+esc(m.code)+'">'+esc(modName(m))+'</option>').join('')+'</select></label>'+
+ (editing?.type==='material'?'<div class="card"><h2>Google-Unterlage hinzufügen</h2><form id="materialForm" class="formgrid"><label>Modul<select name="modul_code"><option value="">Allgemein / Weiterbildung</option>'+data.module.map(m=>'<option value="'+esc(m.code)+'" '+(editing.module===m.code?'selected':'')+'>'+esc(modName(m))+'</option>').join('')+'</select></label>'+
  '<label>Dokumenttyp<select name="typ"><option>Präsentation</option><option>Leitfaden</option><option>Prüfungsunterlage</option><option>Handout</option></select></label><label>Bezeichnung<input name="titel" required maxlength="200"></label>'+
  '<label class="full">Google-Docs-, Slides-, Drive- oder Sites-Link<input type="url" name="url" required placeholder="https://docs.google.com/…"></label><div class="full flex"><button class="primary" type="submit">Verlinken</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></div>':'')+
  (editing?.type==='upload'?'<div class="card"><h2>Interne Datei hochladen</h2><p class="muted">PDF-, DOCX-, PPTX- oder XLSX-Dateien bis 40 MB. Dateien bleiben außerhalb des Webroots und sind nur nach Anmeldung abrufbar. Die große ZIP bitte zuerst entpacken und die Module einzeln hochladen.</p><form id="uploadForm" class="formgrid" enctype="multipart/form-data"><label>Modul<select name="modul_code"><option value="">Allgemein / Weiterbildung</option>'+data.module.map(m=>'<option value="'+esc(m.code)+'">'+esc(modName(m))+'</option>').join('')+'</select></label><label>Dokumenttyp<select name="typ"><option>Präsentation</option><option>Leitfaden</option><option>Prüfungsunterlage</option><option>Handout</option></select></label><label>Bezeichnung<input name="titel" required maxlength="200"></label><label class="full">Datei<input type="file" name="datei" accept=".pdf,.pptx,.docx,.xlsx" required></label><div class="full flex"><button class="primary" type="submit">Geschützt hochladen</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></div>':'');
@@ -199,7 +215,9 @@ shadow.addEventListener('click',async(e)=>{
  if(mode==='new-trainee'){editing={type:'trainee-new'};selected=null;render();return}
  if(mode==='new-trainer'){editing={type:'trainer',id:null};render();return}
  if(mode==='edit-trainer'){editing={type:'trainer',id};render();return}
- if(mode==='new-material'){editing={type:'material'};render();return}
+ if(mode==='new-material'){editing={type:'material',module:''};render();return}
+ if(mode==='link-module'){tab='materialien';editing={type:'material',module:btn.dataset.code};render();return}
+ if(mode==='start-lesson'){await act(async()=>{const r=await request('unterricht',{method:'POST',body:JSON.stringify({modul_code:btn.dataset.code,material_id:id})});sessionStorage.setItem('idvLesson:'+r.id,location.origin+r.einladung);location.assign('/unterricht.html?raum='+r.id)});return}
  if(mode==='upload-material'){editing={type:'upload'};render();return}
  if(mode==='close'){selected=null;editing=null;render();return}
  if(mode==='open'){await act(async()=>{selected=await request('anwaerter/'+id);editing=null;render();el('#details')?.scrollIntoView({behavior:'smooth'})});return}
