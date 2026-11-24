@@ -10,6 +10,7 @@ on:
       - 'scripts/mysql/2026-11-24-ausbildung.sql'
       - 'scripts/mysql/2026-11-24-aulk-public.sql'
       - 'tests/ausbildung-*'
+      - 'docs/AUSBILDUNG-IMPLEMENTIERUNG.md'
   workflow_dispatch:
 permissions:
   contents: read
