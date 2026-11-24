@@ -44,7 +44,7 @@ Das passwortgeschützte ZIP enthält `manifest.json` mit SQL-Struktur-Metadaten 
 
 ## Vor der Ausbildungsdatenbank-Erweiterung
 
-1. Vor der additiven Ausbildungsmigration über **Backup-Übersicht → Verschlüsselte Sicherung erstellen** einen bestätigten, heruntergeladenen und prüfbaren MySQL-Snapshot sichern.
+1. Vor der additiven Ausbildungsmigration über **Backup-Übersicht → Verschlüsselte Sicherung erstellen** einen bestätigten, heruntergeladenen und prüfbaren MySQL-Snapshot sichern. Die Ausbildungs-Setup-API verweigert die Änderung mit **HTTP 428**, solange kein tatsächlich vorhandenes, AES-256-verschlüsseltes IDV-Archiv aus den letzten 24 Stunden für genau diese Datenbank im privaten Backup-Ordner liegt. Eine bloße Bestätigung ohne Backup reicht nicht.
 2. Vor der Migration außerdem **ein unabhängiges vollständiges SQL-Backup beim Hoster/phpMyAdmin** erstellen, denn die In-Panel-Wiederherstellung funktioniert **nicht** für eine alte Sicherung, wenn neue Ausbildungstabellen zwischenzeitlich zum Datenbankschema hinzugefügt wurden.
 3. Erst danach `2026-11-24-ausbildung.sql` und `2026-11-24-aulk-public.sql` auf dem Hoster ausführen.
 4. Weder der Backup-Installer noch die Ausbildungseinrichtung dürfen automatisch bestehende Datensätze ersetzen.
