@@ -7,6 +7,8 @@ on:
       - 'php/Ausbildung.php'
       - 'php/AusbildungPersonal.php'
       - 'scripts/mysql/2026-11-24-ausbildung-personal.sql'
+      - 'scripts/mysql/2026-11-24-ausbildung-vote-details.sql'
+      - 'php/AusbildungDecks.php'
       - 'php/AusbildungUnterricht.php'
       - 'public/unterricht.html'
       - 'public/assets/unterricht-raum.js'
@@ -48,6 +50,7 @@ jobs:
           php -l php/Ausbildung.php
           php -l php/AusbildungUnterricht.php
           php -l php/AusbildungPersonal.php
+          php -l php/AusbildungDecks.php
           php tests/mysql8-ausbildung-personal.php
           php -l php/Api.php
           php tests/ausbildung-logic.php
@@ -65,6 +68,8 @@ jobs:
           mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-ausbildung-unterricht.sql
           mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-ausbildung-personal.sql
           mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-ausbildung-personal.sql
+          mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-ausbildung-vote-details.sql
+          mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-ausbildung-vote-details.sql
           test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='idv_train_ci' AND table_name LIKE 'ausbildung_%'")" -eq 7
           test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM ausbildung_module")" -eq 11
           test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='idv_train_ci' AND table_name='ausbildung_anwaerter' AND column_name='personal_quelle'")" -eq 1
