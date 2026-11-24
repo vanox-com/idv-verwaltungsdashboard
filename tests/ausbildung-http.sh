@@ -264,6 +264,16 @@ roomInfo="$(req "$temp/lead" POST /api/ausbildung/unterricht "{\"modul_code\":\"
 roomId="$(printf '%s' "$roomInfo" | parse id)"
 token="$(printf '%s' "$roomInfo" | php -r '$x=json_decode(stream_get_contents(STDIN),true);echo explode("#",$x["einladung"]??"")[1]??"";')"
 [[ "$roomId" =~ ^[0-9]+$ && "$token" =~ ^[a-f0-9]{64}$ ]] || { echo "Classroom creation: $roomInfo";exit 1; }
+# The creator of an existing lesson is resolved from the regular user table.
+# No schema migration and no exposure of trainer identity via public invite.
+roomList="$(req "$temp/lead" GET /api/ausbildung/unterricht)"
+printf '%s' "$roomList" | php -r '
+$d=json_decode(stream_get_contents(STDIN),true);
+if(count($d["raeume"]??[])!==1)exit(1);
+$room=$d["raeume"][0];
+if(($room["erstellt_von"]??"")!=="Synthetic Training Lead")exit(2);
+if(!isset($room["erstellt"],$room["titel"],$room["modul_code"]))exit(3);'
+
 # Room without the instructor cookie is forbidden.
 code="$(curl -sS -o "$temp/no-trainer" -w '%{http_code}' "$base/api/ausbildung/unterricht/$roomId/details")"
 [[ "$code" == 401 ]] || { echo "Unauthenticated trainer accessed lesson metadata: $code";exit 1; }
