@@ -19,7 +19,32 @@ section.anchor{scroll-margin-top:28px;margin-top:35px}.section-head{margin-botto
 .tag{display:inline-block;padding:4px 10px;border-radius:30px;border:1px solid #4b7396;color:#c4e3ff;font-size:12px;margin:0 0 13px}.requirements{margin:16px 0;padding:14px;border-radius:10px;background:#0a1a2a;border:1px solid #37516c}.requirements b{color:var(--text)}
 ol{padding-left:20px;margin:10px 0}li{margin-bottom:7px}
 .module{display:grid;grid-template-columns:54px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid #ffffff13}.module:last-child{border:0}.code{font-weight:800;color:var(--blue)}
-.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.stat-top{display:flex;justify-content:space-between;gap:8px;align-items:center}.number{font-size:34px;font-weight:800;letter-spacing:-.04em}.stat-row{display:flex;justify-content:space-between;gap:7px;margin:9px 0;border-bottom:1px solid #ffffff12;padding-bottom:7px;color:var(--mut)}.stat-row strong{color:var(--text)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.monitor-gruppen{display:grid;gap:22px}
+.monitor-gruppe{background:#15283de8}
+.monitor-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;border-bottom:1px solid #ffffff1b;padding-bottom:14px;margin-bottom:16px}
+.monitor-head h3{font-size:21px;margin:0}
+.monitor-head .tag{margin:4px 0}
+.person-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:14px}
+.person-card{padding:18px;background:#0f1e30;border:1px solid #35506a;border-radius:12px;min-width:0}
+.person-top{display:flex;align-items:start;justify-content:space-between;gap:9px;flex-wrap:wrap;margin-bottom:12px}
+.person-top h4{font-size:17px;margin:0}
+.state{border:1px solid #577b99;border-radius:25px;padding:5px 10px;color:#c7dff6;font-size:12px;font-weight:650}
+.state.ready{color:#8de8bd;border-color:#418b69;background:#21594035}
+.state.wait{color:#f0d59a;border-color:#8e784a;background:#69502530}
+.module-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:7px;margin:14px 0}
+.module-item{display:flex;align-items:flex-start;gap:7px;padding:8px 9px;border-radius:8px;border:1px solid #42556d;font-size:12px;color:#bdcbda}
+.module-item.done{border-color:#447b65;background:#163a3050;color:#b8f7d9}
+.module-item strong{font-size:12px}
+.module-item span{display:flex;flex-direction:column;gap:1px}
+.vote-box{margin-top:15px;background:#13273b;border:1px solid #3b5978;padding:12px;border-radius:9px}
+.vote-box p{margin:5px 0}.vote-row{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+.vote-row strong{color:#eaf3ff}
+.search-monitors{display:flex;align-items:center;gap:12px;margin:15px 0 22px;flex-wrap:wrap}
+.search-monitors label{font-weight:650}
+.search-monitors input{background:#102036;border:1px solid #527394;border-radius:9px;padding:11px 13px;color:white;font:inherit;width:min(100%,340px)}
+.empty{padding:12px 0;color:var(--mut)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}.stat-top{display:flex;justify-content:space-between;gap:8px;align-items:center}.number{font-size:34px;font-weight:800;letter-spacing:-.04em}.stat-row{display:flex;justify-content:space-between;gap:7px;margin:9px 0;border-bottom:1px solid #ffffff12;padding-bottom:7px;color:var(--mut)}.stat-row strong{color:var(--text)}
 .meter{margin:13px 0 8px;height:9px;background:#384f68;border-radius:10px;overflow:hidden}.meter>i{display:block;background:linear-gradient(90deg,#528bd2,#5acbb0);height:100%;width:0;transition:width .25s}
 .notice{border:1px solid #496985;background:#1a3149;padding:14px 16px;border-radius:10px;margin:19px 0}.muted{color:var(--mut)}.release{display:flex;justify-content:space-between;align-items:center;gap:14px;border-bottom:1px solid #ffffff1b;padding:13px 0}.release b{display:block}.release small{color:var(--mut)}
 footer{border-top:1px solid var(--edge);padding:22px 0;font-size:12px;color:var(--mut)}
@@ -61,9 +86,10 @@ footer{border-top:1px solid var(--edge);padding:22px 0;font-size:12px;color:var(
 </article></div>
 <p class="notice">Weitere in Kompetenzunterlagen erwähnte Module (beispielsweise PM.7, PK.5 und PK.7) sind derzeit nicht Bestandteil der verbindlichen Modulberechnung. Konkrete Bestehensnoten, praktische Prüfungsformen oder Wiederholungsregeln sind in der derzeitigen Monitorlogik nicht definiert und werden hier deshalb nicht erfunden.</p>
 </section>
-<section class="anchor" id="monitore" aria-labelledby="monitorTitel"><div class="section-head"><div class="eyebrow">Automatisch mit dem Personalstamm verbunden</div><h2 id="monitorTitel">PMA-, PKA- und KKA-Monitore</h2><p>Die Zahlen spiegeln den aktuellen Dienstgrad aus der Personalverwaltung wider. Neue Anwärter werden ihrer Laufbahn automatisch zugeordnet.</p></div>
-<div class="stats" id="monitorKarten" aria-live="polite"><div class="card">Monitore werden geladen …</div></div>
-<p class="notice">Diese Seite ist ohne Anmeldung erreichbar. Deshalb werden nur zusammengefasste Ausbildungszahlen angezeigt, keine Namen, Dienstnummern, Stimmabgaben oder Personalakten. Die persönliche Modulübersicht erhält ein Anwärter ausschließlich über seinen individuellen Freigabelink.</p>
+<section class="anchor" id="monitore" aria-labelledby="monitorTitel"><div class="section-head"><div class="eyebrow">Automatisch mit dem Personalstamm verbunden</div><h2 id="monitorTitel">PMA-, PKA- und KKA-Monitore</h2><p>Alle aktuellen Anwärter einzeln, direkt aus dem zentralen Personalstamm. Jedes Pflichtmodul und der jeweilige Zulassungsstatus werden automatisch aktualisiert.</p></div>
+<div class="search-monitors"><label for="monitorSuche">Anwärter suchen</label><input id="monitorSuche" type="search" placeholder="Name eingeben …" autocomplete="off" aria-label="Öffentliche Ausbildungsmonitore durchsuchen"></div>
+<div class="monitor-gruppen" id="monitorKarten" aria-live="polite"><div class="card">Monitore werden geladen …</div></div>
+<p class="notice">Öffentlich sichtbar sind der Anwärtername, die abgeschlossenen und offenen Pflichtmodule sowie beim PMA die <b>Anzahl der abgegebenen Stimmen</b> und der <b>gewichtete Gesamtpunktestand</b>. Wer wie abgestimmt hat, bleibt ausschließlich im internen Ausbildungsbereich. Dienstnummern und Personalakten werden nicht veröffentlicht.</p>
 <p id="monitorZeit" class="muted"></p>
 </section>
 <section class="anchor card" id="unterlagen"><div class="eyebrow">AuLK-Bibliothek</div><h2>Freigegebene Ausbildungsunterlagen</h2><p>Hier erscheinen nur Materialien, die die Ausbildungsleitung ausdrücklich für den öffentlichen Abruf freigegeben hat. Zusätzlich können in Google Drive eigene Zugriffsrechte gelten.</p><div id="documents" aria-live="polite"><p>Dokumente werden geladen …</p></div></section>
@@ -97,32 +123,78 @@ async function documents(){
   }
  }catch(e){docsArea.replaceChildren(make('p','Unterlagen derzeit nicht verfügbar: '+e.message));}
 }
+const formatPunkte=value=>Number(value||0).toLocaleString('de-DE',{maximumFractionDigits:2});
+let currentMonitors=[];
+function renderMonitors(){
+ const area=document.querySelector('#monitorKarten');
+ const search=document.querySelector('#monitorSuche').value.trim().toLocaleLowerCase('de-DE');
+ area.replaceChildren();
+ for(const group of currentMonitors){
+  const section=make('section',undefined,'card monitor-gruppe');
+  const head=make('div',undefined,'monitor-head');
+  const title=make('div');
+  title.append(make('h3',group.laufbahn+'-Monitor'),make('small',group.anzahl+' Anwärter · '+group.zurPruefungZugelassen+' zur Prüfung zugelassen'));
+  head.append(title,make('span',group.moduleProPerson+' Pflichtmodule','tag'));
+  section.append(head);
+  const grid=make('div',undefined,'person-grid');
+  const persons=(group.personen||[]).filter(p=>(p.name||'').toLocaleLowerCase('de-DE').includes(search));
+  if(!persons.length)grid.append(make('p',search?'Kein passender Anwärter.':'Derzeit keine Anwärter in dieser Laufbahn.','empty'));
+  for(const person of persons){
+   const box=make('article',undefined,'person-card');
+   const top=make('div',undefined,'person-top');
+   const title=make('div');
+   title.append(make('h4',person.name||'Unbekannter Anwärter'));
+   const state=make('span',person.status||'Module ausstehend','state'+(person.zurPruefungZugelassen?' ready':person.moduleAbgeschlossen?' wait':''));
+   top.append(title,state);
+   box.append(top);
+   const progress=make('div',undefined,'vote-row');
+   progress.append(make('strong',person.moduleFertig+' / '+person.moduleGesamt+' Module abgeschlossen'));
+   if(person.moduleAbgeschlossen)progress.append(make('span','✓ Pflichtmodule erfüllt','state ready'));
+   box.append(progress);
+   const meter=make('div',undefined,'meter'),bar=make('i');
+   bar.style.width=Math.max(0,Math.min(100,person.moduleGesamt?100*person.moduleFertig/person.moduleGesamt:0))+'%';
+   meter.append(bar);box.append(meter);
+   const list=make('div',undefined,'module-list');
+   for(const m of person.module||[]){
+    const item=make('div',undefined,'module-item'+(m.abgeschlossen?' done':''));
+    item.append(make('span',m.abgeschlossen?'✓':'○'));
+    const label=make('span');
+    label.append(make('strong',m.code),make('small',m.titel));
+    item.append(label);item.title=m.code+' '+(m.abgeschlossen?'abgeschlossen':'noch offen');
+    list.append(item);
+   }
+   box.append(list);
+   if(group.laufbahn==='PMA'){
+    const vote=make('div',undefined,'vote-box'),line=make('div',undefined,'vote-row');
+    line.append(make('span','Abgegebene Stimmen: '+(person.stimmenAnzahl||0)),
+      make('strong',formatPunkte(person.stimmenPunkte)+' / '+formatPunkte(person.stimmenSchwelle)+' Punkte'));
+    vote.append(line);
+    const needed=Number(person.stimmenPunkte||0)>=Number(person.stimmenSchwelle||2.5);
+    vote.append(make('p',needed?'✓ Erforderlicher Punktestand erreicht':'Punktestand für die Prüfung noch nicht erreicht','muted'));
+    if(!person.moduleAbgeschlossen && needed)
+      vote.append(make('small','Die Prüfungszulassung erfolgt erst nach Abschluss aller Pflichtmodule.'));
+    box.append(vote);
+   }
+   grid.append(box);
+  }
+  section.append(grid);area.append(section);
+ }
+}
 async function monitors(){
  const area=document.querySelector('#monitorKarten'),time=document.querySelector('#monitorZeit');
  try{
   const response=await fetch('/api/ausbildung-oeffentlich/monitore',{credentials:'omit',cache:'no-store'});
   const payload=await response.json().catch(()=>({}));
   if(!response.ok)throw Error(payload.error||'Monitore nicht erreichbar');
-  area.replaceChildren();
-  for(const data of payload.monitore||[]){
-   const card=make('article',undefined,'card');
-   const heading=make('div',undefined,'stat-top');
-   heading.append(make('h3',data.laufbahn+'-Monitor'),make('span','Live aus Personal','tag'));
-   const big=make('div',data.anzahl,'number');
-   card.append(heading,big,make('p','Anwärter im zentralen Personalstamm'));
-   for(const [label,n] of [['Zugelassen',data.zurPruefungZugelassen],['Abgeschlossene Module gesamt',data.moduleAbgeschlossen],['Pflichtmodule je Anwärter',data.moduleProPerson]]){
-    const row=make('div',undefined,'stat-row');
-    row.append(make('span',label),make('strong',n));card.append(row);
-   }
-   const meter=make('div',undefined,'meter'),bar=make('i');
-   bar.style.width=Math.max(0,Math.min(100,Number(data.fortschrittProzent)||0))+'%';
-   meter.append(bar);
-   card.append(meter,make('small',data.fortschrittProzent+' % der gesamten Pflichtmodule abgeschlossen'));
-   area.append(card);
-  }
-  time.textContent='Letzter Datenabruf: '+new Date(payload.aktualisiert).toLocaleString('de-DE');
- }catch(e){area.replaceChildren(make('p','Live-Monitore derzeit nicht verfügbar: '+e.message));time.textContent='';}
+  currentMonitors=Array.isArray(payload.monitore)?payload.monitore:[];
+  renderMonitors();
+  time.textContent='Letzter Datenabruf: '+new Date(payload.aktualisiert).toLocaleString('de-DE')+' · automatische Aktualisierung alle 30 Sekunden';
+ }catch(e){
+  area.replaceChildren(make('p','Live-Monitore derzeit nicht verfügbar: '+e.message));
+  time.textContent='';
+ }
 }
+document.querySelector('#monitorSuche').addEventListener('input',renderMonitors);
 monitors();documents();
 setInterval(()=>{if(document.visibilityState==='visible')monitors();},30000);
 })();
