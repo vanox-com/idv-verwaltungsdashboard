@@ -80,8 +80,10 @@ function backupSchema(): array {
         $columnNames=[];
         foreach($columns as $col){
             backupIdentifierSql((string)$col['name']);
+            // MySQL generated columns are reconstructed deterministically
+            // from their source columns on insert; they must not be assigned.
             if(preg_match('/(?:VIRTUAL|STORED)\s+GENERATED/i',(string)$col['extra']))
-                throw new \RuntimeException('Generierte Spalte nicht unterstützt: '.$name);
+                continue;
             $columnNames[]=(string)$col['name'];
         }
         $items[$name]=['type'=>'BASE TABLE','ddl'=>backupDdl((string)($ddl[0]['Create Table']??'')),'columns'=>$columnNames];
@@ -156,7 +158,9 @@ function backupCreate(string $password,string $label='Manuelle Sicherung',string
             $count=0;$bytes=0;$digest=hash_init('sha256');
             try{
                 $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY,false);
-                $statement=$pdo->query('SELECT * FROM '.backupIdentifierSql($name));
+                $quotedColumns=array_map(__NAMESPACE__.'\\backupIdentifierSql',$info['columns']);
+                if(!$quotedColumns)throw new \RuntimeException('Tabelle ohne speicherbare Spalten');
+                $statement=$pdo->query('SELECT '.implode(',',$quotedColumns).' FROM '.backupIdentifierSql($name));
                 if($statement===false)throw new \RuntimeException('Tabellenabfrage fehlgeschlagen');
                 while(($row=$statement->fetch(PDO::FETCH_NUM))!==false){
                     if(count($row)!==count($info['columns']))throw new \RuntimeException('Ungültige Tabellenspalten');
