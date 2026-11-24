@@ -17,6 +17,12 @@ if(!index.includes('/assets/ausbildung-panel.js'))
  throw Error('Embedded module script not loaded by police panel');
 if(index.includes("location.assign('/ausbildung.html')"))
  throw Error('Training must stay in the normal dashboard without redirects');
+const navigation=index.slice(index.indexOf('const NAV_GRUPPEN'),index.indexOf('const NAV_OFFEN'));
+if(navigation.indexOf("id:'ausbildung'")<=navigation.indexOf("id:'verwaltung'"))
+ throw Error('Ausbildung must appear below Administration in the main navigation');
+if(embedded.includes('Zum Login</a>'))throw Error('Training database failure must not redirect to Login');
+if(!embedded.includes('setup-status')||!embedded.includes('setup-schema'))
+ throw Error('Administrator backup-gated database recovery missing from Ausbildung UI');
 if(!embedded.includes('attachShadow')||!embedded.includes('public-material'))
  throw Error('Native isolated module or public document approval control missing');
 const old=readFileSync('public/ausbildung.html','utf8');
