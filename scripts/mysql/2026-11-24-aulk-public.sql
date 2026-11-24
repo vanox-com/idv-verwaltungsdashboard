@@ -13,7 +13,5 @@ PREPARE aulk_stmt FROM @aulk_alter_sql;
 EXECUTE aulk_stmt;
 DEALLOCATE PREPARE aulk_stmt;
 
--- Police council: optional view-only module access, never trainer administration.
--- Existing individual user permissions continue to override role defaults.
-INSERT INTO role_perms(rolle,modul,stufe) VALUES('Polizeirat','ausbildung',1)
- ON DUPLICATE KEY UPDATE stufe=GREATEST(stufe,VALUES(stufe));
+-- Nur neue Ausbildungsmaterialien erhalten eine optionale öffentliche Freigabe.
+-- Keine Änderungen an bestehenden Polizeirat-, Leitungsdienst- oder Administratorrechten.
