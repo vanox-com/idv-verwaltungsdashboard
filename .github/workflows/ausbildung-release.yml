@@ -8,6 +8,7 @@ on:
       - 'php/**'
       - 'public/**'
       - 'scripts/mysql/2026-11-24-ausbildung.sql'
+      - 'scripts/mysql/2026-11-24-aulk-public.sql'
       - 'tests/ausbildung-*'
   workflow_dispatch:
 permissions:
@@ -29,6 +30,9 @@ jobs:
           php tests/mysql8-copnet-managed.php
           node tests/ausbildung-static.mjs
           test -f scripts/mysql/2026-11-24-ausbildung.sql
+          test -f scripts/mysql/2026-11-24-aulk-public.sql
+          test -f public/aulk.html
+          test -f public/assets/ausbildung-panel.js
       - name: Datenfreies Deployment-Paket erstellen
         run: |
           set -euo pipefail
@@ -36,15 +40,19 @@ jobs:
           git archive --format=zip --output=migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip HEAD \
             public php \
             scripts/mysql/2026-11-24-ausbildung.sql \
+            scripts/mysql/2026-11-24-aulk-public.sql \
             docs/AUSBILDUNG-IMPLEMENTIERUNG.md
           unzip -tq migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip
           unzip -Z1 migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip > migration-output/entries.txt
           ! grep -Ei '(^|/)(\.env|node_modules|private|src|config\.local\.php)(/|$)' migration-output/entries.txt
           grep -Fqx public/ausbildung.html migration-output/entries.txt
+          grep -Fqx public/aulk.html migration-output/entries.txt
+          grep -Fqx public/assets/ausbildung-panel.js migration-output/entries.txt
           grep -Fqx public/ausbildung-status.html migration-output/entries.txt
           grep -Fqx php/Ausbildung.php migration-output/entries.txt
           grep -Fqx php/AusbildungFiles.php migration-output/entries.txt
           grep -Fqx scripts/mysql/2026-11-24-ausbildung.sql migration-output/entries.txt
+          grep -Fqx scripts/mysql/2026-11-24-aulk-public.sql migration-output/entries.txt
           sha256sum migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip > migration-output/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
