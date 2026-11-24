@@ -85,13 +85,13 @@ if(($persons["PMA"]["moduleFertig"]??-1)!==0||
    count($persons["PKA"]["module"]??[])!==4||
    count($persons["KKA"]["module"]??[])!==4)exit(5);
 $allowed=["name","status","moduleFertig","moduleGesamt","moduleAbgeschlossen",
- "zurPruefungZugelassen","module","stimmenAnzahl","stimmenPunkte","stimmenSchwelle"];
+ "zurPruefungZugelassen","module","stimmenAnzahl"];
 foreach($persons as $p){
  if(array_diff(array_keys($p),$allowed))exit(6);
  if(array_diff(array_keys($p["module"][0]),["code","titel","abgeschlossen"]))exit(7);
 }
-if(($persons["PMA"]["stimmenPunkte"]??-100)!==0.0 &&
-   ($persons["PMA"]["stimmenPunkte"]??-100)!==0)exit(8);
+if(array_key_exists("stimmenPunkte",$persons["PMA"]) ||
+   array_key_exists("stimmenSchwelle",$persons["PMA"]))exit(8);
 if(str_contains(json_encode($d),"personalnummer") ||
    str_contains(json_encode($d),"anzeigename") ||
    str_contains(json_encode($d),"ausbilder_user_id") ||
@@ -113,18 +113,43 @@ foreach($d["monitore"]??[] as $r)if($r["laufbahn"]==="PMA"){
  if(!($p["moduleAbgeschlossen"]??false) ||
     ($p["zurPruefungZugelassen"]??true) ||
     ($p["status"]??"")!=="Module abgeschlossen – Stimmen fehlen" ||
-    ($p["stimmenAnzahl"]??-1)!==0 || ($p["stimmenPunkte"]??-99)!==0)exit(1);
+    ($p["stimmenAnzahl"]??-1)!==0 || array_key_exists("stimmenPunkte",$p))exit(1);
  foreach($p["module"]??[] as $m)if(!$m["abgeschlossen"])exit(2);
  exit(0);
 }exit(3);'
 
 rev="$(revision "$id")"
-vote="$(req "$temp/trainer" PUT "/api/ausbildung/anwaerter/$id/stimme" "{\"stimme\":\"Ja\",\"revision\":$rev}")"
+# Pflichtfeld-Regeln müssen SERVERSEITIG gelten, nicht nur im Formular.
+for payload in \
+  "{\"stimme\":\"Nein\",\"anlass\":\"Sonstige Leistungen\",\"revision\":$rev}" \
+  "{\"stimme\":\"Ja\",\"anlass\":\"Streifenfahrt\",\"revision\":$rev}" \
+  "{\"stimme\":\"Ja\",\"bemerkung\":\"fehlender Anlass\",\"revision\":$rev}"; do
+  code="$(curl -sS -o "$temp/rejected-vote" -w '%{http_code}' -b "$temp/trainer" \
+     -H 'Content-Type: application/json' -X PUT --data "$payload" \
+     "$base/api/ausbildung/anwaerter/$id/stimme")"
+  [[ "$code" == 400 ]] || { echo "Invalid vote accepted: $code";cat "$temp/rejected-vote";exit 1; }
+done
+[[ "$(revision "$id")" == "$rev" ]] || { echo 'Invalid vote mutated record';exit 1; }
+vote="$(req "$temp/trainer" PUT "/api/ausbildung/anwaerter/$id/stimme" "{\"stimme\":\"Ja\",\"anlass\":\"Sonstige Leistungen\",\"bemerkung\":\"Gute Einsatzleistung\",\"revision\":$rev}")"
 [[ "$vote" == *'"ok":true'* ]] || { echo "$vote";exit 1; }
 rev="$(revision "$id")"
-vote="$(req "$temp/lead" PUT "/api/ausbildung/anwaerter/$id/stimme" "{\"stimme\":\"Ja\",\"revision\":$rev}")"
+vote="$(req "$temp/lead" PUT "/api/ausbildung/anwaerter/$id/stimme" "{\"stimme\":\"Ja\",\"anlass\":\"Streifenfahrt\",\"streifenfahrt_datum\":\"2026-11-23\",\"revision\":$rev}")"
 [[ "$vote" == *'"ok":true'* ]] || { echo "$vote";exit 1; }
 [[ "$(status "$id")" == 'Zugelassen' ]] || { echo "Status: $(status "$id")";exit 1; }
+privateVotes="$(req "$temp/lead" GET "/api/ausbildung/anwaerter/$id")"
+printf '%s' "$privateVotes" | php -r '
+$d=json_decode(stream_get_contents(STDIN),true);
+$vs=$d["fortschritt"]["stimmen"]??[];
+if(count($vs)!==2)exit(1);
+$found=false;
+foreach($vs as $v){
+ if($v["stimme"]==="Ja"&&$v["anlass"]==="Streifenfahrt"){
+   if($v["streifenfahrt_datum"]!=="2026-11-23")exit(2);
+   $found=true;
+ }
+}
+if(!$found)exit(3);'
+
 # Öffentlich: Name und Modulstände ja, wer abgestimmt hat und wie NEIN.
 # Punktesaldo nach normalem Ausbilder (1,0) + Leitung (2,0) überschreitet
 # exakt die Zulassungsschwelle von 2,5.
@@ -137,7 +162,7 @@ foreach($d["monitore"]??[] as $r)if($r["laufbahn"]==="PMA"){
     !($p["zurPruefungZugelassen"]??false) ||
     ($p["status"]??"")!=="Zur Prüfung zugelassen" ||
     ($p["stimmenAnzahl"]??-1)!==2 ||
-    abs(($p["stimmenPunkte"]??0)-3.0)>0.001)exit(1);
+    array_key_exists("stimmenPunkte",$p))exit(1);
  exit(0);
 }exit(2);'
 
@@ -194,7 +219,7 @@ before="$(curl -sS "$base/api/ausbildung-oeffentlich")"
 [[ "$before" == *'"materialien":[]'* ]] || { echo "Unexpected public files: $before";exit 1; }
 newDoc="$(req "$temp/lead" POST /api/ausbildung/materialien '{"titel":"Synthetic approved presentation","typ":"Präsentation","modul_code":"PM.1","url":"https://docs.google.com/presentation/d/SYNTHETIC"}')"
 [[ "$newDoc" == *'"ok":true'* ]] || { echo "Document create failed: $newDoc";exit 1; }
-docId="$(req "$temp/lead" GET /api/ausbildung/bootstrap | php -r '$d=json_decode(stream_get_contents(STDIN),true);echo $d["materialien"][0]["id"]??"";')"
+docId="$(req "$temp/lead" GET /api/ausbildung/bootstrap | php -r '$d=json_decode(stream_get_contents(STDIN),true);foreach($d["materialien"]??[] as $m)if(($m["titel"]??"")==="Synthetic approved presentation"){echo $m["id"];break;}')"
 [[ "$docId" =~ ^[0-9]+$ ]] || { echo "No document ID";exit 1; }
 out="$(req "$temp/lead" PATCH "/api/ausbildung/materialien/$docId/freigabe" '{"public_aktiv":true}')"
 [[ "$out" == *'"ok":true'* ]] || { echo "$out";exit 1; }
