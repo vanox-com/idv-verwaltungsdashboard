@@ -57,6 +57,20 @@ mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "
  (999999,'Synthetic','KKA','Kriminalkommissaranwärter','Aktiv','Hauptberuf','2026-11-24'),
  (999996,'Synthetic','Normalkraft','Polizeimeister','Aktiv','Hauptberuf','2026-11-24');"
 candidates="$(req "$temp/lead" GET /api/ausbildung/bootstrap)"
+# Bereits hochgeladene ZIP-Präsentationen müssen automatisch verlinkt werden
+# und bleiben durchgehend privat, ohne dass jemand sie einzeln erneut hochlädt.
+printf '%s' "$candidates" | php -r '
+$d=json_decode(stream_get_contents(STDIN),true);
+$materials=$d["materialien"]??[];
+if(count($materials)!==16) {fwrite(STDERR,"Expected 16 ZIP-matched Google decks, got ".count($materials));exit(1);}
+$codes=array_column($materials,"modul_code");
+foreach(["PM.0","PM.1","PM.2","PM.3","PM.4","PM.5","PM.6","PK.1","PK.2","PK.3","PK.4"] as $code)
+ if(!in_array($code,$codes,true))exit(2);
+foreach($materials as $m)if((int)($m["public_aktiv"]??-1)!==0)exit(3);'
+second="$(req "$temp/lead" GET /api/ausbildung/bootstrap)"
+printf '%s' "$second" | php -r '
+$d=json_decode(stream_get_contents(STDIN),true);
+if(count($d["materialien"]??[])!==16)exit(1);'
 id="$(printf '%s' "$candidates" | php -r '$d=json_decode(stream_get_contents(STDIN),true);foreach($d["anwaerter"]??[] as $p)if($p["personalnummer"]==999997)echo $p["id"];')"
 [[ "$id" =~ ^[0-9]+$ ]] || { echo "PMA not automatically linked: $candidates";exit 1; }
 printf '%s' "$candidates" | php -r '
@@ -130,6 +144,15 @@ for payload in \
   [[ "$code" == 400 ]] || { echo "Invalid vote accepted: $code";cat "$temp/rejected-vote";exit 1; }
 done
 [[ "$(revision "$id")" == "$rev" ]] || { echo 'Invalid vote mutated record';exit 1; }
+# Eine gültige Nein-Stimme benötigt und speichert eine schriftliche Begründung.
+validNo="$(req "$temp/trainer" PUT "/api/ausbildung/anwaerter/$id/stimme" "{\"stimme\":\"Nein\",\"anlass\":\"Sonstige Leistungen\",\"bemerkung\":\"Unzureichende Eigensicherung\",\"revision\":$rev}")"
+[[ "$validNo" == *'"ok":true'* ]] || { echo "No vote rejected: $validNo";exit 1; }
+storedNo="$(req "$temp/lead" GET "/api/ausbildung/anwaerter/$id")"
+printf '%s' "$storedNo" | php -r '
+$d=json_decode(stream_get_contents(STDIN),true);$v=$d["fortschritt"]["stimmen"][0]??[];
+if(($v["stimme"]??"")!=="Nein"||($v["anlass"]??"")!=="Sonstige Leistungen"||
+   ($v["bemerkung"]??"")!=="Unzureichende Eigensicherung")exit(1);'
+rev="$(revision "$id")"
 vote="$(req "$temp/trainer" PUT "/api/ausbildung/anwaerter/$id/stimme" "{\"stimme\":\"Ja\",\"anlass\":\"Sonstige Leistungen\",\"bemerkung\":\"Gute Einsatzleistung\",\"revision\":$rev}")"
 [[ "$vote" == *'"ok":true'* ]] || { echo "$vote";exit 1; }
 rev="$(revision "$id")"
