@@ -45,6 +45,9 @@ async function refresh(){
   box.append(summary);
   const bar=make('div','progress');const inner=make('i');inner.style.width=(d.moduleGesamt?d.moduleFertig/d.moduleGesamt*100:0)+'%';bar.append(inner);box.append(bar);
   if(d.laufbahn==='PMA'){
+    const rsa=make('div','row');
+    rsa.append(make('span','code','RSA'),make('span','label','Verpflichtende RSA-Schulung'),make('span','state',d.rsa===true?'✓ Erhalten':'Offen'));
+    box.append(rsa);
     const votes=make('div','vote-total');
     votes.append(make('strong','',Number.isFinite(d.stimmenAnzahl)?d.stimmenAnzahl:'—'),make('span','','Abgegebene Stimmen insgesamt'));
     box.append(votes);

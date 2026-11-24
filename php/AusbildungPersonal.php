@@ -30,19 +30,27 @@ function ausbildungPersonalZeilen(): array {
           AND p.status IN ('Aktiv','Abgemeldet','Inaktiv','Suspendiert')
         ORDER BY p.personalnummer");
 }
-function ausbildungPersonalQuelleGueltig(array $a): bool {
+/** Personal uses text ('Erhalten'/'Offen'), training uses a boolean mirror. */
+function ausbildungRsaErhalten($wert): bool {
+    return in_array(strtolower(trim((string)$wert)),['erhalten','1','ja','true'],true);
+}
+function ausbildungPersonalQuelleLesen(array $a,bool $lock=false): ?array {
     $source=(string)($a['personal_quelle']??'');
-    if($source===''||!isset($a['personalnummer']))return false;
-    $rows=sql("SELECT p.dienstgrad,p.status,p.administrativ_geloescht_am,
+    if($source===''||!isset($a['personalnummer']))return null;
+    $rows=sql("SELECT p.dienstgrad,p.status,p.rsa,p.administrativ_geloescht_am,
             COALESCE((SELECT COUNT(*) FROM personalnummer_neubelegungen h
                      WHERE h.personalnummer=p.personalnummer),0) AS belegungen
-        FROM personal p WHERE p.personalnummer=? LIMIT 1",[(int)$a['personalnummer']]);
-    if(!$rows)return false;
+        FROM personal p WHERE p.personalnummer=? LIMIT 1".($lock?' FOR UPDATE':''),[(int)$a['personalnummer']]);
+    if(!$rows)return null;
     $p=$rows[0];
-    return $p['administrativ_geloescht_am']===null
+    $valid=$p['administrativ_geloescht_am']===null
         &&in_array($p['status'],['Aktiv','Abgemeldet','Inaktiv','Suspendiert'],true)
         &&ausbildungPersonalQuelle((int)$a['personalnummer'],(int)$p['belegungen'])===$source
         &&ausbildungPersonalLaufbahn((string)$p['dienstgrad'])===(string)$a['laufbahn'];
+    return $valid?$p:null;
+}
+function ausbildungPersonalQuelleGueltig(array $a): bool {
+    return ausbildungPersonalQuelleLesen($a)!==null;
 }
 /**
  * Synchronisiert automatisch beim Öffnen der Monitore.
@@ -66,7 +74,7 @@ function ausbildungSynchronisierePersonal(): array {
             $name=trim((string)$p['vorname'].' '.(string)$p['nachname']);
             $beginn=$p['eintrittsdatum']??null;
             $neben=(string)($p['beschaeftigungsart']??'');
-            $rsa=(int)($p['rsa']??0);
+            $rsa=ausbildungRsaErhalten($p['rsa']??null)?1:0;
             $matched=sql('SELECT id,name,laufbahn,personalnummer FROM ausbildung_anwaerter WHERE personal_quelle=? LIMIT 1',[$quelle]);
             if($matched) {
                 sql('UPDATE ausbildung_anwaerter SET
@@ -157,6 +165,7 @@ function ausbildungOeffentlicheMonitore(): never {
         $key=ausbildungPersonalQuelle((int)$person['personalnummer'],(int)$person['belegungen']);
         $tracked[$key]=[
             'laufbahn'=>$track,
+            'rsa'=>ausbildungRsaErhalten($person['rsa']??null),
             'name'=>trim((string)$person['vorname'].' '.(string)$person['nachname'])
         ];
     }
@@ -205,7 +214,7 @@ function ausbildungOeffentlicheMonitore(): never {
         $track=$person['laufbahn'];
         $requiredCodes=array_column($required[$track],'code');
         $doneCodes=array_keys($completed[$key]??[]);
-        $result=ausbildungStatus($track,$requiredCodes,$doneCodes,$votes[$key]??[]);
+        $result=ausbildungStatus($track,$requiredCodes,$doneCodes,$votes[$key]??[],$person['rsa']);
         $modulesFinished=$result['moduleGesamt']>0
             && $result['moduleFertig']===$result['moduleGesamt'];
         $admitted=$result['bereit'];
@@ -213,7 +222,7 @@ function ausbildungOeffentlicheMonitore(): never {
         // Erst Modulabschluss, dann bei PMA der Stimmen-/Punktestand.
         // PKA/KKA: in der aktuellen PK-Regel bereits nach allen vier Modulen.
         $status= !$modulesFinished ? 'Module ausstehend' :
-            ($admitted ? 'Zur Prüfung zugelassen' : 'Module abgeschlossen – Stimmen fehlen');
+            ($admitted ? 'Zur Prüfung zugelassen' : ($track==='PMA'&&!$person['rsa']?'RSA ausstehend':'Module abgeschlossen – Stimmen fehlen'));
 
         $modules=[];
         foreach($required[$track] as $module){
@@ -236,6 +245,7 @@ function ausbildungOeffentlicheMonitore(): never {
             // Öffentliche Ansicht: nur Anzahl der Stimmen. Punkte, Stimmeninhalt
             // und verantwortliche Ausbilder werden NIEMALS ausgegeben.
             $entry['stimmenAnzahl']=$result['stimmenJa']+$result['stimmenNein'];
+            $entry['rsa']=$person['rsa'];
         }
         $output[$track]['personen'][]=$entry;
         $output[$track]['anzahl']++;

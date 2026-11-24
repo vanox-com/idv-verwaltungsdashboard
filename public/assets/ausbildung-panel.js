@@ -162,9 +162,9 @@ function examOverviewRow(x){
  const track=['PMA','PKA','KKA'].includes(x.laufbahn)?x.laufbahn:'';
  const total=Math.max(0,Number(f.moduleGesamt)||0),done=Math.max(0,Math.min(total,Number(f.moduleFertig)||0));
  const pct=total?Math.round(done/total*100):0;
- const state=f.status==='Zugelassen'?'ready':f.status==='Nicht bereit'?'not-ready':f.status==='Module unvollständig'?'incomplete':'unknown';
+ const state=f.status==='Zugelassen'?'ready':f.status==='Nicht bereit'?'not-ready':(f.status==='Module unvollständig'||f.status==='RSA ausstehend')?'incomplete':'unknown';
  return '<div class="exam-row '+track.toLowerCase()+'"><div><div class="exam-name">'+esc(x.name)+'</div>'+
- '<div class="exam-meta"><span class="exam-track">'+esc(track||x.laufbahn)+'</span><span>'+done+' / '+total+' Module</span><span>'+pct+' %</span></div>'+
+ '<div class="exam-meta"><span class="exam-track">'+esc(track||x.laufbahn)+'</span><span>'+done+' / '+total+' Module</span><span>'+pct+' %</span>'+(track==='PMA'?'<span class="exam-status '+(f.rsa?'ready':'incomplete')+'">RSA '+(f.rsa?'erhalten':'offen')+'</span>':'')+'</div>'+
  '<div class="exam-meter" role="progressbar" aria-label="Modulfortschritt" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+pct+'"><i style="width:'+pct+'%"></i></div></div>'+
  '<span class="exam-status '+state+'">'+esc(f.status||'Unbekannt')+'</span></div>';
 }
@@ -174,13 +174,13 @@ function overview(){
  '<div class="kpis"><div class="kpi"><strong>'+a.length+'</strong><span>Anwärter insgesamt</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='PMA').length+'</strong><span>PMA</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='PKA').length+'</strong><span>PKA</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='KKA').length+'</strong><span>KKA</span></div><div class="kpi"><strong>'+n+'</strong><span>Zur Prüfung zugelassen</span></div></div>'+
  '<div class="grid"><section class="card"><h2>Prüfungsstand</h2>'+'<div class="exam-list">'+a.slice(0,12).map(examOverviewRow).join('')+'</div>'+
  (a.length?'':'<p class="muted">Noch keine Anwärter angelegt.</p>')+
- '</section><section class="card"><h2>Ausbildungsstruktur</h2><p>Die sieben PMA-Module stammen aus der Excel-Vorlage. Die PMA-Prüfungsbereitschaft setzt vollständige Module und mindestens <b>2,5 gewichtete Stimmenpunkte</b> voraus.</p><p>PKA und KKA verwenden derzeit PK.1–PK.4. Hier gilt laut Vorlage: alle vier Module abgeschlossen = zugelassen.</p><p class="muted">PK.5, PK.7 und PM.7 sind in der Kompetenzmatrix beziehungsweise Übersicht genannt, aber mangels eindeutiger Bewertungsregel noch keine Pflichtmodule.</p><button data-tab="monitore" class="primary">Zu den Monitoren</button></section></div>';
+ '</section><section class="card"><h2>Ausbildungsstruktur</h2><p>Die sieben PMA-Module stammen aus der Excel-Vorlage. Die PMA-Prüfungsbereitschaft setzt vollständige Module, die <b>RSA-Schulung</b> und mindestens <b>2,5 gewichtete Stimmenpunkte</b> voraus.</p><p>PKA und KKA verwenden derzeit PK.1–PK.4. Hier gilt laut Vorlage: alle vier Module abgeschlossen = zugelassen.</p><p class="muted">PK.5, PK.7 und PM.7 sind in der Kompetenzmatrix beziehungsweise Übersicht genannt, aber mangels eindeutiger Bewertungsregel noch keine Pflichtmodule.</p><button data-tab="monitore" class="primary">Zu den Monitoren</button></section></div>';
 }
 function monitors(){
  let list=data.anwaerter.filter(a=>a.laufbahn===track);
  let html='<div class="card"><div class="flex space"><div class="flex">'+['PMA','PKA','KKA'].map(t=>'<button data-track="'+t+'" class="'+(track===t?'primary':'')+'">'+t+' ('+data.anwaerter.filter(x=>x.laufbahn===t).length+')</button>').join('')+'</div>'+
- '<span class="pill good">Live aus dem zentralen Personalstamm</span></div><div class="tablewrap"><table><thead><tr><th>Dienstnr.</th><th>Anwärter</th><th>Beginn</th><th>Module</th><th>Prüfungsstand</th><th></th></tr></thead><tbody>'+
- list.map(x=>'<tr><td>'+esc(x.personalnummer??'—')+'</td><td><b>'+esc(x.name)+'</b><br><small>'+esc(x.nebenberuf||'')+'</small></td><td>'+fmt(x.beginn)+'</td><td>'+x.fortschritt.moduleFertig+'/'+x.fortschritt.moduleGesamt+meter(x.fortschritt.moduleFertig,x.fortschritt.moduleGesamt)+'</td><td>'+pill(x.fortschritt.status)+'</td><td><button class="compact" data-action="open" data-id="'+x.id+'">Öffnen</button></td></tr>').join('')+
+ '<span class="pill good">Live aus dem zentralen Personalstamm</span></div><div class="tablewrap"><table><thead><tr><th>Dienstnr.</th><th>Anwärter</th><th>Beginn</th><th>Module</th>'+(track==='PMA'?'<th>RSA</th>':'')+'<th>Prüfungsstand</th><th></th></tr></thead><tbody>'+
+ list.map(x=>'<tr><td>'+esc(x.personalnummer??'—')+'</td><td><b>'+esc(x.name)+'</b><br><small>'+esc(x.nebenberuf||'')+'</small></td><td>'+fmt(x.beginn)+'</td><td>'+x.fortschritt.moduleFertig+'/'+x.fortschritt.moduleGesamt+meter(x.fortschritt.moduleFertig,x.fortschritt.moduleGesamt)+'</td>'+(track==='PMA'?'<td><span class="exam-status '+(x.fortschritt.rsa?'ready':'incomplete')+'">'+(x.fortschritt.rsa?'Erhalten':'Offen')+'</span></td>':'')+'<td>'+pill(x.fortschritt.status)+'</td><td><button class="compact" data-action="open" data-id="'+x.id+'">Öffnen</button></td></tr>').join('')+
  '</tbody></table></div>'+(list.length?'':'<p class="muted">Für diese Laufbahn sind noch keine Datensätze angelegt.</p>')+'</div>';
  // Anwärter werden nur im Personalstamm angelegt.
  if(selected?.anwaerter && selected.anwaerter.laufbahn===track)html+=traineeDetails(selected);
@@ -188,7 +188,7 @@ function monitors(){
  return html;
 }
 function traineeForm(a){
- return '<section class="card"><h2>Ausbildungsnotiz bearbeiten</h2><p class="muted">Name, Dienstgrad, Laufbahn, Dienstnummer, Eintrittsdatum und RSA werden aus der normalen Personalakte übernommen. Änderungen sind ausschließlich dort möglich.</p>'+
+ return '<section class="card"><h2>Ausbildungsnotiz bearbeiten</h2><p class="muted">Name, Dienstgrad, Laufbahn, Dienstnummer und Eintrittsdatum stammen aus der Personalakte. Die RSA-Schulung kann separat im PMA-Monitor bestätigt werden.</p>'+
  '<p><b>'+esc(a?.name||'')+'</b> · '+esc(a?.laufbahn||'')+' · Dienstnummer '+esc(a?.personalnummer||'—')+'</p>'+
  '<form id="traineeForm" class="formgrid"><label class="full">Interne Ausbildungsbemerkung<textarea name="bemerkung" maxlength="2000" rows="3">'+esc(a?.bemerkung||'')+'</textarea></label>'+
  '<div class="full flex"><button type="submit" class="primary">Ausbildungsnotiz speichern</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></section>';
@@ -214,6 +214,7 @@ function traineeDetails(d){
  }).join('');
  return '<section class="card" id="details"><div class="flex space"><div><span class="eyebrow">'+esc(a.laufbahn)+' · Dienstnummer '+esc(a.personalnummer||'—')+'</span><h2>'+esc(a.name)+'</h2></div><div class="flex">'+pill(p.status)+'<button data-action="close">Schließen</button></div></div>'+
  '<div class="kpis"><div class="kpi"><strong>'+p.moduleFertig+' / '+p.moduleGesamt+'</strong><span>Module abgeschlossen</span></div><div class="kpi"><strong>'+Number(p.stimmenSaldo).toLocaleString('de-DE')+'</strong><span>Punktesaldo</span></div><div class="kpi"><strong>'+Number(p.jaPunkte).toLocaleString('de-DE')+'</strong><span>Ja-Punkte ('+p.stimmenJa+' Stimmen)</span></div><div class="kpi"><strong>'+Number(p.neinPunkte).toLocaleString('de-DE')+'</strong><span>Nein-Punkte ('+p.stimmenNein+' Stimmen)</span></div></div>'+
+ (a.laufbahn==='PMA'?'<h3>Verpflichtende Zusatzschulung</h3><div class="modrow"><b>RSA</b><div><b>RSA-Schulung</b><div class="muted">Zwingend für die PMA-Prüfungszulassung · mit Personalstamm synchronisiert</div><span class="exam-status '+(p.rsa?'ready':'incomplete')+'">'+(p.rsa?'Erhalten':'Offen')+'</span></div><button type="button" class="compact '+(!p.rsa?'primary':'')+'" data-action="rsa" data-done="'+(p.rsa?'1':'0')+'">'+(p.rsa?'↶ Zurücksetzen':'✓ Abschließen')+'</button></div>':'')+
  '<h3>Ausbildungsmodule</h3>'+modules+
  (a.laufbahn==='PMA'?voteSection(p,myVoteRecord,canEdit):'')+
  '<div class="flex" style="margin-top:20px">'+'<button data-action="edit-trainee">Ausbildungsnotiz bearbeiten</button><button data-action="create-link" class="primary">Externen Link erzeugen / erneuern</button><button data-action="remove-link" class="danger">Externen Link sperren</button>'+'</div>'+
@@ -385,6 +386,12 @@ shadow.addEventListener('click',async(e)=>{
  if(mode==='open'){await act(async()=>{selected=await request('anwaerter/'+id);editing=null;render();el('#details')?.scrollIntoView({behavior:'smooth'})});return}
  if(mode==='edit-trainee'){editing={type:'trainee-edit'};render();return}
  if(mode==='module'){await act(async()=>{const id=selected.anwaerter.id;await request('anwaerter/'+id+'/modul/'+encodeURIComponent(btn.dataset.code),{method:'PUT',body:JSON.stringify({abgeschlossen:btn.dataset.done!=='1',revision:Number(selected.anwaerter.revision)})});selected=await request('anwaerter/'+id);await load();message('Modul gespeichert.')});return}
+ if(mode==='rsa'){await act(async()=>{
+   const id=selected.anwaerter.id,bisher=btn.dataset.done==='1';
+   if(bisher&&!confirm('RSA-Schulung zurücksetzen? Die Prüfungszulassung kann dadurch entfallen.'))return;
+   await request('anwaerter/'+id+'/rsa',{method:'PUT',body:JSON.stringify({abgeschlossen:!bisher,bisher,revision:Number(selected.anwaerter.revision)})});
+   selected=await request('anwaerter/'+id);await load();message('RSA-Schulung und Prüfungsstatus aktualisiert.');
+ });return}
  if(mode==='vote'){await act(async()=>{
    if(!data.stimmenDetailsBereit)throw Error('Die Stimmabgabe-Erweiterung muss nach einer Sicherung noch eingerichtet werden.');
    const id=selected.anwaerter.id,v=el('#vote').value,reason=el('#voteReason').value,

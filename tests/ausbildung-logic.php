@@ -21,17 +21,20 @@ checkAus(IDV\ausbildungRechtsstufe('Polizeirat',0,1)===1,'explicit trainer acces
 checkAus(IDV\ausbildungRechtsstufe('Ausbilder',0,null,true)===2,'deputy training profile retains access');
 $modules=['PM.0','PM.1','PM.2','PM.3','PM.4','PM.5','PM.6'];
 $votes=[['stimme'=>'Ja','gewicht'=>2.0],['stimme'=>'Ja','gewicht'=>0.5]];
-$ready=IDV\ausbildungStatus('PMA',$modules,$modules,$votes);
+$ready=IDV\ausbildungStatus('PMA',$modules,$modules,$votes,true);
+$missingRsa=IDV\ausbildungStatus('PMA',$modules,$modules,$votes,false);
+checkAus(!$missingRsa['bereit']&&$missingRsa['status']==='RSA ausstehend','PMA without RSA must not be admitted');
+checkAus(IDV\ausbildungRsaErhalten('Erhalten')&&!IDV\ausbildungRsaErhalten('Offen'),'personal RSA text mapping');
 checkAus($ready['bereit']===true&&$ready['stimmenSaldo']===2.5,'PMA exact threshold');
-$notEnough=IDV\ausbildungStatus('PMA',$modules,$modules,[['stimme'=>'Ja','gewicht'=>2.0]]);
+$notEnough=IDV\ausbildungStatus('PMA',$modules,$modules,[['stimme'=>'Ja','gewicht'=>2.0]],true);
 checkAus($notEnough['status']==='Nicht bereit','PMA below threshold');
-$negative=IDV\ausbildungStatus('PMA',$modules,$modules,[...$votes,['stimme'=>'Nein','gewicht'=>1.0]]);
+$negative=IDV\ausbildungStatus('PMA',$modules,$modules,[...$votes,['stimme'=>'Nein','gewicht'=>1.0]],true);
 checkAus($negative['status']==='Nicht bereit'&&$negative['stimmenSaldo']===1.5,'negative votes count');
 $incomplete=IDV\ausbildungStatus('PMA',$modules,array_slice($modules,0,6),$votes);
 checkAus($incomplete['status']==='Module unvollständig','no admission without all seven modules');
 $pk=['PK.1','PK.2','PK.3','PK.4'];
 foreach(['PKA','KKA'] as $track){
- $pass=IDV\ausbildungStatus($track,$pk,$pk,[]);
+ $pass=IDV\ausbildungStatus($track,$pk,$pk,[],false);
  checkAus($pass['bereit']===true&&$pass['schwelle']===null,$track.' four modules sufficient');
  $miss=IDV\ausbildungStatus($track,$pk,['PK.1','PK.2','PK.3'],[]);
  checkAus(!$miss['bereit'],$track.' missing module blocks admission');

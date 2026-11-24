@@ -82,7 +82,7 @@ function ausbildungModule(string $laufbahn): array {
     return sql('SELECT code,titel,laufbahn FROM ausbildung_module WHERE laufbahn=? AND aktiv=1 ORDER BY sortierung,code',[$track]);
 }
 /** Pure status rules sourced from the uploaded spreadsheets. */
-function ausbildungStatus(string $laufbahn,array $required,array $completed,array $votes): array {
+function ausbildungStatus(string $laufbahn,array $required,array $completed,array $votes,bool $rsa=false): array {
     $required=array_values(array_unique($required));
     $done=count(array_intersect($required,array_values(array_unique($completed))));
     $all=count($required)>0&&$done===count($required);
@@ -92,8 +92,10 @@ function ausbildungStatus(string $laufbahn,array $required,array $completed,arra
         if(($v['stimme']??'')==='Ja'){$score+=$weight;$jaPunkte+=$weight;$yes++;}
         elseif(($v['stimme']??'')==='Nein'){$score-=$weight;$neinPunkte+=$weight;$no++;}
     }
-    $ready=$all&&($laufbahn!=='PMA'||$score>=2.5);
-    return ['status'=>!$all?'Module unvollständig':($ready?'Zugelassen':'Nicht bereit'),
+    $rsaPflicht=$laufbahn==='PMA';
+    $ready=$all&&(!$rsaPflicht||($rsa&&$score>=2.5));
+    return ['status'=>!$all?'Module unvollständig':($ready?'Zugelassen':($rsaPflicht&&!$rsa?'RSA ausstehend':'Nicht bereit')),
+        'rsaPflicht'=>$rsaPflicht,'rsa'=>$rsaPflicht&&$rsa,
         'bereit'=>$ready,'moduleGesamt'=>count($required),'moduleFertig'=>$done,
         'stimmenJa'=>$yes,'stimmenNein'=>$no,'stimmenSaldo'=>round($score,2),
         'jaPunkte'=>round($jaPunkte,2),'neinPunkte'=>round($neinPunkte,2),
@@ -123,7 +125,10 @@ function ausbildungFortschritt(array $a,bool $details=false): array {
         unset($vote['gespeichert_gewicht'],$vote['rolle'],$vote['funktion']);
     }
     unset($vote);
-    $s=ausbildungStatus((string)$a['laufbahn'],array_column($modules,'code'),$done,$votes);
+    // Read the current personnel value even for a public token with an old mirror.
+    $source=$a['laufbahn']==='PMA'?ausbildungPersonalQuelleLesen($a):null;
+    $rsa=ausbildungRsaErhalten($source['rsa']??null);
+    $s=ausbildungStatus((string)$a['laufbahn'],array_column($modules,'code'),$done,$votes,$rsa);
     if($details){
         $s['module']=array_map(static function($m)use($doneRows){
             $record=null;foreach($doneRows as $row)if($row['modul_code']===$m['code']){$record=$row;break;}
@@ -242,7 +247,10 @@ function ausbildungExtern(): never {
     $result=['laufbahn'=>$a['laufbahn'],'status'=>$s['status'],'bereit'=>$s['bereit'],
         'moduleGesamt'=>$s['moduleGesamt'],'moduleFertig'=>$s['moduleFertig'],
         'module'=>$modules,'aktualisiert'=>gmdate('c')];
-    if($a['laufbahn']==='PMA')$result['stimmenAnzahl']=$s['stimmenJa']+$s['stimmenNein'];
+    if($a['laufbahn']==='PMA'){
+        $result['stimmenAnzahl']=$s['stimmenJa']+$s['stimmenNein'];
+        $result['rsa']=$s['rsa'];
+    }
     respond(200,$result);
 }
 /** Only explicitly approved AuLK materials may be seen without a login. */
@@ -386,6 +394,38 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             auditAction($u,'Anwärter aktualisiert: ID '.$id);
             respond(200,['ok'=>true]);
         }
+    }
+    // Only PMA RSA can be edited here. No general personnel write permission.
+    if(preg_match('#^/api/ausbildung/anwaerter/([1-9]\d*)/rsa$#D',$uri,$m)&&$method==='PUT'){
+        ausbildungRecht($u);$id=cleanId($m[1]);$b=body();
+        if(!is_bool($b['abgeschlossen']??null)||!is_bool($b['bisher']??null))
+            fail(400,'RSA-Status muss Ja oder Nein sein');
+        $pre=ausbildungAnwaerter($id);
+        if($pre['laufbahn']!=='PMA')fail(400,'RSA ist nur für PMA vorgesehen');
+        db()->beginTransaction();
+        try{
+            // Lock the actual personnel identity before updating the linked mirror.
+            $source=ausbildungPersonalQuelleLesen($pre,true);
+            if(!$source)fail(409,'Personalzuordnung geändert. Bitte neu laden.');
+            $rows=sql('SELECT * FROM ausbildung_anwaerter WHERE id=? FOR UPDATE',[$id]);
+            $a=$rows[0]??null;
+            if(!$a||$a['laufbahn']!=='PMA'||$a['personal_quelle']!==$pre['personal_quelle']||
+                (int)$a['personalnummer']!==(int)$pre['personalnummer'])
+                fail(409,'Anwärterzuordnung geändert. Bitte neu laden.');
+            ausbildungPruefeRevision($a,$b['revision']??null);
+            $old=ausbildungRsaErhalten($source['rsa']??null);
+            if($old!==$b['bisher'])fail(409,'RSA wurde zwischenzeitlich geändert. Bitte neu laden.');
+            $next=$b['abgeschlossen'];$nr=(int)$a['personalnummer'];$value=$next?'Erhalten':'Offen';
+            if($old!==$next){
+                sql('UPDATE personal SET rsa=? WHERE personalnummer=?',[$value,$nr]);
+                sql('UPDATE ausbildung_anwaerter SET rsa=?,revision=revision+1,aktualisiert=UTC_TIMESTAMP(6) WHERE id=?',[$next?1:0,$id]);
+                sql('INSERT INTO personal_audit(personalnummer,user_id,aenderungen) VALUES(?,?,?)',
+                    [$nr,$u['id'],json_encode(['rsa'=>['alt'=>$source['rsa'],'neu'=>$value]],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)]);
+                auditAction($u,'PMA RSA-Schulung für Anwärter-ID '.$id.($next?' abgeschlossen':' zurückgesetzt'));
+            }
+            db()->commit();
+        }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
+        respond(200,['ok'=>true]);
     }
     if(preg_match('#^/api/ausbildung/anwaerter/([1-9]\d*)/modul/([A-Z]{2}\.[0-9]+)$#D',$uri,$m)&&$method==='PUT'){
         $id=cleanId($m[1]);$code=$m[2];$b=body();

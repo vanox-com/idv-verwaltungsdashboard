@@ -61,7 +61,7 @@ footer{border-top:1px solid var(--edge);padding:22px 0;font-size:12px;color:var(
 <div class="section-head"><div class="eyebrow">Ausbildungsweg</div><h2 id="laufbahnTitel">Die drei Laufbahnen und ihre Voraussetzungen</h2><p>Die Regeln unten entsprechen der aktuellen Berechnung des Ausbildungsmonitors. Eine Prüfungszulassung ist noch kein bestandener Prüfungsabschluss.</p></div>
 <div class="grid">
 <article class="card"><span class="tag">Mittlerer Dienst · PMA</span><h3>Polizeimeisteranwärter</h3><p>Die Grundausbildung umfasst die sieben hinterlegten PM-Module.</p>
-<div class="requirements"><b>Zulassungsvoraussetzungen</b><ol><li>Alle sieben Module PM.0 bis PM.6 müssen abgeschlossen sein.</li><li>Die gewichteten Ausbilderstimmen müssen zusammen mindestens <b>+2,5 Punkte</b> ergeben.</li></ol></div>
+<div class="requirements"><b>Zulassungsvoraussetzungen</b><ol><li>Alle sieben Module PM.0 bis PM.6 müssen abgeschlossen sein.</li><li>Die RSA-Schulung muss abgeschlossen sein.</li><li>Die gewichteten Ausbilderstimmen müssen zusammen mindestens <b>+2,5 Punkte</b> ergeben.</li></ol></div>
 <div class="module"><span class="code">PM.0</span><span>Einstellungsprozess</span></div>
 <div class="module"><span class="code">PM.1</span><span>Onboarding, Funkwesen und Einführung</span></div>
 <div class="module"><span class="code">PM.2</span><span>CopNet &amp; EDV</span></div>
@@ -168,10 +168,15 @@ function renderMonitors(){
     const line=make('div',undefined,'vote-row');
     line.append(make('span','Abgegebene Stimmen: '+Number(person.stimmenAnzahl||0)));
     vote.append(line);
+    const rsa=make('div',undefined,'vote-row');
+    rsa.append(make('strong','RSA-Schulung (Pflicht)'),make('span',person.rsa===true?'✓ Erhalten':'Offen','state'+(person.rsa===true?' ready':' wait')));
+    vote.append(rsa);
     if(person.zurPruefungZugelassen)
       vote.append(make('p','✓ Die erforderliche Stimmenwertung ist erreicht; zur Prüfung zugelassen.','muted'));
+    else if(person.moduleAbgeschlossen&&person.rsa!==true)
+      vote.append(make('p','Pflichtmodule abgeschlossen. Die RSA-Schulung fehlt noch.','muted'));
     else if(person.moduleAbgeschlossen)
-      vote.append(make('p','Pflichtmodule abgeschlossen. Die erforderliche Stimmenwertung ist noch nicht erreicht.','muted'));
+      vote.append(make('p','Pflichtmodule und RSA abgeschlossen. Die erforderliche Stimmenwertung ist noch nicht erreicht.','muted'));
     else
       vote.append(make('p','Zunächst müssen alle Pflichtmodule abgeschlossen werden.','muted'));
     box.append(vote);
