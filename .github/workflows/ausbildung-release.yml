@@ -1,0 +1,55 @@
+name: Ausbildung – geprüftes Deployment-Paket
+on:
+  push:
+    branches:
+      - migration/mysql8-php-cutover-2026-11-10
+    paths:
+      - '.github/workflows/ausbildung-release.yml'
+      - 'php/**'
+      - 'public/**'
+      - 'scripts/mysql/2026-11-24-ausbildung.sql'
+      - 'tests/ausbildung-*'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  release-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql,openssl,zip,curl
+      - name: Syntax und Ausbildungslogik prüfen
+        run: |
+          set -e
+          for f in public/api.php php/*.php; do php -l "$f"; done
+          php tests/ausbildung-logic.php
+          php tests/mysql8-copnet-managed.php
+          node tests/ausbildung-static.mjs
+          test -f scripts/mysql/2026-11-24-ausbildung.sql
+      - name: Datenfreies Deployment-Paket erstellen
+        run: |
+          set -euo pipefail
+          mkdir -p migration-output
+          git archive --format=zip --output=migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip HEAD \
+            public php \
+            scripts/mysql/2026-11-24-ausbildung.sql \
+            docs/AUSBILDUNG-IMPLEMENTIERUNG.md
+          unzip -tq migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip
+          unzip -Z1 migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip > migration-output/entries.txt
+          ! grep -Ei '(^|/)(\.env|node_modules|private|src|config\.local\.php)(/|$)' migration-output/entries.txt
+          grep -Fqx public/ausbildung.html migration-output/entries.txt
+          grep -Fqx public/ausbildung-status.html migration-output/entries.txt
+          grep -Fqx php/Ausbildung.php migration-output/entries.txt
+          grep -Fqx php/AusbildungFiles.php migration-output/entries.txt
+          grep -Fqx scripts/mysql/2026-11-24-ausbildung.sql migration-output/entries.txt
+          sha256sum migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip > migration-output/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: idv-ausbildung-live-paket
+          path: |
+            migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip
+            migration-output/SHA256SUMS.txt
+          retention-days: 30
