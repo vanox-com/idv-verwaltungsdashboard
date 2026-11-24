@@ -51,6 +51,26 @@ if(!embedded.includes("data-action=\"start-lesson\"") ||
    !embedded.includes("materialien/import") ||
    !embedded.includes("location.assign('/unterricht.html?raum='"))
   throw Error('Training module missing linked Google presentations, import or classroom launcher');
+// Datenschutz: NEVER send an unrestricted desktop or another browser tab.
+// Region Capture is mandatory and the crop must finish BEFORE pc.addTrack().
+if(!roomScript.includes('CropTarget.fromElement($("tafel"))') ||
+   !roomScript.includes('await video.cropTo(target)') ||
+   !roomScript.includes('await cropOwnBoard(display)') ||
+   !roomScript.includes('peer.addTrack(video,display)') ||
+   !roomScript.includes('getDisplayMedia(') ||
+   !roomScript.includes('preferCurrentTab:true') ||
+   !roomScript.includes('surfaceSwitching:"exclude"'))
+ throw Error('Classroom must crop exclusively to the presentation DOM element before WebRTC can send frames');
+if(roomScript.indexOf('await cropOwnBoard(display)')>roomScript.indexOf('peer.addTrack(video,display)'))
+ throw Error('Uncropped screen could be transmitted before Region Capture has completed');
+if(!roomScript.includes('setCaptureHandleConfig') ||
+   !roomScript.includes('getCaptureHandle()') ||
+   !roomScript.includes('captured.handle!==captureHandle'))
+ throw Error('Capture Handle should fail closed for a wrong selected tab');
+if(!classroom.includes('id="aktualisieren"') ||
+   !roomScript.includes('fresh.searchParams.set("idv_reload"') ||
+   !classroom.includes('id="sendestatus"'))
+ throw Error('Google Slides reload and simplified teaching-status UI missing');
 const signaling=readFileSync('php/AusbildungUnterricht.php','utf8');
 if(!signaling.includes("einladung_hash") || !signaling.includes("teilnehmer_hash") ||
    !signaling.includes("ausbilder_user_id") || !signaling.includes("unterrichtGastRaum"))
