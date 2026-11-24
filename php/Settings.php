@@ -178,12 +178,18 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
         auditAction($u,'Bekanntmachung geändert');respond(200,['ok'=>true]);
     }
     if($method==='GET'&&$uri==='/api/backup-status'){
-        needRight($u,'backup');$r=sql('SELECT DATABASE() AS datenbank,UTC_TIMESTAMP(6) AS geprueft_am');
+        // Raw database exports contain password hashes and sensitive records.
+        // Backup status and all archive operations are administrator-only.
+        needAdmin($u);
+        $r=sql('SELECT DATABASE() AS datenbank,UTC_TIMESTAMP(6) AS geprueft_am');
         $size=sql('SELECT COALESCE(SUM(data_length+index_length),0) AS bytes FROM information_schema.tables WHERE table_schema=DATABASE()');
         respond(200,['datenbank'=>$r[0]['datenbank'],'bytes'=>(string)$size[0]['bytes'],
-            'geprueft_am'=>$r[0]['geprueft_am'],'plan'=>'nicht bekannt','automatische_sicherungen'=>'Nicht bestätigt',
-            'wiederherstellung'=>'Nicht im Portal verfügbar','ablauf_am'=>null,
-            'hinweis'=>'Dies ist keine Datensicherung. MySQL-Sicherungen und Wiederherstellung beim Hoster prüfen.']);
+            'geprueft_am'=>$r[0]['geprueft_am'],
+            'plan'=>'MySQL 8 / PHP-Hoster',
+            'automatische_sicherungen'=>'Nicht eingerichtet – manuelle AES-256-Backups verfügbar',
+            'wiederherstellung'=>'Kontrolliert und transaktional bei identischem Datenbankschema',
+            'ablauf_am'=>null,
+            'hinweis'=>'Backup-Archive werden AES-256-verschlüsselt außerhalb des Webroots gespeichert. Unabhängige Offsite-Sicherung wird empfohlen.']);
     }
     return false;
 }
