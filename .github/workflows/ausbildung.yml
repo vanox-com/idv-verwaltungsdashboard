@@ -1,0 +1,49 @@
+name: Ausbildung / Rollen, Monitore und MySQL-Erweiterung
+on:
+  push:
+    branches:
+      - migration/mysql8-php-cutover-2026-11-10
+    paths:
+      - 'php/Ausbildung.php'
+      - 'php/Api.php'
+      - 'public/ausbildung*.html'
+      - 'public/index.html'
+      - 'scripts/mysql/2026-11-24-ausbildung.sql'
+      - 'tests/ausbildung-*'
+      - '.github/workflows/ausbildung.yml'
+  workflow_dispatch:
+jobs:
+  logic-and-schema:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: training-ci-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptraining-ci-password"
+          --health-interval=10s --health-timeout=5s --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql,openssl,zip,curl
+      - name: PHP lint and source-based admission logic
+        run: |
+          php -l php/Ausbildung.php
+          php -l php/Api.php
+          php tests/ausbildung-logic.php
+      - name: Both browser scripts parse
+        run: node tests/ausbildung-static.mjs
+      - name: Install original schema then additive migration twice
+        run: |
+          mysql -h127.0.0.1 -uroot -ptraining-ci-password -e 'CREATE DATABASE idv_train_ci CHARACTER SET utf8mb4 COLLATE utf8mb4_bin'
+          mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/IDV-MySQL8-phpMyAdmin-SETUP.sql
+          mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-ausbildung.sql
+          mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-ausbildung.sql
+          test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='idv_train_ci' AND table_name LIKE 'ausbildung_%'")" -eq 6
+          test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM ausbildung_module")" -eq 11
+          test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM role_perms WHERE modul='ausbildung' AND stufe>0")" -eq 3
