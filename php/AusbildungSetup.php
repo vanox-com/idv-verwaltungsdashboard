@@ -10,12 +10,14 @@ namespace IDV;
 function ausbildungSchemaStatus(): array {
     $required=[
         'ausbildung_ausbilder','ausbildung_anwaerter','ausbildung_module',
-        'ausbildung_abschluesse','ausbildung_stimmen','ausbildung_materialien'
+        'ausbildung_abschluesse','ausbildung_stimmen','ausbildung_materialien',
+        'ausbildung_unterricht'
     ];
     $found=sql("SELECT TABLE_NAME AS name FROM information_schema.TABLES
                 WHERE TABLE_SCHEMA=DATABASE()
                   AND TABLE_NAME IN ('ausbildung_ausbilder','ausbildung_anwaerter',
-                  'ausbildung_module','ausbildung_abschluesse','ausbildung_stimmen','ausbildung_materialien')");
+                  'ausbildung_module','ausbildung_abschluesse','ausbildung_stimmen','ausbildung_materialien',
+                  'ausbildung_unterricht')");
     $have=array_column($found,'name');
     $missing=array_values(array_diff($required,$have));
     $column=false;
@@ -44,7 +46,7 @@ function ausbildungSchemaStatus(): array {
     ];
 }
 function ausbildungMigrationsdatei(string $filename): array {
-    if(!in_array($filename,['2026-11-24-ausbildung.sql','2026-11-24-aulk-public.sql'],true))
+    if(!in_array($filename,['2026-11-24-ausbildung.sql','2026-11-24-aulk-public.sql','2026-11-24-ausbildung-unterricht.sql'],true))
         throw new \RuntimeException('Unbekannte Ausbildungsmigration');
     $path=dirname(__DIR__).'/scripts/mysql/'.$filename;
     if(!is_file($path)||!is_readable($path))
@@ -112,7 +114,7 @@ function dispatchAusbildungSetup(array $u,string $method,string $uri): bool {
         try {
             // MySQL DDL implicitly commits. Both checked-in scripts are additive
             // and idempotent so a partially completed install can be retried.
-            foreach(['2026-11-24-ausbildung.sql','2026-11-24-aulk-public.sql'] as $file){
+            foreach(['2026-11-24-ausbildung.sql','2026-11-24-aulk-public.sql','2026-11-24-ausbildung-unterricht.sql'] as $file){
                 foreach(ausbildungMigrationsdatei($file) as $step=>$statement){
                     try{
                         // EXECUTE aulk_stmt can return a SELECT result for an
