@@ -67,16 +67,40 @@ async function load(){
    if(e.status===503||e.status===500){
      try{setup=await request('setup-status')}catch(_){/* Keine Administratorrechte oder Serverproblem */}
    }
-   if(setup && !setup.bereit){
+   // Eine bereits eingerichtete Ausbildung kann nur die NEUE Personalbindung
+   // vermissen. Dann ist 'bereit' weiterhin true: trotzdem Setup-Hilfe zeigen.
+   if(setup && (!setup.bereit || !setup.personalbindungBereit || !setup.unterrichtBereit)){
      const missing=(setup.fehlendeTabellen||[]).map(esc).join(', ');
-     el('#root').innerHTML='<div class="card"><h2>Ausbildungsdatenbank noch nicht eingerichtet</h2>'+
-       '<p>Dein bestehender Panel-Login funktioniert. Es fehlen die neuen Ausbildungstabellen oder die AuLK-Erweiterung in MySQL 8.</p>'+
+     const baseOk=!!setup.bereit;
+     const linkMissing=setup.personalbindungBereit===false;
+     const roomMissing=setup.unterrichtBereit===false;
+     const parts=[];
+     if(!baseOk)parts.push('Ausbildungs-Grundtabellen oder Rollen fehlen');
+     if(linkMissing)parts.push('Verbindung zum zentralen Personalstamm fehlt');
+     if(roomMissing)parts.push('Unterrichtsraum-Tabelle fehlt');
+     el('#root').innerHTML='<section class="card" id="ausbildungSchemaRepair">'+
+       '<span class="eyebrow">Einrichtung · gesicherte Nachinstallation</span>'+
+       '<h2>'+ (baseOk&&linkMissing?'Personalstamm-Verknüpfung fehlt':'Ausbildungsdatenbank vervollständigen') +'</h2>'+
+       '<p>Deine Anmeldung funktioniert. Der Ausbildungsbereich ist vorhanden, aber '+esc(parts.join('; ')||'eine Datenbankerweiterung fehlt')+'.</p>'+
        (missing?'<p><b>Fehlende Tabellen:</b> '+missing+'</p>':'')+
-       (!setup.oeffentlicheFreigabeSpalte?'<p>Die öffentliche AuLK-Dokumentfreigabe fehlt noch.</p>':'')+
-       '<div class="callout"><b>Vor dem Einrichten:</b> Eine vollständige Sicherung der bestehenden Datenbank erstellen. Die Einrichtung ergänzt nur Ausbildungsstrukturen; sie löscht keine Personalakten.</div>'+
-       '<button data-action="setup-schema" class="primary">Ausbildungsdatenbank einrichten</button>'+
-       '<p class="muted">Nur Administratoren. Falls der Hoster keine Datenbank-Strukturänderungen durch PHP erlaubt, können die drei additiven SQL-Dateien stattdessen über phpMyAdmin importiert werden.</p></div>';
-     message('Ausbildungsdatenbank noch nicht eingerichtet',true);
+       (linkMissing?'<p><b>Benötigt:</b> eine eindeutige Zuordnung der Ausbildungsakten zum normalen Polizeipersonal (Feld <code>personal_quelle</code> und zugehöriger eindeutiger Index).</p>':'')+
+       '<div class="callout"><b>Schritt 1: Sicherung erstellen.</b> Öffne im normalen Panel die Kategorie <b>Administration → Backup-Übersicht</b>, erstelle eine neue verschlüsselte Sicherung und lade sie sicher herunter. Für eine vollständige Schema-Wiederherstellung zusätzlich ein SQL-Backup beim Hoster erstellen.</div>'+
+       '<div class="callout"><b>Schritt 2: Fehlende Erweiterung nachinstallieren.</b> Erst dann den Button unten benutzen. Die Serverroutine prüft selbst, ob ein aktuelles gültiges verschlüsseltes Backup existiert; ohne Backup wird keine Datenbankänderung durchgeführt. Die bestehenden Personalakten und Rollen werden nicht überschrieben.</div>'+
+       '<div class="flex"><button data-action="setup-schema" class="primary">Fehlende Ausbildungs-Erweiterung einrichten</button> '+
+       '<button data-action="retry-bootstrap">Status erneut prüfen</button></div>'+
+       '<p class="muted">Nur Administratoren. Bei fehlenden ALTER-Rechten kann die additive Datei <code>scripts/mysql/2026-11-24-ausbildung-personal.sql</code> nach Backup über phpMyAdmin importiert werden. Der Hoster muss die aktuelle Dateiversion bereitstellen.</p>'+
+       '</section>';
+     message('Ausbildung benötigt eine geschützte Datenbank-Nachinstallation',true);
+     return;
+   }
+   // Nichtadministratoren dürfen den Setup-Endpunkt nicht aufrufen. Sie
+   // bekommen einen klaren Hinweis statt eines irreführenden Loginfehlers.
+   if(e.status===503 && /Personalstamm|Ausbildungsdatenbank|Unterrichtsdatenbank/.test(e.message)){
+     el('#root').innerHTML='<section class="card"><h2>Ausbildung wartet auf Datenbank-Erweiterung</h2>'+
+       '<p>'+esc(e.message)+'</p>'+
+       '<p>Ein Administrator muss zuerst unter <b>Administration → Backup-Übersicht</b> eine vollständige Datenbanksicherung erstellen und anschließend die fehlende Ausbildungs-Erweiterung installieren.</p>'+
+       '<button data-action="retry-bootstrap">Erneut prüfen</button></section>';
+     message('Ein Administrator muss die Ausbildungsdatenbank vervollständigen',true);
      return;
    }
    el('#root').innerHTML='<div class="card"><h2>Ausbildung konnte nicht geladen werden</h2>'+
@@ -235,15 +259,16 @@ shadow.addEventListener('click',async(e)=>{
  const mode=btn.dataset.action,id=Number(btn.dataset.id);
  if(mode==='retry-bootstrap'){await load();return}
  if(mode==='setup-schema'){
-   if(!confirm('Hast du die bestehende MySQL-Datenbank vor dieser Einrichtung vollständig gesichert? Die drei Ausbildungs-SQL-Erweiterungen werden jetzt additiv ausgeführt.'))return;
-   if(!confirm('Nur fortfahren, wenn ein Datenbank-Backup vorhanden ist. Ausbildungstabellen und Rollen jetzt ergänzen?'))return;
-   btn.disabled=true;btn.textContent='Datenbank wird eingerichtet …';
+   if(!confirm('Bitte vorher unter Administration → Backup-Übersicht eine aktuelle verschlüsselte Datenbanksicherung erstellen UND herunterladen. Hast du zusätzlich ein vollständiges SQL-Backup beim Hoster?'))return;
+   if(!confirm('Jetzt ausschließlich die additiven Ausbildungs-SQL-Erweiterungen installieren? Vorhandene Polizeipersonal-Datensätze werden nicht bearbeitet. Der Server lehnt den Vorgang ohne gültiges aktuelles Backup ab.'))return;
+   btn.disabled=true;btn.textContent='Geschützte Nachinstallation läuft …';
    try{
-     await request('setup',{method:'POST',body:JSON.stringify({bestaetigung:'BACKUP_ERSTELLT_AUSBILDUNG'})});
-     await load();message('Ausbildungsdatenbank erfolgreich eingerichtet.');
+     const result=await request('setup',{method:'POST',body:JSON.stringify({bestaetigung:'BACKUP_ERSTELLT_AUSBILDUNG'})});
+     if(!result?.schema?.personalbindungBereit)throw Error('Die Personalstamm-Verbindung ist nach der Einrichtung noch nicht verfügbar.');
+     await load();message('Ausbildungsdatenbank und zentraler Personalstamm sind jetzt verbunden.');
    }catch(err){
      message(err.message,true);
-     btn.disabled=false;btn.textContent='Einrichtung erneut versuchen';
+     btn.disabled=false;btn.textContent='Nachinstallation erneut prüfen';
    }
    return;
  }
