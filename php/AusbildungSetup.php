@@ -95,7 +95,13 @@ function dispatchAusbildungSetup(array $u,string $method,string $uri): bool {
             // and idempotent so a partially completed install can be retried.
             foreach(['2026-11-24-ausbildung.sql','2026-11-24-aulk-public.sql'] as $file){
                 foreach(ausbildungMigrationsdatei($file) as $step=>$statement){
-                    try{$pdo->exec($statement);}
+                    try{
+                        // EXECUTE aulk_stmt can return a SELECT result for an
+                        // already-existing column. Always close every cursor before
+                        // the next statement to avoid MySQL HY000/2014.
+                        $cursor=$pdo->query($statement);
+                        if($cursor instanceof \PDOStatement)$cursor->closeCursor();
+                    }
                     catch(\PDOException $ex){
                         // Server-side diagnostic only: never expose SQL/credentials
                         // to the browser.
