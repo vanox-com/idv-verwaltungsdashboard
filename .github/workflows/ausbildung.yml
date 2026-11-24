@@ -5,6 +5,10 @@ on:
       - migration/mysql8-php-cutover-2026-11-10
     paths:
       - 'php/Ausbildung.php'
+      - 'php/AusbildungUnterricht.php'
+      - 'public/unterricht.html'
+      - 'public/assets/unterricht-raum.js'
+      - 'scripts/mysql/2026-11-24-ausbildung-unterricht.sql'
       - 'php/AusbildungSetup.php'
       - 'public/assets/ausbildung-panel.js'
       - 'php/Api.php'
@@ -40,6 +44,7 @@ jobs:
       - name: PHP lint and source-based admission logic
         run: |
           php -l php/Ausbildung.php
+          php -l php/AusbildungUnterricht.php
           php -l php/Api.php
           php tests/ausbildung-logic.php
       - name: Native panel, public AuLK and browser scripts parse
@@ -52,7 +57,9 @@ jobs:
           mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-ausbildung.sql
           mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-aulk-public.sql
           mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-aulk-public.sql
-          test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='idv_train_ci' AND table_name LIKE 'ausbildung_%'")" -eq 6
+          mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-ausbildung-unterricht.sql
+          mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-ausbildung-unterricht.sql
+          test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='idv_train_ci' AND table_name LIKE 'ausbildung_%'")" -eq 7
           test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM ausbildung_module")" -eq 11
           test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM role_perms WHERE modul='ausbildung' AND stufe>0")" -eq 2
       - name: Exercise login, roles, module completion, votes and public link
