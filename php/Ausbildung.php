@@ -179,6 +179,7 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         respond(200,['leitung'=>$leitung,'user'=>['id'=>(int)$u['id'],'rolle'=>$u['rolle'],
             'name'=>userName($u)],'module'=>$module,'ausbilder'=>$trainers,
             'anwaerter'=>$trainees,'materialien'=>$materials,
+            'unterrichtBereit'=>ausbildungSchemaStatus()['unterrichtBereit'],
             'eigeneKompetenzen'=>json_decode((string)($me['kompetenzen']??'[]'),true)??[]]);
     }
     if($uri==='/api/ausbildung/ausbilder'&&$method==='POST'){
