@@ -29,4 +29,23 @@ const old=readFileSync('public/ausbildung.html','utf8');
 if(!old.includes('/#ausbildung'))throw Error('Legacy training bookmark must redirect into normal panel');
 const aulk=readFileSync('public/aulk.html','utf8');
 if(!aulk.includes('/api/ausbildung-oeffentlich'))throw Error('Public AuLK catalog must load only approved materials');
+const roomScript=readFileSync('public/assets/unterricht-raum.js','utf8');
+new Script(roomScript,{filename:'unterricht-raum.js'});
+const classroom=readFileSync('public/unterricht.html','utf8');
+if(!classroom.includes('id="overlay"') || !classroom.includes('id="stream"') ||
+   !classroom.includes('data-tool="laser"') || !classroom.includes('data-tool="pfeil"') ||
+   !classroom.includes('id="teilen"'))
+  throw Error('Classroom screen sharing / laser / annotations missing');
+if(!embedded.includes("data-action=\"start-lesson\"") ||
+   !embedded.includes("materialien/import") ||
+   !embedded.includes("location.assign('/unterricht.html?raum='"))
+  throw Error('Training module missing linked Google presentations, import or classroom launcher');
+const signaling=readFileSync('php/AusbildungUnterricht.php','utf8');
+if(!signaling.includes("einladung_hash") || !signaling.includes("teilnehmer_hash") ||
+   !signaling.includes("ausbilder_user_id") || !signaling.includes("unterrichtGastRaum"))
+  throw Error('Lesson signaling must validate hashed invitation, learner seat and presenter');
+const migration=readFileSync('scripts/mysql/2026-11-24-ausbildung-unterricht.sql','utf8');
+if(!migration.includes('CREATE TABLE IF NOT EXISTS ausbildung_unterricht'))
+  throw Error('Additive lesson migration missing');
+
 console.log('Ausbildung native integration, no extra admin page and public AuLK catalog: OK');
