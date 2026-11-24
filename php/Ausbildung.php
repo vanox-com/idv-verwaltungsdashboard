@@ -164,6 +164,9 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
     if(!ausbildungSchemaStatus()['bereit'])
         fail(503,'Die Ausbildungsdatenbank ist noch nicht vollständig eingerichtet. '
             .'Ein Administrator kann sie im Ausbildungsbereich nach einer Sicherung einrichten.');
+    // Unterrichtssitzungen sind innerhalb der geschützten Ausbildungs-API.
+    require_once __DIR__.'/AusbildungUnterricht.php';
+    if(dispatchUnterrichtTrainer($u,$method,$uri))return;
     if($method==='GET'&&$uri==='/api/ausbildung/bootstrap'){
         $leitung=ausbildungLeitung($u);
         $module=sql('SELECT code,laufbahn,titel FROM ausbildung_module WHERE aktiv=1 ORDER BY laufbahn,sortierung');
