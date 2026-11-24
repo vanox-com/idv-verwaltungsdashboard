@@ -11,6 +11,8 @@ on:
       - 'scripts/mysql/2026-11-24-aulk-public.sql'
       - 'scripts/mysql/2026-11-24-ausbildung-unterricht.sql'
       - 'scripts/mysql/2026-11-24-ausbildung-personal.sql'
+      - 'scripts/mysql/2026-11-24-ausbildung-vote-details.sql'
+      - 'php/AusbildungDecks.php'
       - 'tests/ausbildung-*'
       - 'docs/AUSBILDUNG-IMPLEMENTIERUNG.md'
       - 'docs/DATENBANK-BACKUP-SICHER-RESTORE.md'
@@ -38,6 +40,8 @@ jobs:
           test -f scripts/mysql/2026-11-24-aulk-public.sql
           test -f scripts/mysql/2026-11-24-ausbildung-unterricht.sql
           test -f scripts/mysql/2026-11-24-ausbildung-personal.sql
+          test -f scripts/mysql/2026-11-24-ausbildung-vote-details.sql
+          test -f php/AusbildungDecks.php
           test -f public/unterricht.html
           test -f public/assets/unterricht-raum.js
           test -f php/AusbildungUnterricht.php
@@ -53,6 +57,8 @@ jobs:
             scripts/mysql/2026-11-24-aulk-public.sql \
             scripts/mysql/2026-11-24-ausbildung-unterricht.sql \
             scripts/mysql/2026-11-24-ausbildung-personal.sql \
+            scripts/mysql/2026-11-24-ausbildung-vote-details.sql \
+            php/AusbildungDecks.php \
             docs/AUSBILDUNG-IMPLEMENTIERUNG.md \
             docs/DATENBANK-BACKUP-SICHER-RESTORE.md
           unzip -tq migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip
@@ -68,6 +74,8 @@ jobs:
           grep -Fqx scripts/mysql/2026-11-24-aulk-public.sql migration-output/entries.txt
           grep -Fqx scripts/mysql/2026-11-24-ausbildung-unterricht.sql migration-output/entries.txt
           grep -Fqx scripts/mysql/2026-11-24-ausbildung-personal.sql migration-output/entries.txt
+          grep -Fqx scripts/mysql/2026-11-24-ausbildung-vote-details.sql migration-output/entries.txt
+          grep -Fqx php/AusbildungDecks.php migration-output/entries.txt
           grep -Fqx public/unterricht.html migration-output/entries.txt
           grep -Fqx public/assets/unterricht-raum.js migration-output/entries.txt
           grep -Fqx php/AusbildungUnterricht.php migration-output/entries.txt
