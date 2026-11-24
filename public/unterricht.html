@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<title>Ausbildungsraum · IDV Polizei</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,"Segoe UI",sans-serif;background:#0d1522;color:#e7effc}
+*{box-sizing:border-box}body{margin:0}button,input,a{font:inherit}button{border:1px solid #557293;border-radius:9px;padding:10px 14px;background:#263e58;color:#e8f2ff;cursor:pointer}
+button:hover{background:#31547a}button:disabled{opacity:.5;cursor:not-allowed}
+button.active,.primary{background:#2365a0;border-color:#478dc6}a{color:#a6d4ff}
+header{display:flex;justify-content:space-between;gap:14px;align-items:center;border-bottom:1px solid #344a65;padding:16px 22px;flex-wrap:wrap}
+header h1{margin:0;font-size:22px}header small{color:#9bb2ce}
+main{max-width:1580px;margin:auto;padding:18px}
+.toolbar,.links{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-bottom:16px}
+#hinweis{padding:12px 15px;border:1px solid #567291;border-radius:8px;background:#1b2b41;margin-bottom:16px}
+#hinweis.error{border-color:#a45462;color:#ffd3d7}
+#einladung{width:min(100%,720px);padding:10px;border:1px solid #4d617f;border-radius:7px;background:#13243a;color:#fff}
+#tafel{position:relative;width:100%;aspect-ratio:16/9;background:#0a101a;overflow:hidden;border:1px solid #40516c;border-radius:10px}
+#folie{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
+#overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;touch-action:none}
+#tafel[data-werkzeug="laser"] #overlay,#tafel[data-werkzeug="pfeil"] #overlay,#tafel[data-werkzeug="stift"] #overlay{pointer-events:auto;cursor:crosshair}
+#stream{width:100%;height:auto;aspect-ratio:16/9;object-fit:contain;background:#03070d;border-radius:10px}
+#mitmachen{max-width:850px;margin:24px auto;text-align:center}
+.hidden{display:none!important}
+small,.muted{color:#b7c6da}
+@media(max-width:680px){main{padding:10px}header{padding:12px}header h1{font-size:18px}#tafel{aspect-ratio:4/3}}
+</style>
+</head>
+<body>
+<header><div><small>IDENTITYVALLEY · AUSBILDUNGSABTEILUNG</small><h1 id="titel">Gemeinsamer Unterrichtsraum</h1></div><a id="zurueck" href="/#ausbildung">Zur Ausbildung</a></header>
+<main>
+<div id="hinweis" role="status" aria-live="polite">Unterrichtsraum wird vorbereitet …</div>
+<section id="ausbilder" class="hidden">
+ <div class="links"><label for="einladung">Link für einen Anwärter:</label><input id="einladung" readonly aria-label="Einladungslink"><button id="kopieren">Link kopieren</button></div>
+ <div class="toolbar">
+   <button id="teilen" class="primary">Bildschirm freigeben und starten</button>
+   <button data-tool="cursor" class="active">Bedienen</button>
+   <button data-tool="laser">Laserpointer</button>
+   <button data-tool="pfeil">Pfeile</button>
+   <button data-tool="stift">Markieren</button>
+   <button id="loeschen">Markierungen löschen</button>
+   <button id="ende">Unterricht beenden</button>
+ </div>
+ <p class="muted">Wichtig: Beim Freigeben dieses Unterrichts-Tab oder das Fenster mit dieser Tafel auswählen. Nur dann sieht der Anwärter auch Laserpointer und Zeichnungen. Folien im Google-Rahmen wie gewohnt durchklicken. Die Bildschirmfreigabe benötigt HTTPS und eine Browserbestätigung.</p>
+ <div id="tafel" data-werkzeug="cursor"><iframe id="folie" title="AuLK-Google-Präsentation" allowfullscreen></iframe><canvas id="overlay" aria-label="Interaktive Moderationsfläche"></canvas></div>
+ <p><a id="extern" target="_blank" rel="noopener noreferrer">Google-Präsentation direkt öffnen</a> · Bei fehlender Einbettungsberechtigung den Link in Google öffnen und dieses Fenster teilen (Markierungen sind dann nicht Teil des übertragenen Bildes).</p>
+</section>
+<section id="mitmachen" class="hidden">
+ <h2>Live-Unterricht für Anwärter</h2>
+ <p>Der Ausbilder zeigt seinen Bildschirm. Hier werden keine eigenen Anmeldedaten und keine Mikrofon- oder Kamerafreigabe verlangt.</p>
+ <button id="beitreten" class="primary">Am Unterricht teilnehmen</button>
+ <div id="zuschauer" class="hidden"><video id="stream" autoplay playsinline aria-label="Übertragener Bildschirm des Ausbilders"></video><p class="muted">Wenn kein Bild erscheint, muss der Ausbilder die Bildschirmfreigabe starten. Sprache kann parallel über Discord erfolgen.</p></div>
+</section>
+</main>
+<script src="/assets/unterricht-raum.js" defer></script>
+</body>
+</html>
