@@ -35,11 +35,10 @@ const aulk=readFileSync('public/aulk.html','utf8');
 if(!aulk.includes('/api/ausbildung-oeffentlich'))throw Error('Public AuLK catalog must load only approved materials');
 if(!aulk.includes('group.personen') ||
    !aulk.includes('person.module') ||
-   !aulk.includes('person.stimmenPunkte') ||
    !aulk.includes('person.stimmenAnzahl') ||
    !aulk.includes('person.zurPruefungZugelassen'))
- throw Error('Public AuLK must show each candidate and all module statuses, aggregate vote count and points, admission status');
-if(aulk.includes('nur zusammengefasste Ausbildungszahlen angezeigt'))
+ throw Error('Public AuLK must show each candidate and all module statuses, aggregate vote count only (no public points), admission status');
+if(aulk.includes('nur zusammengefasste Ausbildungszahlen angezeigt') || aulk.includes('person.stimmenPunkte'))
  throw Error('Outdated anonymous-only public monitor statement');
 const roomScript=readFileSync('public/assets/unterricht-raum.js','utf8');
 new Script(roomScript,{filename:'unterricht-raum.js'});
