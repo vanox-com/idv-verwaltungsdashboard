@@ -34,11 +34,14 @@ function ausbildungSchemaStatus(): array {
     }
     $roles=sql("SELECT name FROM roles WHERE name IN ('Ausbildungsleitung','Ausbilder')");
     $roleNames=array_column($roles,'name');
-    $ready=$missing===[] && $column && $moduleCount>=11
+    $roomReady=in_array('ausbildung_unterricht',$have,true);
+    $criticalMissing=array_values(array_diff($missing,['ausbildung_unterricht']));
+    $ready=$criticalMissing===[] && $column && $moduleCount>=11
         && in_array('Ausbildungsleitung',$roleNames,true)
         && in_array('Ausbilder',$roleNames,true);
     return [
         'bereit'=>$ready,
+        'unterrichtBereit'=>$roomReady,
         'fehlendeTabellen'=>$missing,
         'oeffentlicheFreigabeSpalte'=>$column,
         'ausbildungsmodule'=>$moduleCount,
@@ -85,7 +88,7 @@ function dispatchAusbildungSetup(array $u,string $method,string $uri): bool {
         $b=body();
         if(($b['bestaetigung']??null)!=='BACKUP_ERSTELLT_AUSBILDUNG')
             fail(400,'Vor der Einrichtung muss ein Datenbankbackup bestätigt werden');
-        if(ausbildungSchemaStatus()['bereit']){
+        if(ausbildungSchemaStatus()['bereit'] && ausbildungSchemaStatus()['unterrichtBereit']){
             respond(200,['ok'=>true,'bereitsEingerichtet'=>true,'schema'=>ausbildungSchemaStatus()]);
         }
         // A verbal "I made a backup" is not enough. Require an actual
@@ -134,7 +137,7 @@ function dispatchAusbildungSetup(array $u,string $method,string $uri): bool {
                 }
             }
             $status=ausbildungSchemaStatus();
-            if(!$status['bereit'])throw new \RuntimeException('Schema nach Einrichtung unvollständig');
+            if(!$status['bereit']||!$status['unterrichtBereit'])throw new \RuntimeException('Schema nach Einrichtung unvollständig');
             auditAction($u,'Ausbildungsdatenbank additiv eingerichtet','add');
         }catch(\Throwable $error){
             $migrationError=$error;
