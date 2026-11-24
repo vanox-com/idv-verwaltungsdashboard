@@ -61,6 +61,20 @@ after="$(curl -sS -b "$temp/admin.cookies" "$base/api/ausbildung/setup-status")"
 twice="$(curl -sS -b "$temp/admin.cookies" -H 'Content-Type: application/json' -X POST \
  --data '{"bestaetigung":"BACKUP_ERSTELLT_AUSBILDUNG"}' "$base/api/ausbildung/setup")"
 [[ "$twice" == *'"bereitsEingerichtet":true'* ]] || { echo "Setup not idempotent: $twice";exit 1; }
+# Regression: vorhandene Ausbildung ist einsatzbereit, aber nur die neu hinzugekommene
+# Personalstamm-Verknüpfung fehlt (derselbe Zustand wie im produktiven Screenshot).
+# Die Grundtabellen bleiben bestehen. Auf separater synthetischer CI-Datenbank
+# darf der Server die idempotente Ergänzung nach geprüftem Backup reparieren.
+mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_ausbildung_setup_ci -e "
+ ALTER TABLE ausbildung_anwaerter DROP INDEX ausbildung_anwaerter_quelle_uq;
+ ALTER TABLE ausbildung_anwaerter DROP COLUMN personal_quelle;"
+partial="$(curl -sS -b "$temp/admin.cookies" "$base/api/ausbildung/setup-status")"
+[[ "$partial" == *'"bereit":true'* && "$partial" == *'"personalbindungBereit":false'* ]] || { echo "Missing binding not detected: $partial";exit 1; }
+code="$(curl -sS -o "$temp/partial-bootstrap" -w '%{http_code}' -b "$temp/admin.cookies" "$base/api/ausbildung/bootstrap")"
+[[ "$code" == 503 ]] || { echo "Unlinked monitor was not blocked: $code";exit 1; }
+repair="$(curl -sS -b "$temp/admin.cookies" -H 'Content-Type: application/json' -X POST \
+ --data '{"bestaetigung":"BACKUP_ERSTELLT_AUSBILDUNG"}' "$base/api/ausbildung/setup")"
+[[ "$repair" == *'"ok":true'* && "$repair" == *'"personalbindungBereit":true'* ]] || { echo "Partial binding repair failed: $repair";cat "$temp/php.log";exit 1; }
 bootstrap="$(curl -sS -b "$temp/admin.cookies" "$base/api/ausbildung/bootstrap")"
 [[ "$bootstrap" == *'"module"'* && "$bootstrap" == *'"anwaerter":[]'* ]] || { echo "Bootstrap failed after setup: $bootstrap";exit 1; }
 public="$(curl -sS "$base/api/ausbildung-oeffentlich")"
