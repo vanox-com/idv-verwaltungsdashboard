@@ -21,10 +21,18 @@ revision(){ req "$temp/lead" GET "/api/ausbildung/anwaerter/$1" | php -r '$d=jso
 status(){ req "$temp/lead" GET "/api/ausbildung/anwaerter/$1" | php -r '$d=json_decode(stream_get_contents(STDIN),true);echo $d["fortschritt"]["status"]??"";'; }
 lead="$(curl -sS -c "$temp/lead" -H 'Content-Type: application/json' -X POST --data '{"dienstnummer":"TLEAD","passwort":"Leader-Test-2026!"}' "$base/api/login")"
 [[ "$lead" == *'"ok":true'* ]] || { echo "$lead";cat "$temp/php.log";exit 1; }
+# Existing police account with exactly the same displayed DN must not be touched.
+hash_police="$(php -r 'echo password_hash("Original-Police-2026!",PASSWORD_BCRYPT);')"
+mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern,gesperrt) VALUES('TRAIN1','Existing police user','Polizeirat','$hash_police',0,0)"
+original_before="$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT CONCAT_WS('::',id,dienstnummer,anzeigename,rolle,passwort_hash,gesperrt) FROM users WHERE dienstnummer='TRAIN1'")"
 trainer='{"dienstnummer":"TRAIN1","name":"Synthetic Ausbilder","kuerzel":"SA","rang":"Test-Rang","funktion":"Ausbilder mittlerer Dienst","eintritt":"2026-11-24","email":"","notiz":"","kompetenzen":["PM.0","PM.1","PM.2","PM.3","PM.4","PM.5","PM.6"],"startpasswort":"Trainer-Test-2026!"}'
 created="$(req "$temp/lead" POST /api/ausbildung/ausbilder "$trainer")"
 [[ "$created" == *'"ok":true'* ]] || { echo "$created";cat "$temp/php.log";exit 1; }
-login="$(curl -sS -c "$temp/trainer" -H 'Content-Type: application/json' -X POST --data '{"dienstnummer":"TRAIN1","passwort":"Trainer-Test-2026!"}' "$base/api/login")"
+original_after="$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT CONCAT_WS('::',id,dienstnummer,anzeigename,rolle,passwort_hash,gesperrt) FROM users WHERE dienstnummer='TRAIN1'")"
+[[ "$original_before" == "$original_after" ]] || { echo 'Existing police account was modified';exit 1; }
+new_trainers="$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM users WHERE dienstnummer='AUS-TRAIN1' AND rolle='Ausbilder'")"
+[[ "$new_trainers" == 1 ]] || { echo 'Separate AUS- login was not created';exit 1; }
+login="$(curl -sS -c "$temp/trainer" -H 'Content-Type: application/json' -X POST --data '{"dienstnummer":"AUS-TRAIN1","passwort":"Trainer-Test-2026!"}' "$base/api/login")"
 [[ "$login" == *'"mussPasswortAendern":true'* ]] || { echo "$login";exit 1; }
 pass="$(req "$temp/trainer" POST /api/passwort '{"alt":"Trainer-Test-2026!","neu":"Trainer-New-2026!"}')"
 [[ "$pass" == *'"ok":true'* ]] || { echo "$pass";exit 1; }
