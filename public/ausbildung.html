@@ -167,13 +167,14 @@ function trainerForm(t){
 }
 function materials(){
  return '<div class="card"><h2>Ausbildungsbibliothek</h2><p>Hier werden die Google-Präsentationen, Ausbilderleitfäden und Ausbildungsdokumente verlinkt. Der Zugriff auf diese Übersicht erfordert einen Ausbilderzugang; die Freigaben innerhalb von Google Drive gelten zusätzlich.</p>'+
- '<div class="flex space"><a href="https://sites.google.com/view/aulk2026/startseite" rel="noopener noreferrer" target="_blank">Bestehende Ausbildungs-Google-Site öffnen ↗</a>'+(data.leitung?'<button data-action="new-material" class="primary">+ Unterlage verlinken</button>':'')+'</div></div>'+
+ '<div class="flex space"><a href="https://sites.google.com/view/aulk2026/startseite" rel="noopener noreferrer" target="_blank">Bestehende Ausbildungs-Google-Site öffnen ↗</a>'+(data.leitung?'<button data-action="new-material" class="primary">+ Google-Link</button><button data-action="upload-material" class="primary">+ Datei hochladen</button>':'')+'</div></div>'+
  '<div class="card"><div class="tablewrap"><table><thead><tr><th>Modul</th><th>Unterlage</th><th>Typ</th><th></th></tr></thead><tbody>'+
- data.materialien.map(m=>'<tr><td>'+esc(m.modul_code||'Allgemein')+'</td><td>'+esc(m.titel)+'</td><td>'+esc(m.typ)+'</td><td><a href="'+esc(m.url)+'" target="_blank" rel="noopener noreferrer">Öffnen ↗</a> '+(data.leitung?'<button class="compact danger" data-action="remove-material" data-id="'+m.id+'">Entfernen</button>':'')+'</td></tr>').join('')+
+ data.materialien.map(m=>'<tr><td>'+esc(m.modul_code||'Allgemein')+'</td><td>'+esc(m.titel)+'</td><td>'+esc(m.typ)+'</td><td>'+(Number(m.datei)?'<a href="/api/ausbildung/materialien/'+m.id+'/datei">Geschützt herunterladen ↘</a>':'<a href="'+esc(m.url)+'" target="_blank" rel="noopener noreferrer">Öffnen ↗</a>')+' '+(data.leitung?'<button class="compact danger" data-action="remove-material" data-id="'+m.id+'">Entfernen</button>':'')+'</td></tr>').join('')+
  '</tbody></table></div>'+(data.materialien.length?'':'<p class="muted">Noch keine Einzelverknüpfungen hinterlegt. Die hochgeladene ZIP ist nicht automatisch öffentlich veröffentlicht worden.</p>')+'</div>'+
  (editing?.type==='material'?'<div class="card"><h2>Google-Unterlage hinzufügen</h2><form id="materialForm" class="formgrid"><label>Modul<select name="modul_code"><option value="">Allgemein / Weiterbildung</option>'+data.module.map(m=>'<option value="'+esc(m.code)+'">'+esc(modName(m))+'</option>').join('')+'</select></label>'+
  '<label>Dokumenttyp<select name="typ"><option>Präsentation</option><option>Leitfaden</option><option>Prüfungsunterlage</option><option>Handout</option></select></label><label>Bezeichnung<input name="titel" required maxlength="200"></label>'+
- '<label class="full">Google-Docs-, Slides-, Drive- oder Sites-Link<input type="url" name="url" required placeholder="https://docs.google.com/…"></label><div class="full flex"><button class="primary" type="submit">Verlinken</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></div>':'');
+ '<label class="full">Google-Docs-, Slides-, Drive- oder Sites-Link<input type="url" name="url" required placeholder="https://docs.google.com/…"></label><div class="full flex"><button class="primary" type="submit">Verlinken</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></div>':'')+
+ (editing?.type==='upload'?'<div class="card"><h2>Interne Datei hochladen</h2><p class="muted">PDF-, DOCX-, PPTX- oder XLSX-Dateien bis 40 MB. Dateien bleiben außerhalb des Webroots und sind nur nach Anmeldung abrufbar. Die große ZIP bitte zuerst entpacken und die Module einzeln hochladen.</p><form id="uploadForm" class="formgrid" enctype="multipart/form-data"><label>Modul<select name="modul_code"><option value="">Allgemein / Weiterbildung</option>'+data.module.map(m=>'<option value="'+esc(m.code)+'">'+esc(modName(m))+'</option>').join('')+'</select></label><label>Dokumenttyp<select name="typ"><option>Präsentation</option><option>Leitfaden</option><option>Prüfungsunterlage</option><option>Handout</option></select></label><label>Bezeichnung<input name="titel" required maxlength="200"></label><label class="full">Datei<input type="file" name="datei" accept=".pdf,.pptx,.docx,.xlsx" required></label><div class="full flex"><button class="primary" type="submit">Geschützt hochladen</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></div>':'');
 }
 async function act(fn){
  if(busy)return;busy=true;
@@ -190,6 +191,7 @@ document.addEventListener('click',async(e)=>{
  if(mode==='new-trainer'){editing={type:'trainer',id:null};render();return}
  if(mode==='edit-trainer'){editing={type:'trainer',id};render();return}
  if(mode==='new-material'){editing={type:'material'};render();return}
+ if(mode==='upload-material'){editing={type:'upload'};render();return}
  if(mode==='close'){selected=null;editing=null;render();return}
  if(mode==='open'){await act(async()=>{selected=await request('anwaerter/'+id);editing=null;render();el('#details')?.scrollIntoView({behavior:'smooth'})});return}
  if(mode==='edit-trainee'){editing={type:'trainee-edit'};render();return}
@@ -201,11 +203,15 @@ document.addEventListener('click',async(e)=>{
  if(mode==='remove-material'){if(!confirm('Unterlage aus der Ausbildungsliste entfernen?'))return;await act(async()=>{await request('materialien/'+id,{method:'DELETE'});await load();message('Verknüpfung entfernt.')});}
 });
 document.addEventListener('submit',async(e)=>{
- const f=e.target;if(!f.id||!['trainerForm','traineeForm','materialForm'].includes(f.id))return;
+ const f=e.target;if(!f.id||!['trainerForm','traineeForm','materialForm','uploadForm'].includes(f.id))return;
  e.preventDefault();
  await act(async()=>{
   const b=formObj(f);
-  if(f.id==='trainerForm'){
+  if(f.id==='uploadForm'){
+   const res=await fetch('/api/ausbildung/materialien/upload',{method:'POST',credentials:'same-origin',body:new FormData(f)});
+   const answer=await res.json().catch(()=>({}));
+   if(!res.ok){const err=new Error(answer.error||'Dateiupload fehlgeschlagen');err.status=res.status;throw err}
+  }else if(f.id==='trainerForm'){
    b.kompetenzen=Array.from(f.querySelectorAll('[name=kompetenz]:checked')).map(x=>x.value);
    const id=editing.id;
    await request(id?'ausbilder/'+id:'ausbilder',{method:id?'PATCH':'POST',body:JSON.stringify(b)});
