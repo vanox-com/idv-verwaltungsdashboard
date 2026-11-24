@@ -116,65 +116,147 @@ function ausbildungAktuelleAnwaerter(): array {
         static fn($row)=>isset($current[(string)$row['personal_quelle']])));
 }
 
-/** Öffentliche Monitore geben nur anonymisierte Summen heraus, keine Personalakten. */
+/**
+ * Öffentliche AuLK-Monitore: die Anwärter-NAMEN und die explizit gewünschten
+ * Modulstände und Gesamtpunkte. Keine Dienstnummern, Berichte, Ausbilderidentitäten,
+ * Einzelstimmen, vertraulichen Notizen oder internen Datensatz-IDs.
+ *
+ * Für neu eingestellte Anwärter wird direkt aus dem Hauptpersonalstamm gelesen.
+ * Ein eventuell noch nicht synchronisierter Ausbildungsdatensatz zeigt somit
+ * alle Module als offen. Dieser öffentliche GET schreibt nichts in die Datenbank.
+ */
 function ausbildungOeffentlicheMonitore(): never {
-    $status=ausbildungSchemaStatus();
-    if(!$status['bereit'] || !$status['personalbindungBereit'])
+    $schema=ausbildungSchemaStatus();
+    if(!$schema['bereit'] || !$schema['personalbindungBereit'])
         fail(503,'Ausbildungsmonitore werden eingerichtet');
-    $counts=['PMA'=>0,'PKA'=>0,'KKA'=>0];
-    $ready=['PMA'=>0,'PKA'=>0,'KKA'=>0];
-    $progress=['PMA'=>0,'PKA'=>0,'KKA'=>0];
+
+    $tracks=['PMA','PKA','KKA'];
+    $required=[];
+    $completed=[];
+    $votes=[];
+    $tracked=[];
+    $output=[];
+    foreach($tracks as $track){
+        $required[$track]=ausbildungModule($track);
+        $output[$track]=[
+            'laufbahn'=>$track,'anzahl'=>0,
+            'moduleProPerson'=>count($required[$track]),
+            'moduleAbgeschlossen'=>0,
+            'zurPruefungZugelassen'=>0,
+            'fortschrittProzent'=>0,
+            'personen'=>[]
+        ];
+    }
+
+    // Nur aktive Anwärter aus der NORMALEN Personaltabelle bestimmen die Liste.
+    // Nach einer Wiedervergabe der Dienstnummer ist der Schlüssel ein neuer.
     $people=ausbildungPersonalZeilen();
-    $active=[];
-    foreach($people as $p) {
-        $t=ausbildungPersonalLaufbahn((string)$p['dienstgrad']);
-        if($t===null)continue;
-        $counts[$t]++;
-        $key=ausbildungPersonalQuelle((int)$p['personalnummer'],(int)$p['belegungen']);
-        $active[$key]=$t;
+    foreach($people as $person){
+        $track=ausbildungPersonalLaufbahn((string)$person['dienstgrad']);
+        if(!isset($output[$track]))continue;
+        $key=ausbildungPersonalQuelle((int)$person['personalnummer'],(int)$person['belegungen']);
+        $tracked[$key]=[
+            'laufbahn'=>$track,
+            'name'=>trim((string)$person['vorname'].' '.(string)$person['nachname'])
+        ];
     }
-    $stats=sql("SELECT a.id,a.personal_quelle,a.laufbahn,
-          COALESCE((SELECT COUNT(*) FROM ausbildung_abschluesse m
-                    WHERE m.anwaerter_id=a.id AND m.abgeschlossen=1),0) AS fertig
-       FROM ausbildung_anwaerter a WHERE a.personal_quelle IS NOT NULL");
-    // Dieselbe rollengestützte Gewichtung wie im internen PMA-Monitor:
-    // nicht den eventuell veralteten Wert aus historischen Stimmen summieren.
-    $voteRows=sql("SELECT s.anwaerter_id,s.stimme,s.gewicht AS gespeichert_gewicht,
-           u.rolle,t.funktion
-        FROM ausbildung_stimmen s
-        JOIN ausbildung_anwaerter a ON a.id=s.anwaerter_id
-        JOIN users u ON u.id=s.ausbilder_user_id
-        LEFT JOIN ausbildung_ausbilder t ON t.user_id=s.ausbilder_user_id
-        WHERE a.personal_quelle IS NOT NULL");
-    $weightedVotes=[];
-    foreach($voteRows as $vote){
-        $id=(int)$vote['anwaerter_id'];
-        $weight=ausbildungStimmgewicht($vote);
-        $weightedVotes[$id]=($weightedVotes[$id]??0.0)
-            +($vote['stimme']==='Ja'?$weight:-$weight);
+
+    // Historische Daten bleiben archiviert, werden aber nur über einen
+    // gültigen und aktuell zugewiesenen Personen-Identitätsschlüssel gelesen.
+    $records=sql("SELECT id,personal_quelle,laufbahn FROM ausbildung_anwaerter
+        WHERE personal_quelle IS NOT NULL");
+    $activeIds=[];
+    foreach($records as $record){
+        $key=(string)$record['personal_quelle'];
+        if(isset($tracked[$key]) && $tracked[$key]['laufbahn']===$record['laufbahn'])
+            $activeIds[(int)$record['id']]=$key;
     }
-    $req=[];
-    foreach(sql("SELECT laufbahn,COUNT(*) AS anzahl FROM ausbildung_module WHERE aktiv=1 GROUP BY laufbahn") as $m)
-        $req[$m['laufbahn']]=(int)$m['anzahl'];
-    foreach($stats as $a){
-        $key=(string)$a['personal_quelle'];$t=$active[$key]??null;
-        if($t===null||$t!==$a['laufbahn'])continue;
-        $total=$req[$t==='PMA'?'PMA':'PKA']??0;
-        $done=min($total,(int)$a['fertig']);
-        $progress[$t]+=$done;
-        if($total>0 && $done===$total && ($t!=='PMA'||($weightedVotes[(int)$a['id']]??0.0)>=2.5))
-            $ready[$t]++;
+    if($activeIds){
+        $moduleRows=sql("SELECT a.id,c.modul_code FROM ausbildung_abschluesse c
+            JOIN ausbildung_anwaerter a ON a.id=c.anwaerter_id
+            WHERE a.personal_quelle IS NOT NULL AND c.abgeschlossen=1");
+        foreach($moduleRows as $row){
+            $id=(int)$row['id'];
+            if(isset($activeIds[$id]))$completed[$activeIds[$id]][(string)$row['modul_code']]=true;
+        }
+
+        // Keine individuellen Stimmabgaben in der öffentlichen Antwort.
+        // Gewichtung entspricht der internen PMA-Abstimmung und wird aus
+        // der aktuellen Ausbilderfunktion statt altem DB-Score abgeleitet.
+        $voteRows=sql("SELECT a.id,s.stimme,s.gewicht AS gespeichert_gewicht,
+                u.rolle,t.funktion
+            FROM ausbildung_stimmen s
+            JOIN ausbildung_anwaerter a ON a.id=s.anwaerter_id
+            JOIN users u ON u.id=s.ausbilder_user_id
+            LEFT JOIN ausbildung_ausbilder t ON t.user_id=s.ausbilder_user_id
+            WHERE a.personal_quelle IS NOT NULL AND a.laufbahn='PMA'");
+        foreach($voteRows as $row){
+            $id=(int)$row['id'];
+            if(!isset($activeIds[$id]))continue;
+            $key=$activeIds[$id];
+            $votes[$key][]=[
+                'stimme'=>$row['stimme'],
+                'gewicht'=>ausbildungStimmgewicht($row)
+            ];
+        }
     }
-    $out=[];
-    foreach(['PMA','PKA','KKA'] as $t){
-        $total=$req[$t==='PMA'?'PMA':'PKA']??0;
-        $out[]=['laufbahn'=>$t,'anzahl'=>$counts[$t],
-          'moduleProPerson'=>$total,'moduleAbgeschlossen'=>$progress[$t],
-          'zurPruefungZugelassen'=>$ready[$t],
-          'fortschrittProzent'=>$counts[$t]&&$total
-            ?round($progress[$t]/($counts[$t]*$total)*100):0];
+
+    foreach($tracked as $key=>$person){
+        $track=$person['laufbahn'];
+        $requiredCodes=array_column($required[$track],'code');
+        $doneCodes=array_keys($completed[$key]??[]);
+        $result=ausbildungStatus($track,$requiredCodes,$doneCodes,$votes[$key]??[]);
+        $modulesFinished=$result['moduleGesamt']>0
+            && $result['moduleFertig']===$result['moduleGesamt'];
+        $admitted=$result['bereit'];
+
+        // Erst Modulabschluss, dann bei PMA der Stimmen-/Punktestand.
+        // PKA/KKA: in der aktuellen PK-Regel bereits nach allen vier Modulen.
+        $status= !$modulesFinished ? 'Module ausstehend' :
+            ($admitted ? 'Zur Prüfung zugelassen' : 'Module abgeschlossen – Stimmen fehlen');
+
+        $modules=[];
+        foreach($required[$track] as $module){
+            $modules[]=[
+                'code'=>(string)$module['code'],
+                'titel'=>(string)$module['titel'],
+                'abgeschlossen'=>isset(($completed[$key]??[])[(string)$module['code']])
+            ];
+        }
+        $entry=[
+            'name'=>$person['name'],
+            'status'=>$status,
+            'moduleFertig'=>$result['moduleFertig'],
+            'moduleGesamt'=>$result['moduleGesamt'],
+            'moduleAbgeschlossen'=>$modulesFinished,
+            'zurPruefungZugelassen'=>$admitted,
+            'module'=>$modules
+        ];
+        if($track==='PMA'){
+            $entry['stimmenAnzahl']=$result['stimmenJa']+$result['stimmenNein'];
+            $entry['stimmenPunkte']=$result['stimmenSaldo'];
+            $entry['stimmenSchwelle']=2.5;
+        }
+        $output[$track]['personen'][]=$entry;
+        $output[$track]['anzahl']++;
+        $output[$track]['moduleAbgeschlossen']+=$result['moduleFertig'];
+        if($admitted)$output[$track]['zurPruefungZugelassen']++;
     }
+
+    foreach($tracks as $track){
+        $data=&$output[$track];
+        $denom=$data['anzahl']*$data['moduleProPerson'];
+        $data['fortschrittProzent']=$denom>0
+            ?round($data['moduleAbgeschlossen']/$denom*100):0;
+        usort($data['personen'],static fn($a,$b)=>
+            strcasecmp((string)$a['name'],(string)$b['name']));
+        unset($data);
+    }
+
     header('X-Robots-Tag: noindex, nofollow');
-    respond(200,['monitore'=>$out,'aktualisiert'=>gmdate('c'),
-      'hinweis'=>'Anonymisierte Live-Zahlen aus dem zentralen Personalstamm. Keine Namen oder Dienstnummern.']);
+    respond(200,[
+        'monitore'=>array_values($output),
+        'aktualisiert'=>gmdate('c'),
+        'hinweis'=>'Öffentlich: Namen, Modulstände, PMA-Stimmenanzahl und gewichteter Punktesaldo. Keine Dienstnummern oder Einzelstimmen.'
+    ]);
 }
