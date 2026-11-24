@@ -233,9 +233,9 @@ function ausbildungOeffentlicheMonitore(): never {
             'module'=>$modules
         ];
         if($track==='PMA'){
+            // Öffentliche Ansicht: nur Anzahl der Stimmen. Punkte, Stimmeninhalt
+            // und verantwortliche Ausbilder werden NIEMALS ausgegeben.
             $entry['stimmenAnzahl']=$result['stimmenJa']+$result['stimmenNein'];
-            $entry['stimmenPunkte']=$result['stimmenSaldo'];
-            $entry['stimmenSchwelle']=2.5;
         }
         $output[$track]['personen'][]=$entry;
         $output[$track]['anzahl']++;
@@ -257,6 +257,6 @@ function ausbildungOeffentlicheMonitore(): never {
     respond(200,[
         'monitore'=>array_values($output),
         'aktualisiert'=>gmdate('c'),
-        'hinweis'=>'Öffentlich: Namen, Modulstände, PMA-Stimmenanzahl und gewichteter Punktesaldo. Keine Dienstnummern oder Einzelstimmen.'
+        'hinweis'=>'Öffentlich: Namen, Modulstände, PMA-Stimmenanzahl und Zulassungsstatus; keine Punktzahlen, Dienstnummern oder Einzelstimmen.'
     ]);
 }
