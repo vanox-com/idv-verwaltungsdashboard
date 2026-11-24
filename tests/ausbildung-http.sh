@@ -71,9 +71,31 @@ code="$(curl -sS -o "$temp/no-duplicate" -w '%{http_code}' -b "$temp/lead" -H 'C
 publicMonitors="$(curl -sS "$base/api/ausbildung-oeffentlich/monitore")"
 printf '%s' "$publicMonitors" | php -r '
 $d=json_decode(stream_get_contents(STDIN),true);
-$counts=[];foreach($d["monitore"]??[] as $r)$counts[$r["laufbahn"]]=$r["anzahl"];
+$counts=[];$persons=[];
+foreach($d["monitore"]??[] as $r){
+ $counts[$r["laufbahn"]]=$r["anzahl"];
+ $persons[$r["laufbahn"]]=$r["personen"][0]??null;
+}
 if(($counts["PMA"]??0)!==1||($counts["PKA"]??0)!==1||($counts["KKA"]??0)!==1)exit(1);
-if(str_contains(json_encode($d),"Synthetic")||str_contains(json_encode($d),"personalnummer"))exit(1);'
+if(($persons["PMA"]["name"]??"")!=="Synthetic Anwärter")exit(2);
+if(($persons["PKA"]["name"]??"")!=="Synthetic PKA")exit(3);
+if(($persons["KKA"]["name"]??"")!=="Synthetic KKA")exit(4);
+if(($persons["PMA"]["moduleFertig"]??-1)!==0||
+   count($persons["PMA"]["module"]??[])!==7||
+   count($persons["PKA"]["module"]??[])!==4||
+   count($persons["KKA"]["module"]??[])!==4)exit(5);
+$allowed=["name","status","moduleFertig","moduleGesamt","moduleAbgeschlossen",
+ "zurPruefungZugelassen","module","stimmenAnzahl","stimmenPunkte","stimmenSchwelle"];
+foreach($persons as $p){
+ if(array_diff(array_keys($p),$allowed))exit(6);
+ if(array_diff(array_keys($p["module"][0]),["code","titel","abgeschlossen"]))exit(7);
+}
+if(($persons["PMA"]["stimmenPunkte"]??-100)!==0.0 &&
+   ($persons["PMA"]["stimmenPunkte"]??-100)!==0)exit(8);
+if(str_contains(json_encode($d),"personalnummer") ||
+   str_contains(json_encode($d),"anzeigename") ||
+   str_contains(json_encode($d),"ausbilder_user_id") ||
+   str_contains(json_encode($d),"stimme\""))exit(9);'
 
 for module in PM.0 PM.1 PM.2 PM.3 PM.4 PM.5 PM.6;do
  rev="$(revision "$id")"
@@ -81,6 +103,21 @@ for module in PM.0 PM.1 PM.2 PM.3 PM.4 PM.5 PM.6;do
  [[ "$answer" == *'"ok":true'* ]] || { echo "$module: $answer";cat "$temp/php.log";exit 1; }
 done
 [[ "$(status "$id")" == 'Nicht bereit' ]] || exit 1
+# Modulabschluss ist nur die erste Voraussetzung für PMA. Ohne Stimmen darf
+# die öffentliche Ansicht noch KEINE endgültige Prüfungszulassung behaupten.
+beforeVotes="$(curl -sS "$base/api/ausbildung-oeffentlich/monitore")"
+printf '%s' "$beforeVotes" | php -r '
+$d=json_decode(stream_get_contents(STDIN),true);
+foreach($d["monitore"]??[] as $r)if($r["laufbahn"]==="PMA"){
+ $p=$r["personen"][0]??[];
+ if(!($p["moduleAbgeschlossen"]??false) ||
+    ($p["zurPruefungZugelassen"]??true) ||
+    ($p["status"]??"")!=="Module abgeschlossen – Stimmen fehlen" ||
+    ($p["stimmenAnzahl"]??-1)!==0 || ($p["stimmenPunkte"]??-99)!==0)exit(1);
+ foreach($p["module"]??[] as $m)if(!$m["abgeschlossen"])exit(2);
+ exit(0);
+}exit(3);'
+
 rev="$(revision "$id")"
 vote="$(req "$temp/trainer" PUT "/api/ausbildung/anwaerter/$id/stimme" "{\"stimme\":\"Ja\",\"revision\":$rev}")"
 [[ "$vote" == *'"ok":true'* ]] || { echo "$vote";exit 1; }
@@ -88,6 +125,22 @@ rev="$(revision "$id")"
 vote="$(req "$temp/lead" PUT "/api/ausbildung/anwaerter/$id/stimme" "{\"stimme\":\"Ja\",\"revision\":$rev}")"
 [[ "$vote" == *'"ok":true'* ]] || { echo "$vote";exit 1; }
 [[ "$(status "$id")" == 'Zugelassen' ]] || { echo "Status: $(status "$id")";exit 1; }
+# Öffentlich: Name und Modulstände ja, wer abgestimmt hat und wie NEIN.
+# Punktesaldo nach normalem Ausbilder (1,0) + Leitung (2,0) überschreitet
+# exakt die Zulassungsschwelle von 2,5.
+afterVotes="$(curl -sS "$base/api/ausbildung-oeffentlich/monitore")"
+printf '%s' "$afterVotes" | php -r '
+$d=json_decode(stream_get_contents(STDIN),true);
+foreach($d["monitore"]??[] as $r)if($r["laufbahn"]==="PMA"){
+ $p=$r["personen"][0]??[];
+ if(!($p["moduleAbgeschlossen"]??false) ||
+    !($p["zurPruefungZugelassen"]??false) ||
+    ($p["status"]??"")!=="Zur Prüfung zugelassen" ||
+    ($p["stimmenAnzahl"]??-1)!==2 ||
+    abs(($p["stimmenPunkte"]??0)-3.0)>0.001)exit(1);
+ exit(0);
+}exit(2);'
+
 # Die bereits vergebene Ja-Stimme eines normalen Ausbilders zählt 1 Punkt,
 # die der Ausbildungsleitung 2 Punkte. Änderungen der Ausbilderfunktion
 # werden ohne Rewrite der historischen ausbildung_stimmen neu gewertet.
