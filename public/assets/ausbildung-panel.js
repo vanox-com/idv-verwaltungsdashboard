@@ -179,6 +179,39 @@ function traineeDetails(d){
  '<p class="muted">Externe Links zeigen nur Modulfortschritte und Prüfungsstatus, keine Namen oder internen Bewertungen.</p><div id="createdLink"></div>'+
  '</section>';
 }
+function voteSection(p,record,canEdit){
+ const value=record?.stimme||'';
+ const reason=record?.anlass||'';
+ const ready=data.stimmenDetailsBereit!==false;
+ const reasons=[['','Bitte Anlass wählen'],['Streifenfahrt','Streifenfahrt'],['Sonstige Leistungen','Sonstige Leistungen']].map(([code,label])=>'<option value="'+esc(code)+'" '+(reason===code?'selected':'')+'>'+esc(label)+'</option>').join('');
+ return '<section class="card" style="margin-top:16px"><h3>PMA-Prüfungsabstimmung</h3>'+
+ '<p class="muted"><b>Gewichtung:</b> Ausbilder auf Probe 0,5 · normale Ausbilder 1 · Leitungsdienst 1,5 · Ausbildungsleitung 2 Punkte. Bei Nein ist eine Begründung verpflichtend. Bei Ja wegen Streifenfahrt muss das Datum angegeben werden.</p>'+
+ (!ready?'<div class="callout"><b>Einrichtung erforderlich:</b> Die Datenbankfelder für Anlass, Streifenfahrt-Datum und Bemerkung fehlen noch. Vor der nächsten Abstimmung muss ein Administrator nach einer Sicherung die Erweiterung installieren.'+
+ (data.user.rolle==='Administrator'?' <button data-action="setup-schema" type="button">Stimmabgabe-Erweiterung installieren</button>':'')+'</div>':'')+
+ '<div class="formgrid">'+
+ '<label>Meine Stimme<select id="vote"><option value="" '+(!value?'selected':'')+'>Stimme zurückziehen</option><option value="Ja" '+(value==='Ja'?'selected':'')+'>Ja</option><option value="Nein" '+(value==='Nein'?'selected':'')+'>Nein</option></select></label>'+
+ '<label id="reasonWrap">Anlass<select id="voteReason">'+reasons+'</select></label>'+
+ '<label id="dateWrap">Datum der Streifenfahrt<input type="date" id="votePatrolDate" value="'+esc((record?.streifenfahrt_datum||'').slice(0,10))+'"></label>'+
+ '<label class="full" id="noteWrap"><span id="voteNoteLabel">Bemerkung</span><textarea id="voteNote" rows="3" maxlength="2000" placeholder="Informationen zur Stimmabgabe">'+esc(record?.bemerkung||'')+'</textarea></label>'+
+ '<div class="full flex"><button class="primary" type="button" data-action="vote" '+(!canEdit||!ready?'disabled':'')+'>Stimme mit Anlass speichern</button></div></div>'+
+ '<h3>Abgegebene Stimmen · nur intern</h3>'+
+ '<div class="tablewrap"><table><thead><tr><th>Ausbilder</th><th>Stimme</th><th>Gewicht</th><th>Anlass</th><th>Streifenfahrt</th><th>Bemerkung</th><th>Aktualisiert</th></tr></thead><tbody>'+
+ (p.stimmen||[]).map(v=>'<tr><td>'+esc(v.anzeigename)+'</td><td>'+esc(v.stimme)+'</td><td>'+Number(v.gewicht).toLocaleString('de-DE')+' P.</td><td>'+esc(v.anlass||'Alteintrag')+'</td><td>'+fmt(v.streifenfahrt_datum)+'</td><td style="white-space:pre-wrap;min-width:170px;max-width:330px">'+esc(v.bemerkung||'—')+'</td><td>'+fmt(v.aktualisiert)+'</td></tr>').join('')+
+ '</tbody></table></div></section>';
+}
+function updateVoteForm(){
+ const v=el('#vote'),reason=el('#voteReason'),when=el('#votePatrolDate'),note=el('#voteNote');
+ if(!v||!reason||!when||!note)return;
+ const present=v.value!=='';const isPatrol=present&&reason.value==='Streifenfahrt';
+ const mustDate=v.value==='Ja'&&isPatrol;
+ const mustNote=v.value==='Nein';
+ const rw=el('#reasonWrap'),dw=el('#dateWrap'),nw=el('#noteWrap');
+ if(rw)rw.classList.toggle('hidden',!present);
+ if(dw)dw.classList.toggle('hidden',!isPatrol);
+ if(nw)nw.classList.toggle('hidden',!present);
+ reason.required=present;when.required=mustDate;note.required=mustNote;
+ el('#voteNoteLabel').textContent=mustNote?'Bemerkung / Begründung (Pflicht bei Nein)':'Bemerkung (optional)';
+}
 function trainers(){
  let out='<div class="card"><div class="flex space"><div><h2>Ausbilderteam</h2><p class="muted">Kompetenzen, Funktionen und getrennte Zugänge</p></div>'+(data.leitung?'<button data-action="new-trainer" class="primary">+ Ausbilder anlegen</button>':'')+'</div><div class="tablewrap"><table><thead><tr><th>DN</th><th>Name</th><th>Kürzel</th><th>Rang</th><th>Funktion / Stimmgewicht</th><th>Module</th><th></th></tr></thead><tbody>'+
  data.ausbilder.map(t=>'<tr><td>'+esc(t.dienstnummer)+'<br><small>Login: '+esc(t.login_dienstnummer||'—')+'</small></td><td><b>'+esc(t.name)+'</b></td><td>'+esc(t.kuerzel)+'</td><td>'+esc(t.rang)+'</td><td>'+esc(t.funktion)+'<br><small>Gewicht '+Number(t.gewicht)+'</small></td><td>'+json(t.kompetenzen).map(x=>'<span class="pill">'+esc(x)+'</span>').join(' ')+'</td><td>'+(data.leitung?'<button class="compact" data-action="edit-trainer" data-id="'+t.id+'">Bearbeiten</button> <button class="compact danger" data-action="remove-trainer" data-id="'+t.id+'">Zugang entziehen</button>':'')+'</td></tr>').join('')+
