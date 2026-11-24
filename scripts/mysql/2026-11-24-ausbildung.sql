@@ -1,21 +1,15 @@
 -- IDV Ausbildungsabteilung: idempotente Erweiterung für bestehende MySQL-8-Installation.
--- Auf dem PHP-Hoster EINMAL per phpMyAdmin einspielen; keine vorhandenen Tabellen löschen.
+-- Nach Datenbanksicherung additiv einspielen; weder bestehende Benutzer noch bestehende Polizeidaten oder Rechte überschreiben.
 -- Keine realen Ausbilder-/Anwärterdaten, E-Mails, Passwörter oder Dokumentinhalte in GitHub.
 SET NAMES utf8mb4;
+-- Bestehende Rollen, Personen und Rechte werden NICHT bearbeitet.
+-- Es entstehen ausschließlich zwei neue, eigenständige Ausbildungsrollen.
 INSERT IGNORE INTO roles(name,farbe,sensibel) VALUES
- ('Administrator','#607b99',1),
- ('Leitungsdienst','#597898',1),
- ('Polizeirat','#6885a1',1);
-INSERT INTO roles(name,farbe,sensibel) VALUES
  ('Ausbildungsleitung','#5aa7d8',0),
- ('Ausbilder','#5a8a9c',0)
-ON DUPLICATE KEY UPDATE name=VALUES(name);
+ ('Ausbilder','#5a8a9c',0);
 INSERT IGNORE INTO role_perms(rolle,modul,stufe) VALUES
- ('Administrator','ausbildung',2),
  ('Ausbildungsleitung','ausbildung',2),
- ('Ausbilder','ausbildung',1),
- ('Leitungsdienst','ausbildung',0),
- ('Polizeirat','ausbildung',0);
+ ('Ausbilder','ausbildung',1);
 
 CREATE TABLE IF NOT EXISTS ausbildung_ausbilder (
  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
