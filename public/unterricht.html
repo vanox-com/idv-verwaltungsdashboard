@@ -5,55 +5,115 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive">
 <meta name="referrer" content="no-referrer">
-<title>Ausbildungsraum · IDV Polizei</title>
+<title>Live-Unterricht · IDV Ausbildungsabteilung</title>
 <style>
-:root{color-scheme:dark;font-family:system-ui,"Segoe UI",sans-serif;background:#0d1522;color:#e7effc}
-*{box-sizing:border-box}body{margin:0}button,input,a{font:inherit}button{border:1px solid #557293;border-radius:9px;padding:10px 14px;background:#263e58;color:#e8f2ff;cursor:pointer}
-button:hover{background:#31547a}button:disabled{opacity:.5;cursor:not-allowed}
-button.active,.primary{background:#2365a0;border-color:#478dc6}a{color:#a6d4ff}
-header{display:flex;justify-content:space-between;gap:14px;align-items:center;border-bottom:1px solid #344a65;padding:16px 22px;flex-wrap:wrap}
-header h1{margin:0;font-size:22px}header small{color:#9bb2ce}
-main{max-width:1580px;margin:auto;padding:18px}
-.toolbar,.links{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-bottom:16px}
-#hinweis{padding:12px 15px;border:1px solid #567291;border-radius:8px;background:#1b2b41;margin-bottom:16px}
-#hinweis.error{border-color:#a45462;color:#ffd3d7}
-#einladung{width:min(100%,720px);padding:10px;border:1px solid #4d617f;border-radius:7px;background:#13243a;color:#fff}
-#tafel{position:relative;width:100%;aspect-ratio:16/9;background:#0a101a;overflow:hidden;border:1px solid #40516c;border-radius:10px}
+:root{color-scheme:dark;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;--bg:#091220;--panel:#142339;--soft:#1a2c46;--edge:#304966;--fg:#eff6ff;--muted:#a9c0dc;--blue:#88c7ff;--green:#72d4aa}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;color:var(--fg);background:var(--bg)}
+body{min-height:100dvh;background:radial-gradient(ellipse at 72% -20%,#294b73 0%,transparent 58%),var(--bg)}
+button,input,a{font:inherit}a{color:#afd8ff}button{border:1px solid #49688c;border-radius:10px;padding:11px 16px;background:#213955;color:#eef7ff;font-weight:550;cursor:pointer;transition:background .15s,border .15s,transform .15s}
+button:hover:not(:disabled){background:#2e5378;border-color:#7aa9d3}button:active:not(:disabled){transform:translateY(1px)}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #a3d7ff;outline-offset:3px}
+button:disabled{opacity:.46;cursor:not-allowed}
+button.active,.primary{background:linear-gradient(120deg,#2d7bb8,#22588e);border-color:#60a9e3;color:#fff}
+button.danger{background:#432b38;border-color:#88546a;color:#ffd5df}
+header{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:20px clamp(16px,3vw,45px);border-bottom:1px solid #3c537033;background:#0a1525b9;flex-wrap:wrap}
+.identity{display:flex;align-items:center;gap:13px}
+.symbol{width:48px;height:48px;border:1px solid #558bb4;border-radius:14px;background:#142e48;display:grid;place-items:center;font-size:25px}
+header h1{margin:2px 0 0;font-size:clamp(17px,2vw,22px);font-weight:680}
+header small,.eyebrow{color:#acd2f8;font-size:10px;font-weight:730;letter-spacing:.15em;text-transform:uppercase}
+#zurueck{text-decoration:none;font-size:13px;padding:9px 12px;border-radius:8px;border:1px solid #38516f}
+main{max-width:1740px;margin:0 auto;padding:clamp(15px,2vw,32px)}
+#hinweis{margin-bottom:19px;border:1px solid #487c97;background:#153149a8;color:#d8edff;padding:12px 16px;border-radius:11px;font-size:14px;display:flex;gap:10px;align-items:center}
+#hinweis:before{content:"●";color:#8ee4ba;font-size:10px}
+#hinweis.error{border-color:#aa5967;background:#48263580;color:#ffe0e2}
+#hinweis.error:before{color:#ff9eaa}
+.workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(265px,315px);gap:17px;align-items:start}
+.workspace-main{min-width:0}
+.panel{background:#14243be9;border:1px solid #344f6f;border-radius:16px;box-shadow:0 16px 45px #00000020}
+.panel-head{padding:15px 19px;border-bottom:1px solid #ffffff15;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.panel-head h2{font-size:17px;margin:3px 0 0}
+.pill{font-size:12px;background:#1a3a4b;border:1px solid #447969;color:#92e2bf;border-radius:30px;padding:5px 10px;white-space:nowrap}
+.pill.waiting{background:#354027;border-color:#777d46;color:#ecdfaa}
+.board-padding{padding:14px}
+#tafel{position:relative;width:100%;aspect-ratio:16/9;background:#04070c;overflow:hidden;border:1px solid #4e6180;border-radius:10px;isolation:isolate;contain:layout paint}
 #folie{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
 #overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;touch-action:none}
 #tafel[data-werkzeug="laser"] #overlay,#tafel[data-werkzeug="pfeil"] #overlay,#tafel[data-werkzeug="stift"] #overlay{pointer-events:auto;cursor:crosshair}
-#stream{width:100%;height:auto;aspect-ratio:16/9;object-fit:contain;background:#03070d;border-radius:10px}
-#mitmachen{max-width:850px;margin:24px auto;text-align:center}
+.board-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.board-foot p{margin:0;font-size:12px;color:var(--muted)}
+.board-foot button{padding:8px 11px;font-size:12px}
+aside{display:grid;gap:16px}
+.side-section{padding:18px}
+.side-section h2{font-size:16px;margin:2px 0 8px}
+.side-section p{font-size:13px;line-height:1.55;margin:7px 0;color:var(--muted)}
+.step{color:#92c5ee;font-size:11px;font-weight:750;letter-spacing:.11em;text-transform:uppercase}
+.stack{display:grid;gap:10px}
+#teilen,#ende,.full{width:100%;justify-content:center}
+#einladung{width:100%;min-width:0;padding:11px;border-radius:9px;background:#0b1c30;border:1px solid #486b8f;color:#d7e7ff;font-size:12px}
+.tool-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.tool-grid button{padding:11px 7px;font-size:13px}
+.actions{display:flex;gap:9px;flex-wrap:wrap}
+.actions>*{flex:1 1 auto}
+#mitmachen{max-width:1230px;margin:18px auto}
+.viewer-head{text-align:center;padding:28px 16px 18px}
+.viewer-head h2{font-size:clamp(25px,4vw,39px);margin:7px 0}
+.viewer-head p{color:var(--muted);max-width:700px;margin:8px auto 18px}
+#zuschauer{padding:15px}
+#stream{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#030810;border:1px solid #2a425d;border-radius:11px}
+.viewer-note{color:var(--muted);font-size:13px;margin:12px 0 0}
 .hidden{display:none!important}
-small,.muted{color:#b7c6da}
-@media(max-width:680px){main{padding:10px}header{padding:12px}header h1{font-size:18px}#tafel{aspect-ratio:4/3}}
+.muted,small{color:var(--muted)}
+@media(max-width:1100px){.workspace{grid-template-columns:1fr}aside{grid-template-columns:repeat(2,minmax(0,1fr))}aside>section:last-child{grid-column:1/-1}}
+@media(max-width:690px){header{padding:12px 14px}.symbol{width:40px;height:40px;font-size:20px}main{padding:11px}aside{grid-template-columns:1fr}aside>section:last-child{grid-column:auto}.board-padding{padding:8px}.panel-head{padding:12px}.side-section{padding:15px}#tafel{aspect-ratio:16/9}.tool-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
-<header><div><small>IDENTITYVALLEY · AUSBILDUNGSABTEILUNG</small><h1 id="titel">Gemeinsamer Unterrichtsraum</h1></div><a id="zurueck" href="/#ausbildung">Zur Ausbildung</a></header>
+<header>
+ <div class="identity"><div class="symbol" aria-hidden="true">🎓</div><div><small>IDENTITYVALLEY · AUSBILDUNG</small><h1 id="titel">Digitaler Unterrichtsraum</h1></div></div>
+ <a id="zurueck" href="/#ausbildung">← Zur Ausbildungsverwaltung</a>
+</header>
 <main>
-<div id="hinweis" role="status" aria-live="polite">Unterrichtsraum wird vorbereitet …</div>
-<section id="ausbilder" class="hidden">
- <div class="links"><label for="einladung">Link für einen Anwärter:</label><input id="einladung" readonly aria-label="Einladungslink"><button id="kopieren">Link kopieren</button></div>
- <div class="toolbar">
-   <button id="teilen" class="primary">Bildschirm freigeben und starten</button>
-   <button data-tool="cursor" class="active">Bedienen</button>
-   <button data-tool="laser">Laserpointer</button>
-   <button data-tool="pfeil">Pfeile</button>
-   <button data-tool="stift">Markieren</button>
-   <button id="loeschen">Markierungen löschen</button>
-   <button id="ende">Unterricht beenden</button>
- </div>
- <p class="muted">Wichtig: Beim Freigeben dieses Unterrichts-Tab oder das Fenster mit dieser Tafel auswählen. Nur dann sieht der Anwärter auch Laserpointer und Zeichnungen. Folien im Google-Rahmen wie gewohnt durchklicken. Die Bildschirmfreigabe benötigt HTTPS und eine Browserbestätigung.</p>
- <div id="tafel" data-werkzeug="cursor"><iframe id="folie" title="AuLK-Google-Präsentation" allowfullscreen></iframe><canvas id="overlay" aria-label="Interaktive Moderationsfläche"></canvas></div>
- <p><a id="extern" target="_blank" rel="noopener noreferrer">Google-Präsentation direkt öffnen</a> · Bei fehlender Einbettungsberechtigung den Link in Google öffnen und dieses Fenster teilen (Markierungen sind dann nicht Teil des übertragenen Bildes).</p>
-</section>
-<section id="mitmachen" class="hidden">
- <h2>Live-Unterricht für Anwärter</h2>
- <p>Der Ausbilder zeigt seinen Bildschirm. Hier werden keine eigenen Anmeldedaten und keine Mikrofon- oder Kamerafreigabe verlangt.</p>
- <button id="beitreten" class="primary">Am Unterricht teilnehmen</button>
- <div id="zuschauer" class="hidden"><video id="stream" autoplay playsinline aria-label="Übertragener Bildschirm des Ausbilders"></video><p class="muted">Wenn kein Bild erscheint, muss der Ausbilder die Bildschirmfreigabe starten. Sprache kann parallel über Discord erfolgen.</p></div>
-</section>
+ <div id="hinweis" role="status" aria-live="polite">Unterrichtsraum wird vorbereitet …</div>
+ <section id="ausbilder" class="hidden">
+  <div class="workspace">
+   <div class="workspace-main panel">
+    <div class="panel-head"><div><span class="eyebrow">Präsentation · Live-Unterricht</span><h2>Deine Unterrichtstafel</h2></div><span class="pill" id="sendestatus">Noch nicht gestartet</span></div>
+    <div class="board-padding">
+     <!-- Ausschließlich dieses Element wird per Region Capture gesendet. -->
+     <div id="tafel" data-werkzeug="cursor"><iframe id="folie" title="Verknüpfte AuLK-Google-Präsentation" allowfullscreen></iframe><canvas id="overlay" aria-label="Moderationswerkzeuge auf der Präsentation"></canvas></div>
+     <div class="board-foot"><p>Der Anwärter sieht ausschließlich die Folien innerhalb dieser Tafel – inklusive deiner Markierungen.</p><button id="aktualisieren" type="button">↻ Folien neu laden</button></div>
+    </div>
+   </div>
+   <aside>
+    <section class="panel side-section">
+     <div class="step">Schritt 1 · Teilnehmer</div><h2>Einladungslink</h2><p>Der Anwärter öffnet diesen Link ohne Anmeldung. Maximal ein Teilnehmer.</p>
+     <div class="stack"><input id="einladung" readonly aria-label="Einladungslink für Anwärter"><button id="kopieren" class="full">Link kopieren</button></div>
+    </section>
+    <section class="panel side-section">
+     <div class="step">Schritt 2 · Unterricht</div><h2>Nur Präsentation übertragen</h2>
+     <p>Einmalig im Browser <strong>„Diesen Tab“</strong> freigeben. Der Unterrichtsraum überprüft die Auswahl und schneidet die Übertragung technisch auf die Tafel zu. Andere Tabs und der Desktop werden nicht übertragen.</p>
+     <button id="teilen" class="primary">▶ Unterricht starten</button>
+     <p id="sicherheit" class="muted">Benötigt einen aktuellen Chrome- oder Edge-Desktopbrowser mit Region Capture. Ohne diese Funktion wird die Übertragung aus Datenschutzgründen blockiert.</p>
+    </section>
+    <section class="panel side-section">
+     <div class="step">Schritt 3 · Moderation</div><h2>Werkzeuge</h2>
+     <div class="tool-grid" role="group" aria-label="Moderationswerkzeuge">
+      <button data-tool="cursor" class="active" aria-pressed="true">↖ Bedienen</button>
+      <button data-tool="laser" aria-pressed="false">● Laser</button>
+      <button data-tool="pfeil" aria-pressed="false">➜ Pfeil</button>
+      <button data-tool="stift" aria-pressed="false">✎ Zeichnen</button>
+     </div>
+     <div class="actions" style="margin-top:10px"><button id="loeschen">Markierungen löschen</button></div>
+     <p>Du steuerst die Google-Folien direkt in der Tafel. Die Werkzeuge werden im Livebild mit übertragen.</p>
+     <div class="actions" style="margin-top:14px"><button id="ende" class="danger">Unterricht beenden</button></div>
+     <p><a id="extern" target="_blank" rel="noopener noreferrer">Google-Präsentation im Original öffnen</a></p>
+    </section>
+   </aside>
+  </div>
+ </section>
+ <section id="mitmachen" class="hidden">
+  <div class="viewer-head"><span class="eyebrow">IDV · Live-Ausbildung</span><h2>Dein digitaler Unterricht</h2><p>Du erhältst ausschließlich die Google-Präsentation mit den Live-Markierungen deines Ausbilders. Keine Anmeldung, Kamera oder Mikrofonfreigabe erforderlich.</p><button id="beitreten" class="primary">Am Unterricht teilnehmen</button></div>
+  <div id="zuschauer" class="panel hidden"><video id="stream" autoplay playsinline aria-label="Präsentation mit Live-Markierungen des Ausbilders"></video><p class="viewer-note">Das Bild erscheint, sobald der Ausbilder die Präsentationsübertragung startet. Für Sprache könnt ihr Discord verwenden.</p></div>
+ </section>
 </main>
 <script src="/assets/unterricht-raum.js" defer></script>
 </body>
