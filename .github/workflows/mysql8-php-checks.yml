@@ -22,6 +22,12 @@ jobs:
           for f in public/api.php php/*.php; do
             php -l "$f" || exit 1
           done
+      - name: Test training master-personnel rank mapping
+        run: php tests/mysql8-ausbildung-personal.php
+      - name: Check Ausbildung and Unterricht browser JavaScript
+        run: |
+          node --check public/assets/ausbildung-panel.js
+          node --check public/assets/unterricht-raum.js
       - name: Test CopNet managed encryption key and legacy compatibility
         run: php tests/mysql8-copnet-managed.php
       - name: Test Google OAuth origin validation and safe diagnostics
