@@ -266,6 +266,12 @@ function run(): void {
             require_once __DIR__.'/Ausbildung.php';
             ausbildungOeffentlicheMaterialien();
         }
+        // Ausschließlich aggregierte PMA-/PKA-/KKA-Zahlen: keine Namen, keine DNs.
+        if($method==='GET'&&$uri==='/api/ausbildung-oeffentlich/monitore'){
+            require_once __DIR__.'/Ausbildung.php';
+            require_once __DIR__.'/AusbildungSetup.php';
+            ausbildungOeffentlicheMonitore();
+        }
         if($method==='GET'&&preg_match('#^/api/ausbildung-oeffentlich/datei/([1-9]\\d*)$#D',$uri,$publicFile)){
             require_once __DIR__.'/Ausbildung.php';
             require_once __DIR__.'/AusbildungFiles.php';
