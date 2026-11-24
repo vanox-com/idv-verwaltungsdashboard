@@ -10,7 +10,7 @@ Die Tabellen und Ansichten des ursprünglichen Polizeipersonals bleiben führend
 - `Polizeikommissaranwärter` → **PKA-Monitor**.
 - `Kriminalkommissaranwärter` → **KKA-Monitor**.
 - Nur die Personalstatus `Aktiv`, `Abgemeldet`, `Inaktiv` und `Suspendiert` werden angezeigt, sofern `administrativ_geloescht_am IS NULL`. Gekündigte, freigehaltene, gelöschte und andere Dienstgrade sind keine aktiven Anwärter.
-- Nach einer Einstellung oder Dienstgradänderung wird beim Laden der Ausbildungsmonitore der aktuelle Personalstamm abgeglichen; bei geöffneten Monitoren erfolgt zusätzlich eine automatische Aktualisierung (alle 25 Sekunden, sofern gerade kein Formular bearbeitet wird). Die öffentliche anonyme Gesamtübersicht berechnet ihren Bestand direkt aus `personal`.
+- Nach einer Einstellung oder Dienstgradänderung wird beim Laden der Ausbildungsmonitore der aktuelle Personalstamm abgeglichen; bei geöffneten Monitoren erfolgt zusätzlich eine automatische Aktualisierung (alle 25 Sekunden, sofern gerade kein Formular bearbeitet wird). Die öffentliche namentliche Modulübersicht berechnet ihren Bestand direkt aus `personal` (ohne Schreibzugriff).
 - `ausbildung_anwaerter` ist **nur die gebundene Ausbildungsergänzung**. Hier bleiben Ausbildungsbemerkungen, Modulabschlüsse, Ausbilderstimmen und personenbezogene Freigabetoken. Die Anlage von Personen direkt über die Ausbildungs-API ist ausdrücklich gesperrt.
 
 ### Verknüpfung und Neubelegung
@@ -33,9 +33,11 @@ Die Seite `public/aulk.html` erläutert jede Laufbahn einschließlich Module, Vo
 
 ## 3. Externe Übersicht und Datenschutz
 
-- `/aulk.html` enthält neben dem Laufbahnkonzept **drei Live-Monitore**: PMA, PKA und KKA. Ohne Anmeldung erscheinen nur anonymisierte Gesamtzahlen, Zulassungszahlen und zusammengefasste Modulfortschritte. Die öffentliche API `GET /api/ausbildung-oeffentlich/monitore` liest denselben Personalstamm, gibt aber **keine Namen, Dienstnummern, Bemerkungen oder Einzelstimmen** zurück.
+- `/aulk.html` enthält neben dem Laufbahnkonzept **drei öffentlich namentliche Live-Monitore**: PMA, PKA und KKA. Ohne Anmeldung werden **für jeden aktiven Anwärter sein Name, jedes Pflichtmodul (offen/abgeschlossen), der Modulfortschritt und der Zulassungsstatus** dargestellt. Nur beim PMA kommen **Anzahl der abgegebenen Stimmen** und **gewichteter Punktesaldo gegen die 2,5-Punkte-Schwelle** hinzu. Einzelstimmen (Ja/Nein), Ausbilder- und Prüferidentitäten, Dienstnummern, Personalakten, interne Bewertungen, Anmerkungen oder Zugangs-IDs werden **nicht** veröffentlicht. Die öffentliche API `GET /api/ausbildung-oeffentlich/monitore` liest den Personalstamm direkt, ohne neue Ausbildungsdatensätze anzulegen oder bestehende zu ändern. Die Seitenaktualisierung erfolgt alle 30 Sekunden. **Da die Seite ohne Anmeldung erreichbar ist, sind die gezeigten Anwärternamen und Ausbildungsstände für alle Besucher einsehbar.**
 - `/ausbildung-status.html#<geheimer-token>` zeigt einem **individuell freigegebenen** Anwärter ohne Anmeldung seine persönlichen Modulstände und den Zulassungsstatus, ebenfalls ohne Namen oder interne Kommentare. Nach Kündigung, falscher Quellenbindung oder Deaktivierung wird der Abruf verweigert.
 - Die öffentliche AuLK-Bibliothek zeigt ausschließlich explizit freigegebene Unterlagen. Private Google-Präsentationen werden nicht automatisch veröffentlicht. Google Drive kann zusätzliche Berechtigungen erfordern.
+
+**PMA-Zulassung in zwei Schritten:** Solange ein Modul offen ist, lautet der öffentliche Status `Module ausstehend`. Sind alle PM.0–PM.6 abgeschlossen, aber der gewichtete Saldo noch unter +2,5, lautet er `Module abgeschlossen – Stimmen fehlen`. Erst mit allen Pflichtmodulen **und** mindestens +2,5 Punkten erscheint `Zur Prüfung zugelassen`. PKA und KKA bleiben gemäß der bisherigen Fachregel nach Abschluss der vier PK-Pflichtmodule zugelassen; eine zusätzliche Stimmenhürde ist für diese Laufbahnen nicht hinterlegt.
 
 ## 4. Unterrichtsräume: einfacher Ablauf
 
