@@ -31,13 +31,30 @@ function ausbildungDatum($value): ?string {
     if(!$d||$d->format('Y-m-d')!==$value)fail(400,'Ungültiges Datum');
     return $value;
 }
+/** Feste Stimmgewichte nach der tatsächlichen Funktion – niemals nach dem Rang. */
 function ausbildungStufe(string $funktion): float {
     return match($funktion) {
-        'Ausbildungsleitung','stv. Ausbildungsleitung'=>2.0,
+        'Ausbildungsleitung','stv. Ausbildungsleitung','Administrator'=>2.0,
         'Leitungsdienst'=>1.5,
-        'Ausbilder gehobener Dienst'=>1.0,
-        default=>0.5
+        'Ausbilder auf Probe'=>0.5,
+        'Ausbilder gehobener Dienst','Ausbilder mittlerer Dienst','Ausbilder'=>1.0,
+        default=>1.0
     };
+}
+/**
+ * Existierende Stimmabgaben werden nach der Ausbilderfunktion gewertet.
+ * Historische Stimmdatensätze müssen dafür nicht geändert oder gelöscht werden.
+ */
+function ausbildungStimmgewicht(array $stimme): float {
+    $funktion=$stimme['funktion']??null;
+    if(is_string($funktion) && $funktion!=='')
+        return ausbildungStufe($funktion);
+    $rolle=(string)($stimme['rolle']??'');
+    if(in_array($rolle,['Administrator','Ausbildungsleitung','Leitungsdienst'],true))
+        return ausbildungStufe($rolle);
+    // Historische Stimmen ohne vorhandenes Ausbilderprofil behalten ihre
+    // gespeicherte Gewichtung, statt einen unbekannten Rang zu unterstellen.
+    return (float)($stimme['gespeichert_gewicht']??$stimme['gewicht']??0);
 }
 function ausbildungModule(string $laufbahn): array {
     $track=$laufbahn==='PMA'?'PMA':'PKA';
@@ -48,16 +65,17 @@ function ausbildungStatus(string $laufbahn,array $required,array $completed,arra
     $required=array_values(array_unique($required));
     $done=count(array_intersect($required,array_values(array_unique($completed))));
     $all=count($required)>0&&$done===count($required);
-    $score=0.0;$yes=0;$no=0;
+    $score=0.0;$yes=0;$no=0;$jaPunkte=0.0;$neinPunkte=0.0;
     foreach($votes as $v){
         $weight=(float)($v['gewicht']??0);
-        if(($v['stimme']??'')==='Ja'){$score+=$weight;$yes++;}
-        elseif(($v['stimme']??'')==='Nein'){$score-=$weight;$no++;}
+        if(($v['stimme']??'')==='Ja'){$score+=$weight;$jaPunkte+=$weight;$yes++;}
+        elseif(($v['stimme']??'')==='Nein'){$score-=$weight;$neinPunkte+=$weight;$no++;}
     }
     $ready=$all&&($laufbahn!=='PMA'||$score>=2.5);
     return ['status'=>!$all?'Module unvollständig':($ready?'Zugelassen':'Nicht bereit'),
         'bereit'=>$ready,'moduleGesamt'=>count($required),'moduleFertig'=>$done,
         'stimmenJa'=>$yes,'stimmenNein'=>$no,'stimmenSaldo'=>round($score,2),
+        'jaPunkte'=>round($jaPunkte,2),'neinPunkte'=>round($neinPunkte,2),
         'schwelle'=>$laufbahn==='PMA'?2.5:null];
 }
 function ausbildungFortschritt(array $a,bool $details=false): array {
@@ -65,7 +83,17 @@ function ausbildungFortschritt(array $a,bool $details=false): array {
     $modules=ausbildungModule((string)$a['laufbahn']);
     $doneRows=sql('SELECT modul_code,abgeschlossen,ausbilder_user_id,aktualisiert FROM ausbildung_abschluesse WHERE anwaerter_id=?',[$id]);
     $done=array_values(array_map(fn($x)=>(string)$x['modul_code'],array_filter($doneRows,fn($x)=>(int)$x['abgeschlossen']===1)));
-    $votes=sql('SELECT s.stimme,s.gewicht,s.ausbilder_user_id,s.aktualisiert,u.anzeigename FROM ausbildung_stimmen s JOIN users u ON u.id=s.ausbilder_user_id WHERE s.anwaerter_id=? ORDER BY s.aktualisiert DESC',[$id]);
+    $votes=sql('SELECT s.stimme,s.gewicht AS gespeichert_gewicht,s.ausbilder_user_id,
+        s.aktualisiert,u.anzeigename,u.rolle,t.funktion
+        FROM ausbildung_stimmen s
+        JOIN users u ON u.id=s.ausbilder_user_id
+        LEFT JOIN ausbildung_ausbilder t ON t.user_id=s.ausbilder_user_id
+        WHERE s.anwaerter_id=? ORDER BY s.aktualisiert DESC',[$id]);
+    foreach($votes as &$vote){
+        $vote['gewicht']=ausbildungStimmgewicht($vote);
+        unset($vote['gespeichert_gewicht'],$vote['rolle'],$vote['funktion']);
+    }
+    unset($vote);
     $s=ausbildungStatus((string)$a['laufbahn'],array_column($modules,'code'),$done,$votes);
     if($details){
         $s['module']=array_map(static function($m)use($doneRows){
@@ -180,7 +208,11 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         $leitung=ausbildungLeitung($u);
         $module=sql('SELECT code,laufbahn,titel FROM ausbildung_module WHERE aktiv=1 ORDER BY laufbahn,sortierung');
         $trainers=sql('SELECT a.*,u.gesperrt,u.rolle,u.dienstnummer AS login_dienstnummer FROM ausbildung_ausbilder a JOIN users u ON u.id=a.user_id WHERE a.aktiv=1 ORDER BY a.name');
-        if(!$leitung)foreach($trainers as &$t){unset($t['email'],$t['notiz']);}unset($t);
+        foreach($trainers as &$t){
+            $t['gewicht']=ausbildungStufe((string)$t['funktion']);
+            if(!$leitung)unset($t['email'],$t['notiz']);
+        }
+        unset($t);
         $trainees=ausbildungAktuelleAnwaerter();
         foreach($trainees as &$a)$a['fortschritt']=ausbildungFortschritt($a);unset($a);
         $materials=sql('SELECT id,modul_code,titel,typ,url,public_aktiv,CASE WHEN dateipfad IS NULL THEN 0 ELSE 1 END AS datei FROM ausbildung_materialien WHERE aktiv=1 ORDER BY modul_code,titel');
@@ -291,7 +323,8 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         if(!in_array($vote,['Ja','Nein',null],true))fail(400,'Ungültige Stimme');
         $trainer=ausbildungTrainer($u);
         if(!$trainer&&!ausbildungLeitung($u))fail(403,'Nur aktive Ausbilder stimmen ab');
-        $weight=$trainer?(float)$trainer['gewicht']:2.0;
+        $weight=$trainer?ausbildungStufe((string)$trainer['funktion']):
+            ausbildungStufe((string)($u['rolle']==='Leitungsdienst'?'Leitungsdienst':'Ausbildungsleitung'));
         db()->beginTransaction();
         try {
             $a=ausbildungAnwaerter($id,true);ausbildungPruefeRevision($a,$b['revision']??null);
