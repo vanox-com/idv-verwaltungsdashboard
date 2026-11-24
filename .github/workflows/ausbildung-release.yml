@@ -11,6 +11,7 @@ on:
       - 'scripts/mysql/2026-11-24-aulk-public.sql'
       - 'tests/ausbildung-*'
       - 'docs/AUSBILDUNG-IMPLEMENTIERUNG.md'
+      - 'docs/DATENBANK-BACKUP-SICHER-RESTORE.md'
   workflow_dispatch:
 permissions:
   contents: read
@@ -42,7 +43,8 @@ jobs:
             public php \
             scripts/mysql/2026-11-24-ausbildung.sql \
             scripts/mysql/2026-11-24-aulk-public.sql \
-            docs/AUSBILDUNG-IMPLEMENTIERUNG.md
+            docs/AUSBILDUNG-IMPLEMENTIERUNG.md \
+            docs/DATENBANK-BACKUP-SICHER-RESTORE.md
           unzip -tq migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip
           unzip -Z1 migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip > migration-output/entries.txt
           ! grep -Ei '(^|/)(\.env|node_modules|private|src|config\.local\.php)(/|$)' migration-output/entries.txt
