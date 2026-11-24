@@ -64,7 +64,7 @@ async function load(){
        (!setup.oeffentlicheFreigabeSpalte?'<p>Die öffentliche AuLK-Dokumentfreigabe fehlt noch.</p>':'')+
        '<div class="callout"><b>Vor dem Einrichten:</b> Eine vollständige Sicherung der bestehenden Datenbank erstellen. Die Einrichtung ergänzt nur Ausbildungsstrukturen; sie löscht keine Personalakten.</div>'+
        '<button data-action="setup-schema" class="primary">Ausbildungsdatenbank einrichten</button>'+
-       '<p class="muted">Nur Administratoren. Falls der Hoster keine Datenbank-Strukturänderungen durch PHP erlaubt, können die beiden additiven SQL-Dateien stattdessen über phpMyAdmin importiert werden.</p></div>';
+       '<p class="muted">Nur Administratoren. Falls der Hoster keine Datenbank-Strukturänderungen durch PHP erlaubt, können die drei additiven SQL-Dateien stattdessen über phpMyAdmin importiert werden.</p></div>';
      message('Ausbildungsdatenbank noch nicht eingerichtet',true);
      return;
    }
@@ -201,7 +201,7 @@ shadow.addEventListener('click',async(e)=>{
  const mode=btn.dataset.action,id=Number(btn.dataset.id);
  if(mode==='retry-bootstrap'){await load();return}
  if(mode==='setup-schema'){
-   if(!confirm('Hast du die bestehende MySQL-Datenbank vor dieser Einrichtung vollständig gesichert? Die beiden Ausbildungs-SQL-Erweiterungen werden jetzt additiv ausgeführt.'))return;
+   if(!confirm('Hast du die bestehende MySQL-Datenbank vor dieser Einrichtung vollständig gesichert? Die drei Ausbildungs-SQL-Erweiterungen werden jetzt additiv ausgeführt.'))return;
    if(!confirm('Nur fortfahren, wenn ein Datenbank-Backup vorhanden ist. Ausbildungstabellen und Rollen jetzt ergänzen?'))return;
    btn.disabled=true;btn.textContent='Datenbank wird eingerichtet …';
    try{
