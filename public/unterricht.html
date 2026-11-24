@@ -35,6 +35,23 @@ main{max-width:1740px;margin:0 auto;padding:clamp(15px,2vw,32px)}
 .pill.waiting{background:#354027;border-color:#777d46;color:#ecdfaa}
 .board-padding{padding:14px}
 #tafel{position:relative;width:100%;aspect-ratio:16/9;background:#04070c;overflow:hidden;border:1px solid #4e6180;border-radius:10px;isolation:isolate;contain:layout paint}
+/* Während einer Live-Stunde hat die Folientafel eine feste, sichtbare
+   16:9-Position. Nur die Werkzeugseitenleiste darf noch scrollen.
+   So wandert der Region-Capture-Ausschnitt nicht mit der Dokumentseite. */
+body.presentation-locked{height:100dvh;display:flex;flex-direction:column;overflow:hidden;overscroll-behavior:none}
+body.presentation-locked>header{flex:0 0 auto}
+body.presentation-locked>main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:12px clamp(10px,1.5vw,24px)}
+body.presentation-locked #hinweis{flex:0 0 auto;height:48px;max-height:48px;overflow:hidden;margin-bottom:10px}
+body.presentation-locked #ausbilder{flex:1;min-height:0;overflow:hidden}
+body.presentation-locked .workspace{height:100%;min-height:0}
+body.presentation-locked .workspace-main{min-height:0;display:flex;flex-direction:column}
+body.presentation-locked .panel-head{flex:0 0 auto;min-height:68px}
+body.presentation-locked .board-padding{min-height:0;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px}
+body.presentation-locked #tafel{flex:0 0 auto;width:min(100%,calc((100dvh - 305px)*1.7777778));max-height:calc(100dvh - 305px);aspect-ratio:16/9}
+body.presentation-locked .board-foot{width:100%;margin-top:0;flex:0 0 auto}
+body.presentation-locked aside{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:4px}
+body.presentation-locked aside .side-section{flex-shrink:0}
+body.presentation-locked .workspace-main,body.presentation-locked aside{overscroll-behavior:contain}
 #folie{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
 #overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;touch-action:none}
 #tafel[data-werkzeug="laser"] #overlay,#tafel[data-werkzeug="pfeil"] #overlay,#tafel[data-werkzeug="stift"] #overlay{pointer-events:auto;cursor:crosshair}
@@ -80,7 +97,7 @@ aside{display:grid;gap:16px}
     <div class="board-padding">
      <!-- Ausschließlich dieses Element wird per Region Capture gesendet. -->
      <div id="tafel" data-werkzeug="cursor"><iframe id="folie" title="Verknüpfte AuLK-Google-Präsentation" allowfullscreen></iframe><canvas id="overlay" aria-label="Moderationswerkzeuge auf der Präsentation"></canvas></div>
-     <div class="board-foot"><p>Der Anwärter sieht ausschließlich die Folien innerhalb dieser Tafel – inklusive deiner Markierungen.</p><button id="aktualisieren" type="button">↻ Folien neu laden</button></div>
+     <div class="board-foot"><p id="fokusInfo">Übertragen wird nur die 16:9-Folientafel samt Markierungen. Im Live-Modus bleibt sie beim Scrollen fest stehen.</p><button id="aktualisieren" type="button">↻ Folien neu laden</button></div>
     </div>
    </div>
    <aside>
@@ -92,7 +109,7 @@ aside{display:grid;gap:16px}
      <div class="step">Schritt 2 · Unterricht</div><h2>Nur Präsentation übertragen</h2>
      <p>Einmalig im Browser <strong>„Diesen Tab“</strong> freigeben. Der Unterrichtsraum überprüft die Auswahl und schneidet die Übertragung technisch auf die Tafel zu. Andere Tabs und der Desktop werden nicht übertragen.</p>
      <button id="teilen" class="primary">▶ Unterricht starten</button>
-     <p id="sicherheit" class="muted">Benötigt einen aktuellen Chrome- oder Edge-Desktopbrowser mit Region Capture. Ohne diese Funktion wird die Übertragung aus Datenschutzgründen blockiert.</p>
+     <p id="sicherheit" class="muted">Im Live-Modus bleibt die Folientafel fest stehen; nur die rechte Werkzeugleiste scrollt. Der Stream bevorzugt scharfe Schrift und bis zu 24 Bilder/s. Die tatsächliche Qualität hängt von Browser, Fenstergröße und Verbindung ab. Erforderlich: Chrome oder Edge mit Region Capture.</p>
     </section>
     <section class="panel side-section">
      <div class="step">Schritt 3 · Moderation</div><h2>Werkzeuge</h2>
