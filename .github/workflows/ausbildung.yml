@@ -7,6 +7,10 @@ on:
       - 'php/Ausbildung.php'
       - 'php/Api.php'
       - 'public/ausbildung*.html'
+      - 'public/aulk.html'
+      - 'public/assets/ausbildung-panel.js'
+      - 'php/AusbildungFiles.php'
+      - 'scripts/mysql/2026-11-24-aulk-public.sql'
       - 'public/index.html'
       - 'scripts/mysql/2026-11-24-ausbildung.sql'
       - 'tests/ausbildung-*'
@@ -36,7 +40,7 @@ jobs:
           php -l php/Ausbildung.php
           php -l php/Api.php
           php tests/ausbildung-logic.php
-      - name: Both browser scripts parse
+      - name: Native panel, public AuLK and browser scripts parse
         run: node tests/ausbildung-static.mjs
       - name: Install original schema then additive migration twice
         run: |
@@ -44,8 +48,10 @@ jobs:
           mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/IDV-MySQL8-phpMyAdmin-SETUP.sql
           mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-ausbildung.sql
           mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-ausbildung.sql
+          mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-aulk-public.sql
+          mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci < scripts/mysql/2026-11-24-aulk-public.sql
           test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='idv_train_ci' AND table_name LIKE 'ausbildung_%'")" -eq 6
           test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM ausbildung_module")" -eq 11
-          test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM role_perms WHERE modul='ausbildung' AND stufe>0")" -eq 3
+          test "$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "SELECT COUNT(*) FROM role_perms WHERE modul='ausbildung' AND stufe>0")" -eq 4
       - name: Exercise login, roles, module completion, votes and public link
         run: bash tests/ausbildung-http.sh
