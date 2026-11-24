@@ -1,0 +1,42 @@
+name: MySQL8 – verschlüsselte Datenbanksicherung und Wiederherstellung
+on:
+  push:
+    branches:
+      - migration/mysql8-php-cutover-2026-11-10
+    paths:
+      - 'php/DatabaseBackup.php'
+      - 'php/Api.php'
+      - 'php/Settings.php'
+      - 'public/index.html'
+      - 'tests/database-backup-http.sh'
+      - '.github/workflows/database-backup.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backup-restore:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: training-ci-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptraining-ci-password"
+          --health-interval=10s --health-timeout=5s --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql,openssl,zip,curl
+      - name: Syntax and archive encryption support
+        run: |
+          php -l php/DatabaseBackup.php
+          php -l php/Api.php
+          php -r 'if(!defined("ZipArchive::EM_AES_256") || !method_exists(ZipArchive::class, "setEncryptionName")) exit(1);'
+          node tests/ausbildung-static.mjs
+      - name: Actual encrypted backup and transaction restore against MySQL8
+        run: bash tests/database-backup-http.sh
