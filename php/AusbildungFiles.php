@@ -90,3 +90,25 @@ function ausbildungDateiUpload(array $u): never {
         throw $e;
     }
 }
+
+/**
+ * Public download only for an explicitly enabled item. Does not reveal
+ * private storage paths, names of staff or any trainee data.
+ */
+function ausbildungOeffentlicheDatei(int $id): never {
+    header('X-Robots-Tag: noindex, nofollow');
+    $rows=sql('SELECT dateipfad FROM ausbildung_materialien WHERE id=? AND aktiv=1 AND public_aktiv=1 LIMIT 1',[$id]);
+    $filename=$rows[0]['dateipfad']??null;
+    if(!is_string($filename)||!preg_match('/^[a-f0-9]{32}\.(?:pdf|pptx|docx|xlsx)$/D',$filename))
+        fail(404,'Diese Unterlage ist nicht öffentlich freigegeben');
+    $path=ausbildungDateiverzeichnis().DIRECTORY_SEPARATOR.$filename;
+    if(!is_file($path)||!is_readable($path)||is_link($path))
+        fail(404,'Unterlage nicht verfügbar');
+    header('Content-Type: application/octet-stream');
+    header('Content-Disposition: attachment; filename="AuLK-Unterlage.'.pathinfo($filename,PATHINFO_EXTENSION).'"');
+    header('Content-Length: '.(string)filesize($path));
+    header('Cache-Control: no-store');
+    header('X-Content-Type-Options: nosniff');
+    readfile($path);
+    exit;
+}
