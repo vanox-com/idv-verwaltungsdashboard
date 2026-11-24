@@ -71,6 +71,8 @@ if(!classroom.includes('id="aktualisieren"') ||
    !roomScript.includes('fresh.searchParams.set("idv_reload"') ||
    !classroom.includes('id="sendestatus"'))
  throw Error('Google Slides reload and simplified teaching-status UI missing');
+if(!embedded.includes('<th>Erstellt von</th>') || !embedded.includes("esc(r.erstellt_von||'Unbekannter Ausbilder')"))
+ throw Error('Classroom dashboard must display the recorded creator of each room');
 const signaling=readFileSync('php/AusbildungUnterricht.php','utf8');
 if(!signaling.includes("einladung_hash") || !signaling.includes("teilnehmer_hash") ||
    !signaling.includes("ausbilder_user_id") || !signaling.includes("unterrichtGastRaum"))
