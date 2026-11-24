@@ -45,4 +45,6 @@ async function refresh(){
  }catch(e){box.replaceChildren(make('p','','Abruf nicht möglich: '+e.message))}
 }
 document.querySelector('#reload').addEventListener('click',refresh);refresh();
+// Die externe Google-Sites-/Anwärteransicht erhält ohne erneute Anmeldung aktuelle Werte.
+setInterval(()=>{if(document.visibilityState==='visible')refresh();},30000);
 </script></body></html>
