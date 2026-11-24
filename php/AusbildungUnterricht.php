@@ -104,7 +104,7 @@ function dispatchUnterrichtTrainer(array $u,string $method,string $uri): bool {
         respond(201,['id'=>$id,'einladung'=>'/unterricht.html#'.$token,
             'modul_code'=>$code,'titel'=>$material[0]['titel'],'url'=>$material[0]['url']]);
     }
-    if(!preg_match('#^/api/ausbildung/unterricht/([1-9][0-9]*)/(status|angebot|beenden)$#D',$uri,$m))
+    if(!preg_match('#^/api/ausbildung/unterricht/([1-9][0-9]*)/(status|angebot|beenden|details)$#D',$uri,$m))
         fail(404,'Unterrichtssitzung nicht gefunden');
     $id=(int)$m[1];$action=$m[2];
     $room=unterrichtRaum($id,(int)$u['id']);
@@ -116,6 +116,13 @@ function dispatchUnterrichtTrainer(array $u,string $method,string $uri): bool {
         respond(200,['ok'=>true]);
     }
     unterrichtAktiv($room);
+    if($action==='details'&&$method==='GET'){
+        $material=sql('SELECT titel,url FROM ausbildung_materialien WHERE id=? AND aktiv=1 LIMIT 1',
+            [$room['material_id']]);
+        if(!$material)fail(404,'Präsentation nicht mehr vorhanden');
+        respond(200,['modul_code'=>$room['modul_code'],
+            'titel'=>$material[0]['titel'],'url'=>$material[0]['url']]);
+    }
     if($action==='status'&&$method==='GET')
         respond(200,['aktiv'=>true,'teilnehmerAngemeldet'=>$room['teilnehmer_hash']!==null,
             'antwort'=>$room['antwort']]);
