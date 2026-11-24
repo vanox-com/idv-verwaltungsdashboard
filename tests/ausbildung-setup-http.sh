@@ -27,9 +27,24 @@ status="$(curl -sS -o "$temp/unfinished" -w '%{http_code}' -b "$temp/admin.cooki
 status="$(curl -sS -o "$temp/no-confirm" -w '%{http_code}' -b "$temp/admin.cookies" \
  -H 'Content-Type: application/json' -X POST --data '{}' "$base/api/ausbildung/setup")"
 [[ "$status" == 400 ]] || { echo "Setup without backup confirmation allowed: $status";exit 1; }
+# Compare protected, existing police records byte-for-byte before and after.
+# Only new training tables, new training role records and new training logins are allowed.
+police_before="$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_ausbildung_setup_ci -e "
+ SELECT id,dienstnummer,anzeigename,rolle,passwort_hash,gesperrt,muss_passwort_aendern FROM users ORDER BY id;
+ SELECT name,farbe,sensibel FROM roles WHERE name NOT IN ('Ausbildungsleitung','Ausbilder') ORDER BY name;
+ SELECT rolle,modul,stufe FROM role_perms WHERE rolle NOT IN ('Ausbildungsleitung','Ausbilder') ORDER BY rolle,modul;
+ SELECT COUNT(*) FROM personal;
+")"
 setup="$(curl -sS -b "$temp/admin.cookies" -H 'Content-Type: application/json' -X POST \
  --data '{"bestaetigung":"BACKUP_ERSTELLT_AUSBILDUNG"}' "$base/api/ausbildung/setup")"
 [[ "$setup" == *'"ok":true'* && "$setup" == *'"bereit":true'* ]] || { echo "Setup failed: $setup";cat "$temp/php.log";exit 1; }
+police_after="$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_ausbildung_setup_ci -e "
+ SELECT id,dienstnummer,anzeigename,rolle,passwort_hash,gesperrt,muss_passwort_aendern FROM users ORDER BY id;
+ SELECT name,farbe,sensibel FROM roles WHERE name NOT IN ('Ausbildungsleitung','Ausbilder') ORDER BY name;
+ SELECT rolle,modul,stufe FROM role_perms WHERE rolle NOT IN ('Ausbildungsleitung','Ausbilder') ORDER BY rolle,modul;
+ SELECT COUNT(*) FROM personal;
+")"
+[[ "$police_before" == "$police_after" ]] || { echo "Existing police records/roles/permissions changed during setup";exit 1; }
 after="$(curl -sS -b "$temp/admin.cookies" "$base/api/ausbildung/setup-status")"
 [[ "$after" == *'"bereit":true'* && "$after" == *'"ausbildungsmodule":11'* ]] || { echo "Schema incomplete: $after";exit 1; }
 twice="$(curl -sS -b "$temp/admin.cookies" -H 'Content-Type: application/json' -X POST \
@@ -41,4 +56,4 @@ public="$(curl -sS "$base/api/ausbildung-oeffentlich")"
 [[ "$public" == *'"materialien":[]'* ]] || { echo "Public catalog not private-by-default: $public";exit 1; }
 people="$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_ausbildung_setup_ci -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='personal'")"
 [[ "$people" == 1 ]] || { echo "Existing personal table vanished";exit 1; }
-echo 'Ausbildung setup integration passed: preflight, admin-only confirmed migration, repeatability, dashboard, public privacy, original personal table'
+echo 'Ausbildung setup passed: additive tables only; byte-identical existing users, roles, role rights and personal counts; no original records changed'
