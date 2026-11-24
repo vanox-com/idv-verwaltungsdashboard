@@ -233,6 +233,13 @@ function backupOpen(string $id,string $passphrase): array {
         fail(404,'Backup nicht gefunden');
     $zip=new ZipArchive();
     if($zip->open($path,ZipArchive::RDONLY)!==true)fail(400,'Beschädigtes ZIP-Backup');
+    if($zip->numFiles<2||$zip->numFiles>256){
+        $zip->close();fail(400,'Backup enthält zu viele oder zu wenige Dateien');
+    }
+    $manifestStat=$zip->statName('manifest.json');
+    if(!is_array($manifestStat)||($manifestStat['size']??0)>2097152){
+        $zip->close();fail(400,'Fehlendes oder zu großes Backup-Manifest');
+    }
     $zip->setPassword($passphrase);
     $raw=$zip->getFromName('manifest.json');
     if(!is_string($raw)||strlen($raw)>2097152){$zip->close();fail(400,'Backup-Passwort falsch oder Manifest beschädigt');}
