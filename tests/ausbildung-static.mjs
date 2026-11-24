@@ -3,7 +3,7 @@ import {Script} from 'node:vm';
 const pages=['public/index.html','public/ausbildung.html','public/ausbildung-status.html','public/aulk.html'];
 for(const file of pages){
  const source=readFileSync(file,'utf8');
- const scripts=[...source.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)].map(m=>m[1]);
+ const scripts=[...source.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map(m=>m[1]);
  if(!scripts.length)throw Error(file+': no inline script');
  for(const script of scripts)new Script(script,{filename:file});
  console.log(file+': inline JavaScript parses ('+scripts.length+' scripts)');
