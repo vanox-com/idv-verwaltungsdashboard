@@ -338,7 +338,20 @@ shadow.addEventListener('click',async(e)=>{
  if(mode==='open'){await act(async()=>{selected=await request('anwaerter/'+id);editing=null;render();el('#details')?.scrollIntoView({behavior:'smooth'})});return}
  if(mode==='edit-trainee'){editing={type:'trainee-edit'};render();return}
  if(mode==='module'){await act(async()=>{const id=selected.anwaerter.id;await request('anwaerter/'+id+'/modul/'+encodeURIComponent(btn.dataset.code),{method:'PUT',body:JSON.stringify({abgeschlossen:btn.dataset.done!=='1',revision:Number(selected.anwaerter.revision)})});selected=await request('anwaerter/'+id);await load();message('Modul gespeichert.')});return}
- if(mode==='vote'){await act(async()=>{const id=selected.anwaerter.id,v=el('#vote').value;await request('anwaerter/'+id+'/stimme',{method:'PUT',body:JSON.stringify({stimme:v||null,revision:Number(selected.anwaerter.revision)})});selected=await request('anwaerter/'+id);await load();message('Stimme gespeichert. Punkte und Prüfungsstatus sind aktualisiert.')});return}
+ if(mode==='vote'){await act(async()=>{
+   if(!data.stimmenDetailsBereit)throw Error('Die Stimmabgabe-Erweiterung muss nach einer Sicherung noch eingerichtet werden.');
+   const id=selected.anwaerter.id,v=el('#vote').value,reason=el('#voteReason').value,
+     date=el('#votePatrolDate').value,remark=el('#voteNote').value.trim();
+   if(v && !reason)throw Error('Bitte den Anlass der Stimmabgabe auswählen.');
+   if(v==='Nein'&&!remark)throw Error('Bei einer Nein-Stimme ist eine Bemerkung verpflichtend.');
+   if(v==='Ja'&&reason==='Streifenfahrt'&&!date)throw Error('Bitte das Datum der Streifenfahrt angeben.');
+   await request('anwaerter/'+id+'/stimme',{method:'PUT',body:JSON.stringify({
+      stimme:v||null,anlass:reason||null,streifenfahrt_datum:date||null,bemerkung:remark,
+      revision:Number(selected.anwaerter.revision)
+   })});
+   selected=await request('anwaerter/'+id);await load();
+   message('Stimme mit Anlass gespeichert. Ausbildungsstand und Prüfungsstatus aktualisiert.');
+ });return}
  if(mode==='create-link'){await act(async()=>{const r=await request('anwaerter/'+selected.anwaerter.id+'/link',{method:'POST',body:'{}'});const target=el('#createdLink');target.textContent='';const p=document.createElement('p');p.textContent='Neuer Link (bitte sicher an den Anwärter weitergeben):';const inp=document.createElement('input');inp.readOnly=true;inp.value=location.origin+r.pfad;target.append(p,inp);inp.select();message('Neuer externer Zugangslink erzeugt; ältere Links sind ungültig.')});return}
  if(mode==='remove-link'){if(!confirm('Externen Zugangslink wirklich sperren?'))return;await act(async()=>{await request('anwaerter/'+selected.anwaerter.id+'/link',{method:'DELETE'});message('Externer Link deaktiviert.')});return}
  if(mode==='remove-trainer'){if(!confirm('Ausbilderzugang entziehen? Das bestehende Polizeikonto bleibt erhalten.'))return;await act(async()=>{await request('ausbilder/'+id,{method:'DELETE'});await load();message('Ausbilderzugang entzogen.')});return}
@@ -385,6 +398,9 @@ shadow.addEventListener('submit',async(e)=>{
  });
 });
 el('#reload').addEventListener('click',()=>act(load));
+shadow.addEventListener('change',e=>{
+ if(['vote','voteReason'].includes(e.target?.id))updateVoteForm();
+});
 
 load();
 const refreshTimer=setInterval(()=>{
