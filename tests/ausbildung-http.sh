@@ -28,8 +28,11 @@ login="$(curl -sS -c "$temp/trainer" -H 'Content-Type: application/json' -X POST
 [[ "$login" == *'"mussPasswortAendern":true'* ]] || { echo "$login";exit 1; }
 pass="$(req "$temp/trainer" POST /api/passwort '{"alt":"Trainer-Test-2026!","neu":"Trainer-New-2026!"}')"
 [[ "$pass" == *'"ok":true'* ]] || { echo "$pass";exit 1; }
-code="$(curl -sS -o "$temp/restricted" -w '%{http_code}' -b "$temp/trainer" "$base/api/bootstrap")"
-[[ "$code" == 403 ]] || { echo "Police data leak: $code";exit 1; }
+# Training-only accounts get a minimum dashboard shell, never police records.
+bootstrap="$(req "$temp/trainer" GET /api/bootstrap)"
+[[ "$bootstrap" == *'"user"'* && "$bootstrap" == *'"dashboard"'* && "$bootstrap" != *'"personal"'* && "$bootstrap" != *'"kuendigungen"'* ]] || { echo "Police data leaked into training bootstrap: $bootstrap";exit 1; }
+code="$(curl -sS -o "$temp/restricted" -w '%{http_code}' -b "$temp/trainer" "$base/api/users")"
+[[ "$code" == 403 ]] || { echo "Trainer reached user administration: $code";exit 1; }
 code="$(curl -sS -o "$temp/restricted" -w '%{http_code}' -b "$temp/trainer" -H 'Content-Type: application/json' -X POST --data "$trainer" "$base/api/ausbildung/ausbilder")"
 [[ "$code" == 403 ]] || { echo "Privilege escalation: $code";exit 1; }
 candidate="$(req "$temp/lead" POST /api/ausbildung/anwaerter '{"name":"Synthetic Anwärter","laufbahn":"PMA","personalnummer":999997,"beginn":"2026-11-24","nebenberuf":"","bemerkung":""}')"
@@ -59,6 +62,20 @@ public="$(curl -sS -H 'Content-Type: application/json' -X POST --data "{\"token\
 req "$temp/lead" DELETE "/api/ausbildung/anwaerter/$id/link" '{}' >/dev/null
 code="$(curl -sS -o "$temp/revoked" -w '%{http_code}' -H 'Content-Type: application/json' -X POST --data "{\"token\":\"$token\"}" "$base/api/ausbildung-extern/status")"
 [[ "$code" == 404 ]] || { echo "Public link active: $code";exit 1; }
+# Public AuLK library must expose ONLY explicitly approved documents.
+before="$(curl -sS "$base/api/ausbildung-oeffentlich")"
+[[ "$before" == *'"materialien":[]'* ]] || { echo "Unexpected public files: $before";exit 1; }
+newDoc="$(req "$temp/lead" POST /api/ausbildung/materialien '{"titel":"Synthetic approved presentation","typ":"Präsentation","modul_code":"PM.1","url":"https://docs.google.com/presentation/d/SYNTHETIC"}')"
+[[ "$newDoc" == *'"ok":true'* ]] || { echo "Document create failed: $newDoc";exit 1; }
+docId="$(req "$temp/lead" GET /api/ausbildung/bootstrap | php -r '$d=json_decode(stream_get_contents(STDIN),true);echo $d["materialien"][0]["id"]??"";')"
+[[ "$docId" =~ ^[0-9]+$ ]] || { echo "No document ID";exit 1; }
+out="$(req "$temp/lead" PATCH "/api/ausbildung/materialien/$docId/freigabe" '{"public_aktiv":true}')"
+[[ "$out" == *'"ok":true'* ]] || { echo "$out";exit 1; }
+publicDoc="$(curl -sS "$base/api/ausbildung-oeffentlich")"
+[[ "$publicDoc" == *'Synthetic approved presentation'* ]] && [[ "$publicDoc" != *'Synthetic Anwärter'* ]] || { echo "Public catalog error: $publicDoc";exit 1; }
+req "$temp/lead" PATCH "/api/ausbildung/materialien/$docId/freigabe" '{"public_aktiv":false}' >/dev/null
+again="$(curl -sS "$base/api/ausbildung-oeffentlich")"
+[[ "$again" == *'"materialien":[]'* ]] || { echo "Unpublish did not revoke: $again";exit 1; }
 trainerId="$(req "$temp/lead" GET /api/ausbildung/bootstrap | php -r '$d=json_decode(stream_get_contents(STDIN),true);echo $d["ausbilder"][0]["id"]??"";')"
 req "$temp/lead" DELETE "/api/ausbildung/ausbilder/$trainerId" '{}' >/dev/null
 code="$(curl -sS -o "$temp/revokeduser" -w '%{http_code}' -b "$temp/trainer" "$base/api/me")"
