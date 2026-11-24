@@ -138,7 +138,7 @@ function traineeDetails(d){
 }
 function trainers(){
  let out='<div class="card"><div class="flex space"><div><h2>Ausbilderteam</h2><p class="muted">Kompetenzen, Funktionen und getrennte Zugänge</p></div>'+(data.leitung?'<button data-action="new-trainer" class="primary">+ Ausbilder anlegen</button>':'')+'</div><div class="tablewrap"><table><thead><tr><th>DN</th><th>Name</th><th>Kürzel</th><th>Rang</th><th>Funktion / Stimmgewicht</th><th>Module</th><th></th></tr></thead><tbody>'+
- data.ausbilder.map(t=>'<tr><td>'+esc(t.dienstnummer)+'</td><td><b>'+esc(t.name)+'</b></td><td>'+esc(t.kuerzel)+'</td><td>'+esc(t.rang)+'</td><td>'+esc(t.funktion)+'<br><small>Gewicht '+Number(t.gewicht)+'</small></td><td>'+json(t.kompetenzen).map(x=>'<span class="pill">'+esc(x)+'</span>').join(' ')+'</td><td>'+(data.leitung?'<button class="compact" data-action="edit-trainer" data-id="'+t.id+'">Bearbeiten</button> <button class="compact danger" data-action="remove-trainer" data-id="'+t.id+'">Zugang entziehen</button>':'')+'</td></tr>').join('')+
+ data.ausbilder.map(t=>'<tr><td>'+esc(t.dienstnummer)+'<br><small>Login: '+esc(t.login_dienstnummer||'—')+'</small></td><td><b>'+esc(t.name)+'</b></td><td>'+esc(t.kuerzel)+'</td><td>'+esc(t.rang)+'</td><td>'+esc(t.funktion)+'<br><small>Gewicht '+Number(t.gewicht)+'</small></td><td>'+json(t.kompetenzen).map(x=>'<span class="pill">'+esc(x)+'</span>').join(' ')+'</td><td>'+(data.leitung?'<button class="compact" data-action="edit-trainer" data-id="'+t.id+'">Bearbeiten</button> <button class="compact danger" data-action="remove-trainer" data-id="'+t.id+'">Zugang entziehen</button>':'')+'</td></tr>').join('')+
  '</tbody></table></div></div>';
  if(editing?.type==='trainer')out+=trainerForm(editing.id?data.ausbilder.find(t=>Number(t.id)===editing.id):null);
  return out;
@@ -146,7 +146,7 @@ function trainers(){
 function trainerForm(t){
  const codes=data.module.map(m=>m.code),current=json(t?.kompetenzen);
  const funcs=['Ausbildungsleitung','stv. Ausbildungsleitung','Leitungsdienst','Ausbilder gehobener Dienst','Ausbilder mittlerer Dienst','Ausbilder auf Probe'];
- return '<div class="card"><h2>'+(t?'Ausbilder bearbeiten':'Neuen Ausbilderzugang anlegen')+'</h2><p class="muted">Bestehende Dienstnummern behalten ihren bisherigen Verwaltungszugang. Neue Konten werden als reine Ausbilderkonten eingerichtet.</p><form id="trainerForm" class="formgrid">'+
+ return '<div class="card"><h2>'+(t?'Ausbilder bearbeiten':'Neuen Ausbilderzugang anlegen')+'</h2><p class="muted">Für jeden Ausbilder wird ein neuer, eigenständiger Login erstellt: AUS-&lt;Dienstnummer&gt;. Beispielsweise bekommt die Ausbildungs-DN 13 den Login AUS-13. Vorhandene Polizeikonten, Dienstnummern, Passwörter und Berechtigungen bleiben unverändert.</p><form id="trainerForm" class="formgrid">'+
  '<label>Dienstnummer<input name="dienstnummer" required maxlength="32" value="'+esc(t?.dienstnummer||'')+'" '+(t?'readonly':'')+'></label>'+
  '<label>Name<input name="name" required maxlength="180" value="'+esc(t?.name||'')+'"></label>'+
  '<label>Kürzel<input name="kuerzel" maxlength="16" required value="'+esc(t?.kuerzel||'')+'"></label>'+
