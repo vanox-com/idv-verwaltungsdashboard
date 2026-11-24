@@ -164,6 +164,358 @@ function ausbildungKompetenzen($value): array {
     }
     return array_keys($result);
 }
+function ausbildungTrainerPersonal(?int $nr=null,bool $lock=false): array {
+    $ranks=['Polizeiobermeister','Polizeihauptmeister','Polizeihauptmeister AZ','Polizeihauptmeister mit Amtszulage','Polizeikommissar','Kriminalkommissar','Polizeioberkommissar','Kriminaloberkommissar','Polizeihauptkommissar','Kriminalhauptkommissar','Polizeihauptkommissar A12','Erster Polizeihauptkommissar','Polizeiratanwärter','Polizeirat','Polizeioberrat','Polizeidirektor','Leitender Polizeidirektor','Polizeivizepräsident','Polizeipräsident'];
+    $cols=array_column(sql("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='personal' AND COLUMN_NAME IN ('email','e_mail','mail','email_adresse')"),'COLUMN_NAME');
+    $emailExpr="''";
+    foreach(['email','e_mail','mail','email_adresse'] as $col)if(in_array($col,$cols,true)){$emailExpr='p.`'.$col.'`';break;}
+    $rows=sql("SELECT p.personalnummer,p.vorname,p.nachname,p.dienstgrad,".$emailExpr." AS email,
+        COALESCE((SELECT COUNT(*) FROM personalnummer_neubelegungen h WHERE h.personalnummer=p.personalnummer),0) AS belegungen
+        FROM personal p WHERE p.administrativ_geloescht_am IS NULL AND p.status IN ('Aktiv','Abgemeldet')".
+        ($nr!==null?' AND p.personalnummer=?':'')." ORDER BY p.nachname,p.vorname,p.personalnummer".($lock?' FOR UPDATE':''),$nr!==null?[$nr]:[]);
+    $result=[];
+    foreach($rows as $p){
+        if(!in_array(trim((string)$p['dienstgrad']),$ranks,true))continue;
+        $first=trim((string)$p['vorname']);$last=trim((string)$p['nachname']);$n=(int)$p['personalnummer'];
+        if($n<1||$first===''||$last===''||$first==='-'||$last==='-')continue;
+        preg_match('/^./u',$first,$a);preg_match('/^./u',$last,$b);
+        $initials=($a[0]??'').($b[0]??'');
+        $initials=function_exists('mb_strtoupper')?mb_strtoupper($initials,'UTF-8'):strtoupper(strtr($initials,['ä'=>'Ä','ö'=>'Ö','ü'=>'Ü','ß'=>'ẞ']));
+        $email=trim((string)($p['email']??''));
+        $result[]=['personalnummer'=>$n,'dienstnummer'=>str_pad((string)$n,2,'0',STR_PAD_LEFT),'name'=>$first.' '.$last,
+            'kuerzel'=>$initials,'rang'=>(string)$p['dienstgrad'],'email'=>filter_var($email,FILTER_VALIDATE_EMAIL)?$email:'',
+            'quelle'=>ausbildungPersonalQuelle($n,(int)$p['belegungen'])];
+    }
+    return $result;
+}
+function ausbildungTrainerKandidaten(): array {
+    $used=[];
+    foreach(sql('SELECT dienstnummer FROM ausbildung_ausbilder WHERE aktiv=1') as $r){
+        $dn=(string)$r['dienstnummer'];if(ctype_digit($dn))$used[(int)$dn]=true;
+    }
+    foreach(sql("SELECT dienstnummer FROM users WHERE dienstnummer REGEXP '^AUS-[0-9]+
+    $nr=ausbildungString($b['dienstnummer']??null,32,'Dienstnummer',true);
+    $name=ausbildungString($b['name']??null,180,'Name',true);
+    $kuerzel=ausbildungString($b['kuerzel']??null,16,'Kürzel',true);
+    $rang=ausbildungString($b['rang']??'',120,'Rang');
+    $funktion=ausbildungString($b['funktion']??'',100,'Funktion');
+    $allowed=['Ausbildungsleitung','stv. Ausbildungsleitung','Leitungsdienst',
+        'Ausbilder gehobener Dienst','Ausbilder mittlerer Dienst','Ausbilder auf Probe'];
+    if(!in_array($funktion,$allowed,true))fail(400,'Unbekannte Ausbilderfunktion');
+    $email=ausbildungString($b['email']??'',254,'E-Mail');
+    if($email!==''&&!filter_var($email,FILTER_VALIDATE_EMAIL))fail(400,'Ungültige E-Mail-Adresse');
+    $notiz=ausbildungString($b['notiz']??'',2000,'Notiz');
+    $beginn=ausbildungDatum($b['eintritt']??null);
+    $kompetenzen=ausbildungKompetenzen($b['kompetenzen']??[]);
+    return compact('nr','name','kuerzel','rang','funktion','email','notiz','beginn','kompetenzen');
+}
+function ausbildungLink($url): string {
+    if(!is_string($url)||strlen($url)>2048)fail(400,'Ungültiger Dokumentlink');
+    $url=trim($url);
+    if($url==='')return '';
+    $parts=parse_url($url);
+    if(!is_array($parts)||($parts['scheme']??'')!=='https'||!in_array(strtolower((string)($parts['host']??'')),
+        ['docs.google.com','drive.google.com','sites.google.com'],true)||isset($parts['user'])||isset($parts['pass']))
+        fail(400,'Nur sichere Google-Docs-, Drive- und Sites-Links erlaubt');
+    return $url;
+}
+/** Called by Api.php for public token-only status; never return names or remarks. */
+function ausbildungExtern(): never {
+    $input=body();$token=(string)($input['token']??'');
+    if(!preg_match('/^[a-f0-9]{64}$/iD',$token))fail(404,'Ansicht nicht verfügbar');
+    $rows=sql('SELECT id,laufbahn,personalnummer,personal_quelle FROM ausbildung_anwaerter WHERE public_hash=? AND public_aktiv=1 LIMIT 1',
+        [hash('sha256',strtolower($token))]);
+    if(!$rows)fail(404,'Ansicht nicht verfügbar');
+    $a=$rows[0];
+    if(!ausbildungPersonalQuelleGueltig($a))fail(404,'Diese Ausbildungsansicht ist nicht mehr aktiv');
+    $s=ausbildungFortschritt($a,true);
+    $modules=array_map(fn($m)=>['code'=>$m['code'],'titel'=>$m['titel'],'abgeschlossen'=>$m['abgeschlossen']],$s['module']);
+    header('X-Robots-Tag: noindex, nofollow');
+    respond(200,['laufbahn'=>$a['laufbahn'],'status'=>$s['status'],'bereit'=>$s['bereit'],
+        'moduleGesamt'=>$s['moduleGesamt'],'moduleFertig'=>$s['moduleFertig'],
+        'module'=>$modules,'aktualisiert'=>gmdate('c')]);
+}
+/** Only explicitly approved AuLK materials may be seen without a login. */
+function ausbildungOeffentlicheMaterialien(): never {
+    header('X-Robots-Tag: noindex, nofollow');
+    $rows=sql("SELECT id,modul_code,titel,typ,url,
+        CASE WHEN dateipfad IS NULL THEN 0 ELSE 1 END AS datei
+        FROM ausbildung_materialien WHERE aktiv=1 AND public_aktiv=1
+        ORDER BY modul_code,titel,id");
+    respond(200,['materialien'=>$rows]);
+}
+function dispatchAusbildung(array $u,string $method,string $uri): bool {
+    if(!str_starts_with($uri,'/api/ausbildung/'))return false;
+    ausbildungRecht($u);
+    require_once __DIR__.'/AusbildungSetup.php';
+    if(dispatchAusbildungSetup($u,$method,$uri))return true;
+    if(!ausbildungSchemaStatus()['bereit'])
+        fail(503,'Die Ausbildungsdatenbank ist noch nicht vollständig eingerichtet. '
+            .'Ein Administrator kann sie im Ausbildungsbereich nach einer Sicherung einrichten.');
+    if(!ausbildungSchemaStatus()['personalbindungBereit'])
+        fail(503,'Die Verbindung zum zentralen Personalstamm muss nach einer Datenbanksicherung noch eingerichtet werden.');
+    if($uri==='/api/ausbildung/bootstrap'||str_starts_with($uri,'/api/ausbildung/anwaerter/'))
+        ausbildungSynchronisierePersonal();
+    // Unterrichtssitzungen sind innerhalb der geschützten Ausbildungs-API.
+    require_once __DIR__.'/AusbildungUnterricht.php';
+    if(dispatchUnterrichtTrainer($u,$method,$uri))return true;
+    if($method==='GET'&&$uri==='/api/ausbildung/bootstrap'){
+        $leitung=ausbildungLeitung($u);
+        $module=sql('SELECT code,laufbahn,titel FROM ausbildung_module WHERE aktiv=1 ORDER BY laufbahn,sortierung');
+        $trainers=sql('SELECT a.*,u.gesperrt,u.rolle,u.dienstnummer AS login_dienstnummer FROM ausbildung_ausbilder a JOIN users u ON u.id=a.user_id WHERE a.aktiv=1 ORDER BY a.name');
+        foreach($trainers as &$t){
+            $t['gewicht']=ausbildungStufe((string)$t['funktion']);
+            if(!$leitung)unset($t['email'],$t['notiz']);
+        }
+        unset($t);
+        $trainees=ausbildungAktuelleAnwaerter();
+        foreach($trainees as &$a)$a['fortschritt']=ausbildungFortschritt($a);unset($a);
+        // Kein erneuter Datei-Upload: die Präsentationen aus der gelieferten ZIP
+        // sind mit den bereits vorhandenen Google-Slides-Originalen abgeglichen.
+        // Ergänzt nur fehlende, private Verweise (kein Überschreiben/Freigeben).
+        if($leitung){
+            require_once __DIR__.'/AusbildungDecks.php';
+            ausbildungSeedZipDecks($u);
+        }
+        $materials=sql('SELECT id,modul_code,titel,typ,url,public_aktiv,CASE WHEN dateipfad IS NULL THEN 0 ELSE 1 END AS datei FROM ausbildung_materialien WHERE aktiv=1 ORDER BY modul_code,titel');
+        $me=ausbildungTrainer($u);
+        respond(200,['leitung'=>$leitung,'user'=>['id'=>(int)$u['id'],'rolle'=>$u['rolle'],
+            'name'=>userName($u)],'module'=>$module,'ausbilder'=>$trainers,
+            'anwaerter'=>$trainees,'materialien'=>$materials,
+            'ausbilderKandidaten'=>(int)(rights($u)['ausbildung']??0)>=2?ausbildungTrainerKandidaten():[],
+            'unterrichtBereit'=>ausbildungSchemaStatus()['unterrichtBereit'],
+            'stimmenDetailsBereit'=>ausbildungStimmenDetailsVerfuegbar(),
+            'eigeneKompetenzen'=>json_decode((string)($me['kompetenzen']??'[]'),true)??[]]);
+    }
+    if($uri==='/api/ausbildung/ausbilder'&&$method==='POST'){
+        ausbildungRecht($u,2);
+        $b=body();
+        $nr=filter_var($b['personalnummer']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        if($nr===false||$nr===null)fail(400,'Bitte eine geeignete Person aus dem Personalstamm auswählen.');
+        $pw=$b['startpasswort']??'';
+        if(!is_string($pw)||strlen($pw)<8||strlen($pw)>4096)
+            fail(400,'Für jeden neuen Ausbilderzugang ist ein Startpasswort mit mindestens 8 Zeichen erforderlich');
+        db()->beginTransaction();
+        try{
+            $person=ausbildungTrainerPersonal((int)$nr,true)[0]??null;
+            if(!$person)fail(409,'Person nicht mehr geeignet: mindestens Polizeiobermeister und aktiv oder abgemeldet erforderlich.');
+            if(!is_string($b['personal_quelle']??null)||$b['personal_quelle']!==$person['quelle'])
+                fail(409,'Die Personalzuordnung hat sich geändert. Bitte erneut auswählen.');
+            foreach(['dienstnummer','name','kuerzel','rang'] as $key)$b[$key]=$person[$key];
+            if($person['email']!=='')$b['email']=$person['email'];
+            $v=ausbildungTrainerInput($b);
+            if($v['beginn']===null)fail(400,'Bitte Eintritt in die Ausbildungsabteilung angeben.');
+            if($v['email']==='')fail(400,'Bitte E-Mail-Adresse angeben.');
+            $ausbildungsLogin='AUS-'.$v['nr'];
+            if(sql("SELECT id FROM users WHERE dienstnummer REGEXP '^AUS-[0-9]+$' AND CAST(SUBSTRING(dienstnummer,5) AS UNSIGNED)=? LIMIT 1",[(int)$nr])
+                ||sql("SELECT id FROM ausbildung_ausbilder WHERE aktiv=1 AND dienstnummer REGEXP '^[0-9]+$' AND CAST(dienstnummer AS UNSIGNED)=? LIMIT 1",[(int)$nr]))
+                fail(409,'Für diese Dienstnummer existiert bereits ein Ausbildungszugang.');
+            sql('INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern,gesperrt) VALUES(?,?,\'Ausbilder\',?,1,0)',
+                [$ausbildungsLogin,$v['name'],password_hash($pw,PASSWORD_BCRYPT,['cost'=>12])]);
+            $uid=(int)db()->lastInsertId();
+            sql('INSERT INTO ausbildung_ausbilder(user_id,dienstnummer,name,kuerzel,rang,funktion,eintritt,email,notiz,gewicht,kompetenzen,aktiv) VALUES(?,?,?,?,?,?,?,?,?,?,?,1)',
+                [$uid,$v['nr'],$v['name'],$v['kuerzel'],$v['rang'],$v['funktion'],$v['beginn'],$v['email'],$v['notiz'],
+                 ausbildungStufe($v['funktion']),json_encode($v['kompetenzen'],JSON_THROW_ON_ERROR)]);
+            auditAction($u,'Neuen eigenständigen Ausbilderzugang angelegt: ID '.$uid,'add');
+            db()->commit();
+        }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
+        respond(200,['ok'=>true]);
+    }
+    if(preg_match('#^/api/ausbildung/ausbilder/([1-9]\d*)$#D',$uri,$m)){
+        ausbildungRecht($u,2);$id=cleanId($m[1]);
+        $row=sql('SELECT a.user_id,u.rolle FROM ausbildung_ausbilder a JOIN users u ON u.id=a.user_id WHERE a.id=? AND a.aktiv=1',[$id]);
+        if(!$row)fail(404,'Ausbilder nicht gefunden');
+        $target=(int)$row[0]['user_id'];
+        if($method==='PATCH'){
+            $v=ausbildungTrainerInput(body());
+            if($target===(int)$u['id'])fail(400,'Eigenes Leitungsprofil hier nicht bearbeiten');
+            sql('UPDATE ausbildung_ausbilder SET name=?,kuerzel=?,rang=?,funktion=?,eintritt=?,email=?,notiz=?,gewicht=?,kompetenzen=?,revision=revision+1,aktualisiert=UTC_TIMESTAMP(6) WHERE id=?',
+                [$v['name'],$v['kuerzel'],$v['rang'],$v['funktion'],$v['beginn'],$v['email'],$v['notiz'],
+                 ausbildungStufe($v['funktion']),json_encode($v['kompetenzen'],JSON_THROW_ON_ERROR),$id]);
+            auditAction($u,'Ausbilderprofil geändert: ID '.$id);
+            respond(200,['ok'=>true]);
+        }
+        if($method==='DELETE'){
+            if($target===(int)$u['id']||$row[0]['rolle']!=='Ausbilder')
+                fail(403,'Bestehende Polizeikonten werden von der Ausbildungsverwaltung nicht verändert');
+            db()->beginTransaction();
+            try {
+                sql('UPDATE ausbildung_ausbilder SET aktiv=0,revision=revision+1 WHERE id=?',[$id]);
+                // Sperrt ausschließlich neu angelegte, reine Ausbilderkonten.
+                // Rollen und Berechtigungen bestehender Polizeikonten bleiben unangetastet.
+                sql('UPDATE users SET gesperrt=1 WHERE id=? AND rolle=\'Ausbilder\'',[$target]);
+                sql('DELETE FROM sessions WHERE user_id=?',[$target]);
+                auditAction($u,'Ausbilderzugang entzogen: ID '.$target,'del');
+                db()->commit();
+            }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
+            respond(200,['ok'=>true]);
+        }
+    }
+    if($uri==='/api/ausbildung/anwaerter'&&$method==='POST')
+        fail(409,'Anwärter werden ausschließlich im Personalstamm angelegt und automatisch ihrem Ausbildungsmonitor zugeordnet.');
+    if(preg_match('#^/api/ausbildung/anwaerter/([1-9]\d*)$#D',$uri,$m)){
+        $id=cleanId($m[1]);
+        if($method==='GET'){
+            $a=ausbildungAnwaerter($id);
+            respond(200,['anwaerter'=>$a,'fortschritt'=>ausbildungFortschritt($a,true)]);
+        }
+        if($method==='PATCH'){
+            ausbildungRecht($u,2);$b=body();$a=ausbildungAnwaerter($id);
+            ausbildungPruefeRevision($a,$b['revision']??null);
+            // Name, Laufbahn, DN, Beginn und RSA stammen ausschließlich aus personal.
+            $bem=ausbildungString($b['bemerkung']??'',2000,'Bemerkung');
+            $stmt=db()->prepare('UPDATE ausbildung_anwaerter SET bemerkung=?,revision=revision+1,aktualisiert=UTC_TIMESTAMP(6) WHERE id=? AND revision=?');
+            $stmt->execute([$bem,$id,$b['revision']]);
+            if($stmt->rowCount()!==1)fail(409,'Anwärter wurde zwischenzeitlich geändert');
+            auditAction($u,'Anwärter aktualisiert: ID '.$id);
+            respond(200,['ok'=>true]);
+        }
+    }
+    if(preg_match('#^/api/ausbildung/anwaerter/([1-9]\d*)/modul/([A-Z]{2}\.[0-9]+)$#D',$uri,$m)&&$method==='PUT'){
+        $id=cleanId($m[1]);$code=$m[2];$b=body();
+        if(!is_bool($b['abgeschlossen']??null))fail(400,'Abschluss muss Ja oder Nein sein');
+        ausbildungDarfModul($u,$code);
+        db()->beginTransaction();
+        try {
+            $a=ausbildungAnwaerter($id,true);ausbildungPruefeRevision($a,$b['revision']??null);
+            if(!in_array($code,array_column(ausbildungModule((string)$a['laufbahn']),'code'),true))
+                fail(400,'Modul gehört nicht zu dieser Laufbahn');
+            sql('INSERT INTO ausbildung_abschluesse(anwaerter_id,modul_code,ausbilder_user_id,abgeschlossen) VALUES(?,?,?,?)
+                ON DUPLICATE KEY UPDATE ausbilder_user_id=VALUES(ausbilder_user_id),abgeschlossen=VALUES(abgeschlossen),aktualisiert=UTC_TIMESTAMP(6)',
+                [$id,$code,(int)$u['id'],$b['abgeschlossen']?1:0]);
+            sql('UPDATE ausbildung_anwaerter SET revision=revision+1,aktualisiert=UTC_TIMESTAMP(6) WHERE id=?',[$id]);
+            auditAction($u,'Ausbildungsmodul '.$code.' für Anwärter-ID '.$id.($b['abgeschlossen']?' abgeschlossen':' zurückgesetzt'));
+            db()->commit();
+        }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
+        respond(200,['ok'=>true]);
+    }
+    if(preg_match('#^/api/ausbildung/anwaerter/([1-9]\d*)/stimme$#D',$uri,$m)&&$method==='PUT'){
+        $id=cleanId($m[1]);$b=body();$vote=$b['stimme']??null;
+        if(!in_array($vote,['Ja','Nein',null],true))fail(400,'Ungültige Stimme');
+        if(!ausbildungStimmenDetailsVerfuegbar())
+            fail(503,'Für neue Stimmabgaben müssen zuerst die zusätzlichen Felder für Anlass, Datum und Bemerkung nach einer Datenbanksicherung eingerichtet werden.');
+        $details=$vote===null?null:ausbildungStimmDetailsPruefen($b,$vote);
+        $trainer=ausbildungTrainer($u);
+        if(!$trainer&&!ausbildungLeitung($u))fail(403,'Nur aktive Ausbilder stimmen ab');
+        $weight=$trainer?ausbildungStufe((string)$trainer['funktion']):
+            ausbildungStufe((string)($u['rolle']==='Leitungsdienst'?'Leitungsdienst':'Ausbildungsleitung'));
+        db()->beginTransaction();
+        try {
+            $a=ausbildungAnwaerter($id,true);ausbildungPruefeRevision($a,$b['revision']??null);
+            if($a['laufbahn']!=='PMA')fail(400,'Der Excel-Stimmenmonitor gilt nur für PMA');
+            if($vote===null)sql('DELETE FROM ausbildung_stimmen WHERE anwaerter_id=? AND ausbilder_user_id=?',[$id,(int)$u['id']]);
+            else sql('INSERT INTO ausbildung_stimmen(anwaerter_id,ausbilder_user_id,stimme,gewicht,anlass,streifenfahrt_datum,bemerkung)
+                VALUES(?,?,?,?,?,?,?)
+                ON DUPLICATE KEY UPDATE stimme=VALUES(stimme),gewicht=VALUES(gewicht),
+                  anlass=VALUES(anlass),streifenfahrt_datum=VALUES(streifenfahrt_datum),
+                  bemerkung=VALUES(bemerkung),aktualisiert=UTC_TIMESTAMP(6)',
+                [$id,(int)$u['id'],$vote,$weight,$details['anlass'],$details['streifenfahrt_datum'],$details['bemerkung']]);
+            sql('UPDATE ausbildung_anwaerter SET revision=revision+1,aktualisiert=UTC_TIMESTAMP(6) WHERE id=?',[$id]);
+            auditAction($u,'PMA-Stimme aktualisiert: Anwärter-ID '.$id);
+            db()->commit();
+        }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
+        respond(200,['ok'=>true]);
+    }
+    if(preg_match('#^/api/ausbildung/anwaerter/([1-9]\d*)/link$#D',$uri,$m)){
+        ausbildungRecht($u,2);$id=cleanId($m[1]);
+        if($method==='POST'){
+            $a=ausbildungAnwaerter($id);
+            $token=bin2hex(random_bytes(32));
+            sql('UPDATE ausbildung_anwaerter SET public_hash=?,public_aktiv=1 WHERE id=?',
+                [hash('sha256',$token),$id]);
+            auditAction($u,'Externen Ausbildungslink für Anwärter-ID '.$id.' erneuert');
+            respond(200,['pfad'=>'/ausbildung-status.html#'.$token]);
+        }
+        if($method==='DELETE'){
+            ausbildungAnwaerter($id);
+            sql('UPDATE ausbildung_anwaerter SET public_hash=NULL,public_aktiv=0 WHERE id=?',[$id]);
+            auditAction($u,'Externen Ausbildungslink für Anwärter-ID '.$id.' deaktiviert');
+            respond(200,['ok'=>true]);
+        }
+    }
+    // Private AuLK-URL-Zuordnung aus einem lokalen JSON-Import. Nur neue Einträge.
+    // Keine Veröffentlichung, keine Änderung oder Löschung bestehender Unterlagen.
+    if($method==='POST'&&$uri==='/api/ausbildung/materialien/import'){
+        ausbildungRecht($u,2);
+        $b=body();$items=$b['eintraege']??null;
+        if(($b['bestaetigung']??null)!=='AULK_PRIVAT_IMPORT'
+            ||!is_array($items)||!array_is_list($items)||count($items)<1||count($items)>60)
+            fail(400,'Gültige AuLK-Importdatei mit höchstens 60 Einträgen erforderlich');
+        $validModules=array_column(sql('SELECT code FROM ausbildung_module WHERE aktiv=1'),'code');
+        $records=[];
+        foreach($items as $item){
+            if(!is_array($item))fail(400,'Ungültiger AuLK-Eintrag');
+            $code=ausbildungString($item['modul_code']??null,12,'Modulcode',true);
+            $title=ausbildungString($item['titel']??null,200,'Titel',true);
+            $url=ausbildungLink($item['url']??null);
+            if(!in_array($code,$validModules,true)
+                ||!preg_match('#^https://docs\.google\.com/presentation/d/[a-zA-Z0-9_-]+/#D',$url))
+                fail(400,'Nur vorhandene Module und Google-Slides-Präsentationen importieren');
+            $records[]=[$code,$title,$url];
+        }
+        $locked=sql("SELECT GET_LOCK('idv_ausbildung_aulk_import',10) AS ok");
+        if((int)($locked[0]['ok']??0)!==1)fail(503,'Ein weiterer AuLK-Import läuft gerade');
+        $created=0;$skipped=0;
+        try{
+            db()->beginTransaction();
+            foreach($records as [$code,$title,$url]){
+                if(sql('SELECT id FROM ausbildung_materialien WHERE modul_code=? AND url=? LIMIT 1',[$code,$url])){
+                    $skipped++;continue;
+                }
+                sql("INSERT INTO ausbildung_materialien(modul_code,titel,typ,url,public_aktiv,aktiv)
+                    VALUES(?,?,'Präsentation',?,0,1)",[$code,$title,$url]);
+                $created++;
+            }
+            auditAction($u,'Private AuLK-Präsentationen importiert: '.$created.' neu, '.$skipped.' übersprungen','add');
+            db()->commit();
+        }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
+        finally{sql("SELECT RELEASE_LOCK('idv_ausbildung_aulk_import')");}
+        respond(200,['ok'=>true,'neu'=>$created,'vorhanden'=>$skipped]);
+    }
+    if($method==='POST'&&$uri==='/api/ausbildung/materialien/upload'){
+        require_once __DIR__.'/AusbildungFiles.php';
+        ausbildungDateiUpload($u);
+    }
+    if($method==='GET'&&preg_match('#^/api/ausbildung/materialien/([1-9]\\d*)/datei$#D',$uri,$fileMatch)){
+        require_once __DIR__.'/AusbildungFiles.php';
+        ausbildungDateiDownload($u,cleanId($fileMatch[1]));
+    }
+    if($uri==='/api/ausbildung/materialien'&&$method==='POST'){
+        ausbildungRecht($u,2);$b=body();
+        $titel=ausbildungString($b['titel']??null,200,'Titel',true);
+        $typ=ausbildungString($b['typ']??'Präsentation',50,'Typ',true);
+        $code=$b['modul_code']??null;
+        if($code!==null&&!in_array($code,array_column(sql('SELECT code FROM ausbildung_module'),'code'),true))
+            fail(400,'Unbekanntes Modul');
+        $url=ausbildungLink($b['url']??'');
+        if($url==='')fail(400,'Bitte einen Google-Dokumentlink hinterlegen');
+        sql('INSERT INTO ausbildung_materialien(modul_code,titel,typ,url) VALUES(?,?,?,?)',[$code,$titel,$typ,$url]);
+        auditAction($u,'Ausbildungsunterlage verlinkt: '.$titel,'add');
+        respond(200,['ok'=>true]);
+    }
+    if(preg_match('#^/api/ausbildung/materialien/([1-9]\\d*)/freigabe$#D',$uri,$m)&&$method==='PATCH'){
+        ausbildungRecht($u,2);
+        $id=cleanId($m[1]);
+        $b=body();
+        if(!is_bool($b['public_aktiv']??null))fail(400,'Freigabe muss Ja oder Nein sein');
+        if(!sql('SELECT 1 FROM ausbildung_materialien WHERE id=? AND aktiv=1',[$id]))
+            fail(404,'Ausbildungsunterlage nicht gefunden');
+        sql('UPDATE ausbildung_materialien SET public_aktiv=?,aktualisiert=UTC_TIMESTAMP(6) WHERE id=?',
+            [$b['public_aktiv']?1:0,$id]);
+        auditAction($u,'AuLK-Unterlage '.($b['public_aktiv']?'öffentlich freigegeben':'gesperrt').': ID '.$id);
+        respond(200,['ok'=>true]);
+    }
+    if(preg_match('#^/api/ausbildung/materialien/([1-9]\d*)$#D',$uri,$m)&&$method==='DELETE'){
+        ausbildungRecht($u,2);$id=cleanId($m[1]);
+        sql('UPDATE ausbildung_materialien SET aktiv=0 WHERE id=?',[$id]);
+        auditAction($u,'Ausbildungsunterlage entfernt: ID '.$id,'del');
+        respond(200,['ok'=>true]);
+    }
+    return false;
+}
+") as $r)$used[(int)substr((string)$r['dienstnummer'],4)]=true;
+    return array_values(array_filter(ausbildungTrainerPersonal(),fn($p)=>!isset($used[$p['personalnummer']])));
+}
 function ausbildungTrainerInput(array $b): array {
     $nr=ausbildungString($b['dienstnummer']??null,32,'Dienstnummer',true);
     $name=ausbildungString($b['name']??null,180,'Name',true);

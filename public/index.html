@@ -2806,12 +2806,7 @@ document.addEventListener('click',event=>{
   const p=(D.personal||[]).find(x=>Number(x.personalnummer)===nummer);
   if(!p||!/ausbilder[\s-]*team/i.test(String(p.gruppe||'')))return;
   // Nur eine Formularvorbelegung, keine Änderung an Personaldaten oder Konten.
-  const vorname=String(p.vorname||'').trim(),nachname=String(p.nachname||'').trim();
-  window.IDVTrainerPreset={
-    dienstnummer:String(nummer),name:[vorname,nachname].filter(Boolean).join(' '),
-    kuerzel:(vorname.slice(0,1)+nachname.slice(0,2)).toUpperCase(),
-    rang:String(p.dienstgrad||''),eintritt:String(p.eintrittsdatum||'').slice(0,10)
-  };
+  window.IDVTrainerPreset={personalnummer:nummer};
   wechsleZuModul('ausbildung');
 });
 document.addEventListener('click',event=>{
@@ -6452,6 +6447,6 @@ document.addEventListener('click',async e=>{
 <script src="/abmeldungen.js"></script>
 <script src="/botKonfiguration.js"></script>
 <script src="/responsiveNav.js"></script>
-<script src="/assets/ausbildung-panel.js?v=20261124-5" defer></script>
+<script src="/assets/ausbildung-panel.js?v=20261125-3" defer></script>
 </body>
 </html>

@@ -234,20 +234,25 @@ function trainers(){
 }
 function trainerForm(t){
  const preset=(!t&&editing?.personal)||{};
+ const candidates=data.ausbilderKandidaten||[];
+ const chosen=!t?candidates.find(p=>Number(p.personalnummer)===Number(preset.personalnummer??preset.dienstnummer)):null;
  const codes=data.module.map(m=>m.code),current=json(t?.kompetenzen);
  const funcs=['Ausbildungsleitung','stv. Ausbildungsleitung','Leitungsdienst','Ausbilder gehobener Dienst','Ausbilder mittlerer Dienst','Ausbilder auf Probe'];
  return '<div class="card"><h2>'+(t?'Ausbilder bearbeiten':'Neuen Ausbilderzugang anlegen')+'</h2><p class="muted">Die Personalakte bleibt unverändert. Für jeden Ausbilder wird ein neuer, eigenständiger Login erstellt: AUS-&lt;Dienstnummer&gt;. Beispielsweise bekommt die Ausbildungs-DN 13 den Login AUS-13. Vorhandene Polizeikonten, Dienstnummern, Passwörter und Berechtigungen bleiben unverändert.</p><form id="trainerForm" class="formgrid">'+
- '<label>Dienstnummer<input name="dienstnummer" required maxlength="32" value="'+esc(t?.dienstnummer||preset.dienstnummer||'')+'" '+(t?'readonly':'')+'></label>'+
- '<label>Name<input name="name" required maxlength="180" value="'+esc(t?.name||preset.name||'')+'"></label>'+
- '<label>Kürzel<input name="kuerzel" maxlength="16" required value="'+esc(t?.kuerzel||preset.kuerzel||'')+'"></label>'+
- '<label>Rang<input name="rang" maxlength="120" value="'+esc(t?.rang||preset.rang||'')+'"></label>'+
+ (!t?'<label class="full">Person aus dem Personalstamm auswählen<select id="trainerPerson" name="personalnummer" required><option value="">Bitte auswählen · ab Polizeiobermeister</option>'+
+ candidates.map(p=>'<option value="'+Number(p.personalnummer)+'" '+(chosen&&Number(chosen.personalnummer)===Number(p.personalnummer)?'selected':'')+'>'+esc(p.dienstnummer+' · '+p.name+' · '+p.rang)+'</option>').join('')+
+ '</select><small>'+ (candidates.length?candidates.length+' geeignete Personen ohne bestehenden AUS-Zugang.':'Keine geeigneten Personen ohne bestehenden Ausbildungszugang verfügbar.')+'</small></label><input type="hidden" name="personal_quelle" value="'+esc(chosen?.quelle||'')+'">':'')+
+ '<label>Dienstnummer<input name="dienstnummer" required maxlength="32" value="'+esc(t?.dienstnummer||chosen?.dienstnummer||'')+'" readonly></label>'+
+ '<label>Name<input name="name" required maxlength="180" value="'+esc(t?.name||chosen?.name||'')+'" '+(!t?'readonly':'')+'></label>'+
+ '<label>Kürzel<input name="kuerzel" maxlength="16" required value="'+esc(t?.kuerzel||chosen?.kuerzel||'')+'" '+(!t?'readonly':'')+'></label>'+
+ '<label>Rang<input name="rang" maxlength="120" value="'+esc(t?.rang||chosen?.rang||'')+'" '+(!t?'readonly':'')+'></label>'+
  '<label>Funktion<select name="funktion">'+funcs.map(x=>'<option '+(x===(t?.funktion||'Ausbilder auf Probe')?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select></label>'+
- '<label>Eintritt<input name="eintritt" type="date" value="'+esc((t?.eintritt||preset.eintritt||'').slice(0,10))+'"></label>'+
- '<label>E-Mail<input type="email" name="email" maxlength="254" value="'+esc(t?.email||'')+'"></label>'+
- (!t?'<label>Startpasswort (nur bei neuem Konto Pflicht)<input type="password" name="startpasswort" autocomplete="new-password" minlength="8"></label>':'')+
+ '<label>Eintritt in die Ausbildungsabteilung<input name="eintritt" type="date" '+(!t?'required':'')+' value="'+esc((t?.eintritt||'').slice(0,10))+'"></label>'+
+ '<label>E-Mail<input type="email" name="email" maxlength="254" '+(!t?'required':'')+' value="'+esc(t?.email||chosen?.email||'')+'" '+(!t&&chosen?.email?'readonly':'')+'><small id="trainerEmailHint">'+(!t&&chosen?.email?'Aus Personalstamm übernommen.':'Falls nicht hinterlegt, bitte selbst eingeben.')+'</small></label>'+
+ (!t?'<label>Startpasswort (nur bei neuem Konto Pflicht)<input type="password" name="startpasswort" autocomplete="new-password" required minlength="8"></label>':'')+
  '<label class="full">Interne Anmerkung<textarea name="notiz" rows="2">'+esc(t?.notiz||'')+'</textarea></label>'+
  '<div class="full"><h3>Freigegebene Ausbildungsmodule</h3><div class="competence">'+codes.map(code=>'<label><input type="checkbox" name="kompetenz" value="'+esc(code)+'" '+(current.includes(code)?'checked':'')+'> '+esc(code)+'</label>').join('')+'</div></div>'+
- '<div class="full flex"><button type="submit" class="primary">Speichern</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></div>';
+ '<div class="full flex"><button type="submit" class="primary" '+(!t&&!chosen?'disabled':'')+'>Speichern</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></div>';
 }
 function materials(){
  const roomSetup=data.unterrichtBereit===false?'<div class="card"><h2>Unterrichtsraum noch nicht eingerichtet</h2><p>Die vorhandenen Ausbildungsmodule bleiben nutzbar. Für gemeinsame Bildschirmübertragungen fehlt noch die neue, additive Unterrichtstabelle.</p>'+(data.user.rolle==='Administrator'?'<p>Vor der Einrichtung ein vollständiges Datenbankbackup erstellen und herunterladen.</p><button data-action="setup-schema" class="primary">Unterrichtsraum-Datenbank sicher ergänzen</button>':'<p class="muted">Die Ergänzung kann ausschließlich ein Administrator nach aktueller Datenbanksicherung installieren.</p>')+'</div>':'';
@@ -413,6 +418,15 @@ shadow.addEventListener('submit',async(e)=>{
 el('#reload').addEventListener('click',()=>act(load));
 shadow.addEventListener('change',e=>{
  if(['vote','voteReason'].includes(e.target?.id))updateVoteForm();
+ if(e.target?.id==='trainerPerson'){
+   const f=e.target.form;
+   const p=(data.ausbilderKandidaten||[]).find(x=>Number(x.personalnummer)===Number(e.target.value));
+   for(const k of ['dienstnummer','name','kuerzel','rang','email'])f.elements.namedItem(k).value=p?.[k]||'';
+   f.elements.namedItem('personal_quelle').value=p?.quelle||'';
+   f.elements.namedItem('email').readOnly=Boolean(p?.email);
+   el('#trainerEmailHint').textContent=p?.email?'Aus Personalstamm übernommen.':'Falls nicht hinterlegt, bitte selbst eingeben.';
+   f.querySelector('[type=submit]').disabled=!p;
+ }
 });
 
 load();
