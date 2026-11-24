@@ -1,7 +1,7 @@
 /* 1:1 AuLK-Unterricht. Nur die eigene #tafel ist zur Übertragung freigegeben.
  * Der Browser fragt einmal nach Freigabe DIESES Tabs. Danach wird der Videotrack
- * mit Region Capture zwingend auf #tafel beschnitten, BEVOR WebRTC ihn sendet.
- * Ohne unterstütztes CropTarget oder bei falscher Tab-Auswahl: KEIN Livestream.
+ * mit Element Capture (oder sicherem Region Capture) auf #tafel begrenzt,
+ * BEVOR WebRTC ihn sendet. Ohne Zuschnitt: KEIN Livestream.
  * Google Slides sind cross-origin und werden nicht per JS ferngesteuert.
  */
 (function () {
@@ -24,8 +24,9 @@
     chip.classList.toggle("waiting",!active);
   }
   function prepareSafeCapture() {
-    if(typeof CropTarget==="undefined" || typeof CropTarget.fromElement!=="function" ||
-       !navigator.mediaDevices?.getDisplayMedia)return false;
+    const element=typeof RestrictionTarget!=="undefined" && typeof RestrictionTarget.fromElement==="function";
+    const region=typeof CropTarget!=="undefined" && typeof CropTarget.fromElement==="function";
+    if((!element&&!region)||!navigator.mediaDevices?.getDisplayMedia)return false;
     if(typeof navigator.mediaDevices.setCaptureHandleConfig==="function"){
       try {
         navigator.mediaDevices.setCaptureHandleConfig({
@@ -42,11 +43,12 @@
     }
     return true;
   }
-  // Fixiert den Folienbereich während der Übertragung im sichtbaren Viewport.
-  // Scrollen in der Werkzeugleiste verschiebt #tafel dadurch nicht.
+  // Die Seite bleibt scrollbar. Nur die Tafel mit ihrer lokalen Werkzeugleiste
+  // ist sticky; keine body-/main-Scroll-Sperre und kein abgeschnittenes Menü.
   function pinPresentation(){
-    window.scrollTo(0,0);
     document.body.classList.add("presentation-locked");
+    $("tafel").closest(".workspace").scrollIntoView({block:"start",behavior:"instant"});
+    paint();
     const area=$("tafel").getBoundingClientRect();
     if(area.width<320 || area.height<180 || area.top<0 ||
        area.bottom>window.innerHeight+2)
@@ -54,39 +56,59 @@
   }
   function unpinPresentation(){
     document.body.classList.remove("presentation-locked");
+    paint();
   }
-  // WebRTC priorisiert Textschärfe statt bei Netzwerkproblemen als Erstes
-  // die Auflösung herunterzuregeln. Der Browser kann Werte ablehnen.
+  // Folien brauchen Pixel statt hoher Bildrate. Die Einstellungen sind Ziele;
+  // Browser, echte Quellauflösung und Verbindung bestimmen das Ergebnis.
   async function optimizeSlides(sender,video){
-    try{video.contentHint="detail";}catch(_){/* optional browser hint */}
+    try{video.contentHint="text";if(video.contentHint!=="text")video.contentHint="detail";}catch(_){/* optional */}
     if(!sender || typeof sender.getParameters!=="function" ||
        typeof sender.setParameters!=="function")return;
     try{
       const params=sender.getParameters();
       if(!params.encodings?.length)return;
-      params.encodings[0].maxBitrate=4500000;
-      params.encodings[0].scaleResolutionDownBy=1;
-      params.encodings[0].maxFramerate=24;
+      for(const encoding of params.encodings){
+        encoding.maxBitrate=12000000;
+        encoding.scaleResolutionDownBy=1;
+        encoding.maxFramerate=15;
+      }
       params.degradationPreference="maintain-resolution";
       await sender.setParameters(params);
     }catch(_){
-      // Ein nicht unterstützter Qualitätsparameter darf weder die
-      // Region-Capture-Sicherheit noch den Unterricht blockieren.
+      // Manche Browser unterstützen die Degradation-Präferenz nicht.
+      // In diesem Fall wenigstens das höhere Bitratenbudget versuchen.
+      try{
+        const params=sender.getParameters();
+        if(params.encodings?.length){
+          params.encodings[0].maxBitrate=12000000;
+          await sender.setParameters(params);
+        }
+      }catch(_){/* Browser entscheidet selbst; Zuschnitt bleibt aktiv. */}
     }
   }
   async function cropOwnBoard(stream){
     const video=stream.getVideoTracks()[0];
-    if(!video || typeof video.cropTo!=="function")
+    if(!video || (typeof video.restrictTo!=="function" && typeof video.cropTo!=="function"))
       throw new Error("Dieser Browser kann die Übertragung nicht auf die Folien beschränken. Bitte Chrome oder Edge auf dem Desktop verwenden.");
     if(handleConfigured && typeof video.getCaptureHandle==="function"){
       const captured=video.getCaptureHandle();
       if(!captured || captured.handle!==captureHandle)
         throw new Error("Bitte ausschließlich „Diesen Tab“ auswählen. Die Freigabe eines anderen Tabs oder Bildschirms wird blockiert.");
     }
-    const target=await CropTarget.fromElement($("tafel"));
-    // Andere Tabs und Monitore lassen sich nicht auf ein DOM-Element DIESES
-    // Tabs zuschneiden; der Browser lehnt cropTo() in diesem Fall ab.
-    await video.cropTo(target);
+    let restricted=false;
+    // Element Capture isoliert den DOM-Unterbaum einschließlich iframe
+    // und Zeichen-Canvas, selbst wenn andere Seitenelemente darüberliegen.
+    if(typeof RestrictionTarget!=="undefined" && typeof video.restrictTo==="function"){
+      try{
+        await video.restrictTo(await RestrictionTarget.fromElement($("tafel")));
+        restricted=true;
+      }catch(_){/* Ältere Browser: sicherer Zuschnitt auf dieselbe Tafel. */}
+    }
+    if(!restricted){
+      if(typeof CropTarget==="undefined" || typeof video.cropTo!=="function")
+        throw new Error("Die Folientafel kann nicht sicher isoliert werden.");
+      await video.cropTo(await CropTarget.fromElement($("tafel")));
+    }
     if(video.readyState!=="live")
       throw new Error("Präsentationsübertragung wurde abgebrochen.");
     return video;
@@ -158,7 +180,7 @@
     shareState("Nicht verbunden",false);
     unpinPresentation();
     const info=$("fokusInfo");
-    if(info)info.textContent="Nur die 16:9-Folientafel wird übertragen. Beim nächsten Start wird sie wieder fixiert.";
+    if(info)info.textContent="Nur die 16:9-Folientafel wird übertragen.";
   }
   function googleEmbed(url) {
     const match = /^https:\/\/docs\.google\.com\/presentation\/d\/([a-zA-Z0-9_-]+)\//.exec(url || "");
@@ -213,6 +235,7 @@
   function initMarkupTools() {
     board=$("tafel");canvas=$("overlay");ctx=canvas.getContext("2d");
     window.addEventListener("resize",paint);
+    if(typeof ResizeObserver!=="undefined")new ResizeObserver(paint).observe(board);
     canvas.addEventListener("pointerdown",evt=>{
       if(tool==="cursor")return;
       const p=position(evt);
@@ -282,8 +305,8 @@
     const canCrop=prepareSafeCapture();
     if(!canCrop){
       $("teilen").disabled=true;
-      notice("Für eine auf Folien begrenzte Übertragung benötigst du Chrome oder Edge mit Region Capture. Eine unbeschränkte Bildschirmfreigabe wird nicht angeboten.",true);
-      $("sicherheit").textContent="Sicherheitsfunktion Region Capture nicht verfügbar. Bitte den Unterrichtsraum mit einem aktuellen Desktop-Chrome oder -Edge öffnen.";
+      notice("Für eine auf Folien begrenzte Übertragung benötigst du aktuelles Desktop-Chrome oder -Edge mit Element oder Region Capture. Eine unbeschränkte Bildschirmfreigabe wird nicht angeboten.",true);
+      $("sicherheit").textContent="Sicherer Folien-Zuschnitt nicht verfügbar. Bitte aktuelles Desktop-Chrome oder -Edge verwenden.";
     } else {
       shareState("Bereit · nicht live",false);
       notice("Präsentation bereit. Einladungslink kopieren und anschließend den Unterricht starten.");
@@ -298,10 +321,10 @@
         // Der Browser verlangt aus Datenschutzgründen immer eine explizite
         // Freigabe. Bereits im Dialog möglichst „Diesen Tab“ auswählen.
         // VOR Freigabe und Zuschnitt Folienfläche fest positionieren.
-        // Im Live-Betrieb scrollt nur die Werkzeugleiste, nicht die Tafel.
+        // Die Seite bleibt scrollbar; die Tafel bleibt im sichtbaren Bereich.
         pinPresentation();
         display=await navigator.mediaDevices.getDisplayMedia({
-          video:{displaySurface:"browser",frameRate:{ideal:24,max:24}},
+          video:{displaySurface:"browser",width:{ideal:3840},height:{ideal:2160},frameRate:{ideal:15,max:15}},
           audio:false,
           preferCurrentTab:true,
           selfBrowserSurface:"include",
@@ -320,15 +343,18 @@
         // Bei Fehlwahl oder ohne CropTarget sieht der Anwärter gar nichts.
         await cropOwnBoard(display);
         const peer=connection();
+        try{video.contentHint="text";}catch(_){}
         const sender=peer.addTrack(video,display);
         await optimizeSlides(sender,video);
         const offer=await peer.createOffer();
-        await peer.setLocalDescription(offer);await waitIce(peer);
+        await peer.setLocalDescription(offer);
+        await optimizeSlides(sender,video);
+        await waitIce(peer);
         await trainerApi("angebot",{sdp:peer.localDescription.sdp});
         answered=false;
         $("teilen").disabled=true;
         shareState("Live · fixierte Folien",true);
-        $("fokusInfo").textContent="Folientafel fixiert: Scrollen in der rechten Leiste bewegt das übertragene Bild nicht. Moderationswerkzeuge bleiben sichtbar.";
+        $("fokusInfo").textContent="Tafel bleibt sichtbar · Seite scrollbar · Werkzeuge direkt darunter";
         notice("Live-Präsentation gestartet: Die Folientafel bleibt fest stehen; andere Tabs und der Desktop werden nicht übertragen.");
         if(poller)clearInterval(poller);
         poller=setInterval(async()=>{
@@ -337,7 +363,8 @@
             const state=await trainerApi("status");
             if(state.antwort&&!answered){
               answered=true;
-              await pc.setRemoteDescription({type:"answer",sdp:state.antwort});
+              await peer.setRemoteDescription({type:"answer",sdp:state.antwort});
+              await optimizeSlides(sender,video);
               notice("Anwärter zugeschaltet. Die Live-Präsentation wird verbunden.");
             }else if(!state.teilnehmerAngemeldet){
               notice("Die Folientafel ist freigegeben. Warte auf den Anwärter.");
@@ -395,7 +422,22 @@
         poller=setInterval(check,1400);
       }catch(err){$("beitreten").disabled=false;notice(err.message,true);}
     };
-    $("stream").addEventListener("click",()=>$("stream").play().catch(()=>{}));
+    const player=$("stream"), quality=$("empfangsqualitaet"), fullscreen=$("vollbild");
+    const updateQuality=()=>{
+      quality.textContent=player.videoWidth&&player.videoHeight
+        ? "Empfang: "+player.videoWidth+" × "+player.videoHeight+" Pixel"
+        : "Warte auf Bildsignal";
+    };
+    player.addEventListener("loadedmetadata",updateQuality);
+    player.addEventListener("resize",updateQuality);
+    player.addEventListener("click",()=>player.play().catch(()=>{}));
+    fullscreen.disabled=typeof player.requestFullscreen!=="function"||!document.fullscreenEnabled;
+    fullscreen.onclick=async()=>{
+      try{
+        if(document.fullscreenElement)await document.exitFullscreen();
+        else await player.requestFullscreen();
+      }catch(_){notice("Vollbild konnte nicht geöffnet werden.",true);}
+    };
   }
   if(isTrainer) train().catch(err=>notice("Unterricht kann nicht geladen werden: "+err.message,true));
   else if(isGuest)watch().catch(err=>notice(err.message,true));

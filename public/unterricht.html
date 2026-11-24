@@ -35,23 +35,29 @@ main{max-width:1740px;margin:0 auto;padding:clamp(15px,2vw,32px)}
 .pill.waiting{background:#354027;border-color:#777d46;color:#ecdfaa}
 .board-padding{padding:14px}
 #tafel{position:relative;width:100%;aspect-ratio:16/9;background:#04070c;overflow:hidden;border:1px solid #4e6180;border-radius:10px;isolation:isolate;contain:layout paint}
-/* Während einer Live-Stunde hat die Folientafel eine feste, sichtbare
-   16:9-Position. Nur die Werkzeugseitenleiste darf noch scrollen.
-   So wandert der Region-Capture-Ausschnitt nicht mit der Dokumentseite. */
-body.presentation-locked{height:100dvh;display:flex;flex-direction:column;overflow:hidden;overscroll-behavior:none}
-body.presentation-locked>header{flex:0 0 auto}
-body.presentation-locked>main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:12px clamp(10px,1.5vw,24px)}
-body.presentation-locked #hinweis{flex:0 0 auto;height:48px;max-height:48px;overflow:hidden;margin-bottom:10px}
-body.presentation-locked #ausbilder{flex:1;min-height:0;overflow:hidden}
-body.presentation-locked .workspace{height:100%;min-height:0}
-body.presentation-locked .workspace-main{min-height:0;display:flex;flex-direction:column}
-body.presentation-locked .panel-head{flex:0 0 auto;min-height:68px}
-body.presentation-locked .board-padding{min-height:0;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px}
-body.presentation-locked #tafel{flex:0 0 auto;width:min(100%,calc((100dvh - 305px)*1.7777778));max-height:calc(100dvh - 305px);aspect-ratio:16/9}
-body.presentation-locked .board-foot{width:100%;margin-top:0;flex:0 0 auto}
-body.presentation-locked aside{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:4px}
-body.presentation-locked aside .side-section{flex-shrink:0}
-body.presentation-locked .workspace-main,body.presentation-locked aside{overscroll-behavior:contain}
+/* Normales Seitenscrolling auch bei laufender Übertragung.
+   Nur der Folienblock bleibt sichtbar; die Werkzeuge liegen direkt darunter.
+   Kein overflow:hidden auf body, main oder dem Unterrichtscontainer. */
+body.presentation-locked>main{max-width:none;padding:12px clamp(10px,1.4vw,24px)}
+body.presentation-locked .workspace{grid-template-columns:minmax(0,1fr) minmax(235px,265px);gap:12px;align-items:start;scroll-margin-top:8px}
+body.presentation-locked .workspace-main{position:sticky;top:8px;z-index:2;min-width:0;background:#14243b}
+body.presentation-locked .panel-head{padding:8px 12px;gap:6px}
+body.presentation-locked .panel-head h2{font-size:15px;margin:0}
+body.presentation-locked .panel-head .eyebrow{display:none}
+body.presentation-locked .board-padding{padding:8px;display:flex;flex-direction:column;align-items:center;gap:6px}
+body.presentation-locked #tafel{width:min(100%,calc(max(180px,100dvh - 155px)*1.7777778));aspect-ratio:16/9;border-radius:0}
+body.presentation-locked .board-foot{width:100%;margin:0}
+body.presentation-locked .board-foot p{font-size:11px}
+body.presentation-locked aside{min-width:0}
+.board-tools{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:5px}
+.board-tools button{font-size:12px;padding:7px 10px;white-space:nowrap}
+#tafel:focus-within{outline:none}
+@media(max-width:850px){
+ body.presentation-locked .workspace{grid-template-columns:1fr}
+ body.presentation-locked #tafel{width:min(100%,calc(max(180px,48dvh)*1.7777778))}
+ body.presentation-locked aside{grid-template-columns:1fr}
+ body.presentation-locked aside>section:last-child{grid-column:auto}
+}
 #folie{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
 #overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;touch-action:none}
 #tafel[data-werkzeug="laser"] #overlay,#tafel[data-werkzeug="pfeil"] #overlay,#tafel[data-werkzeug="stift"] #overlay{pointer-events:auto;cursor:crosshair}
@@ -95,8 +101,15 @@ aside{display:grid;gap:16px}
    <div class="workspace-main panel">
     <div class="panel-head"><div><span class="eyebrow">Präsentation · Live-Unterricht</span><h2>Deine Unterrichtstafel</h2></div><span class="pill" id="sendestatus">Noch nicht gestartet</span></div>
     <div class="board-padding">
-     <!-- Ausschließlich dieses Element wird per Region Capture gesendet. -->
+     <!-- Ausschließlich dieses Element wird per Element/Region Capture gesendet. -->
      <div id="tafel" data-werkzeug="cursor"><iframe id="folie" title="Verknüpfte AuLK-Google-Präsentation" allowfullscreen></iframe><canvas id="overlay" aria-label="Moderationswerkzeuge auf der Präsentation"></canvas></div>
+     <div class="board-tools" role="group" aria-label="Moderationswerkzeuge">
+      <button data-tool="cursor" class="active" aria-pressed="true">↖ Bedienen</button>
+      <button data-tool="laser" aria-pressed="false">● Laser</button>
+      <button data-tool="pfeil" aria-pressed="false">➜ Pfeil</button>
+      <button data-tool="stift" aria-pressed="false">✎ Zeichnen</button>
+      <button id="loeschen">Markierungen löschen</button>
+     </div>
      <div class="board-foot"><p id="fokusInfo">Übertragen wird nur die 16:9-Folientafel samt Markierungen. Im Live-Modus bleibt sie beim Scrollen fest stehen.</p><button id="aktualisieren" type="button">↻ Folien neu laden</button></div>
     </div>
    </div>
@@ -109,18 +122,11 @@ aside{display:grid;gap:16px}
      <div class="step">Schritt 2 · Unterricht</div><h2>Nur Präsentation übertragen</h2>
      <p>Einmalig im Browser <strong>„Diesen Tab“</strong> freigeben. Der Unterrichtsraum überprüft die Auswahl und schneidet die Übertragung technisch auf die Tafel zu. Andere Tabs und der Desktop werden nicht übertragen.</p>
      <button id="teilen" class="primary">▶ Unterricht starten</button>
-     <p id="sicherheit" class="muted">Im Live-Modus bleibt die Folientafel fest stehen; nur die rechte Werkzeugleiste scrollt. Der Stream bevorzugt scharfe Schrift und bis zu 24 Bilder/s. Die tatsächliche Qualität hängt von Browser, Fenstergröße und Verbindung ab. Erforderlich: Chrome oder Edge mit Region Capture.</p>
+     <p id="sicherheit" class="muted">Die Seite bleibt scrollbar, die Tafel bleibt im Blick. Der Stream bevorzugt scharfe Schrift bei bis zu 15 Bildern/s und höherem Bitratenbudget. Die echte Auflösung hängt von Bildschirm und Verbindung ab. Aktuelles Chrome oder Edge erforderlich.</p>
     </section>
     <section class="panel side-section">
-     <div class="step">Schritt 3 · Moderation</div><h2>Werkzeuge</h2>
-     <div class="tool-grid" role="group" aria-label="Moderationswerkzeuge">
-      <button data-tool="cursor" class="active" aria-pressed="true">↖ Bedienen</button>
-      <button data-tool="laser" aria-pressed="false">● Laser</button>
-      <button data-tool="pfeil" aria-pressed="false">➜ Pfeil</button>
-      <button data-tool="stift" aria-pressed="false">✎ Zeichnen</button>
-     </div>
-     <div class="actions" style="margin-top:10px"><button id="loeschen">Markierungen löschen</button></div>
-     <p>Du steuerst die Google-Folien direkt in der Tafel. Die Werkzeuge werden im Livebild mit übertragen.</p>
+     <div class="step">Schritt 3 · Abschluss</div><h2>Unterricht verwalten</h2>
+     <p>Die Moderationswerkzeuge liegen direkt unter der Tafel. Nur ihre Markierungen, nicht die Bedienknöpfe, sind im Livebild sichtbar.</p>
      <div class="actions" style="margin-top:14px"><button id="ende" class="danger">Unterricht beenden</button></div>
      <p><a id="extern" target="_blank" rel="noopener noreferrer">Google-Präsentation im Original öffnen</a></p>
     </section>
@@ -129,9 +135,9 @@ aside{display:grid;gap:16px}
  </section>
  <section id="mitmachen" class="hidden">
   <div class="viewer-head"><span class="eyebrow">IDV · Live-Ausbildung</span><h2>Dein digitaler Unterricht</h2><p>Du erhältst ausschließlich die Google-Präsentation mit den Live-Markierungen deines Ausbilders. Keine Anmeldung, Kamera oder Mikrofonfreigabe erforderlich.</p><button id="beitreten" class="primary">Am Unterricht teilnehmen</button></div>
-  <div id="zuschauer" class="panel hidden"><video id="stream" autoplay playsinline aria-label="Präsentation mit Live-Markierungen des Ausbilders"></video><p class="viewer-note">Das Bild erscheint, sobald der Ausbilder die Präsentationsübertragung startet. Für Sprache könnt ihr Discord verwenden.</p></div>
+  <div id="zuschauer" class="panel hidden"><video id="stream" autoplay playsinline aria-label="Präsentation mit Live-Markierungen des Ausbilders"></video><div class="board-foot"><span id="empfangsqualitaet" class="muted" aria-live="polite">Warte auf Bildsignal</span><button id="vollbild" type="button">⛶ Vollbild</button></div><p class="viewer-note">Das Bild erscheint, sobald der Ausbilder die Präsentationsübertragung startet. Für Sprache könnt ihr Discord verwenden.</p></div>
  </section>
 </main>
-<script src="/assets/unterricht-raum.js" defer></script>
+<script src="/assets/unterricht-raum.js?v=20261124-2" defer></script>
 </body>
 </html>
