@@ -9,7 +9,7 @@ use RuntimeException;
 
 const SESSION_HOURS = 12;
 const MAX_BODY_BYTES = 2097152;
-const PANEL_LOGIN_ROLES = ['Administrator','Leitungsdienst','Polizeirat'];
+const PANEL_LOGIN_ROLES = ['Administrator','Leitungsdienst','Polizeirat','Ausbildungsleitung','Ausbilder'];
 
 function hasPanelLoginRole(string $role): bool {
     return in_array($role,PANEL_LOGIN_ROLES,true);
@@ -109,6 +109,7 @@ function loggedUser(bool $allowPasswordChange=false): ?array {
          WHERE s.token=? AND s.ablauf>UTC_TIMESTAMP() LIMIT 1",[$token]);
     $u=$users[0]??null;
     if (!$u || (int)$u['gesperrt']===1 || !hasPanelLoginRole((string)$u['rolle'])) return null;
+    if ($u['rolle']==='Ausbilder' && !sql('SELECT 1 FROM ausbildung_ausbilder WHERE user_id=? AND aktiv=1 LIMIT 1',[(int)$u['id']])) return null;
     if ((int)$u['muss_passwort_aendern']===1) {
         return $allowPasswordChange && $u['zweck']==='passwortwechsel'?$u:null;
     }
@@ -120,6 +121,10 @@ function requireLogin(bool $allowPasswordChange=false): array {
     return $u;
 }
 function rights(array $u): array {
+    // Ausbildungsrollen sind auf den Ausbildungsbereich beschränkt, selbst wenn
+    // alte Rollen- oder Einzelrechte in der Datenbank noch weiter reichen.
+    if($u['rolle']==='Ausbilder')return ['ausbildung'=>1];
+    if($u['rolle']==='Ausbildungsleitung')return ['ausbildung'=>2];
     ensureDNApprovalPermissions();
     $rights=[];
     foreach(sql("SELECT modul,stufe FROM role_perms WHERE rolle=?",[$u['rolle']]) as $row)
@@ -178,9 +183,11 @@ function handleLogin(): never {
         fail(401,'Dienstnummer oder Passwort stimmt nicht');
     }
     if((int)$u['gesperrt']===1)fail(403,'Dieser Zugang ist gesperrt');
-    // Only the three explicitly authorized dashboard roles can sign in.
+    // Ausschließlich die fünf ausdrücklich erlaubten Verwaltungs-/Ausbildungsrollen.
     if(!hasPanelLoginRole((string)$u['rolle']))
         fail(403,'Für diese Rolle besteht kein Verwaltungszugang');
+    if($u['rolle']==='Ausbilder' && !sql('SELECT 1 FROM ausbildung_ausbilder WHERE user_id=? AND aktiv=1 LIMIT 1',[(int)$u['id']]))
+        fail(403,'Kein aktiver Ausbilderzugang');
     $token=bin2hex(random_bytes(32));
     $purpose=(int)$u['muss_passwort_aendern']===1?'passwortwechsel':'voll';
     $expiry=time()+SESSION_HOURS*3600;
@@ -235,6 +242,10 @@ function run(): void {
         if(!str_starts_with($uri,'/api/')) fail(404,'Nicht gefunden');
         csrfCheck();
         require_once __DIR__.'/RateLimit.php';
+        if($method==='POST'&&$uri==='/api/ausbildung-extern/status'){
+            require_once __DIR__.'/Ausbildung.php';
+            ausbildungExtern();
+        }
         if($method==='POST'&&$uri==='/api/login')handleLogin();
         if($method==='POST'&&$uri==='/api/logout')handleLogout();
         if($method==='GET'&&$uri==='/api/me'){
@@ -244,8 +255,13 @@ function run(): void {
         if($method==='POST'&&$uri==='/api/passwort')handlePassword();
         // Unknown routes must fail closed, and no PHP code may delegate to PostgreSQL.
         $u=requireLogin();
+        // Nur Ausbildungs-APIs sind für die isolierten Ausbildungsrollen zulässig.
+        if(in_array($u['rolle'],['Ausbildungsleitung','Ausbilder'],true)&&!str_starts_with($uri,'/api/ausbildung/'))
+            fail(403,'Dieser Zugang ist nur für die Ausbildungsabteilung freigegeben');
         // Make authenticated actor available to MySQL audit triggers on every route.
         sql('SET @idv_actor = ?',[(int)$u['id']]);
+        require_once __DIR__.'/Ausbildung.php';
+        if(dispatchAusbildung($u,$method,$uri))return;
         if($method==='GET'&&$uri==='/api/changes') {
             require_once __DIR__.'/Changes.php';
             streamChanges($u);
