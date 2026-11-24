@@ -89,7 +89,7 @@ footer{border-top:1px solid var(--edge);padding:22px 0;font-size:12px;color:var(
 <section class="anchor" id="monitore" aria-labelledby="monitorTitel"><div class="section-head"><div class="eyebrow">Automatisch mit dem Personalstamm verbunden</div><h2 id="monitorTitel">PMA-, PKA- und KKA-Monitore</h2><p>Alle aktuellen Anwärter einzeln, direkt aus dem zentralen Personalstamm. Jedes Pflichtmodul und der jeweilige Zulassungsstatus werden automatisch aktualisiert.</p></div>
 <div class="search-monitors"><label for="monitorSuche">Anwärter suchen</label><input id="monitorSuche" type="search" placeholder="Name eingeben …" autocomplete="off" aria-label="Öffentliche Ausbildungsmonitore durchsuchen"></div>
 <div class="monitor-gruppen" id="monitorKarten" aria-live="polite"><div class="card">Monitore werden geladen …</div></div>
-<p class="notice">Öffentlich sichtbar sind der Anwärtername, die abgeschlossenen und offenen Pflichtmodule sowie beim PMA die <b>Anzahl der abgegebenen Stimmen</b> und der <b>gewichtete Gesamtpunktestand</b>. Wer wie abgestimmt hat, bleibt ausschließlich im internen Ausbildungsbereich. Dienstnummern und Personalakten werden nicht veröffentlicht.</p>
+<p class="notice">Öffentlich sichtbar sind der Anwärtername, die abgeschlossenen und offenen Pflichtmodule und beim PMA ausschließlich die <b>Anzahl der abgegebenen Stimmen</b> sowie die <b>Prüfungszulassung</b>. Punktestände und einzelne Entscheidungen bleiben ausschließlich im internen Ausbildungsbereich. Dienstnummern und Personalakten werden nicht veröffentlicht.</p>
 <p id="monitorZeit" class="muted"></p>
 </section>
 <section class="anchor card" id="unterlagen"><div class="eyebrow">AuLK-Bibliothek</div><h2>Freigegebene Ausbildungsunterlagen</h2><p>Hier erscheinen nur Materialien, die die Ausbildungsleitung ausdrücklich für den öffentlichen Abruf freigegeben hat. Zusätzlich können in Google Drive eigene Zugriffsrechte gelten.</p><div id="documents" aria-live="polite"><p>Dokumente werden geladen …</p></div></section>
@@ -123,7 +123,6 @@ async function documents(){
   }
  }catch(e){docsArea.replaceChildren(make('p','Unterlagen derzeit nicht verfügbar: '+e.message));}
 }
-const formatPunkte=value=>Number(value||0).toLocaleString('de-DE',{maximumFractionDigits:2});
 let currentMonitors=[];
 function renderMonitors(){
  const area=document.querySelector('#monitorKarten');
@@ -165,14 +164,16 @@ function renderMonitors(){
    }
    box.append(list);
    if(group.laufbahn==='PMA'){
-    const vote=make('div',undefined,'vote-box'),line=make('div',undefined,'vote-row');
-    line.append(make('span','Abgegebene Stimmen: '+(person.stimmenAnzahl||0)),
-      make('strong',formatPunkte(person.stimmenPunkte)+' / '+formatPunkte(person.stimmenSchwelle)+' Punkte'));
+    const vote=make('div',undefined,'vote-box');
+    const line=make('div',undefined,'vote-row');
+    line.append(make('span','Abgegebene Stimmen: '+Number(person.stimmenAnzahl||0)));
     vote.append(line);
-    const needed=Number(person.stimmenPunkte||0)>=Number(person.stimmenSchwelle||2.5);
-    vote.append(make('p',needed?'✓ Erforderlicher Punktestand erreicht':'Punktestand für die Prüfung noch nicht erreicht','muted'));
-    if(!person.moduleAbgeschlossen && needed)
-      vote.append(make('small','Die Prüfungszulassung erfolgt erst nach Abschluss aller Pflichtmodule.'));
+    if(person.zurPruefungZugelassen)
+      vote.append(make('p','✓ Die erforderliche Stimmenwertung ist erreicht; zur Prüfung zugelassen.','muted'));
+    else if(person.moduleAbgeschlossen)
+      vote.append(make('p','Pflichtmodule abgeschlossen. Die erforderliche Stimmenwertung ist noch nicht erreicht.','muted'));
+    else
+      vote.append(make('p','Zunächst müssen alle Pflichtmodule abgeschlossen werden.','muted'));
     box.append(vote);
    }
    grid.append(box);
