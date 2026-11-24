@@ -57,7 +57,7 @@ police_after="$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_ausbil
 ")"
 [[ "$police_before" == "$police_after" ]] || { echo "Existing police records/roles/permissions changed during setup";exit 1; }
 after="$(curl -sS -b "$temp/admin.cookies" "$base/api/ausbildung/setup-status")"
-[[ "$after" == *'"bereit":true'* && "$after" == *'"ausbildungsmodule":11'* && "$after" == *'"personalbindungBereit":true'* ]] || { echo "Schema incomplete: $after";exit 1; }
+[[ "$after" == *'"bereit":true'* && "$after" == *'"ausbildungsmodule":11'* && "$after" == *'"personalbindungBereit":true'* && "$after" == *'"stimmenDetailsBereit":true'* ]] || { echo "Schema incomplete: $after";exit 1; }
 twice="$(curl -sS -b "$temp/admin.cookies" -H 'Content-Type: application/json' -X POST \
  --data '{"bestaetigung":"BACKUP_ERSTELLT_AUSBILDUNG"}' "$base/api/ausbildung/setup")"
 [[ "$twice" == *'"bereitsEingerichtet":true'* ]] || { echo "Setup not idempotent: $twice";exit 1; }
@@ -67,14 +67,15 @@ twice="$(curl -sS -b "$temp/admin.cookies" -H 'Content-Type: application/json' -
 # darf der Server die idempotente Ergänzung nach geprüftem Backup reparieren.
 mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_ausbildung_setup_ci -e "
  ALTER TABLE ausbildung_anwaerter DROP INDEX ausbildung_anwaerter_quelle_uq;
- ALTER TABLE ausbildung_anwaerter DROP COLUMN personal_quelle;"
+ ALTER TABLE ausbildung_anwaerter DROP COLUMN personal_quelle;
+ ALTER TABLE ausbildung_stimmen DROP COLUMN anlass, DROP COLUMN streifenfahrt_datum, DROP COLUMN bemerkung;"
 partial="$(curl -sS -b "$temp/admin.cookies" "$base/api/ausbildung/setup-status")"
-[[ "$partial" == *'"bereit":true'* && "$partial" == *'"personalbindungBereit":false'* ]] || { echo "Missing binding not detected: $partial";exit 1; }
+[[ "$partial" == *'"bereit":true'* && "$partial" == *'"personalbindungBereit":false'* && "$partial" == *'"stimmenDetailsBereit":false'* ]] || { echo "Missing binding not detected: $partial";exit 1; }
 code="$(curl -sS -o "$temp/partial-bootstrap" -w '%{http_code}' -b "$temp/admin.cookies" "$base/api/ausbildung/bootstrap")"
 [[ "$code" == 503 ]] || { echo "Unlinked monitor was not blocked: $code";exit 1; }
 repair="$(curl -sS -b "$temp/admin.cookies" -H 'Content-Type: application/json' -X POST \
  --data '{"bestaetigung":"BACKUP_ERSTELLT_AUSBILDUNG"}' "$base/api/ausbildung/setup")"
-[[ "$repair" == *'"ok":true'* && "$repair" == *'"personalbindungBereit":true'* ]] || { echo "Partial binding repair failed: $repair";cat "$temp/php.log";exit 1; }
+[[ "$repair" == *'"ok":true'* && "$repair" == *'"personalbindungBereit":true'* && "$repair" == *'"stimmenDetailsBereit":true'* ]] || { echo "Partial binding repair failed: $repair";cat "$temp/php.log";exit 1; }
 bootstrap="$(curl -sS -b "$temp/admin.cookies" "$base/api/ausbildung/bootstrap")"
 [[ "$bootstrap" == *'"module"'* && "$bootstrap" == *'"anwaerter":[]'* ]] || { echo "Bootstrap failed after setup: $bootstrap";exit 1; }
 public="$(curl -sS "$base/api/ausbildung-oeffentlich")"
