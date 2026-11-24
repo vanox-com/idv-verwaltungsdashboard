@@ -140,7 +140,7 @@ function ausbildungLink($url): string {
 function ausbildungExtern(): never {
     $input=body();$token=(string)($input['token']??'');
     if(!preg_match('/^[a-f0-9]{64}$/iD',$token))fail(404,'Ansicht nicht verfügbar');
-    $rows=sql('SELECT id,laufbahn FROM ausbildung_anwaerter WHERE public_hash=? AND public_aktiv=1 LIMIT 1',
+    $rows=sql('SELECT id,laufbahn,personalnummer,personal_quelle FROM ausbildung_anwaerter WHERE public_hash=? AND public_aktiv=1 LIMIT 1',
         [hash('sha256',strtolower($token))]);
     if(!$rows)fail(404,'Ansicht nicht verfügbar');
     $a=$rows[0];
