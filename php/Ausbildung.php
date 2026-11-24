@@ -157,7 +157,7 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         if(!$leitung)foreach($trainers as &$t){unset($t['email'],$t['notiz']);}unset($t);
         $trainees=sql('SELECT * FROM ausbildung_anwaerter ORDER BY laufbahn,name,id');
         foreach($trainees as &$a)$a['fortschritt']=ausbildungFortschritt($a);unset($a);
-        $materials=sql('SELECT id,modul_code,titel,typ,url FROM ausbildung_materialien WHERE aktiv=1 ORDER BY modul_code,titel');
+        $materials=sql('SELECT id,modul_code,titel,typ,url,CASE WHEN dateipfad IS NULL THEN 0 ELSE 1 END AS datei FROM ausbildung_materialien WHERE aktiv=1 ORDER BY modul_code,titel');
         $me=ausbildungTrainer($u);
         respond(200,['leitung'=>$leitung,'user'=>['id'=>(int)$u['id'],'rolle'=>$u['rolle'],
             'name'=>userName($u)],'module'=>$module,'ausbilder'=>$trainers,
@@ -319,6 +319,14 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             auditAction($u,'Externen Ausbildungslink für Anwärter-ID '.$id.' deaktiviert');
             respond(200,['ok'=>true]);
         }
+    }
+    if($method==='POST'&&$uri==='/api/ausbildung/materialien/upload'){
+        require_once __DIR__.'/AusbildungFiles.php';
+        ausbildungDateiUpload($u);
+    }
+    if($method==='GET'&&preg_match('#^/api/ausbildung/materialien/([1-9]\\d*)/datei$#D',$uri,$fileMatch)){
+        require_once __DIR__.'/AusbildungFiles.php';
+        ausbildungDateiDownload($u,cleanId($fileMatch[1]));
     }
     if($uri==='/api/ausbildung/materialien'&&$method==='POST'){
         ausbildungRecht($u,2);$b=body();
