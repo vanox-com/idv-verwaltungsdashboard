@@ -21,7 +21,8 @@ function unterrichtRaum(int $id, int $userId): array {
     return $found[0];
 }
 function unterrichtAktiv(array $room): void {
-    if((int)$room['beendet']===1 || strtotime((string)$room['ablauf'])<=time())
+    $expires=(new \DateTimeImmutable((string)$room['ablauf'],new \DateTimeZone('UTC')))->getTimestamp();
+    if((int)$room['beendet']===1 || $expires<=time())
         fail(410,'Die Unterrichtssitzung ist beendet oder abgelaufen');
 }
 function unterrichtToken(array $input): string {
@@ -83,6 +84,8 @@ function dispatchUnterrichtGast(string $method, string $uri): bool {
 function dispatchUnterrichtTrainer(array $u,string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/ausbildung/unterricht'))return false;
     ausbildungRecht($u);
+    if(!ausbildungSchemaStatus()['unterrichtBereit'])
+        fail(503,'Die Unterrichtsdatenbank fehlt. Bitte als Administrator zuerst eine verschlüsselte Sicherung erstellen und anschließend im Ausbildungsbereich die Ergänzung einrichten.');
     if($uri==='/api/ausbildung/unterricht'&&$method==='POST'){
         $input=body();
         $code=$input['modul_code']??null;$materialId=$input['material_id']??null;
