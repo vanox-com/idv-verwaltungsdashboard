@@ -89,6 +89,7 @@ function dispatchAusbildungSetup(array $u,string $method,string $uri): bool {
         $pdo=db();
         $lock=sql("SELECT GET_LOCK('idv_ausbildung_schema_v1',10) AS ok");
         if((int)($lock[0]['ok']??0)!==1)fail(503,'Ausbildungsdatenbank wird bereits eingerichtet');
+        $migrationError=null;
         try {
             // MySQL DDL implicitly commits. Both checked-in scripts are additive
             // and idempotent so a partially completed install can be retried.
@@ -99,14 +100,16 @@ function dispatchAusbildungSetup(array $u,string $method,string $uri): bool {
             if(!$status['bereit'])throw new \RuntimeException('Schema nach Einrichtung unvollständig');
             auditAction($u,'Ausbildungsdatenbank additiv eingerichtet','add');
         }catch(\Throwable $error){
+            $migrationError=$error;
             error_log('[IDV Ausbildung] Einrichtung fehlgeschlagen: '.$error::class.
                 ' in '.basename($error->getFile()).':'.$error->getLine());
-            fail(503,'Die Ausbildungsdatenbank konnte nicht vollständig eingerichtet werden. '
-                .'Der Datenbanknutzer benötigt CREATE/ALTER-Berechtigung; alternativ beide SQL-Skripte '
-                .'nach Backup über phpMyAdmin einspielen.');
         }finally{
             sql("SELECT RELEASE_LOCK('idv_ausbildung_schema_v1')");
         }
+        if($migrationError!==null)
+            fail(503,'Die Ausbildungsdatenbank konnte nicht vollständig eingerichtet werden. '
+                .'Der Datenbanknutzer benötigt CREATE/ALTER-Berechtigung; alternativ beide SQL-Skripte '
+                .'nach Backup über phpMyAdmin einspielen.');
         respond(200,['ok'=>true,'schema'=>$status]);
     }
     fail(405,'Methode nicht erlaubt');
