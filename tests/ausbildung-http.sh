@@ -88,6 +88,44 @@ rev="$(revision "$id")"
 vote="$(req "$temp/lead" PUT "/api/ausbildung/anwaerter/$id/stimme" "{\"stimme\":\"Ja\",\"revision\":$rev}")"
 [[ "$vote" == *'"ok":true'* ]] || { echo "$vote";exit 1; }
 [[ "$(status "$id")" == 'Zugelassen' ]] || { echo "Status: $(status "$id")";exit 1; }
+# Die bereits vergebene Ja-Stimme eines normalen Ausbilders zählt 1 Punkt,
+# die der Ausbildungsleitung 2 Punkte. Änderungen der Ausbilderfunktion
+# werden ohne Rewrite der historischen ausbildung_stimmen neu gewertet.
+check_weight(){
+ local expected="$1"
+ req "$temp/lead" GET "/api/ausbildung/anwaerter/$id" | php -r '
+   $d=json_decode(stream_get_contents(STDIN),true);
+   if(!$d||abs((float)($d["fortschritt"]["jaPunkte"]??-1)-(float)$argv[1])>0.001)
+     {fwrite(STDERR,"Wrong Ja-Punkte: ".json_encode($d).PHP_EOL);exit(1);}
+   if(($d["fortschritt"]["stimmenJa"]??0)!==2)exit(2);
+ ' "$expected"
+}
+check_weight 3.0
+trainerId="$(req "$temp/lead" GET /api/ausbildung/bootstrap | php -r '$d=json_decode(stream_get_contents(STDIN),true);echo $d["ausbilder"][0]["id"]??"";')"
+[[ "$trainerId" =~ ^[0-9]+$ ]] || { echo 'Trainer profile absent';exit 1; }
+change_role(){
+ local role="$1"
+ local payload
+ payload="$(php -r '$x=json_decode(stream_get_contents(STDIN),true);$x["funktion"]=$argv[1];unset($x["startpasswort"]);echo json_encode($x,JSON_UNESCAPED_UNICODE);' "$role" <<< "$trainer")"
+ local changed
+ changed="$(req "$temp/lead" PATCH "/api/ausbildung/ausbilder/$trainerId" "$payload")"
+ [[ "$changed" == *'"ok":true'* ]] || { echo "Role update failed: $changed";exit 1; }
+}
+change_role 'Ausbilder auf Probe'
+check_weight 2.5
+change_role 'Leitungsdienst'
+check_weight 3.5
+change_role 'Ausbildungsleitung'
+check_weight 4.0
+change_role 'Ausbilder mittlerer Dienst'
+check_weight 3.0
+stored_weight="$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_train_ci -e "
+ SELECT s.gewicht FROM ausbildung_stimmen s
+ JOIN users u ON u.id=s.ausbilder_user_id
+ WHERE s.anwaerter_id=$id AND u.dienstnummer='AUS-TRAIN1'")"
+[[ "$stored_weight" == "1.00" || "$stored_weight" == "1.0" ]] || {
+ echo "Existing vote unexpectedly rewritten: $stored_weight";exit 1; }
+
 code="$(curl -sS -o "$temp/conflict" -w '%{http_code}' -b "$temp/trainer" -H 'Content-Type: application/json' -X PUT --data "{\"abgeschlossen\":false,\"revision\":$rev}" "$base/api/ausbildung/anwaerter/$id/modul/PM.0")"
 [[ "$code" == 409 ]] || { echo "Stale edit accepted: $code";exit 1; }
 link="$(req "$temp/lead" POST "/api/ausbildung/anwaerter/$id/link" '{}')"
