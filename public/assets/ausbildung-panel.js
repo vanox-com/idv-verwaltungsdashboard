@@ -42,6 +42,14 @@ async function load(){
    if(data.unterrichtBereit){
      try{data.raeume=(await request('unterricht')).raeume||[]}catch(_){data.raeume=[]}
    }else data.raeume=[];
+   if(!lessonInvite)for(const room of data.raeume){
+     if(!Number(room.aktiv))continue;
+     const link=sessionStorage.getItem('idvLesson:'+room.id);
+     if(link && link.startsWith(location.origin+'/unterricht.html#')){
+       lessonInvite={id:Number(room.id),link,titel:room.titel,modul_code:room.modul_code};
+       break;
+     }
+   }
    el('#account').textContent=data.user.name+' · '+data.user.rolle;
    if(!['Ausbilder','Ausbildungsleitung'].includes(data.user.rolle))el('#back').classList.remove('hidden');
    el('#notice').style.display='none';
@@ -99,7 +107,7 @@ function render(){
 function overview(){
  const a=data.anwaerter;const n=a.filter(x=>x.fortschritt.bereit).length;
  return '<p class="callout">Die normale Personaltabelle ist der Hauptdatenstamm. Anwärter werden anhand ihres aktuellen Dienstgrades automatisch PMA, PKA oder KKA zugeordnet. Die Ausbildungsübersicht speichert nur ergänzende Modul- und Prüfungsdaten.</p>'+
- '<div class="kpis"><div class="kpi"><strong>'+a.length+'</strong><span>Anwärter insgesamt</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='PMA').length+'</strong><span>PMA</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn!=='PMA').length+'</strong><span>PKA / KKA</span></div><div class="kpi"><strong>'+n+'</strong><span>Zur Prüfung zugelassen</span></div></div>'+
+ '<div class="kpis"><div class="kpi"><strong>'+a.length+'</strong><span>Anwärter insgesamt</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='PMA').length+'</strong><span>PMA</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='PKA').length+'</strong><span>PKA</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='KKA').length+'</strong><span>KKA</span></div><div class="kpi"><strong>'+n+'</strong><span>Zur Prüfung zugelassen</span></div></div>'+
  '<div class="grid"><section class="card"><h2>Prüfungsstand</h2>'+a.slice(0,12).map(x=>'<div class="flex space" style="border-bottom:1px solid #ffffff18;padding:9px 0"><span><b>'+esc(x.name)+'</b><br><small>'+esc(x.laufbahn)+' · '+x.fortschritt.moduleFertig+'/'+x.fortschritt.moduleGesamt+' Module</small></span>'+pill(x.fortschritt.status)+'</div>').join('')+
  (a.length?'':'<p class="muted">Noch keine Anwärter angelegt.</p>')+
  '</section><section class="card"><h2>Ausbildungsstruktur</h2><p>Die sieben PMA-Module stammen aus der Excel-Vorlage. Die PMA-Prüfungsbereitschaft setzt vollständige Module und mindestens <b>2,5 gewichtete Stimmenpunkte</b> voraus.</p><p>PKA und KKA verwenden derzeit PK.1–PK.4. Hier gilt laut Vorlage: alle vier Module abgeschlossen = zugelassen.</p><p class="muted">PK.5, PK.7 und PM.7 sind in der Kompetenzmatrix beziehungsweise Übersicht genannt, aber mangels eindeutiger Bewertungsregel noch keine Pflichtmodule.</p><button data-tab="monitore" class="primary">Zu den Monitoren</button></section></div>';
@@ -208,9 +216,9 @@ function classroom(){
  '<button type="button" data-action="open-room" data-id="'+lessonInvite.id+'">Ausbildertafel öffnen ↗</button>'+
  '<button type="button" data-action="end-room" data-id="'+lessonInvite.id+'" class="danger">Sitzung beenden</button></div></section>';
  out+='</div><div class="card"><h2>Meine Unterrichtsräume</h2><p class="muted">Status, Teilnehmer und Sitzungskontrolle. Beendete Räume sind nicht mehr erreichbar.</p>'+
- '<div class="tablewrap"><table><thead><tr><th>Modul</th><th>Präsentation</th><th>Erstellt (UTC)</th><th>Anwärter</th><th>Status</th><th></th></tr></thead><tbody>'+
+ '<div class="tablewrap"><table><thead><tr><th>Modul</th><th>Präsentation</th><th>Erstellt (UTC)</th><th>Ablauf (UTC)</th><th>Anwärter</th><th>Status</th><th></th></tr></thead><tbody>'+
  (data.raeume||[]).map(r=>'<tr><td><b>'+esc(r.modul_code)+'</b></td><td>'+esc(r.titel)+'</td><td>'+esc(String(r.erstellt||'').slice(0,16))+'</td>'+
- '<td>'+(Number(r.teilnehmer)?'Beigetreten':'Wartet')+'</td><td>'+(!Number(r.aktiv)?'<span class="pill">Abgeschlossen</span>':'<span class="pill good">Aktiv</span>')+'</td>'+
+ '<td>'+esc(String(r.ablauf||'').slice(0,16))+'</td><td>'+(Number(r.teilnehmer)?'Beigetreten':'Wartet')+'</td><td>'+(!Number(r.aktiv)?'<span class="pill">Abgeschlossen</span>':'<span class="pill good">Aktiv</span>')+'</td>'+
  '<td>'+(Number(r.aktiv)?'<button class="compact" data-action="open-room" data-id="'+Number(r.id)+'">Öffnen</button> <button class="compact danger" data-action="end-room" data-id="'+Number(r.id)+'">Beenden</button>':'')+'</td></tr>').join('')+
  '</tbody></table></div>'+(data.raeume?.length?'':'<p class="muted">Noch keine Unterrichtsräume angelegt.</p>')+'</div>';
  return out;
