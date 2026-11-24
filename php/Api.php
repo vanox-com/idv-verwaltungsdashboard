@@ -244,6 +244,16 @@ function run(): void {
         $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
         if(!str_starts_with($uri,'/api/')) fail(404,'Nicht gefunden');
         csrfCheck();
+        // While an administrator restores a database, block every ordinary
+        // write through this PHP application (including login and logout).
+        // Backup restoration itself remains explicitly controlled separately.
+        if(in_array($method,['POST','PUT','PATCH','DELETE'],true)
+           &&!str_starts_with($uri,'/api/backup/')){
+            $backupRoot=(string)(getenv('IDV_BACKUP_DIRECTORY')
+                ?:dirname(__DIR__).'/private/database-backups');
+            if(is_file($backupRoot.'/.restore_maintenance'))
+                fail(503,'Datenbank wird gerade wiederhergestellt. Schreibzugriffe sind vorübergehend gesperrt.');
+        }
         require_once __DIR__.'/RateLimit.php';
         if($method==='POST'&&$uri==='/api/ausbildung-extern/status'){
             require_once __DIR__.'/Ausbildung.php';
@@ -282,6 +292,8 @@ function run(): void {
         sql('SET @idv_actor = ?',[(int)$u['id']]);
         // Ausbildung benötigt cleanId() und auditAction() aus Settings.php.
         require_once __DIR__.'/Settings.php';
+        require_once __DIR__.'/DatabaseBackup.php';
+        if(dispatchDatabaseBackup($u,$method,$uri))return;
         require_once __DIR__.'/Ausbildung.php';
         if(dispatchAusbildung($u,$method,$uri))return;
         if($method==='GET'&&$uri==='/api/changes') {
