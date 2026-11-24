@@ -69,9 +69,9 @@ function ausbildungSynchronisierePersonal(): array {
             $rsa=(int)($p['rsa']??0);
             $matched=sql('SELECT id,name,laufbahn,personalnummer FROM ausbildung_anwaerter WHERE personal_quelle=? LIMIT 1',[$quelle]);
             if($matched) {
-                sql('UPDATE ausbildung_anwaerter SET name=?,laufbahn=?,nebenberuf=?,beginn=?,rsa=?,
-                    revision=IF(name<>? OR laufbahn<>? OR nebenberuf<>? OR NOT(beginn <=> ?) OR rsa<>?,revision+1,revision)
-                    WHERE id=?',
+                sql('UPDATE ausbildung_anwaerter SET
+                    revision=IF(name<>? OR laufbahn<>? OR nebenberuf<>? OR NOT(beginn <=> ?) OR rsa<>?,revision+1,revision),
+                    name=?,laufbahn=?,nebenberuf=?,beginn=?,rsa=? WHERE id=?',
                     [$name,$laufbahn,$neben,$beginn,$rsa,$name,$laufbahn,$neben,$beginn,$rsa,$matched[0]['id']]);
                 $updated++;
                 continue;
@@ -114,4 +114,53 @@ function ausbildungAktuelleAnwaerter(): array {
          WHERE personal_quelle IS NOT NULL ORDER BY laufbahn,name,id");
     return array_values(array_filter($rows,
         static fn($row)=>isset($current[(string)$row['personal_quelle']])));
+}
+
+/** Öffentliche Monitore geben nur anonymisierte Summen heraus, keine Personalakten. */
+function ausbildungOeffentlicheMonitore(): never {
+    $status=ausbildungSchemaStatus();
+    if(!$status['bereit'] || !$status['personalbindungBereit'])
+        fail(503,'Ausbildungsmonitore werden eingerichtet');
+    $counts=['PMA'=>0,'PKA'=>0,'KKA'=>0];
+    $ready=['PMA'=>0,'PKA'=>0,'KKA'=>0];
+    $progress=['PMA'=>0,'PKA'=>0,'KKA'=>0];
+    $people=ausbildungPersonalZeilen();
+    $active=[];
+    foreach($people as $p) {
+        $t=ausbildungPersonalLaufbahn((string)$p['dienstgrad']);
+        if($t===null)continue;
+        $counts[$t]++;
+        $key=ausbildungPersonalQuelle((int)$p['personalnummer'],(int)$p['belegungen']);
+        $active[$key]=$t;
+    }
+    $stats=sql("SELECT a.personal_quelle,a.laufbahn,
+          COALESCE((SELECT COUNT(*) FROM ausbildung_abschluesse m
+                    WHERE m.anwaerter_id=a.id AND m.abgeschlossen=1),0) AS fertig,
+          COALESCE((SELECT SUM(CASE WHEN stimme='Ja' THEN gewicht ELSE -gewicht END)
+                    FROM ausbildung_stimmen s WHERE s.anwaerter_id=a.id),0) AS stimmen
+       FROM ausbildung_anwaerter a WHERE a.personal_quelle IS NOT NULL");
+    $req=[];
+    foreach(sql("SELECT laufbahn,COUNT(*) AS anzahl FROM ausbildung_module WHERE aktiv=1 GROUP BY laufbahn") as $m)
+        $req[$m['laufbahn']]=(int)$m['anzahl'];
+    foreach($stats as $a){
+        $key=(string)$a['personal_quelle'];$t=$active[$key]??null;
+        if($t===null||$t!==$a['laufbahn'])continue;
+        $total=$req[$t==='PMA'?'PMA':'PKA']??0;
+        $done=min($total,(int)$a['fertig']);
+        $progress[$t]+=$done;
+        if($total>0 && $done===$total && ($t!=='PMA'||(float)$a['stimmen']>=2.5))
+            $ready[$t]++;
+    }
+    $out=[];
+    foreach(['PMA','PKA','KKA'] as $t){
+        $total=$req[$t==='PMA'?'PMA':'PKA']??0;
+        $out[]=['laufbahn'=>$t,'anzahl'=>$counts[$t],
+          'moduleProPerson'=>$total,'moduleAbgeschlossen'=>$progress[$t],
+          'zurPruefungZugelassen'=>$ready[$t],
+          'fortschrittProzent'=>$counts[$t]&&$total
+            ?round($progress[$t]/($counts[$t]*$total)*100):0];
+    }
+    header('X-Robots-Tag: noindex, nofollow');
+    respond(200,['monitore'=>$out,'aktualisiert'=>gmdate('c'),
+      'hinweis'=>'Anonymisierte Live-Zahlen aus dem zentralen Personalstamm. Keine Namen oder Dienstnummern.']);
 }
