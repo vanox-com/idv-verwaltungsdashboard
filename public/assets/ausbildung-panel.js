@@ -280,8 +280,8 @@ function classroom(){
  '<button type="button" data-action="open-room" data-id="'+lessonInvite.id+'">Ausbildertafel öffnen ↗</button>'+
  '<button type="button" data-action="end-room" data-id="'+lessonInvite.id+'" class="danger">Sitzung beenden</button></div></section>';
  out+='</div><div class="card"><h2>Meine Unterrichtsräume</h2><p class="muted">Status, Teilnehmer und Sitzungskontrolle. Beendete Räume sind nicht mehr erreichbar.</p>'+
- '<div class="tablewrap"><table><thead><tr><th>Modul</th><th>Präsentation</th><th>Erstellt (UTC)</th><th>Ablauf (UTC)</th><th>Anwärter</th><th>Status</th><th></th></tr></thead><tbody>'+
- (data.raeume||[]).map(r=>'<tr><td><b>'+esc(r.modul_code)+'</b></td><td>'+esc(r.titel)+'</td><td>'+esc(String(r.erstellt||'').slice(0,16))+'</td>'+
+ '<div class="tablewrap"><table><thead><tr><th>Modul</th><th>Präsentation</th><th>Erstellt von</th><th>Erstellt (UTC)</th><th>Ablauf (UTC)</th><th>Anwärter</th><th>Status</th><th></th></tr></thead><tbody>'+
+ (data.raeume||[]).map(r=>'<tr><td><b>'+esc(r.modul_code)+'</b></td><td>'+esc(r.titel)+'</td><td><b>'+esc(r.erstellt_von||'Unbekannter Ausbilder')+'</b></td><td>'+esc(String(r.erstellt||'').slice(0,16))+'</td>'+
  '<td>'+esc(String(r.ablauf||'').slice(0,16))+'</td><td>'+(Number(r.teilnehmer)?'Beigetreten':'Wartet')+'</td><td>'+(!Number(r.aktiv)?'<span class="pill">Abgeschlossen</span>':'<span class="pill good">Aktiv</span>')+'</td>'+
  '<td>'+(Number(r.aktiv)?'<button class="compact" data-action="open-room" data-id="'+Number(r.id)+'">Öffnen</button> <button class="compact danger" data-action="end-room" data-id="'+Number(r.id)+'">Beenden</button>':'')+'</td></tr>').join('')+
  '</tbody></table></div>'+(data.raeume?.length?'':'<p class="muted">Noch keine Unterrichtsräume angelegt.</p>')+'</div>';
