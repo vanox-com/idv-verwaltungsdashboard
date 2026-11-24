@@ -178,9 +178,23 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
                     fail(400,'Administrations- und Ausbildungsleitungskonten können hier nicht neu zugeordnet werden');
                 if(sql('SELECT id FROM ausbildung_ausbilder WHERE user_id=? AND aktiv=1',[$uid]))
                     fail(409,'Diese Person ist bereits Ausbilder');
-                if($existing[0]['rolle']==='Ausbilder')
+                if($existing[0]['rolle']==='Ausbilder'){
                     sql('UPDATE users SET gesperrt=0 WHERE id=?',[$uid]);
-                else sql('INSERT INTO user_perms(user_id,modul,stufe) VALUES(?,\'ausbildung\',1) ON DUPLICATE KEY UPDATE stufe=VALUES(stufe)',[$uid]);
+                    if($pw!==''){
+                        if(strlen($pw)<8)fail(400,'Startpasswort min. 8 Zeichen');
+                        sql('UPDATE users SET passwort_hash=?,muss_passwort_aendern=1 WHERE id=?',
+                            [password_hash($pw,PASSWORD_BCRYPT,['cost'=>12]),$uid]);
+                    }
+                }elseif(!hasPanelLoginRole((string)$existing[0]['rolle'])){
+                    // Alte Mitarbeiterkonten ohne Verwaltungslogin können zu reinen
+                    // Ausbilderkonten werden; bestehende Polizeizugänge bleiben unberührt.
+                    sql('UPDATE users SET rolle=\'Ausbilder\',gesperrt=0 WHERE id=?',[$uid]);
+                    if($pw!==''){
+                        if(strlen($pw)<8)fail(400,'Startpasswort min. 8 Zeichen');
+                        sql('UPDATE users SET passwort_hash=?,muss_passwort_aendern=1 WHERE id=?',
+                            [password_hash($pw,PASSWORD_BCRYPT,['cost'=>12]),$uid]);
+                    }
+                }else sql('INSERT INTO user_perms(user_id,modul,stufe) VALUES(?,\'ausbildung\',1) ON DUPLICATE KEY UPDATE stufe=GREATEST(stufe,VALUES(stufe))',[$uid]);
             }else {
                 sql('INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern,gesperrt) VALUES(?,?,\'Ausbilder\',?,1,0)',
                     [$v['nr'],$v['name'],password_hash($pw,PASSWORD_BCRYPT,['cost'=>12])]);
