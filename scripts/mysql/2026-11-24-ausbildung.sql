@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS ausbildung_materialien (
  typ VARCHAR(50) NOT NULL DEFAULT 'Präsentation',
  url VARCHAR(2048) NOT NULL DEFAULT '',
  dateipfad VARCHAR(120) NULL,
+ public_aktiv TINYINT(1) NOT NULL DEFAULT 0,
  aktiv TINYINT(1) NOT NULL DEFAULT 1,
  aktualisiert DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  CONSTRAINT ausbildung_materialien_modul_fk FOREIGN KEY(modul_code) REFERENCES ausbildung_module(code) ON DELETE SET NULL,
