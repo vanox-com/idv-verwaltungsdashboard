@@ -184,16 +184,18 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         $pw=$b['startpasswort']??'';
         if(!is_string($pw)||strlen($pw)<8||strlen($pw)>4096)
             fail(400,'Für jeden neuen Ausbilderzugang ist ein Startpasswort mit mindestens 8 Zeichen erforderlich');
-        // Bestandsdaten bleiben strikt unberührt. Eine bereits vergebene
-        // Dienstnummer darf kein bestehendes Polizeikonto umwidmen oder entsperren.
-        if(sql('SELECT id FROM users WHERE dienstnummer=? LIMIT 1',[$v['nr']]))
-            fail(409,'Diese Dienstnummer gehört bereits zu einem bestehenden Konto. '
-                .'Bitte für den eigenständigen Ausbildungszugang eine freie Kennung wählen; '
-                .'bestehende Benutzer werden nicht verändert.');
+        // Strikte Trennung: Eine Ausbildungs-DN kann mit einer bestehenden
+        // Personal-DN übereinstimmen. Der Login bekommt den Namespace AUS-.
+        // Niemand greift auf bestehende Polizeikonten zu.
+        $ausbildungsLogin='AUS-'.$v['nr'];
+        if(sql('SELECT id FROM users WHERE dienstnummer=? LIMIT 1',[$ausbildungsLogin])
+            ||sql('SELECT id FROM ausbildung_ausbilder WHERE dienstnummer=? AND aktiv=1 LIMIT 1',[$v['nr']]))
+            fail(409,'Für diese Dienstnummer existiert bereits ein Ausbildungszugang. '
+                .'Bestehende Konten bleiben unverändert.');
         db()->beginTransaction();
         try{
             sql('INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern,gesperrt) VALUES(?,?,\'Ausbilder\',?,1,0)',
-                [$v['nr'],$v['name'],password_hash($pw,PASSWORD_BCRYPT,['cost'=>12])]);
+                [$ausbildungsLogin,$v['name'],password_hash($pw,PASSWORD_BCRYPT,['cost'=>12])]);
             $uid=(int)db()->lastInsertId();
             sql('INSERT INTO ausbildung_ausbilder(user_id,dienstnummer,name,kuerzel,rang,funktion,eintritt,email,notiz,gewicht,kompetenzen,aktiv) VALUES(?,?,?,?,?,?,?,?,?,?,?,1)',
                 [$uid,$v['nr'],$v['name'],$v['kuerzel'],$v['rang'],$v['funktion'],$v['beginn'],$v['email'],$v['notiz'],
