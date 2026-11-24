@@ -88,6 +88,46 @@ publicDoc="$(curl -sS "$base/api/ausbildung-oeffentlich")"
 req "$temp/lead" PATCH "/api/ausbildung/materialien/$docId/freigabe" '{"public_aktiv":false}' >/dev/null
 again="$(curl -sS "$base/api/ausbildung-oeffentlich")"
 [[ "$again" == *'"materialien":[]'* ]] || { echo "Unpublish did not revoke: $again";exit 1; }
+# Classroom signaling is separate from the personnel database and strictly invitation-scoped.
+# Bulk import is private-by-default and must never overwrite or publish existing materials.
+imports='{"bestaetigung":"AULK_PRIVAT_IMPORT","eintraege":[{"modul_code":"PM.2","titel":"Synthetic AuLK deck","url":"https://docs.google.com/presentation/d/SYNTHETIC-PRIVATE/edit"}]}'
+imp="$(req "$temp/lead" POST /api/ausbildung/materialien/import "$imports")"
+[[ "$imp" == *'"neu":1'* ]] || { echo "First private import failed: $imp";exit 1; }
+imp2="$(req "$temp/lead" POST /api/ausbildung/materialien/import "$imports")"
+[[ "$imp2" == *'"neu":0'* && "$imp2" == *'"vorhanden":1'* ]] || { echo "Import is not idempotent: $imp2";exit 1; }
+publicDoc="$(curl -sS "$base/api/ausbildung-oeffentlich")"
+[[ "$publicDoc" != *'Synthetic AuLK deck'* ]] || { echo "Private AuLK mapping became public";exit 1; }
+roomInfo="$(req "$temp/lead" POST /api/ausbildung/unterricht "{\"modul_code\":\"PM.1\",\"material_id\":$docId}")"
+roomId="$(printf '%s' "$roomInfo" | parse id)"
+token="$(printf '%s' "$roomInfo" | php -r '$x=json_decode(stream_get_contents(STDIN),true);echo explode("#",$x["einladung"]??"")[1]??"";')"
+[[ "$roomId" =~ ^[0-9]+$ && "$token" =~ ^[a-f0-9]{64}$ ]] || { echo "Classroom creation: $roomInfo";exit 1; }
+# Room without the instructor cookie is forbidden.
+code="$(curl -sS -o "$temp/no-trainer" -w '%{http_code}' "$base/api/ausbildung/unterricht/$roomId/details")"
+[[ "$code" == 401 ]] || { echo "Unauthenticated trainer accessed lesson metadata: $code";exit 1; }
+# The invitation is a bearer token: only one synthetic learner claims the seat.
+client=abcdefabcdefabcdefabcdefabcdefab
+join="$(curl -sS -H 'Content-Type: application/json' -X POST --data "{\"token\":\"$token\",\"client\":\"$client\"}" "$base/api/unterricht/beitreten")"
+[[ "$join" == *'"aktiv":true'* && "$join" != *'Synthetic Training Lead'* ]] || { echo "Learner join: $join";exit 1; }
+code="$(curl -sS -o "$temp/seat" -w '%{http_code}' -H 'Content-Type: application/json' -X POST \
+  --data "{\"token\":\"$token\",\"client\":\"11111111111111111111111111111111\"}" "$base/api/unterricht/beitreten")"
+[[ "$code" == 403 ]] || { echo "Second learner stole seat: $code";exit 1; }
+offer='{"sdp":"v=0\r\no=- 1234 1 IN IP4 127.0.0.1\r\ns=IDV Training\r\nt=0 0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=rtcp-mux\r\na=sendonly\r\n"}'
+offerResult="$(req "$temp/lead" POST "/api/ausbildung/unterricht/$roomId/angebot" "$offer")"
+[[ "$offerResult" == *'"ok":true'* ]] || { echo "Offer write: $offerResult";exit 1; }
+status="$(curl -sS -H 'Content-Type: application/json' -X POST --data "{\"token\":\"$token\",\"client\":\"$client\"}" "$base/api/unterricht/status")"
+[[ "$status" == *'v=0'* ]] || { echo "Guest did not receive offer: $status";exit 1; }
+answered="$(curl -sS -H 'Content-Type: application/json' -X POST \
+  --data "{\"token\":\"$token\",\"client\":\"$client\",\"sdp\":\"v=0\\r\\no=- 5678 1 IN IP4 127.0.0.1\\r\\ns=IDV Learner\\r\\nt=0 0\\r\\nm=video 9 UDP/TLS/RTP/SAVPF 96\\r\\na=rtcp-mux\\r\\na=recvonly\\r\\n\"}" \
+  "$base/api/unterricht/antwort")"
+[[ "$answered" == *'"ok":true'* ]] || { echo "Guest answer: $answered";exit 1; }
+teacherState="$(req "$temp/lead" GET "/api/ausbildung/unterricht/$roomId/status")"
+[[ "$teacherState" == *'"teilnehmerAngemeldet":true'* && "$teacherState" == *'v=0'* ]] || { echo "Teacher did not receive answer: $teacherState";exit 1; }
+closed="$(req "$temp/lead" POST "/api/ausbildung/unterricht/$roomId/beenden" '{}')"
+[[ "$closed" == *'"ok":true'* ]] || { echo "Close lesson: $closed";exit 1; }
+code="$(curl -sS -o "$temp/closed" -w '%{http_code}' -H 'Content-Type: application/json' -X POST \
+  --data "{\"token\":\"$token\",\"client\":\"$client\"}" "$base/api/unterricht/status")"
+[[ "$code" == 410 ]] || { echo "Revoked lesson still accessible: $code";exit 1; }
+
 trainerId="$(req "$temp/lead" GET /api/ausbildung/bootstrap | php -r '$d=json_decode(stream_get_contents(STDIN),true);echo $d["ausbilder"][0]["id"]??"";')"
 req "$temp/lead" DELETE "/api/ausbildung/ausbilder/$trainerId" '{}' >/dev/null
 code="$(curl -sS -o "$temp/revokeduser" -w '%{http_code}' -b "$temp/trainer" "$base/api/me")"
