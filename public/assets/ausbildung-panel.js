@@ -264,7 +264,7 @@ shadow.addEventListener('click',async(e)=>{
  if(mode==='link-module'){tab='materialien';editing={type:'material',module:btn.dataset.code};render();return}
  if(mode==='start-lesson'){tab='unterricht';editing={type:'lesson-setup',material:id};selected=null;render();return}
  if(mode==='copy-lesson'&&lessonInvite){const inp=el('#lessonLink');if(inp){try{await navigator.clipboard.writeText(inp.value);message('Einladungslink kopiert.')}catch{inp.select();message('Link markieren und kopieren.')}}return}
- if(mode==='open-room'){window.open('/unterricht.html?raum='+id,'_blank','noopener');return}
+ if(mode==='open-room'){location.assign('/unterricht.html?raum='+id);return}
  if(mode==='end-room'){if(!confirm('Unterricht beenden? Der Link wird sofort ungültig.'))return;
    await act(async()=>{await request('unterricht/'+id+'/beenden',{method:'POST',body:'{}'});if(lessonInvite?.id===id)lessonInvite=null;await load();message('Unterricht beendet.')});return}
  if(mode==='upload-material'){editing={type:'upload'};render();return}
