@@ -35,6 +35,10 @@ function ausbildungSchemaStatus(): array {
     $roles=sql("SELECT name FROM roles WHERE name IN ('Ausbildungsleitung','Ausbilder')");
     $roleNames=array_column($roles,'name');
     $roomReady=in_array('ausbildung_unterricht',$have,true);
+    $binding=sql("SELECT COUNT(*) AS n FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='ausbildung_anwaerter'
+          AND COLUMN_NAME='personal_quelle'");
+    $personalReady=(int)($binding[0]['n']??0)>0;
     $criticalMissing=array_values(array_diff($missing,['ausbildung_unterricht']));
     $ready=$criticalMissing===[] && $column && $moduleCount>=11
         && in_array('Ausbildungsleitung',$roleNames,true)
@@ -42,6 +46,7 @@ function ausbildungSchemaStatus(): array {
     return [
         'bereit'=>$ready,
         'unterrichtBereit'=>$roomReady,
+        'personalbindungBereit'=>$personalReady,
         'fehlendeTabellen'=>$missing,
         'oeffentlicheFreigabeSpalte'=>$column,
         'ausbildungsmodule'=>$moduleCount,
@@ -49,7 +54,7 @@ function ausbildungSchemaStatus(): array {
     ];
 }
 function ausbildungMigrationsdatei(string $filename): array {
-    if(!in_array($filename,['2026-11-24-ausbildung.sql','2026-11-24-aulk-public.sql','2026-11-24-ausbildung-unterricht.sql'],true))
+    if(!in_array($filename,['2026-11-24-ausbildung.sql','2026-11-24-aulk-public.sql','2026-11-24-ausbildung-unterricht.sql','2026-11-24-ausbildung-personal.sql'],true))
         throw new \RuntimeException('Unbekannte Ausbildungsmigration');
     $path=dirname(__DIR__).'/scripts/mysql/'.$filename;
     if(!is_file($path)||!is_readable($path))
@@ -88,7 +93,7 @@ function dispatchAusbildungSetup(array $u,string $method,string $uri): bool {
         $b=body();
         if(($b['bestaetigung']??null)!=='BACKUP_ERSTELLT_AUSBILDUNG')
             fail(400,'Vor der Einrichtung muss ein Datenbankbackup bestätigt werden');
-        if(ausbildungSchemaStatus()['bereit'] && ausbildungSchemaStatus()['unterrichtBereit']){
+        if(ausbildungSchemaStatus()['bereit'] && ausbildungSchemaStatus()['unterrichtBereit'] && ausbildungSchemaStatus()['personalbindungBereit']){
             respond(200,['ok'=>true,'bereitsEingerichtet'=>true,'schema'=>ausbildungSchemaStatus()]);
         }
         // A verbal "I made a backup" is not enough. Require an actual
@@ -117,7 +122,7 @@ function dispatchAusbildungSetup(array $u,string $method,string $uri): bool {
         try {
             // MySQL DDL implicitly commits. Both checked-in scripts are additive
             // and idempotent so a partially completed install can be retried.
-            foreach(['2026-11-24-ausbildung.sql','2026-11-24-aulk-public.sql','2026-11-24-ausbildung-unterricht.sql'] as $file){
+            foreach(['2026-11-24-ausbildung.sql','2026-11-24-aulk-public.sql','2026-11-24-ausbildung-unterricht.sql','2026-11-24-ausbildung-personal.sql'] as $file){
                 foreach(ausbildungMigrationsdatei($file) as $step=>$statement){
                     try{
                         // EXECUTE aulk_stmt can return a SELECT result for an
@@ -137,7 +142,7 @@ function dispatchAusbildungSetup(array $u,string $method,string $uri): bool {
                 }
             }
             $status=ausbildungSchemaStatus();
-            if(!$status['bereit']||!$status['unterrichtBereit'])throw new \RuntimeException('Schema nach Einrichtung unvollständig');
+            if(!$status['bereit']||!$status['unterrichtBereit']||!$status['personalbindungBereit'])throw new \RuntimeException('Schema nach Einrichtung unvollständig');
             auditAction($u,'Ausbildungsdatenbank additiv eingerichtet','add');
         }catch(\Throwable $error){
             $migrationError=$error;
