@@ -94,7 +94,17 @@ function dispatchAusbildungSetup(array $u,string $method,string $uri): bool {
             // MySQL DDL implicitly commits. Both checked-in scripts are additive
             // and idempotent so a partially completed install can be retried.
             foreach(['2026-11-24-ausbildung.sql','2026-11-24-aulk-public.sql'] as $file){
-                foreach(ausbildungMigrationsdatei($file) as $statement)$pdo->exec($statement);
+                foreach(ausbildungMigrationsdatei($file) as $step=>$statement){
+                    try{$pdo->exec($statement);}
+                    catch(\PDOException $ex){
+                        // Server-side diagnostic only: never expose SQL/credentials
+                        // to the browser.
+                        error_log('[IDV Ausbildung] SQL migration step '.
+                            basename($file).' #'.($step+1).' MySQL='.
+                            (string)($ex->errorInfo[1]??'unknown'));
+                        throw $ex;
+                    }
+                }
             }
             $status=ausbildungSchemaStatus();
             if(!$status['bereit'])throw new \RuntimeException('Schema nach Einrichtung unvollständig');
