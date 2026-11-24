@@ -260,6 +260,8 @@ function run(): void {
             fail(403,'Dieser Zugang ist nur für die Ausbildungsabteilung freigegeben');
         // Make authenticated actor available to MySQL audit triggers on every route.
         sql('SET @idv_actor = ?',[(int)$u['id']]);
+        // Ausbildung benötigt cleanId() und auditAction() aus Settings.php.
+        require_once __DIR__.'/Settings.php';
         require_once __DIR__.'/Ausbildung.php';
         if(dispatchAusbildung($u,$method,$uri))return;
         if($method==='GET'&&$uri==='/api/changes') {
