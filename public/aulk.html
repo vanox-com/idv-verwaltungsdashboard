@@ -1,103 +1,129 @@
 <!doctype html>
-<html lang="de">
-<head>
+<html lang="de"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Öffentlich freigegebene Ausbildungsmodule des fiktiven IdentityValley-Polizeiprojekts">
-<title>AuLK 2026 – Ausbildungsunterlagen | IdentityValley</title>
+<meta name="description" content="Ausbildungs- und Laufbahnkonzept der fiktiven IdentityValley Polizei: PMA, PKA, KKA, Zugangsbedingungen und externe Ausbildungsmonitore">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>AuLK 2026 · Laufbahnen & Ausbildungsmonitore | IdentityValley</title>
 <link rel="icon" href="/assets/idv-verwaltung-favicon.svg" type="image/svg+xml">
 <style>
-:root{color-scheme:dark;--bg:#0b1420;--panel:#17283d;--card:#1c3149;--edge:#334b65;--text:#eef5fc;--mut:#adbed1;--blue:#91bded}
-*{box-sizing:border-box}html{scroll-behavior:smooth}
-body{margin:0;font:15px/1.55 system-ui,"Segoe UI",sans-serif;background:radial-gradient(ellipse at top right,#254667 0,#0b1420 55%);color:var(--text);min-height:100vh}
-a{color:#b5d6fa;text-decoration:none}a:hover{text-decoration:underline}
-header{border-bottom:1px solid var(--edge);background:#0c1724bd;backdrop-filter:blur(16px)}.wrap{width:min(1100px,calc(100% - 32px));margin:auto}
-header .wrap{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:17px 0}
-header img{width:152px;height:auto;display:block}
-main{padding:30px 0 65px}.eyebrow{font-size:11px;letter-spacing:.16em;color:var(--blue);font-weight:750;text-transform:uppercase}
-h1{font-size:clamp(30px,5vw,48px);margin:6px 0 12px;line-height:1.15;letter-spacing:-.035em}
-h2{font-size:22px;margin:0 0 13px}
-p{color:var(--mut)}.intro{max-width:790px;font-size:16px}
-.toplinks{display:flex;gap:12px;flex-wrap:wrap;margin:23px 0 32px}
-.link{display:inline-flex;padding:11px 16px;border-radius:9px;border:1px solid #6289aa;background:#284562;color:#f1f8ff}
-.link.alt{background:transparent;border-color:var(--edge)}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px}
-.card{background:var(--panel);border:1px solid var(--edge);border-radius:14px;padding:20px;margin:0 0 18px}
-.module{display:grid;grid-template-columns:64px minmax(0,1fr);gap:15px;padding:13px 0;border-bottom:1px solid #ffffff16}
-.module:last-child{border:0}
-.code{color:var(--blue);font-weight:800}.module strong{display:block}.module small{color:var(--mut)}
-.release{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid #ffffff19}
-.release:last-child{border:0}.release b{display:block}.release small{color:var(--mut)}
-.message{padding:15px;border-radius:9px;border:1px solid #466588;background:#1c314a}
-footer{padding:23px 0;color:var(--mut);font-size:12px;border-top:1px solid var(--edge)}
-@media(max-width:680px){.grid{grid-template-columns:1fr}.release{align-items:flex-start;flex-direction:column}.link{display:inline-flex}}
-</style>
-</head>
-<body>
-<header><div class="wrap"><img src="/assets/idv-polizei-logo-transparent.svg" alt="Polizei IdentityValley"><a href="/">Zum Verwaltungspanel</a></div></header>
+:root{color-scheme:dark;--bg:#0b1420;--panel:#142235;--card:#1b2d42;--edge:#354c66;--text:#eff5fc;--mut:#afc0d3;--blue:#9acaf7;--green:#76d4ae}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font:15px/1.6 system-ui,"Segoe UI",sans-serif;background:radial-gradient(ellipse at 85% 0,#204468 0,#0b1420 58%);color:var(--text);min-height:100dvh}
+a{color:#b9dcff;text-decoration:none}a:hover{text-decoration:underline}
+.wrap{width:min(1200px,calc(100% - 34px));margin:auto}header{background:#0a1828c9;border-bottom:1px solid var(--edge);backdrop-filter:blur(12px)}header>.wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px 0;flex-wrap:wrap}header img{width:145px;max-width:38vw}
+nav{display:flex;gap:18px;flex-wrap:wrap}main{padding:38px 0 70px}.eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);font-weight:750}
+h1{font-size:clamp(30px,5vw,49px);line-height:1.12;margin:8px 0 18px;letter-spacing:-.03em}h2{font-size:24px;margin:0 0 10px}h3{font-size:18px;margin:0 0 8px}p{color:var(--mut)}
+.intro{font-size:17px;max-width:900px}.actions{display:flex;gap:11px;flex-wrap:wrap;margin:23px 0 35px}
+.link{display:inline-flex;align-items:center;padding:11px 15px;border-radius:9px;border:1px solid #608aaf;background:#284865;color:white}.link.alt{background:transparent}
+section.anchor{scroll-margin-top:28px;margin-top:35px}.section-head{margin-bottom:20px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.card{padding:23px;border-radius:15px;border:1px solid var(--edge);background:#16283bde}.card p{margin:9px 0}
+.tag{display:inline-block;padding:4px 10px;border-radius:30px;border:1px solid #4b7396;color:#c4e3ff;font-size:12px;margin:0 0 13px}.requirements{margin:16px 0;padding:14px;border-radius:10px;background:#0a1a2a;border:1px solid #37516c}.requirements b{color:var(--text)}
+ol{padding-left:20px;margin:10px 0}li{margin-bottom:7px}
+.module{display:grid;grid-template-columns:54px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid #ffffff13}.module:last-child{border:0}.code{font-weight:800;color:var(--blue)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.stat-top{display:flex;justify-content:space-between;gap:8px;align-items:center}.number{font-size:34px;font-weight:800;letter-spacing:-.04em}.stat-row{display:flex;justify-content:space-between;gap:7px;margin:9px 0;border-bottom:1px solid #ffffff12;padding-bottom:7px;color:var(--mut)}.stat-row strong{color:var(--text)}
+.meter{margin:13px 0 8px;height:9px;background:#384f68;border-radius:10px;overflow:hidden}.meter>i{display:block;background:linear-gradient(90deg,#528bd2,#5acbb0);height:100%;width:0;transition:width .25s}
+.notice{border:1px solid #496985;background:#1a3149;padding:14px 16px;border-radius:10px;margin:19px 0}.muted{color:var(--mut)}.release{display:flex;justify-content:space-between;align-items:center;gap:14px;border-bottom:1px solid #ffffff1b;padding:13px 0}.release b{display:block}.release small{color:var(--mut)}
+footer{border-top:1px solid var(--edge);padding:22px 0;font-size:12px;color:var(--mut)}
+@media(max-width:950px){.grid,.stats{grid-template-columns:1fr 1fr}}@media(max-width:620px){.grid,.stats{grid-template-columns:1fr}main{padding-top:25px}.release{flex-direction:column;align-items:flex-start}}
+</style></head><body>
+<header><div class="wrap"><img src="/assets/idv-polizei-logo-transparent.svg" alt="Polizei IdentityValley">
+<nav aria-label="Navigation"><a href="#laufbahnen">Laufbahnen</a><a href="#monitore">Live-Monitore</a><a href="#unterlagen">Unterlagen</a><a href="/">Verwaltung</a></nav></div></header>
 <main class="wrap">
-<section class="eyebrow">IdentityValley · GTA Roleplay</section>
+<div class="eyebrow">IdentityValley · GTA Roleplay · Ausbildung</div>
 <h1>Ausbildungs- und Laufbahnkonzept 2026</h1>
-<p class="intro">Öffentlicher Bereich für Ausbildungspräsentationen, Handouts und freigegebene AuLK-Dokumente. Hier ist keine Anmeldung im Verwaltungspanel erforderlich. Interne Ausbilderdaten, Anwärterbewertungen und Prüfungsunterlagen werden nicht veröffentlicht.</p>
-<div class="toplinks">
-<a class="link" href="https://sites.google.com/view/aulk2026/startseite" target="_blank" rel="noopener noreferrer">Zur bisherigen AuLK-Google-Site</a>
-<a class="link alt" href="#unterlagen">Freigegebene Unterlagen ansehen</a>
-</div>
+<p class="intro">Die zentrale Übersicht für den Weg vom Anwärter zur Prüfungszulassung. Drei Laufbahnen, klare Modulanforderungen und live berechnete Ausbildungsmonitore. Die Daten stammen aus dem regulären Personalstamm der fiktiven Polizeiverwaltung.</p>
+<div class="actions"><a class="link" href="#monitore">PMA-, PKA- und KKA-Monitore ansehen</a><a class="link alt" href="#laufbahnen">Laufbahnkonzept lesen</a><a class="link alt" href="https://sites.google.com/view/aulk2026/startseite" target="_blank" rel="noopener noreferrer">Bisherige AuLK-Google-Site</a></div>
+<section id="laufbahnen" class="anchor" aria-labelledby="laufbahnTitel">
+<div class="section-head"><div class="eyebrow">Ausbildungsweg</div><h2 id="laufbahnTitel">Die drei Laufbahnen und ihre Voraussetzungen</h2><p>Die Regeln unten entsprechen der aktuellen Berechnung des Ausbildungsmonitors. Eine Prüfungszulassung ist noch kein bestandener Prüfungsabschluss.</p></div>
 <div class="grid">
-<section class="card"><h2>Mittlerer Dienst · PMA</h2>
-<div class="module"><span class="code">PM.0</span><div><strong>Einstellungsprozess</strong><small>Grundlagen des Einstiegs</small></div></div>
-<div class="module"><span class="code">PM.1</span><div><strong>Onboarding</strong><small>Funkwesen und erste Schritte</small></div></div>
-<div class="module"><span class="code">PM.2</span><div><strong>CopNet &amp; EDV</strong><small>Systeme im Ausbildungsalltag</small></div></div>
-<div class="module"><span class="code">PM.3</span><div><strong>Verkehrskontrolle</strong></div></div>
-<div class="module"><span class="code">PM.4</span><div><strong>Verfolgungsfahrt &amp; Hochrisikokontrolle</strong></div></div>
-<div class="module"><span class="code">PM.5</span><div><strong>Einsatzstellen</strong></div></div>
-<div class="module"><span class="code">PM.6</span><div><strong>ED-Behandlung &amp; Abhandlung</strong></div></div>
+<article class="card"><span class="tag">Mittlerer Dienst · PMA</span><h3>Polizeimeisteranwärter</h3><p>Die Grundausbildung umfasst die sieben hinterlegten PM-Module.</p>
+<div class="requirements"><b>Zulassungsvoraussetzungen</b><ol><li>Alle sieben Module PM.0 bis PM.6 müssen abgeschlossen sein.</li><li>Die gewichteten Ausbilderstimmen müssen zusammen mindestens <b>+2,5 Punkte</b> ergeben.</li></ol></div>
+<div class="module"><span class="code">PM.0</span><span>Einstellungsprozess</span></div>
+<div class="module"><span class="code">PM.1</span><span>Onboarding, Funkwesen und Einführung</span></div>
+<div class="module"><span class="code">PM.2</span><span>CopNet &amp; EDV</span></div>
+<div class="module"><span class="code">PM.3</span><span>Verkehrskontrolle</span></div>
+<div class="module"><span class="code">PM.4</span><span>Verfolgungsfahrt &amp; Hochrisikokontrolle</span></div>
+<div class="module"><span class="code">PM.5</span><span>Verhalten an Einsatzstellen</span></div>
+<div class="module"><span class="code">PM.6</span><span>ED-Behandlung &amp; Abhandlung</span></div>
+</article>
+<article class="card"><span class="tag">Gehobener Dienst · PKA</span><h3>Polizeikommissaranwärter</h3><p>Die Ausbildung im gehobenen operativen Dienst nutzt die vier PK-Module.</p>
+<div class="requirements"><b>Zulassungsvoraussetzungen</b><ol><li>PK.1, PK.2, PK.3 und PK.4 abschließen.</li><li>Nach vollständigem Modulabschluss weist der Monitor den Status „Zugelassen“ aus.</li></ol></div>
+<div class="module"><span class="code">PK.1</span><span>Grundlagen Einsatztaktik</span></div>
+<div class="module"><span class="code">PK.2</span><span>Einsatzleitung</span></div>
+<div class="module"><span class="code">PK.3</span><span>Verhandlungsführung</span></div>
+<div class="module"><span class="code">PK.4</span><span>Best Practice DGL</span></div>
+</article>
+<article class="card"><span class="tag">Gehobener Dienst · KKA</span><h3>Kriminalkommissaranwärter</h3><p>Die kriminalpolizeiliche Laufbahn wird als eigener Monitor geführt. Die aktuell hinterlegte Pflichtmodulreihe ist dieselbe PK.1 bis PK.4.</p>
+<div class="requirements"><b>Zulassungsvoraussetzungen</b><ol><li>Alle vier PK-Module vollständig abschließen.</li><li>Die Zulassung wird getrennt vom PKA-Monitor angezeigt.</li></ol></div>
+<div class="module"><span class="code">PK.1</span><span>Grundlagen Einsatztaktik</span></div>
+<div class="module"><span class="code">PK.2</span><span>Einsatzleitung</span></div>
+<div class="module"><span class="code">PK.3</span><span>Verhandlungsführung</span></div>
+<div class="module"><span class="code">PK.4</span><span>Best Practice DGL</span></div>
+</article></div>
+<p class="notice">Weitere in Kompetenzunterlagen erwähnte Module (beispielsweise PM.7, PK.5 und PK.7) sind derzeit nicht Bestandteil der verbindlichen Modulberechnung. Konkrete Bestehensnoten, praktische Prüfungsformen oder Wiederholungsregeln sind in der derzeitigen Monitorlogik nicht definiert und werden hier deshalb nicht erfunden.</p>
 </section>
-<section class="card"><h2>Gehobener Dienst · PKA / KKA</h2>
-<div class="module"><span class="code">PK.1</span><div><strong>Grundlagen Einsatztaktik</strong></div></div>
-<div class="module"><span class="code">PK.2</span><div><strong>Einsatzleitung</strong></div></div>
-<div class="module"><span class="code">PK.3</span><div><strong>Verhandlungsführung</strong></div></div>
-<div class="module"><span class="code">PK.4</span><div><strong>Best Practice DGL</strong></div></div>
-<p>Zusätzliche Weiterbildungsunterlagen können von der Ausbildungsleitung nach Prüfung veröffentlicht werden.</p>
+<section class="anchor" id="monitore" aria-labelledby="monitorTitel"><div class="section-head"><div class="eyebrow">Automatisch mit dem Personalstamm verbunden</div><h2 id="monitorTitel">PMA-, PKA- und KKA-Monitore</h2><p>Die Zahlen spiegeln den aktuellen Dienstgrad aus der Personalverwaltung wider. Neue Anwärter werden ihrer Laufbahn automatisch zugeordnet.</p></div>
+<div class="stats" id="monitorKarten" aria-live="polite"><div class="card">Monitore werden geladen …</div></div>
+<p class="notice">Diese Seite ist ohne Anmeldung erreichbar. Deshalb werden nur zusammengefasste Ausbildungszahlen angezeigt, keine Namen, Dienstnummern, Stimmabgaben oder Personalakten. Die persönliche Modulübersicht erhält ein Anwärter ausschließlich über seinen individuellen Freigabelink.</p>
+<p id="monitorZeit" class="muted"></p>
 </section>
-</div>
-<section id="unterlagen" class="card"><div class="eyebrow">Öffentlicher Dokumentenzugriff</div>
-<h2>Freigegebene AuLK-Unterlagen</h2>
-<div id="documents" aria-live="polite"><p>Dokumentenverzeichnis wird geladen …</p></div>
-</section>
-<p class="message">Nur von der Ausbildungsleitung ausdrücklich öffentlich freigegebene Dokumente werden hier aufgelistet. Ein Google-Drive-Link kann zusätzliche Freigaben von Google verlangen; die Berechtigung muss dort ebenfalls auf „Jeder mit dem Link“ stehen.</p>
+<section class="anchor card" id="unterlagen"><div class="eyebrow">AuLK-Bibliothek</div><h2>Freigegebene Ausbildungsunterlagen</h2><p>Hier erscheinen nur Materialien, die die Ausbildungsleitung ausdrücklich für den öffentlichen Abruf freigegeben hat. Zusätzlich können in Google Drive eigene Zugriffsrechte gelten.</p><div id="documents" aria-live="polite"><p>Dokumente werden geladen …</p></div></section>
 </main>
-<footer><div class="wrap">IdentityValley · Fiktives Polizeiprojekt in GTA Roleplay · Keine echte Landespolizei oder staatliche Behörde.</div></footer>
+<footer><div class="wrap">IdentityValley · Fiktives Polizeiprojekt im GTA-Roleplay · Keine echte Landespolizei oder staatliche Behörde.</div></footer>
 <script>
 (function(){
 'use strict';
-const area=document.querySelector('#documents');
-const make=(tag,value,cls)=>{const el=document.createElement(tag);if(value!==undefined)el.textContent=String(value);if(cls)el.className=cls;return el};
-async function show(){
- try {
+const make=(tag,value,cls)=>{const el=document.createElement(tag);if(value!==undefined)el.textContent=String(value);if(cls)el.className=cls;return el;};
+const docsArea=document.querySelector('#documents');
+async function documents(){
+ try{
   const result=await fetch('/api/ausbildung-oeffentlich',{credentials:'omit',cache:'no-store'});
-  if(!result.ok)throw Error('Die Dokumentenfreigaben sind noch nicht eingerichtet.');
+  if(!result.ok)throw Error('Die Unterlagen sind noch nicht eingerichtet.');
   const body=await result.json();
   const docs=Array.isArray(body.materialien)?body.materialien:[];
-  area.replaceChildren();
-  if(!docs.length){area.append(make('p','Zurzeit sind noch keine Einzeldateien für den öffentlichen Abruf freigegeben. Die bereits bestehende AuLK-Google-Site ist oben verlinkt.'));return}
+  docsArea.replaceChildren();
+  if(!docs.length){docsArea.append(make('p','Derzeit sind keine Dateien öffentlich freigegeben. Die bisherige AuLK-Google-Site ist oben verlinkt.'));return;}
   const groups=new Map();
-  for(const d of docs){const key=d.modul_code||'Allgemein / Weiterbildung';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(d)}
+  for(const d of docs){const key=d.modul_code||'Allgemein';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(d);}
   for(const [key,items] of groups){
-   area.append(make('h3',key));
+   docsArea.append(make('h3',key));
    for(const d of items){
-    const row=make('div',undefined,'release');
-    const info=make('div');info.append(make('b',d.titel),make('small',d.typ||'Unterlage'));
-    const link=document.createElement('a');
-    link.className='link';
-    link.textContent=Number(d.datei)?'Herunterladen':'Dokument öffnen';
+    const row=make('div',undefined,'release'),info=make('div'),link=make('a');
+    info.append(make('b',d.titel),make('small',d.typ||'Unterlage'));
+    link.className='link';link.textContent=Number(d.datei)?'Herunterladen':'Dokument öffnen';
     link.href=Number(d.datei)?'/api/ausbildung-oeffentlich/datei/'+encodeURIComponent(d.id):d.url;
-    if(!Number(d.datei)){link.target='_blank';link.rel='noopener noreferrer'}
-    row.append(info,link);area.append(row);
+    if(!Number(d.datei)){link.target='_blank';link.rel='noopener noreferrer';}
+    row.append(info,link);docsArea.append(row);
    }
   }
- }catch(e){area.replaceChildren(make('p',e.message+' Nutze bis dahin die AuLK-Google-Site.'))}
+ }catch(e){docsArea.replaceChildren(make('p','Unterlagen derzeit nicht verfügbar: '+e.message));}
 }
-show();
+async function monitors(){
+ const area=document.querySelector('#monitorKarten'),time=document.querySelector('#monitorZeit');
+ try{
+  const response=await fetch('/api/ausbildung-oeffentlich/monitore',{credentials:'omit',cache:'no-store'});
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok)throw Error(payload.error||'Monitore nicht erreichbar');
+  area.replaceChildren();
+  for(const data of payload.monitore||[]){
+   const card=make('article',undefined,'card');
+   const heading=make('div',undefined,'stat-top');
+   heading.append(make('h3',data.laufbahn+'-Monitor'),make('span','Live aus Personal','tag'));
+   const big=make('div',data.anzahl,'number');
+   card.append(heading,big,make('p','Anwärter im zentralen Personalstamm'));
+   for(const [label,n] of [['Zugelassen',data.zurPruefungZugelassen],['Abgeschlossene Module gesamt',data.moduleAbgeschlossen],['Pflichtmodule je Anwärter',data.moduleProPerson]]){
+    const row=make('div',undefined,'stat-row');
+    row.append(make('span',label),make('strong',n));card.append(row);
+   }
+   const meter=make('div',undefined,'meter'),bar=make('i');
+   bar.style.width=Math.max(0,Math.min(100,Number(data.fortschrittProzent)||0))+'%';
+   meter.append(bar);
+   card.append(meter,make('small',data.fortschrittProzent+' % der gesamten Pflichtmodule abgeschlossen'));
+   area.append(card);
+  }
+  time.textContent='Letzter Datenabruf: '+new Date(payload.aktualisiert).toLocaleString('de-DE');
+ }catch(e){area.replaceChildren(make('p','Live-Monitore derzeit nicht verfügbar: '+e.message));time.textContent='';}
+}
+monitors();documents();
+setInterval(()=>{if(document.visibilityState==='visible')monitors();},30000);
 })();
-</script>
-</body></html>
+</script></body></html>
