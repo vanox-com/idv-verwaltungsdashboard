@@ -42,6 +42,38 @@
     }
     return true;
   }
+  // Fixiert den Folienbereich während der Übertragung im sichtbaren Viewport.
+  // Scrollen in der Werkzeugleiste verschiebt #tafel dadurch nicht.
+  function pinPresentation(){
+    window.scrollTo(0,0);
+    document.body.classList.add("presentation-locked");
+    const area=$("tafel").getBoundingClientRect();
+    if(area.width<320 || area.height<180 || area.top<0 ||
+       area.bottom>window.innerHeight+2)
+      throw new Error("Das Präsentationsfenster passt nicht vollständig ins Browserfenster. Bitte Browser maximieren oder den Zoom reduzieren.");
+  }
+  function unpinPresentation(){
+    document.body.classList.remove("presentation-locked");
+  }
+  // WebRTC priorisiert Textschärfe statt bei Netzwerkproblemen als Erstes
+  // die Auflösung herunterzuregeln. Der Browser kann Werte ablehnen.
+  async function optimizeSlides(sender,video){
+    try{video.contentHint="detail";}catch(_){/* optional browser hint */}
+    if(!sender || typeof sender.getParameters!=="function" ||
+       typeof sender.setParameters!=="function")return;
+    try{
+      const params=sender.getParameters();
+      if(!params.encodings?.length)return;
+      params.encodings[0].maxBitrate=4500000;
+      params.encodings[0].scaleResolutionDownBy=1;
+      params.encodings[0].maxFramerate=24;
+      params.degradationPreference="maintain-resolution";
+      await sender.setParameters(params);
+    }catch(_){
+      // Ein nicht unterstützter Qualitätsparameter darf weder die
+      // Region-Capture-Sicherheit noch den Unterricht blockieren.
+    }
+  }
   async function cropOwnBoard(stream){
     const video=stream.getVideoTracks()[0];
     if(!video || typeof video.cropTo!=="function")
@@ -124,6 +156,9 @@
     if(poller)clearInterval(poller);
     poller=null;
     shareState("Nicht verbunden",false);
+    unpinPresentation();
+    const info=$("fokusInfo");
+    if(info)info.textContent="Nur die 16:9-Folientafel wird übertragen. Beim nächsten Start wird sie wieder fixiert.";
   }
   function googleEmbed(url) {
     const match = /^https:\/\/docs\.google\.com\/presentation\/d\/([a-zA-Z0-9_-]+)\//.exec(url || "");
@@ -262,8 +297,11 @@
       try{
         // Der Browser verlangt aus Datenschutzgründen immer eine explizite
         // Freigabe. Bereits im Dialog möglichst „Diesen Tab“ auswählen.
+        // VOR Freigabe und Zuschnitt Folienfläche fest positionieren.
+        // Im Live-Betrieb scrollt nur die Werkzeugleiste, nicht die Tafel.
+        pinPresentation();
         display=await navigator.mediaDevices.getDisplayMedia({
-          video:{displaySurface:"browser",frameRate:{ideal:15,max:20}},
+          video:{displaySurface:"browser",frameRate:{ideal:24,max:24}},
           audio:false,
           preferCurrentTab:true,
           selfBrowserSurface:"include",
@@ -282,14 +320,16 @@
         // Bei Fehlwahl oder ohne CropTarget sieht der Anwärter gar nichts.
         await cropOwnBoard(display);
         const peer=connection();
-        peer.addTrack(video,display);
+        const sender=peer.addTrack(video,display);
+        await optimizeSlides(sender,video);
         const offer=await peer.createOffer();
         await peer.setLocalDescription(offer);await waitIce(peer);
         await trainerApi("angebot",{sdp:peer.localDescription.sdp});
         answered=false;
         $("teilen").disabled=true;
-        shareState("Live · nur Folien",true);
-        notice("Die Präsentation wird live übertragen – ausschließlich die Folientafel samt Moderationswerkzeugen. Dein restlicher Bildschirm bleibt privat.");
+        shareState("Live · fixierte Folien",true);
+        $("fokusInfo").textContent="Folientafel fixiert: Scrollen in der rechten Leiste bewegt das übertragene Bild nicht. Moderationswerkzeuge bleiben sichtbar.";
+        notice("Live-Präsentation gestartet: Die Folientafel bleibt fest stehen; andere Tabs und der Desktop werden nicht übertragen.");
         if(poller)clearInterval(poller);
         poller=setInterval(async()=>{
           if(!pc||closed)return;
