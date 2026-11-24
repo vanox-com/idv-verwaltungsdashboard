@@ -41,6 +41,13 @@ listed="$(request GET /api/backup/liste)"
 [[ "$listed" == *"$id"* ]] || { echo "Backup absent in UI list";exit 1; }
 code="$(curl -sS -o "$tmp/unauthorized" -w '%{http_code}' "$base/api/backup/$id/download")"
 [[ "$code" == 401 ]] || { echo "Unauthenticated download allowed: $code";exit 1; }
+curl -sS -b "$tmp/auth.cookie" -o "$tmp/local-backup.zip" "$base/api/backup/$id/download"
+cmp "$tmp/local-backup.zip" "$tmp/private-backups/$id.zip" || { echo 'Downloaded archive differs';exit 1; }
+uploaded="$(curl -sS -b "$tmp/auth.cookie" -F "datei=@$tmp/local-backup.zip;type=application/zip" "$base/api/backup/upload")"
+[[ "$uploaded" == *'"encrypted":true'* ]] || { echo "Upload failed: $uploaded";cat "$tmp/php.log";exit 1; }
+import_id="$(printf '%s' "$uploaded" | php -r '$a=json_decode(stream_get_contents(STDIN),true);echo $a["backup"]["id"]??"";')"
+[[ "$import_id" =~ ^import_[0-9]{8}_[0-9]{6}_[a-f0-9]{20}$ ]] || { echo 'Imported ID invalid';exit 1; }
+id="$import_id"
 code="$(curl -sS -o "$tmp/wrong" -w '%{http_code}' -b "$tmp/auth.cookie" -H 'Content-Type: application/json' \
  -X POST --data '{"passwort":"This_is_a_wrong_password_123"}' "$base/api/backup/$id/pruefen")"
 [[ "$code" == 400 ]] || { echo "Wrong passphrase was accepted: $code";exit 1; }
