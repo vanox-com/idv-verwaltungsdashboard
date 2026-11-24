@@ -13,7 +13,7 @@ mysql -h127.0.0.1 -uroot -ptraining-ci-password idv_ausbildung_setup_ci -e \
  "INSERT INTO roles(name,farbe,sensibel) VALUES('Administrator','#607b99',1) ON DUPLICATE KEY UPDATE name=name;
   INSERT INTO users(dienstnummer,anzeigename,rolle,passwort_hash,muss_passwort_aendern,gesperrt)
   VALUES('SETUPADMIN','Training Setup Admin','Administrator','$hash',0,0)"
-MYSQL_HOST=127.0.0.1 MYSQL_PORT=3306 MYSQL_DATABASE=idv_ausbildung_setup_ci MYSQL_USER=root \
+IDV_BACKUP_DIRECTORY="$temp/secure-db-backups" MYSQL_HOST=127.0.0.1 MYSQL_PORT=3306 MYSQL_DATABASE=idv_ausbildung_setup_ci MYSQL_USER=root \
  MYSQL_PASSWORD=training-ci-password php -S 127.0.0.1:18764 -t public public/api.php > "$temp/php.log" 2>&1 &
 server=$!
 for i in $(seq 1 40); do curl -sS "$base/api/me" > /dev/null 2>&1 && break;sleep .25;done
@@ -27,6 +27,17 @@ status="$(curl -sS -o "$temp/unfinished" -w '%{http_code}' -b "$temp/admin.cooki
 status="$(curl -sS -o "$temp/no-confirm" -w '%{http_code}' -b "$temp/admin.cookies" \
  -H 'Content-Type: application/json' -X POST --data '{}' "$base/api/ausbildung/setup")"
 [[ "$status" == 400 ]] || { echo "Setup without backup confirmation allowed: $status";exit 1; }
+# Explicit confirmation is insufficient if no real backup exists.
+status="$(curl -sS -o "$temp/without-backup" -w '%{http_code}' -b "$temp/admin.cookies" \
+ -H 'Content-Type: application/json' -X POST --data '{"bestaetigung":"BACKUP_ERSTELLT_AUSBILDUNG"}' "$base/api/ausbildung/setup")"
+[[ "$status" == 428 ]] || { echo "Unsafe setup without real backup: $status";exit 1; }
+created="$(curl -sS -b "$temp/admin.cookies" -H 'Content-Type: application/json' -X POST \
+ --data '{"bezeichnung":"Before additive Ausbildung migration","passwort":"Training_Protected_Archive_2026!"}' "$base/api/backup/erstellen")"
+[[ "$created" == *'"encrypted":true'* ]] || { echo "Required encrypted backup unavailable: $created";cat "$temp/php.log";exit 1; }
+snapshot_id="$(printf '%s' "$created" | php -r '$v=json_decode(stream_get_contents(STDIN),true);echo $v["backup"]["id"]??"";')"
+curl -sS -b "$temp/admin.cookies" "$base/api/backup/$snapshot_id/download" -o "$temp/downloaded-before-migration.zip"
+test -s "$temp/downloaded-before-migration.zip"
+
 # Compare protected, existing police records byte-for-byte before and after.
 # Only new training tables, new training role records and new training logins are allowed.
 police_before="$(mysql -N -B -h127.0.0.1 -uroot -ptraining-ci-password idv_ausbildung_setup_ci -e "
