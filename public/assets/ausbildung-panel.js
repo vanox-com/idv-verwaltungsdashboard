@@ -188,6 +188,33 @@ function materials(){
  '<label class="full">Google-Docs-, Slides-, Drive- oder Sites-Link<input type="url" name="url" required placeholder="https://docs.google.com/…"></label><div class="full flex"><button class="primary" type="submit">Verlinken</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></div>':'')+
  (editing?.type==='upload'?'<div class="card"><h2>Interne Datei hochladen</h2><p class="muted">PDF-, DOCX-, PPTX- oder XLSX-Dateien bis 40 MB. Dateien bleiben außerhalb des Webroots und sind nur nach Anmeldung abrufbar. Die große ZIP bitte zuerst entpacken und die Module einzeln hochladen.</p><form id="uploadForm" class="formgrid" enctype="multipart/form-data"><label>Modul<select name="modul_code"><option value="">Allgemein / Weiterbildung</option>'+data.module.map(m=>'<option value="'+esc(m.code)+'">'+esc(modName(m))+'</option>').join('')+'</select></label><label>Dokumenttyp<select name="typ"><option>Präsentation</option><option>Leitfaden</option><option>Prüfungsunterlage</option><option>Handout</option></select></label><label>Bezeichnung<input name="titel" required maxlength="200"></label><label class="full">Datei<input type="file" name="datei" accept=".pdf,.pptx,.docx,.xlsx" required></label><div class="full flex"><button class="primary" type="submit">Geschützt hochladen</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></div>':'');
 }
+function classroom(){
+ const decks=(data.materialien||[]).filter(d=>d.modul_code && /^https:\/\/docs\.google\.com\/presentation\//.test(d.url||'') &&
+   (data.leitung||data.eigeneKompetenzen.includes(d.modul_code)));
+ const ready=data.unterrichtBereit!==false;
+ let out='<div class="card"><div class="flex space"><div><span class="eyebrow">Digitale Ausbildung · 1:1 Live</span>'+
+ '<h2>Unterrichtsraum erstellen</h2></div><span class="pill '+(ready?'good':'warn')+'">'+(ready?'Bereit':'Einrichtung erforderlich')+'</span></div>'+
+ '<p>Erstelle die Sitzung erst nach Auswahl einer Präsentation. Der Einladungslink funktioniert ohne Anmeldung, gilt maximal zwei Stunden und lässt einen Anwärter zu. Nur der angemeldete Ausbilder kann den Bildschirm freigeben und steuern.</p>'+
+ '<div class="callout"><b>So funktioniert es:</b> Präsentation wählen → Raum erzeugen → Link kopieren → Ausbildertafel öffnen → Browser-Bildschirmfreigabe erlauben → nach dem Unterricht beenden.</div>';
+ if(!ready)out+='<p class="muted">Ein Administrator muss nach einer verschlüsselten Datenbanksicherung die Unterrichtstabelle ergänzen.</p>';
+ else if(!decks.length)out+='<p class="muted">Für deine Modulberechtigungen ist noch keine Google-Präsentation gespeichert. Bitte zuerst in den Ausbildungsunterlagen zuordnen.</p>';
+ else out+='<form id="lessonCreateForm" class="formgrid"><label class="full">Modul / Präsentation<select id="lessonDeck" required>'+
+ decks.map(d=>'<option value="'+Number(d.id)+'" data-code="'+esc(d.modul_code)+'" '+(Number(editing?.material)===Number(d.id)?'selected':'')+'>'+esc(d.modul_code+' · '+d.titel)+'</option>').join('')+
+ '</select></label><div class="full flex"><button type="submit" class="primary">+ Unterrichtsraum erstellen</button><button type="button" data-tab="materialien">Unterlagen verwalten</button></div></form>';
+ if(lessonInvite)out+='<section class="card" style="margin-top:16px;border-color:#5b9bc8"><h3>Neuer Unterrichtsraum · '+esc(lessonInvite.modul_code)+'</h3>'+
+ '<p>Dieser persönliche Einladungslink ist jetzt für den Anwärter freigegeben. Nicht öffentlich veröffentlichen.</p>'+
+ '<label>Einladung ohne Login<input id="lessonLink" readonly value="'+esc(lessonInvite.link)+'"></label>'+
+ '<div class="flex" style="margin-top:13px"><button type="button" class="primary" data-action="copy-lesson">Link kopieren</button>'+
+ '<button type="button" data-action="open-room" data-id="'+lessonInvite.id+'">Ausbildertafel öffnen ↗</button>'+
+ '<button type="button" data-action="end-room" data-id="'+lessonInvite.id+'" class="danger">Sitzung beenden</button></div></section>';
+ out+='</div><div class="card"><h2>Meine Unterrichtsräume</h2><p class="muted">Status, Teilnehmer und Sitzungskontrolle. Beendete Räume sind nicht mehr erreichbar.</p>'+
+ '<div class="tablewrap"><table><thead><tr><th>Modul</th><th>Präsentation</th><th>Erstellt (UTC)</th><th>Anwärter</th><th>Status</th><th></th></tr></thead><tbody>'+
+ (data.raeume||[]).map(r=>'<tr><td><b>'+esc(r.modul_code)+'</b></td><td>'+esc(r.titel)+'</td><td>'+esc(String(r.erstellt||'').slice(0,16))+'</td>'+
+ '<td>'+(Number(r.teilnehmer)?'Beigetreten':'Wartet')+'</td><td>'+(!Number(r.aktiv)?'<span class="pill">Abgeschlossen</span>':'<span class="pill good">Aktiv</span>')+'</td>'+
+ '<td>'+(Number(r.aktiv)?'<button class="compact" data-action="open-room" data-id="'+Number(r.id)+'">Öffnen</button> <button class="compact danger" data-action="end-room" data-id="'+Number(r.id)+'">Beenden</button>':'')+'</td></tr>').join('')+
+ '</tbody></table></div>'+(data.raeume?.length?'':'<p class="muted">Noch keine Unterrichtsräume angelegt.</p>')+'</div>';
+ return out;
+}
 async function act(fn){
  if(busy)return;busy=true;
  try{await fn();}catch(e){message(e.message,true);if(e.status===409){await load();if(selected){try{selected=await request('anwaerter/'+selected.anwaerter.id);render()}catch{selected=null}}}}
@@ -235,7 +262,11 @@ shadow.addEventListener('click',async(e)=>{
  }
  if(mode==='new-material'){editing={type:'material',module:''};render();return}
  if(mode==='link-module'){tab='materialien';editing={type:'material',module:btn.dataset.code};render();return}
- if(mode==='start-lesson'){await act(async()=>{const r=await request('unterricht',{method:'POST',body:JSON.stringify({modul_code:btn.dataset.code,material_id:id})});sessionStorage.setItem('idvLesson:'+r.id,location.origin+r.einladung);location.assign('/unterricht.html?raum='+r.id)});return}
+ if(mode==='start-lesson'){tab='unterricht';editing={type:'lesson-setup',material:id};selected=null;render();return}
+ if(mode==='copy-lesson'&&lessonInvite){const inp=el('#lessonLink');if(inp){try{await navigator.clipboard.writeText(inp.value);message('Einladungslink kopiert.')}catch{inp.select();message('Link markieren und kopieren.')}}return}
+ if(mode==='open-room'){window.open('/unterricht.html?raum='+id,'_blank','noopener');return}
+ if(mode==='end-room'){if(!confirm('Unterricht beenden? Der Link wird sofort ungültig.'))return;
+   await act(async()=>{await request('unterricht/'+id+'/beenden',{method:'POST',body:'{}'});if(lessonInvite?.id===id)lessonInvite=null;await load();message('Unterricht beendet.')});return}
  if(mode==='upload-material'){editing={type:'upload'};render();return}
  if(mode==='close'){selected=null;editing=null;render();return}
  if(mode==='open'){await act(async()=>{selected=await request('anwaerter/'+id);editing=null;render();el('#details')?.scrollIntoView({behavior:'smooth'})});return}
@@ -256,8 +287,19 @@ shadow.addEventListener('click',async(e)=>{
  if(mode==='remove-material'){if(!confirm('Unterlage aus der Ausbildungsliste entfernen?'))return;await act(async()=>{await request('materialien/'+id,{method:'DELETE'});await load();message('Verknüpfung entfernt.')});}
 });
 shadow.addEventListener('submit',async(e)=>{
- const f=e.target;if(!f.id||!['trainerForm','traineeForm','materialForm','uploadForm'].includes(f.id))return;
+ const f=e.target;if(!f.id||!['trainerForm','traineeForm','materialForm','uploadForm','lessonCreateForm'].includes(f.id))return;
  e.preventDefault();
+ if(f.id==='lessonCreateForm'){
+   await act(async()=>{
+     const deck=f.querySelector('#lessonDeck')?.selectedOptions[0];
+     if(!deck)throw Error('Bitte eine Präsentation auswählen.');
+     const r=await request('unterricht',{method:'POST',body:JSON.stringify({modul_code:deck.dataset.code,material_id:Number(deck.value)})});
+     const link=location.origin+r.einladung;
+     sessionStorage.setItem('idvLesson:'+r.id,link);
+     lessonInvite={id:r.id,link,titel:r.titel,modul_code:r.modul_code};
+     editing=null;await load();message('Raum angelegt. Link kopieren und Ausbildertafel öffnen.');
+   });return;
+ }
  await act(async()=>{
   const b=formObj(f);
   if(f.id==='uploadForm'){
@@ -279,8 +321,12 @@ shadow.addEventListener('submit',async(e)=>{
 el('#reload').addEventListener('click',()=>act(load));
 
 load();
+const refreshTimer=setInterval(()=>{
+ if(host.isConnected && document.visibilityState==='visible' && !busy && !editing && !selected && ['uebersicht','monitore','unterricht'].includes(tab))
+   void load();
+},25000);
 
-    return {host,refresh:load};
+    return {host,refresh:load,destroy:()=>clearInterval(refreshTimer)};
   }
   window.IDVAusbildung={
     laden(container){
@@ -288,6 +334,7 @@ load();
       if(instance&&instance.host.isConnected&&instance.host.parentElement===container){
         void instance.refresh();return;
       }
+      instance?.destroy?.();
       container.replaceChildren();
       instance=create(container);
     }
