@@ -23,7 +23,7 @@ const AUSB_NAV={
 function panelCan(user,m,l=1){
   if(!user)return false;
   if(m==='rechtesimulator'||m==='users')return user.rolle==='Administrator';
-  if(m==='benachrichtigungen')return ['Administrator','Leitungsdienst'].includes(user.rolle)||(user.rechte?.por||0)>=2||(user.rechte?.ausbildung||0)>=1;
+  if(m==='benachrichtigungen')return ['Administrator','Leitungsdienst','Polizeirat','Ausbildungsleitung'].includes(user.rolle)||(user.rolle==='Ausbilder'&&Number(user.rechte?.ausbildung||0)>=2);
   if(Object.hasOwn(AUSB_NAV,m))return (user.rechte?.ausbildung||0)>=Math.max(l,AUSB_NAV[m].leitung?2:1);
   if(['Ausbilder','Ausbildungsleitung'].includes(user.rolle))return (m==='dash'||m==='design')&&l<=1;
   return m==='design'||m==='favoriten'?true:m==='entwicklung'?(user.rechte?.pers||0)>=l:m==='system'?user.rolle==='Administrator':m==='meldungen'?(user.rechte?.mitteilungen||0)>=2:m==='statistik'?(user.rechte?.pers||0)>=l:(user.rechte?.[m]||0)>=l;

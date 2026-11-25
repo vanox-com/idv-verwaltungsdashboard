@@ -15,3 +15,7 @@ verifyIsolation(str_contains($training,"if(\$uri==='/api/ausbildung/pruefungen'|
 verifyIsolation(str_contains($training,'require_once $examFile;'),'exam module loaded from guarded path');
 verifyIsolation(str_contains($exam,"if(str_starts_with(\$uri,\$root.'/google/')){\n        require_once __DIR__.'/PruefungenGoogle.php';"),'Google import module scoped to import routes');
 echo "Auth module isolation OK\n";
+
+$settings=file_get_contents(dirname(__DIR__).'/php/Settings.php');
+verifyIsolation(substr_count($settings,'if(!notificationSettingsAllowed($u))fail(403,')===2,'Both preference endpoints must enforce the role guard');
+verifyIsolation(str_contains($api,'$personalNotifications=notificationSettingsAllowed($u)&&'),'Isolated training accounts must pass the role guard');

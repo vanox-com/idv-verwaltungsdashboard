@@ -117,3 +117,9 @@ if(!embedded.includes('data-action="rsa"')||!embedded.includes("a.laufbahn==='PM
  throw Error('PMA RSA control or public status missing');
 
 if(!embedded.includes('data-action="open" data-id="'+ "'+Number(x.id)+'"+'" aria-label=')||!embedded.includes("detail.anwaerter.laufbahn==='PMA'?'PMA':'PKA-KKA'")||!embedded.includes("tab='monitore';track=targetTrack;selected=detail"))throw Error('Exam overview must open the correct individual trainee monitor');
+
+// Notification preferences: normal instructors may receive notices but cannot configure them.
+const notificationCan=new Function(sharedNav+'\nreturn panelCan;')();
+for(const [rolle,ausbildung,expected] of [["Administrator",0,true],["Leitungsdienst",0,true],["Polizeirat",0,true],["Ausbildungsleitung",0,true],["Ausbilder",1,false],["Ausbilder",2,true],["Mitarbeiter",2,false],["Unbekannt",2,false]]){
+ if(notificationCan({rolle,rechte:{ausbildung,por:2}},'benachrichtigungen')!==expected)throw Error('Wrong notification settings permission: '+rolle+'/'+ausbildung);
+}

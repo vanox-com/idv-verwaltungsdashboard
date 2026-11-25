@@ -15,7 +15,8 @@
  const keys=groups.flatMap(g=>g.items.map(i=>i[0]));
  const who=()=>String(ME?.id??ME?.dienstnummer??'');
  const allowed=()=>typeof can==='function'&&can('benachrichtigungen');
- const enabled=key=>flags?.[key]===true;
+ // Accounts without access cannot customize popups; their eligible notices stay enabled by default.
+ const enabled=key=>keys.includes(key)&&(!allowed()?true:flags?.[key]===true);
  function accept(payload){
    const next=payload?.einstellungen;
    if(!next||!keys.every(k=>typeof next[k]==='boolean'))throw Error('Ungültige Einstellungen vom Server');
@@ -25,9 +26,9 @@
    if(account!==who()){account=who();flags=null;sequence++;inFlight=null;window.IDVPMA?.settingsChanged();window.IDVPOR?.settingsChanged();}
  }
  async function refresh(){
-   if(!ME)return;reset();if(saving)return;if(inFlight)return inFlight;
+   if(!ME)return;reset();if(!allowed()){if(flags||inFlight){flags=null;sequence++;inFlight=null;window.IDVPMA?.settingsChanged();window.IDVPOR?.settingsChanged();}return;}if(saving)return;if(inFlight)return inFlight;
    const id=who(),version=++sequence;
-   const pending=(async()=>{try{const data=await api('/benachrichtigungs-einstellungen');if(who()===id&&sequence===version)accept(data);}
+   const pending=(async()=>{try{const data=await api('/benachrichtigungs-einstellungen');if(who()===id&&sequence===version&&allowed())accept(data);}
      catch(e){if(who()===id&&sequence===version){if([401,403].includes(e.status)){flags=null;window.IDVPMA?.settingsChanged();window.IDVPOR?.settingsChanged();}paint();status('Einstellungen konnten nicht geladen werden.',true);}}
    })();
    inFlight=pending;try{await pending;}finally{if(inFlight===pending)inFlight=null;}
@@ -43,7 +44,7 @@
    if(!allowed()||!flags||saving||!keys.includes(key))return;
    saving=true;++sequence;paint();status('Speichert …');
    const id=who();
-   try{const result=await api('/benachrichtigungs-einstellungen/'+key,{method:'PUT',body:JSON.stringify({aktiv:!enabled(key)})});if(who()===id){accept(result);status('Gespeichert. Gilt nur für deinen Zugang.');}}
+   try{const result=await api('/benachrichtigungs-einstellungen/'+key,{method:'PUT',body:JSON.stringify({aktiv:!enabled(key)})});if(who()===id&&allowed()){accept(result);status('Gespeichert. Gilt nur für deinen Zugang.');}}
    catch(e){status('Speichern fehlgeschlagen: '+e.message,true);}
    finally{saving=false;paint();}
  }
@@ -56,7 +57,7 @@
    root.querySelectorAll('[data-notify-setting]').forEach(b=>b.addEventListener('click',()=>void save(b.dataset.notifySetting)));
    paint();void refresh();
  }
- function start(){if(!ME)return;reset();if(!timer)timer=setInterval(()=>{if(!document.hidden)void refresh();},15000);void refresh();}
+ function start(){if(!ME)return;reset();if(!allowed()){if(timer){clearInterval(timer);timer=null;}void refresh();return;}if(!timer)timer=setInterval(()=>{if(!document.hidden)void refresh();},15000);void refresh();}
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)start();});
  window.IDVNotificationSettings={enabled,start,open};
 })();

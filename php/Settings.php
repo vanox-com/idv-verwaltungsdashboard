@@ -86,10 +86,12 @@ function notificationSettingsRead(array $u): array {
 }
 function dispatchSettings(array $u,string $method,string $uri): bool {
     if($method==='GET'&&$uri==='/api/benachrichtigungs-einstellungen'){
+        if(!notificationSettingsAllowed($u))fail(403,'Keine Berechtigung für Benachrichtigungseinstellungen');
         respond(200,['einstellungen'=>notificationSettingsRead($u)]);
     }
     if($method==='PUT'&&preg_match('#^/api/benachrichtigungs-einstellungen/([a-z_]+)$#D',$uri,$m)){
-        // Any authenticated account may adjust its own preferences, never another user's.
+        if(!notificationSettingsAllowed($u))fail(403,'Keine Berechtigung für Benachrichtigungseinstellungen');
+        // Authorized accounts may adjust only their own preferences.
         $key=$m[1];$b=body();$enabled=$b['aktiv']??null;
         if(!array_key_exists($key,notificationSettingsDefaults())||!is_bool($enabled))fail(400,'Ungültige Benachrichtigungseinstellung');
         db()->beginTransaction();

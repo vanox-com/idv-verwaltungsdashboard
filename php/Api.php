@@ -132,6 +132,12 @@ function ausbildungVerwaltungsleitung(array $u): bool {
     return (int)(rights($u)['ausbildung']??0)>=2
         &&(in_array($u['rolle']??'',['Administrator','Leitungsdienst','Ausbildungsleitung'],true)||ausbildungLeitungsprofil($u));
 }
+/** Popup preferences are restricted to the four leadership/administrative roles, including genuine training leadership profiles on an AUS account. */
+function notificationSettingsAllowed(array $u): bool {
+    $role=(string)($u['rolle']??'');
+    return in_array($role,['Administrator','Leitungsdienst','Polizeirat','Ausbildungsleitung'],true)
+        ||($role==='Ausbilder'&&(int)(rights($u)['ausbildung']??0)>=2);
+}
 /** Role defaults are deliberately limited; an administrator's explicit user override
  * can grant training leadership to an existing police account. */
 function ausbildungRechtsstufe(string $rolle,int $rollenstufe,?int $einzelrecht,bool $leitungsprofil=false): int {
@@ -331,8 +337,9 @@ function run(): void {
             }
             $personalDesign=($method==='GET'&&$uri==='/api/portal-design')
                 ||(in_array($method,['PUT','DELETE'],true)&&$uri==='/api/portal-design/personal');
-            if(!str_starts_with($uri,'/api/ausbildung/')&&!$personalDesign&&!($method==='GET'&&$uri==='/api/benachrichtigungs-einstellungen')
-                &&!($method==='PUT'&&preg_match('#^/api/benachrichtigungs-einstellungen/[a-z_]+$#D',$uri)))
+            $personalNotifications=notificationSettingsAllowed($u)&&(($method==='GET'&&$uri==='/api/benachrichtigungs-einstellungen')
+                ||($method==='PUT'&&preg_match('#^/api/benachrichtigungs-einstellungen/[a-z_]+$#D',$uri)));
+            if(!str_starts_with($uri,'/api/ausbildung/')&&!$personalDesign&&!$personalNotifications)
                 fail(403,'Dieser Zugang ist nur für die Ausbildungsabteilung und das eigene Design freigegeben');
         }
         // Make authenticated actor available to MySQL audit triggers on every route.
