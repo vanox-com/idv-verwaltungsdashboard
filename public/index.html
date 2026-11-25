@@ -1008,14 +1008,19 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 #jonasSpruchDialog .jonas-dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:15px}
 @media(max-width:1150px){#inhalt>.hello.hello--jonas{grid-template-columns:minmax(0,1fr) minmax(250px,42%);gap:14px}.hello-jonas-portrait{width:185px;height:176px}.hello-jonas-message{max-width:calc(100% - 113px);margin-right:113px}}
 @media(max-width:680px){#inhalt>.hello.hello--jonas{grid-template-columns:minmax(0,1fr);gap:10px;padding:20px 20px 0}.hello-jonas{min-height:155px;margin-right:-20px}.hello-jonas-portrait{bottom:0;right:0;width:180px;height:165px}.hello-jonas-message{max-width:min(245px,calc(100% - 112px));margin-right:112px}.hello-jonas::before{right:15px}}
-/* Separate transparent portraits, cropped from the shared image atlas. */
-.hello-jonas-portrait.figur-sprite,.figur-thumb.figur-sprite{display:block;overflow:hidden;width:auto;aspect-ratio:var(--sprite-ratio);max-width:100%}
-.figur-sprite{position:relative;--sprite-offset:0%;--sprite-ratio:1}
-.figur-sprite--schneider{--sprite-ratio:765/724;--sprite-offset:0%}
-.figur-sprite--renner{--sprite-ratio:710/724;--sprite-offset:-35.2209945%}
-.figur-sprite--lou{--sprite-ratio:697/724;--sprite-offset:-67.9097606%}
-.figur-sprite>img{display:block;height:100%;width:auto;max-width:none;transform:translateX(var(--sprite-offset));pointer-events:none}
+/* Crop exactly one portrait from the 2172 × 724 atlas. Background sizing is
+   relative to the explicit viewport, never to the intrinsic size of a child img. */
+.figur-sprite{position:relative;--sprite-ratio:1;--sprite-scale:100%;--sprite-position:0%;background-image:url('/assets/idv-leitung-figuren.png');background-repeat:no-repeat;background-size:var(--sprite-scale) 100%;background-position:var(--sprite-position) bottom}
+.figur-sprite--schneider{--sprite-ratio:1.056629834;--sprite-scale:283.92156863%;--sprite-position:0.00000000%}
+.figur-sprite--renner{--sprite-ratio:0.980662983;--sprite-scale:305.91549296%;--sprite-position:52.32558140%}
+.figur-sprite--lou{--sprite-ratio:0.962707182;--sprite-scale:311.62123386%;--sprite-position:100.00000000%}
+.hello-jonas-portrait.figur-sprite,.figur-thumb.figur-sprite{display:block;overflow:hidden;flex:none;width:calc(var(--sprite-height) * var(--sprite-ratio));height:var(--sprite-height);max-width:none;padding:0;border:0;box-sizing:border-box}
+.hello-jonas-portrait.figur-sprite{--sprite-height:190px}
+.figur-thumb.figur-sprite{--sprite-height:92px}
+.figur-sprite>img{display:none!important}
 .hello-jonas .figur-sprite{position:absolute;right:-8px;bottom:-26px}
+@media(max-width:1150px){.hello-jonas-portrait.figur-sprite{--sprite-height:176px}}
+@media(max-width:680px){.hello-jonas-portrait.figur-sprite{--sprite-height:165px}}
 .hello-jonas-message{max-width:calc(100% - 155px);margin-right:155px}
 .figur-category{display:block;font-size:10px;font-weight:800;letter-spacing:.045em;text-transform:uppercase;color:#446ba0;margin-bottom:4px}
 .figur-bubble--denken{border-radius:24px}
