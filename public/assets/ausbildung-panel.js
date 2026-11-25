@@ -32,6 +32,7 @@ const fmtTimestamp=v=>{
 };
 const modName=(m)=>m.code==='WB'?'Weiterbildungen':m.code+' · '+m.titel;
 const lessonCodeLabel=code=>code==='WB'?'Weiterbildung':code;
+const lessonParticipantFits=(code,track)=>code==='WB'||(code?.startsWith('PM.')&&track==='PMA')||(code?.startsWith('PK.')&&['PKA','KKA'].includes(track));
 const pill=(s)=>'<span class="pill '+(s==='Zugelassen'?'good':/ausstehend|unvollständig|Nicht bereit/.test(s)?'warn':'')+'">'+esc(s)+'</span>';
 const meter=(n,d)=>'<div class="meter" title="'+n+' von '+d+'"><i style="width:'+Math.min(100,Math.max(0,d?n/d*100:0))+'%"></i></div>';
 let data=null,tab=initial.route||'uebersicht',track=initial.track||'PMA',selected=null,editing=null,busy=false,lessonInvite=null;
@@ -63,7 +64,7 @@ async function load(){
    data=await request('bootstrap');
    if(Array.isArray(data.pmaHinweise))window.IDVPMA?.observe(data.pmaHinweise);
    if(data.unterrichtBereit){
-     try{const rooms=await request('unterricht');data.raeume=rooms.raeume||[];data.raumProtokoll=rooms.raumProtokoll||[];data.raumProtokollErlaubt=rooms.protokollErlaubt===true;}catch(_){data.raeume=[];data.raumProtokoll=[];data.raumProtokollErlaubt=false;}
+     try{const rooms=await request('unterricht');data.raeume=rooms.raeume||[];data.teilnehmerAuswahl=rooms.teilnehmerAuswahl||[];data.raumProtokoll=rooms.raumProtokoll||[];data.raumProtokollErlaubt=rooms.protokollErlaubt===true;}catch(_){data.raeume=[];data.teilnehmerAuswahl=[];data.raumProtokoll=[];data.raumProtokollErlaubt=false;}
    }else data.raeume=[];
    if(!lessonInvite)for(const room of data.raeume){
      if(!Number(room.aktiv))continue;
@@ -189,7 +190,7 @@ function render(){
  if(tab==='monitore'){r.innerHTML=monitors();updateVoteForm();}
  if(tab==='ausbilder')r.innerHTML=trainers();
  if(tab==='materialien')r.innerHTML=materials();
- if(tab==='unterricht')r.innerHTML=classroom();
+ if(tab==='unterricht'){r.innerHTML=classroom();const deck=r.querySelector('#lessonDeck'),person=r.querySelector('#lessonParticipant');if(deck&&person){const sync=()=>{const code=deck.selectedOptions[0]?.dataset.code;for(const opt of person.options){if(!opt.value)continue;const allowed=lessonParticipantFits(code,opt.dataset.track);opt.hidden=!allowed;opt.disabled=!allowed;}if(person.selectedOptions[0]?.disabled)person.value='';};deck.addEventListener('change',sync);sync();}}
  if(data.stimmenDetailsBereit===false){
    const warning='<section class="card" style="border-color:#aa8051"><h3>Erweiterung für Stimmabgaben fehlt noch</h3>'+
      '<p>Für die neuen Pflichtangaben (Streifenfahrt, Datum, sonstige Leistungen, Bemerkung) muss ein Administrator nach einer gesicherten Datenbanksicherung eine rein additive SQL-Erweiterung installieren. Bestehende Stimmen bleiben erhalten.</p>'+
@@ -383,7 +384,7 @@ function classroom(){
  else if(!decks.length)out+='<p class="muted">Für deine Modul- und Weiterbildungsberechtigungen ist noch keine Google-Präsentation gespeichert. Bitte die Ausbildungsleitung um Zuordnung einer Präsentation bitten.</p>';
  else out+='<form id="lessonCreateForm" class="formgrid"><label class="full">Ausbildungsmodul oder Weiterbildung<select id="lessonDeck" required>'+
  groups.filter(([,items])=>items.length).map(([label,items])=>'<optgroup label="'+esc(label)+'">'+deckOptions(items)+'</optgroup>').join('')+
- '</select></label><div class="full flex"><button type="submit" class="primary">+ Unterrichtsraum erstellen</button>'+(data.leitung?'<button type="button" data-tab="materialien">Unterlagen verwalten</button>':'')+'</div></form>';
+ '</select></label><label class="full">Teilnehmer aus dem Personalstamm<select id="lessonParticipant" required><option value="">Bitte auswählen</option>'+ (data.teilnehmerAuswahl||[]).map(p=>'<option value="'+esc(p.key)+'" data-track="'+esc(p.laufbahn||'')+'">'+esc('DN '+p.dn+' · '+p.name+(p.laufbahn?' · '+p.laufbahn:''))+'</option>').join('')+'</select><small class="muted">Bei Ausbildungsmodulen werden nur passende Anwärter angeboten; bei Weiterbildungen auch andere aktive Mitarbeiter. Der Link ist für eine Person vorgesehen.</small></label><div class="full flex"><button type="submit" class="primary">+ Unterrichtsraum erstellen</button>'+(data.leitung?'<button type="button" data-tab="materialien">Unterlagen verwalten</button>':'')+'</div></form>';
  if(lessonInvite)out+='<section class="card" style="margin-top:16px;border-color:#5b9bc8"><h3>Neuer Unterrichtsraum · '+esc(lessonCodeLabel(lessonInvite.modul_code))+'</h3>'+
  '<p>Dieser persönliche Einladungslink ist jetzt für den Anwärter freigegeben. Nicht öffentlich veröffentlichen.</p>'+
  '<label>Einladung ohne Login<input id="lessonLink" readonly value="'+esc(lessonInvite.link)+'"></label>'+
@@ -393,10 +394,10 @@ function classroom(){
  out+='</div><div class="card"><h2>Meine aktiven Unterrichtsräume</h2><p class="muted">Status, Teilnehmer und Sitzungskontrolle. Beendete Räume werden hier nicht angezeigt.</p>'+
  '<div class="tablewrap"><table><thead><tr><th>Modul</th><th>Präsentation</th>'+(data.raumProtokollErlaubt?'<th>Erstellt von</th><th>Erstellt (UTC)</th>':'')+'<th>Ablauf (UTC)</th><th>Anwärter</th><th>Status</th><th></th></tr></thead><tbody>'+
  (data.raeume||[]).map(r=>'<tr><td><b>'+esc(lessonCodeLabel(r.modul_code))+'</b></td><td>'+esc(r.titel)+'</td>'+(data.raumProtokollErlaubt?'<td><b>'+esc(r.erstellt_von||'Unbekannter Ausbilder')+'</b></td><td>'+esc(String(r.erstellt||'').slice(0,16))+'</td>':'')+
- '<td>'+esc(String(r.ablauf||'').slice(0,16))+'</td><td>'+(Number(r.teilnehmer)?'Beigetreten':'Wartet')+'</td><td>'+(!Number(r.aktiv)?'<span class="pill">Abgeschlossen</span>':'<span class="pill good">Aktiv</span>')+'</td>'+
+ '<td>'+esc(String(r.ablauf||'').slice(0,16))+'</td><td>'+esc(r.zuordnung||'Teilnehmer nicht erfasst')+'<br><small class="muted">'+(Number(r.teilnehmer)?'Einladungsplatz belegt':'Wartet')+'</small></td><td>'+(!Number(r.aktiv)?'<span class="pill">Abgeschlossen</span>':'<span class="pill good">Aktiv</span>')+'</td>'+
  '<td>'+(Number(r.aktiv)?'<button class="compact" data-action="open-room" data-id="'+Number(r.id)+'">Öffnen</button> <button class="compact danger" data-action="end-room" data-id="'+Number(r.id)+'">Beenden</button>':'')+'</td></tr>').join('')+
  '</tbody></table></div>'+(data.raeume?.length?'':'<p class="muted">Keine aktiven Unterrichtsräume.</p>')+'</div>';
- if(data.raumProtokollErlaubt)out+='<div class="card"><h2>Unterrichtsraum-Protokoll</h2><p class="muted">Nur Leitung und Administratoren · letzte 500 dokumentierte Raumvorgänge.</p><div class="tablewrap"><table><thead><tr><th>Zeit (UTC)</th><th>Ausbilder</th><th>Vorgang / Raum-ID</th></tr></thead><tbody>'+ (data.raumProtokoll||[]).map(x=>'<tr><td>'+esc(String(x.zeit||'').slice(0,19))+'</td><td>'+esc(x.benutzer)+'</td><td>'+esc(x.aktion)+'</td></tr>').join('')+'</tbody></table></div>'+(!data.raumProtokoll?.length?'<p class="muted">Keine protokollierten Vorgänge.</p>':'')+'</div>';
+ if(data.raumProtokollErlaubt)out+='<div class="card"><h2>Unterrichtsraum-Protokoll</h2><p class="muted">Nur Leitung und Administratoren · letzte 500 dokumentierte Raumvorgänge. Teilnehmerzuordnung und Beitritt werden getrennt protokolliert; Einladungslinks verifizieren keine Identität.</p><div class="tablewrap"><table><thead><tr><th>Zeit (UTC)</th><th>Ausbilder</th><th>Vorgang / Raum-ID / Teilnehmer / Thema</th></tr></thead><tbody>'+ (data.raumProtokoll||[]).map(x=>'<tr><td>'+esc(String(x.zeit||'').slice(0,19))+'</td><td>'+esc(x.benutzer)+'</td><td>'+esc(x.aktion)+'</td></tr>').join('')+'</tbody></table></div>'+(!data.raumProtokoll?.length?'<p class="muted">Keine protokollierten Vorgänge.</p>':'')+'</div>';
  return out;
 }
 async function act(fn){
@@ -522,7 +523,9 @@ shadow.addEventListener('submit',async(e)=>{
    await act(async()=>{
      const deck=f.querySelector('#lessonDeck')?.selectedOptions[0];
      if(!deck)throw Error('Bitte eine Präsentation auswählen.');
-     const r=await request('unterricht',{method:'POST',body:JSON.stringify({modul_code:deck.dataset.code,material_id:Number(deck.value)})});
+     const participant=f.querySelector('#lessonParticipant')?.selectedOptions[0];
+     if(!participant?.value||!lessonParticipantFits(deck.dataset.code,participant.dataset.track))throw Error('Bitte einen passenden Teilnehmer auswählen.');
+     const r=await request('unterricht',{method:'POST',body:JSON.stringify({modul_code:deck.dataset.code,material_id:Number(deck.value),teilnehmer:participant.value})});
      const link=location.origin+r.einladung;
      sessionStorage.setItem('idvLesson:'+r.id,link);
      lessonInvite={id:r.id,link,titel:r.titel,modul_code:r.modul_code};
@@ -566,7 +569,7 @@ shadow.addEventListener('change',e=>{
 
 load();
 const refreshTimer=setInterval(()=>{
- if(host.isConnected && document.visibilityState==='visible' && !busy && !editing && !selected && ['uebersicht','monitore','unterricht'].includes(tab))
+ if(host.isConnected && document.visibilityState==='visible' && !busy && !editing && !selected && !(tab==='unterricht'&&(el('#lessonParticipant')?.value||el('#lessonCreateForm')?.contains(document.activeElement))) && ['uebersicht','monitore','unterricht'].includes(tab))
    void load();
 },25000);
 const selectedTimer=setInterval(()=>{

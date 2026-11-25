@@ -37,6 +37,39 @@ function unterrichtClient(array $input): string {
         fail(400,'Teilnehmerkennung ungültig');
     return hash('sha256',$token);
 }
+/** Snapshot the assigned person's name and service number, not a mutable DN reference. */
+function unterrichtTeilnehmerListe(array $u): array {
+    $trainer=ausbildungTrainer($u);
+    $codes=json_decode((string)($trainer['kompetenzen']??'[]'),true);
+    $codes=is_array($codes)?$codes:[];
+    if(ausbildungLeitung($u))$codes=array_column(sql("SELECT code FROM ausbildung_module WHERE aktiv=1"),'code');
+    $wb=in_array('WB',$codes,true);$pm=false;$pk=false;
+    foreach($codes as $code){if(str_starts_with((string)$code,'PM.'))$pm=true;if(str_starts_with((string)$code,'PK.'))$pk=true;}
+    $result=[];
+    foreach(ausbildungPersonalZeilen() as $p){
+        if(!in_array($p['status'],['Aktiv','Abgemeldet'],true))continue;
+        $nr=(int)$p['personalnummer'];$name=trim((string)$p['vorname'].' '.(string)$p['nachname']);
+        if($nr<1||$name===''||trim((string)$p['vorname'])===''||trim((string)$p['nachname'])===''||in_array(trim((string)$p['vorname']),['-','–'],true)||in_array(trim((string)$p['nachname']),['-','–'],true))continue;
+        $track=ausbildungPersonalLaufbahn((string)$p['dienstgrad']);
+        if(!$wb&&!(($track==='PMA'&&$pm)||(in_array($track,['PKA','KKA'],true)&&$pk)))continue;
+        $result[]=['key'=>ausbildungPersonalQuelle($nr,(int)$p['belegungen']),'dn'=>$nr,'name'=>$name,'laufbahn'=>$track];
+    }
+    return $result;
+}
+function unterrichtTeilnehmerPasst(string $code,?string $track): bool {
+    return $code==='WB'||(str_starts_with($code,'PM.')&&$track==='PMA')||(str_starts_with($code,'PK.')&&in_array($track,['PKA','KKA'],true));
+}
+function unterrichtLogPrefix(array $room): string {
+    return 'Unterricht für '.$room['modul_code'].' gestartet; Sitzungs-ID '.(int)$room['id'].'; ';
+}
+function unterrichtZuordnung(array $room): string {
+    $prefix=unterrichtLogPrefix($room);
+    $rows=sql('SELECT aktion FROM log WHERE aktion LIKE ? ORDER BY id ASC LIMIT 1',[$prefix.'%']);
+    return $rows?substr((string)$rows[0]['aktion'],strlen($prefix)):'Teilnehmer nicht erfasst (Altbestand)';
+}
+function unterrichtLog(?int $uid,string $message,string $art='edit'): void {
+    sql('INSERT INTO log(user_id,aktion,art) VALUES(?,?,?)',[$uid,$message,$art]);
+}
 function unterrichtGastRaum(array $input, bool $join=false): array {
     $hash=unterrichtToken($input);
     $client=unterrichtClient($input);
@@ -44,10 +77,18 @@ function unterrichtGastRaum(array $input, bool $join=false): array {
     if(!$rooms)fail(404,'Einladung nicht gefunden');
     $room=$rooms[0];unterrichtAktiv($room);
     if($room['teilnehmer_hash']===null && $join){
-        // First invitee claims the single learner seat. Parallel joins cannot steal it.
-        sql('UPDATE ausbildung_unterricht SET teilnehmer_hash=?,aktualisiert=UTC_TIMESTAMP(6)
-             WHERE id=? AND teilnehmer_hash IS NULL',[$client,$room['id']]);
-        $room=sql('SELECT * FROM ausbildung_unterricht WHERE id=? LIMIT 1',[$room['id']])[0];
+        // Record the first successful claim exactly once, in the same transaction.
+        $pdo=db();$pdo->beginTransaction();
+        try{
+            $room=sql('SELECT * FROM ausbildung_unterricht WHERE id=? FOR UPDATE',[$room['id']])[0];
+            unterrichtAktiv($room);
+            if($room['teilnehmer_hash']===null){
+                sql('UPDATE ausbildung_unterricht SET teilnehmer_hash=?,aktualisiert=UTC_TIMESTAMP(6) WHERE id=?',[$client,$room['id']]);
+                $room['teilnehmer_hash']=$client;
+                unterrichtLog(null,'Unterrichtssitzung '.(int)$room['id'].' · Einladungsplatz belegt; '.unterrichtZuordnung($room).' (Identität nicht verifiziert)');
+            }
+            $pdo->commit();
+        }catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
     }
     if(!is_string($room['teilnehmer_hash'])||
         !hash_equals((string)$room['teilnehmer_hash'],$client))
@@ -97,12 +138,15 @@ function dispatchUnterrichtTrainer(array $u,string $method,string $uri): bool {
                 LEFT JOIN users ersteller ON ersteller.id=i.ausbilder_user_id
                 WHERE i.ausbilder_user_id=? AND i.beendet=0 AND i.ablauf>UTC_TIMESTAMP()
                 ORDER BY i.erstellt DESC LIMIT 40",[(int)$u['id']]);
-        if(!$leitung)foreach($rows as &$row){unset($row['erstellt_von'],$row['erstellt']);}unset($row);
-        $history=$leitung?sql("SELECT l.id,l.zeit,l.aktion,COALESCE(NULLIF(u.anzeigename,''),'Unbekannt') AS benutzer
+        foreach($rows as &$row){
+            $row['zuordnung']=unterrichtZuordnung($row);
+            if(!$leitung){unset($row['erstellt_von'],$row['erstellt']);}
+        }unset($row);
+        $history=$leitung?sql("SELECT l.id,l.zeit,l.aktion,COALESCE(NULLIF(u.anzeigename,''),IF(l.user_id IS NULL,'System / Einladungslink','Unbekannt')) AS benutzer
             FROM log l LEFT JOIN users u ON u.id=l.user_id
-            WHERE l.aktion LIKE 'Unterricht für % gestartet; Sitzungs-ID %' OR l.aktion LIKE 'Unterrichtssitzung % beendet'
+            WHERE l.aktion LIKE 'Unterricht für % gestartet; Sitzungs-ID %' OR l.aktion LIKE 'Unterrichtssitzung %'
             ORDER BY l.zeit DESC,l.id DESC LIMIT 500"):[];
-        respond(200,['raeume'=>$rows,'protokollErlaubt'=>$leitung,'raumProtokoll'=>$history]);
+        respond(200,['raeume'=>$rows,'protokollErlaubt'=>$leitung,'raumProtokoll'=>$history,'teilnehmerAuswahl'=>unterrichtTeilnehmerListe($u)]);
     }
     if($uri==='/api/ausbildung/unterricht'&&$method==='POST'){
         $input=body();
@@ -115,14 +159,22 @@ function dispatchUnterrichtTrainer(array $u,string $method,string $uri): bool {
             WHERE id=? AND modul_code=? AND aktiv=1 AND url LIKE 'https://docs.google.com/presentation/%'
             LIMIT 1",[$materialId,$code]);
         if(!$material)fail(409,'Für dieses Modul ist keine Google-Präsentation verknüpft');
-        $token=bin2hex(random_bytes(32));
+        $participantKey=$input['teilnehmer']??null;$participant=null;
+        if(is_string($participantKey))foreach(unterrichtTeilnehmerListe($u) as $candidate)
+            if($candidate['key']===$participantKey&&unterrichtTeilnehmerPasst($code,$candidate['laufbahn'])){$participant=$candidate;break;}
+        if(!$participant)fail(400,'Bitte einen gültigen Teilnehmer aus dem Personalstamm für dieses Modul auswählen.');
+        $snapshot='Teilnehmer: DN '.$participant['dn'].' · '.$participant['name'].'; Thema: '.$material[0]['titel'];
+        $token=bin2hex(random_bytes(32));$pdo=db();$pdo->beginTransaction();
+        try{
         sql('INSERT INTO ausbildung_unterricht
             (modul_code,material_id,ausbilder_user_id,einladung_hash,ablauf)
             VALUES(?,?,?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 2 HOUR))',
             [$code,$materialId,(int)$u['id'],hash('sha256',$token)]);
         $id=(int)db()->lastInsertId();
-        auditAction($u,'Unterricht für '.$code.' gestartet; Sitzungs-ID '.$id,'add');
-        respond(201,['id'=>$id,'einladung'=>'/unterricht.html#'.$token,
+        unterrichtLog((int)$u['id'],unterrichtLogPrefix(['id'=>$id,'modul_code'=>$code]).$snapshot,'add');
+        $pdo->commit();
+        }catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
+        respond(201,['id'=>$id,'einladung'=>'/unterricht.html#'.$token,'zuordnung'=>$snapshot,
             'modul_code'=>$code,'titel'=>$material[0]['titel'],'url'=>$material[0]['url']]);
     }
     if(!preg_match('#^/api/ausbildung/unterricht/([1-9][0-9]*)/(status|angebot|beenden|details)$#D',$uri,$m))
@@ -130,10 +182,16 @@ function dispatchUnterrichtTrainer(array $u,string $method,string $uri): bool {
     $id=(int)$m[1];$action=$m[2];
     $room=unterrichtRaum($id,(int)$u['id']);
     if($action==='beenden'&&$method==='POST'){
-        sql('UPDATE ausbildung_unterricht SET beendet=1,angebot=NULL,antwort=NULL,
-             aktualisiert=UTC_TIMESTAMP(6) WHERE id=? AND ausbilder_user_id=?',
-             [$id,(int)$u['id']]);
-        if((int)$room['beendet']===0)auditAction($u,'Unterrichtssitzung '.$id.' beendet','edit');
+        $pdo=db();$pdo->beginTransaction();
+        try{
+            $room=sql('SELECT * FROM ausbildung_unterricht WHERE id=? AND ausbilder_user_id=? FOR UPDATE',[$id,(int)$u['id']])[0];
+            if((int)$room['beendet']===0){
+                sql('UPDATE ausbildung_unterricht SET beendet=1,angebot=NULL,antwort=NULL,
+                     aktualisiert=UTC_TIMESTAMP(6) WHERE id=? AND ausbilder_user_id=?',[$id,(int)$u['id']]);
+                unterrichtLog((int)$u['id'],'Unterrichtssitzung '.$id.' beendet; '.unterrichtZuordnung($room).'; '.($room['teilnehmer_hash']!==null?'Einladungsplatz belegt':'Kein Beitritt erfasst'));
+            }
+            $pdo->commit();
+        }catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
         respond(200,['ok'=>true]);
     }
     unterrichtAktiv($room);

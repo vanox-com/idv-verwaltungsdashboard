@@ -39,7 +39,7 @@ function handleProtocol(array $user,string $kind): never {
       :"SELECT l.zeit,l.aktion,l.art,COALESCE(u.anzeigename,'–') AS benutzer
           FROM log l LEFT JOIN users u ON u.id=l.user_id";
     $conditions=[];
-    if(!$isAudit&&!ausbildungVerwaltungsleitung($user))$conditions[]="NOT (l.aktion LIKE 'Unterricht für % gestartet; Sitzungs-ID %' OR l.aktion LIKE 'Unterrichtssitzung % beendet')";
+    if(!$isAudit&&!ausbildungVerwaltungsleitung($user))$conditions[]="NOT (l.aktion LIKE 'Unterricht für % gestartet; Sitzungs-ID %' OR l.aktion LIKE 'Unterrichtssitzung %')";
     if($view!==null){
         $column=$isAudit?'a.zeit':'l.zeit';
         $comparison=$view==='archiv'?'<':'>=';
