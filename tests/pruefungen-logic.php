@@ -8,3 +8,6 @@ assertExam(IDV\pruefungAuto($q,[0])===0.0,'incomplete selection');
 assertExam(IDV\pruefungAuto($q,[0,1,2])===0.0,'extra incorrect selection');
 assertExam(IDV\pruefungAuto(['typ'=>'text'], 'text')===null,'manual text review');
 echo "Prüfungsbewertung OK\n";
+
+foreach(['abgegeben','erstkorrigiert','zweitkorrigiert','freigegeben'] as $s)assertExam(IDV\pruefungBerichtigungStatus($s),'lead correction '.$s);
+foreach(['bereit','laufend','annulliert'] as $s)assertExam(!IDV\pruefungBerichtigungStatus($s),'no correction '.$s);

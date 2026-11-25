@@ -32,14 +32,14 @@ function convertGoogle(raw){
 function open(host){
  const mount=node('div');host.replaceChildren(mount);
  const title=node('h1','Prüfungszentrum');const note=node('p','', 'mut');const main=node('div');mount.append(title,note,main);
- let data=null,busy=false,view='overview',detailId=null;
+ let data=null,busy=false,view='overview',detailId=null,templateDraft=null;
  const connected=()=>mount.isConnected;
  function message(t,bad=false){if(connected()){note.textContent=t;note.style.color=bad?'#e7a3a3':'';}}
  async function run(fn){if(busy)return;busy=true;try{await fn()}catch(e){message(e.message,true)}finally{busy=false}}
  async function load(){data=await api();if(connected())render();}
  function linkBox(url){if(!url)return;const box=card('Prüfungslink · vertraulich weitergeben');const i=text();i.value=location.origin+url;i.readOnly=true;box.append(i,btn('Link kopieren',async()=>{try{await navigator.clipboard.writeText(i.value);message('Link kopiert.')}catch{ i.select();message('Bitte markierten Link manuell kopieren.')}}));main.prepend(box);}
  function nav(){const bar=node('div',undefined,'box');bar.style.display='flex';bar.style.gap='8px';bar.style.flexWrap='wrap';
-  for(const [v,t] of [['overview','Übersicht'],['create','Prüfung erstellen'],['running','Laufend'],['first','Erstkorrektur'],['second','Zweitkorrektur'],['archive','Archiv'],...(data.leitung?[['templates','Vorlagen']]:[])]){
+  for(const [v,t] of [['overview','Übersicht'],['create','Prüfung erstellen'],['running','Laufend'],['first','Erstkorrektur'],['second','Zweitkorrektur'],['archive','Archiv'],...(data.verwaltung?[['templates','Vorlagen']]:[])]){
    bar.append(btn(t,()=>{view=v;detailId=null;render()},view===v?'p':''));
   }bar.append(btn('Aktualisieren',()=>run(load),''));return bar;}
  function render(){if(!connected())return;main.replaceChildren();
@@ -63,18 +63,55 @@ function open(host){
  c.append(node('p','Einmaliger Prüfungsversuch. Der Link kann vor dem Start erneuert werden und gilt 24 Stunden für den Prüfungsbeginn.','mut'),
  btn('Prüfung anlegen',()=>run(async()=>{const j=await api('',{vorlage:Number(v.value),anwaerter:Number(a.value),erst:Number(first.value),zweit:Number(second.value)});view='overview';await load();linkBox(j.link);message(j.link?'Prüfung erstellt. Link jetzt kopieren.':'Praxisbewertung zur Erstkorrektur angelegt.');})));main.append(c);
  }
- function templates(){const c=card('Prüfungsvorlagen · geschützt in MySQL');
- const v=field(c,'Prüfungsart',select(Object.entries(data.arten)));const t=field(c,'Titel (optional)',text('Standardtitel'));
- const time=field(c,'Bearbeitungszeit (Minuten; Praxis = 0)',num(0,480)),pass=field(c,'Bestehensgrenze (%)',num(1,100,'0.01'));
- const json=field(c,'Fragen und Musterlösungen (JSON)',area('JSON-Fragenliste oder Google-Forms formular.json'));json.rows=12;
- const file=field(c,'JSON-Datei auswählen',node('input'));file.type='file';file.accept='.json,application/json';file.onchange=async()=>{try{const f=file.files[0];if(f){if(f.size>1800000)throw Error('Datei zu groß');json.value=await f.text()}}catch(e){message(e.message,true)}};
- const confirmation=node('input');confirmation.type='checkbox';const label=node('label',' Ich habe Fragen, Punktwerte, Musterlösungen und Bestehensgrenze fachlich geprüft.');label.prepend(confirmation);c.append(label);
- c.append(node('p','Normales Format: Liste mit typ (single/multiple/text/praxis), titel, punkte, muster; bei Auswahlfragen zusätzlich optionen und richtig (nullbasierte Indizes). Einfach aufgebaute Forms-Exporte können konvertiert werden. Bilder, Abschnitte und Sonderfragen werden nicht stillschweigend ausgelassen. Multiple Choice: volle Punkte nur bei exakt richtiger Auswahl.','mut'));
- c.append(btn('Vorlage prüfen / Vorschau',()=>{try{const raw=JSON.parse(json.value);const questions=Array.isArray(raw)?raw:raw.fragen||convertGoogle(raw);json.value=JSON.stringify(questions,null,2);message(questions.length+' Fragen · '+questions.reduce((n,q)=>n+Number(q.punkte||0),0)+' Punkte. Bitte prüfen.');confirmation.checked=false}catch(e){message(e.message,true)}}),
- btn('Geprüfte Vorlage speichern',()=>run(async()=>{if(!confirmation.checked||time.value===''||pass.value==='')throw Error('Zeit, Bestehensgrenze und Bestätigung erforderlich.');const raw=JSON.parse(json.value);const questions=Array.isArray(raw)?raw:raw.fragen||convertGoogle(raw);await api('/vorlagen',{art:v.value,...(t.value?{titel:t.value}:{}),minuten:Number(time.value),grenze:Number(pass.value),fragen:questions,bestaetigt:true});await load();message('Neue unveränderliche Vorlagenversion gespeichert.');})));
- const l=card('Vorhandene Versionen');for(const x of data.vorlagen)l.append(node('p','#'+x.id+' · '+x.titel+' · '+x.grenze+' % · '+x.minuten+' Min.'));main.append(c,l);
+ function templates(){
+ const c=card('Prüfungsvorlagen · Frageneditor');
+ const draft=templateDraft;
+ const v=field(c,'Prüfungsart',select(Object.entries(data.arten)));
+ const t=field(c,'Titel (optional)',text('Standardtitel'));
+ const time=field(c,'Bearbeitungszeit (Minuten; Praxis = 0)',num(0,480));
+ const pass=field(c,'Bestehensgrenze (%)',num(1,100,'0.01'));
+ if(draft){v.value=draft.art;v.disabled=true;t.value=draft.titel;time.value=draft.minuten;pass.value=draft.grenze;c.append(node('p','Bearbeitung von Version #'+draft.id+' · Speichern erzeugt eine neue Version. Bereits gestartete und archivierte Prüfungen behalten ihre ursprünglichen Fragen.','mut'));}
+ const questionList=node('div');const total=node('p','','mut');let questions=structuredClone(draft?.fragen||[]);
+ const confirmation=node('input');confirmation.type='checkbox';
+ const update=()=>{total.textContent=questions.length+' Fragen · '+questions.reduce((n,q)=>n+(Number(q.punkte)||0),0)+' Gesamtpunkte';confirmation.checked=false};
+ const blank=()=>({typ:v.value==='praxis'?'praxis':'text',titel:'',punkte:1,muster:'',optionen:[],richtig:[]});
+ function renderQuestions(){
+  questionList.replaceChildren();
+  questions.forEach((q,i)=>{
+   const row=card('Frage '+(i+1));row.style.border='1px solid var(--border,#405268)';row.style.padding='14px';
+   const tools=node('div');tools.style.display='flex';tools.style.gap='8px';tools.style.flexWrap='wrap';
+   if(i>0)tools.append(btn('↑ Nach oben',()=>{[questions[i-1],questions[i]]=[questions[i],questions[i-1]];renderQuestions();update()},''));
+   if(i<questions.length-1)tools.append(btn('↓ Nach unten',()=>{[questions[i+1],questions[i]]=[questions[i],questions[i+1]];renderQuestions();update()},''));
+   tools.append(btn('Frage löschen',()=>{if(confirm('Frage aus dieser Vorlagenversion entfernen?')){questions.splice(i,1);renderQuestions();update()}},'danger'));row.append(tools);
+   const typ=field(row,'Fragetyp',select(v.value==='praxis'?[['praxis','Praxis-Kriterium']]:[['text','Freitext'],['single','Single Choice'],['multiple','Multiple Choice']]));typ.value=q.typ;
+   typ.onchange=()=>{q.typ=typ.value;if(['single','multiple'].includes(q.typ)&&!q.optionen.length)q.optionen=['',''];if(q.typ==='single')q.richtig=q.richtig.slice(0,1);renderQuestions();update()};
+   const title=field(row,'Frage / Kriterium',area());title.value=q.titel||'';title.oninput=()=>{q.titel=title.value;update()};
+   const p=field(row,'Maximale Punktzahl',num(0.01,1000,'0.01'));p.value=q.punkte;p.oninput=()=>{q.punkte=Number(p.value);update()};
+   const m=field(row,'Musterlösung / Bewertungskriterien',area());m.value=q.muster||'';m.oninput=()=>{q.muster=m.value;update()};
+   if(['single','multiple'].includes(q.typ)){
+    row.append(node('p','Antwortoptionen · richtige Antworten markieren','mut'));
+    q.optionen.forEach((o,j)=>{
+     const line=node('div');line.style.display='flex';line.style.gap='8px';line.style.margin='5px 0';
+     const mark=node('input');mark.type=q.typ==='single'?'radio':'checkbox';mark.name='solution-'+i;mark.checked=q.richtig.includes(j);mark.setAttribute('aria-label','Antwort '+(j+1)+' ist richtig');
+     mark.onchange=()=>{q.richtig=q.typ==='single'?[j]:mark.checked?[...q.richtig,j]:q.richtig.filter(x=>x!==j);update()};
+     const value=text('Antwort '+(j+1));value.value=o;value.style.flex='1';value.oninput=()=>{q.optionen[j]=value.value;update()};
+     line.append(mark,value,btn('Entfernen',()=>{q.optionen.splice(j,1);q.richtig=q.richtig.filter(x=>x!==j).map(x=>x>j?x-1:x);renderQuestions();update()},''));row.append(line);
+    });row.append(btn('+ Antwortoption',()=>{q.optionen.push('');renderQuestions();update()},''));
+   }questionList.append(row);
+  });update();
  }
- async function details(id){const {pruefung:p,user,leitung}=await api('/'+id);if(!connected())return;detailId=id;view='detail';main.replaceChildren(nav());
+ v.onchange=()=>{if(questions.length&&!confirm('Prüfungsart wechseln und bisherige Fragen entfernen?')){v.value=questions[0].typ==='praxis'?'praxis':(v.dataset.previous||'pm');return}questions=[];v.dataset.previous=v.value;if(v.value==='praxis')time.value=0;renderQuestions()};v.dataset.previous=v.value;
+ for(const input of [t,time,pass])input.addEventListener('input',()=>confirmation.checked=false);
+ const file=field(c,'JSON-Datei importieren (optional)',node('input'));file.type='file';file.accept='.json,application/json';
+ file.onchange=async()=>{try{const f=file.files[0];if(!f)return;if(f.size>1800000)throw Error('Datei zu groß');const raw=JSON.parse(await f.text());const imported=Array.isArray(raw)?raw:raw.fragen||convertGoogle(raw);if(!Array.isArray(imported))throw Error('Ungültige Fragenliste');if(questions.length&&!confirm('Fragen im aktuellen Entwurf durch Import ersetzen?'))return;questions=imported.map(q=>({...q,optionen:Array.isArray(q.optionen)?q.optionen:[],richtig:Array.isArray(q.richtig)?q.richtig:[]}));renderQuestions();message('Import geladen. Fragen und Lösungen überprüfen.')}catch(e){message(e.message,true)}};
+ c.append(total,questionList,btn('+ Frage hinzufügen',()=>{questions.push(blank());renderQuestions()},''));
+ const label=node('label',' Ich habe Fragen, Punktwerte, Musterlösungen und Bestehensgrenze fachlich geprüft.');label.prepend(confirmation);label.style.display='block';label.style.margin='14px 0';c.append(label);
+ c.append(btn('Geprüfte Version speichern',()=>run(async()=>{if(!confirmation.checked||time.value===''||pass.value==='')throw Error('Zeit, Bestehensgrenze und Bestätigung erforderlich.');await api('/vorlagen',{art:v.value,...(t.value?{titel:t.value}:{}),...(draft?{basis:Number(draft.id)}:{}),minuten:Number(time.value),grenze:Number(pass.value),fragen:questions,bestaetigt:true});templateDraft=null;await load();message('Neue Vorlagenversion gespeichert.');})));
+ if(draft)c.append(btn('Neue Vorlage statt Bearbeitung',()=>{if(confirm('Entwurf verwerfen?')){templateDraft=null;render()}},''));
+ const l=card('Vorhandene Versionen');for(const x of data.vorlagen){const line=node('div');line.style.display='flex';line.style.justifyContent='space-between';line.style.alignItems='center';line.style.gap='8px';line.style.margin='8px 0';line.append(node('span','#'+x.id+' · '+x.titel+' · '+x.grenze+' % · '+x.minuten+' Min.'),btn('Bearbeiten',()=>run(async()=>{if(questions.length&&!confirm('Aktuellen Entwurf verwerfen und Vorlage laden?'))return;templateDraft=(await api('/vorlagen/'+x.id)).vorlage;render();}),''));
+ l.append(line)}main.append(c,l);renderQuestions();
+ }
+ async function details(id){const {pruefung:p,user,leitung,verwaltung}=await api('/'+id);if(!connected())return;detailId=id;view='detail';main.replaceChildren(nav());
  const c=card(p.kandidat+' · '+p.titel);c.append(node('p',states[p.status]+' · Erstprüfer #'+p.erst+' · Zweitprüfer #'+p.zweit),node('p','Start: '+date(p.start_am)+' · Ende: '+date(p.ende_am)+' · Abgabe: '+date(p.abgabe_am)));
  const actions=node('div');actions.style.display='flex';actions.style.gap='8px';actions.style.flexWrap='wrap';c.append(actions);
  if(p.status==='bereit'&&p.art!=='praxis')actions.append(btn('Link erneuern',()=>run(async()=>{const r=await api('/'+id+'/link',{revision:Number(p.revision)});await details(id);linkBox(r.link);}), ''));
@@ -85,6 +122,8 @@ function open(host){
  const f=card('Fokusprotokoll · Hinweise, kein Täuschungsnachweis');f.append(node('p','Tab-/Fensterwechsel: '+(p.fokus.wechsel||0)));for(const e of (p.fokus.events||[]))f.append(node('p',new Date(e.am).toLocaleString('de-DE')+' · '+e.ereignis));main.append(f);
  if(p.fragen){
  const first=p.status==='abgegeben'&&Number(p.erst)===user,second=p.status==='erstkorrigiert'&&Number(p.zweit)===user;
+ const override=verwaltung&&['abgegeben','erstkorrigiert','zweitkorrigiert','freigegeben'].includes(p.status);
+ let editOverride=false;
  const fields=[];p.fragen.forEach((q,i)=>{const b=card('Frage '+(i+1)+' · '+q.punkte+' Punkte');b.append(node('p',q.titel));
  const ans=p.antworten[i];const answer=Array.isArray(ans)?ans.map(a=>q.optionen[a]).join(' · '):ans;
  if(q.typ!=='praxis')b.append(node('p','Antwort: '+(answer||'—')));b.append(node('p','Muster / Kriterien: '+([q.muster,...(q.richtig||[]).map(a=>q.optionen[a])].filter(Boolean).join(' · ')||'—')));
@@ -92,12 +131,22 @@ function open(host){
  const score=field(b,'Punkte',num(0,q.punkte,'0.01'));score.value=p.bewertung[i]?.punkte??automatic??'';score.disabled=!first;
  const n=field(b,'Korrekturvermerk',area());n.value=p.bewertung[i]?.notiz||'';n.disabled=!first&&!second;fields.push({score,n});main.append(b);
  });
+ if(override){
+ const b=card('Leitung · Korrektursperre übergehen');
+ b.append(node('p','Auch nach der Zweitkorrektur und Ergebnisfreigabe darf die Leitung Punkte und Vermerke berichtigen. Ursprüngliche Antworten bleiben unverändert; der alte und neue Bewertungsstand werden protokolliert. Bei bereits freigegebenen Ergebnissen wird die neue Punktzahl unmittelbar im Ergebnislink angezeigt.','mut'));
+ const why=field(b,'Pflichtbegründung',area('Warum ist die Berichtigung erforderlich?'));
+ const saveOverride=btn('Berichtigung verbindlich speichern',()=>run(async()=>{if(!editOverride||!why.value.trim())throw Error('Berichtigungsmodus aktivieren und Begründung eingeben.');if(fields.some(x=>x.score.value===''||!x.score.checkValidity()))throw Error('Alle Punkte vollständig und gültig eintragen.');if(!confirm('Bewertung mit Leitungsrecht berichtigen?'))return;await api('/'+id+'/berichtigen',{revision:Number(p.revision),notiz:why.value,bewertung:fields.map(x=>({punkte:Number(x.score.value),notiz:x.n.value}))});await details(id);message('Berichtigung protokolliert.');}));
+ saveOverride.disabled=true;
+ b.append(btn('Berichtigung aktivieren',()=>{editOverride=true;fields.forEach(x=>{x.score.disabled=false;x.n.disabled=false});saveOverride.disabled=false;message('Berichtigungsmodus aktiv. Begründung ist Pflicht.');}),saveOverride);
+ if(p.status!=='abgegeben')b.append(btn('Erst- und Zweitkorrektur erneut öffnen',()=>run(async()=>{if(!why.value.trim())throw Error('Begründung erforderlich.');if(!confirm('Korrektur erneut öffnen? Ein freigegebenes Ergebnis wird bis zur erneuten Freigabe ausgeblendet.'))return;await api('/'+id+'/wiedereroeffnen',{revision:Number(p.revision),notiz:why.value});await details(id);message('Korrektur erneut geöffnet.');}),''));
+ main.append(b);
+ }
  if(first||second){const b=card(first?'Erstkorrektur abschließen':'Zweitkorrektur abschließen');const note=field(b,'Gesamtvermerk / Begründung',area());
  b.append(btn(first?'An Zweitprüfer übergeben':'Zweitkorrektur bestätigen',()=>run(async()=>{if(fields.some(x=>x.score.value===''||!x.score.checkValidity()))throw Error('Alle Punkte vollständig und gültig eintragen.');await api('/'+id+'/korrektur',{revision:Number(p.revision),notiz:note.value,bewertung:fields.map(x=>({punkte:Number(x.score.value),notiz:x.n.value}))});await details(id);message('Korrektur gespeichert.');})));
  if(second)b.append(btn('Mit Begründung an Erstprüfer zurückgeben',()=>run(async()=>{await api('/'+id+'/korrektur',{revision:Number(p.revision),notiz:note.value,zurueck:true});await details(id);message('Zurückgegeben.');}),''));
  main.append(b);}
  }
- const h=card('Verlauf');for(const e of p.protokoll)h.append(node('p',new Date(e.am).toLocaleString('de-DE')+' · '+e.aktion+' · '+(e.user?'#'+e.user:'System')+(e.notiz?' · '+e.notiz:'')));main.append(h);
+ const h=card('Verlauf');for(const e of p.protokoll){h.append(node('p',new Date(e.am).toLocaleString('de-DE')+' · '+e.aktion+' · '+(e.user?'#'+e.user:'System')+(e.notiz?' · '+e.notiz:'')));if(e.vorher&&e.nachher){const d=node('details');d.append(node('summary','Bewertungsänderungen: '+(e.vorher.ergebnis??'offen')+' → '+(e.nachher.ergebnis??'offen')+' Punkte · '+e.vorher.status+' → '+e.nachher.status));const old=e.vorher.bewertung||[],next=e.nachher.bewertung||[];for(let i=0;i<Math.max(old.length,next.length);i++){const a=old[i],b=next[i];if(JSON.stringify(a)!==JSON.stringify(b))d.append(node('p','Frage '+(i+1)+': '+(a?.punkte??'offen')+' → '+(b?.punkte??'offen')+' Punkte · '+(a?.notiz||'—')+' → '+(b?.notiz||'—')));}h.append(d);}}main.append(h);
  }
  run(load);
  const interval=setInterval(()=>{if(!connected()){clearInterval(interval);return}if(view==='running'&&!busy&&document.visibilityState==='visible')run(load)},10000);

@@ -100,6 +100,22 @@ function pruefungRow(int $id,bool $lock=false): array {
     $r=sql("SELECT p.*,v.art,v.titel,v.minuten,v.grenze,v.fragen FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id WHERE p.id=?".($lock?' FOR UPDATE':''),[$id]);
     if(!$r)fail(404,'Prüfung nicht gefunden');return $r[0];
 }
+function pruefungVerwaltung(array $u): bool {
+    return ausbildungLeitung($u)&&(in_array($u['rolle']??'',['Administrator','Leitungsdienst','Ausbildungsleitung'],true)||ausbildungLeitungsprofil($u));
+}
+function pruefungBerichtigungStatus(string $status): bool {
+    return in_array($status,['abgegeben','erstkorrigiert','zweitkorrigiert','freigegeben'],true);
+}
+function pruefungBewertung(array $q,$scores): array {
+    if(!is_array($scores)||!array_is_list($scores)||count($scores)!==count($q))fail(400,'Alle Fragen bewerten');
+    $result=[];$total=0;
+    foreach($q as $i=>$f){
+        $s=$scores[$i];if(!is_array($s))fail(400,'Bewertung fehlt');
+        $points=pruefungNum($s['punkte']??null,0,(float)$f['punkte']);
+        $total+=$points;$result[]=['punkte'=>$points,'notiz'=>pruefungText($s['notiz']??'',4000,false)];
+    }
+    return [$result,round($total,2)];
+}
 function pruefungAccess(array $p,array $u): void {
     if(!ausbildungLeitung($u)&&!in_array((int)$u['id'],[(int)$p['erst'],(int)$p['zweit']],true))fail(403,'Nicht für diese Prüfung eingeteilt');
 }
@@ -157,7 +173,7 @@ function pruefungGuest(string $method,string $uri): bool {
 }
 function dispatchPruefung(array $u,string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/ausbildung/pruefungen'))return false;
-    ausbildungRecht($u);$lead=ausbildungLeitung($u);$uid=(int)$u['id'];
+    ausbildungRecht($u);$lead=ausbildungLeitung($u);$verwaltung=pruefungVerwaltung($u);$uid=(int)$u['id'];
     $root='/api/ausbildung/pruefungen';
     if($method==='POST'&&$uri===$root.'/setup')pruefungInstall($u);
     if(!pruefungSchema()){
@@ -172,10 +188,21 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         $reviewers=[];foreach(sql("SELECT id,anzeigename,dienstnummer FROM users WHERE gesperrt=0 AND muss_passwort_aendern=0 ORDER BY anzeigename") as $r)if(pruefungReviewer((int)$r['id']))$reviewers[]=$r;
         ausbildungSynchronisierePersonal();
         $trainees=array_map(fn($a)=>array_intersect_key($a,array_flip(['id','name','laufbahn','personalnummer'])),ausbildungAktuelleAnwaerter());
-        respond(200,['bereit'=>true,'leitung'=>$lead,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM ausbildung_pruefung_vorlagen ORDER BY id DESC'),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
+        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM ausbildung_pruefung_vorlagen ORDER BY id DESC'),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
+    }
+    if($method==='GET'&&preg_match('#^/api/ausbildung/pruefungen/vorlagen/([1-9][0-9]*)$#D',$uri,$vMatch)){
+        if(!$verwaltung)fail(403,'Nur Ausbildungsleitung und Leitungsdienst');
+        $rows=sql('SELECT id,art,titel,minuten,grenze,fragen FROM ausbildung_pruefung_vorlagen WHERE id=?',[(int)$vMatch[1]]);
+        if(!$rows)fail(404,'Vorlage nicht gefunden');
+        $v=$rows[0];$v['fragen']=pruefungRead($v['fragen']);respond(200,['vorlage'=>$v]);
     }
     if($method==='POST'&&$uri===$root.'/vorlagen'){
-        ausbildungRecht($u,2);[$art,$titel,$minuten,$grenze,$fragen]=pruefungVorlage(body());
+        if(!$verwaltung)fail(403,'Nur Ausbildungsleitung und Leitungsdienst');
+        $b=body();[$art,$titel,$minuten,$grenze,$fragen]=pruefungVorlage($b);
+        if(isset($b['basis'])){
+            $basis=sql('SELECT art FROM ausbildung_pruefung_vorlagen WHERE id=?',[(int)$b['basis']]);
+            if(!$basis||$basis[0]['art']!==$art)fail(400,'Bearbeitete Version muss dieselbe Prüfungsart behalten');
+        }
         sql('INSERT INTO ausbildung_pruefung_vorlagen(art,titel,minuten,grenze,fragen,erstellt_von) VALUES(?,?,?,?,?,?)',[$art,$titel,$minuten,$grenze,pruefungJson($fragen),$uid]);
         respond(201,['id'=>(int)db()->lastInsertId()]);
     }
@@ -193,7 +220,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
             [$vid,$aid,$a['name'],$track,$first,$second,$practice?'abgegeben':'bereit',hash('sha256',$token),pruefungJson($answers),'[]',pruefungJson([['am'=>gmdate('c'),'aktion'=>'erstellt','user'=>$uid]]),'{"wechsel":0,"events":[]}']);
         respond(201,['id'=>(int)db()->lastInsertId(),'link'=>$practice?null:'/pruefung.html#'.$token]);
     }
-    if(!preg_match('#^/api/ausbildung/pruefungen/([1-9][0-9]*)(?:/(korrektur|freigabe|annullieren|link))?$#D',$uri,$m))fail(404,'Nicht gefunden');
+    if(!preg_match('#^/api/ausbildung/pruefungen/([1-9][0-9]*)(?:/(korrektur|freigabe|annullieren|link|berichtigen|wiedereroeffnen))?$#D',$uri,$m))fail(404,'Nicht gefunden');
     $id=(int)$m[1];$action=$m[2]??'';
     if($method==='GET'&&$action===''){
         $p=pruefungRow($id);pruefungAccess($p,$u);
@@ -202,7 +229,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         if(in_array($p['status'],['bereit','laufend'],true)){
             unset($p['fragen'],$p['antworten'],$p['bewertung']);
         }else $p['automatisch']=array_map(fn($q,$i)=>pruefungAuto($q,$p['antworten'][$i]??null),$p['fragen'],array_keys($p['fragen']));
-        respond(200,['pruefung'=>$p,'user'=>$uid,'leitung'=>$lead]);
+        respond(200,['pruefung'=>$p,'user'=>$uid,'leitung'=>$lead,'verwaltung'=>$verwaltung]);
     }
     if($method!=='POST'||$action==='')fail(405,'Nicht erlaubt');
     $b=body();$pdo=db();$pdo->beginTransaction();
@@ -216,6 +243,20 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         }elseif($action==='annullieren'){
             if(!$lead||in_array($status,['freigegeben','annulliert'],true)||$note==='')fail(403,'Nur Ausbildungsleitung, mit Begründung, vor Freigabe');
             sql("UPDATE ausbildung_pruefungen SET status='annulliert',revision=revision+1,protokoll=? WHERE id=?",[pruefungJson($history),$id]);
+        }elseif($action==='berichtigen'||$action==='wiedereroeffnen'){
+            if(!$verwaltung)fail(403,'Nur Ausbildungsleitung und Leitungsdienst dürfen die Korrektursperre umgehen');
+            if(!pruefungBerichtigungStatus($status))fail(409,'Nur abgegebene Prüfungen können korrigiert werden');
+            if($note==='')fail(400,'Begründung für die Berichtigung ist erforderlich');
+            $i=count($history)-1;
+            $history[$i]['vorher']=['status'=>$status,'ergebnis'=>$p['ergebnis'],'bewertung'=>pruefungRead($p['bewertung'])];
+            if($action==='wiedereroeffnen'){
+                $history[$i]['nachher']=['status'=>'abgegeben','ergebnis'=>$p['ergebnis'],'bewertung'=>pruefungRead($p['bewertung'])];
+                sql("UPDATE ausbildung_pruefungen SET status='abgegeben',revision=revision+1,protokoll=? WHERE id=?",[pruefungJson($history),$id]);
+            }else{
+                [$result,$total]=pruefungBewertung(pruefungRead($p['fragen']),$b['bewertung']??null);
+                $history[$i]['nachher']=['status'=>$status,'ergebnis'=>$total,'bewertung'=>$result];
+                sql('UPDATE ausbildung_pruefungen SET bewertung=?,ergebnis=?,revision=revision+1,protokoll=? WHERE id=?',[pruefungJson($result),$total,pruefungJson($history),$id]);
+            }
         }elseif($action==='korrektur'){
             $first=$status==='abgegeben'&&$uid===(int)$p['erst'];$second=$status==='erstkorrigiert'&&$uid===(int)$p['zweit'];
             if(!$first&&!$second)fail(403,'Korrektur nicht für diesen Prüfer freigegeben');
@@ -223,10 +264,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
                 if($note==='')fail(400,'Begründung erforderlich');
                 sql("UPDATE ausbildung_pruefungen SET status='abgegeben',revision=revision+1,protokoll=? WHERE id=?",[pruefungJson($history),$id]);
             }else{
-                $q=pruefungRead($p['fragen']);$scores=$b['bewertung']??null;
-                if(!is_array($scores)||!array_is_list($scores)||count($scores)!==count($q))fail(400,'Alle Fragen bewerten');
-                $result=[];$total=0;
-                foreach($q as $i=>$f){$s=$scores[$i];if(!is_array($s))fail(400,'Bewertung fehlt');$points=pruefungNum($s['punkte']??null,0,(float)$f['punkte']);$total+=$points;$result[]=['punkte'=>$points,'notiz'=>pruefungText($s['notiz']??'',4000,false)];}
+                [$result,$total]=pruefungBewertung(pruefungRead($p['fragen']),$b['bewertung']??null);
                 $history[count($history)-1]['bewertung']=$result;
                 if($second){
                     $old=pruefungRead($p['bewertung']);
