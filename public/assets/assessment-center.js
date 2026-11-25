@@ -297,7 +297,11 @@ function open(host){
  if(data.importAdmin&&!practice){
  const googleBox=card('Google Forms direkt importieren');
  const source=field(googleBox,'Assessment-Testart',select(Object.entries(data.arten)));source.value=v.value;
+ const originals={einstellung_leicht:'1DXuN2M7OzykethGPWWqHsEk81hP6d8mflCT1yaNEza0',einstellung_schwer:'1FPMkdHyMdkMecN3yW7rdXwpoDSaOwakWfvBaDPU10_E',wiedereinstieg:'19wRu_kbfIkVJ8aANbJA02fMUJW4NnGWKR11U3DzoVto'};
  const formLink=field(googleBox,'Google Forms · Bearbeitungslink oder Formular-ID',text('https://docs.google.com/forms/d/…/edit'));formLink.maxLength=500;
+ const originalLink=()=>{formLink.value=originals[source.value]?'https://docs.google.com/forms/d/'+originals[source.value]+'/edit':'';};
+ source.addEventListener('change',originalLink);originalLink();
+ googleBox.append(node('p','Originale vorbelegt. Zuordnung A = leicht und B = schwer ist vorläufig; bitte vor dem Import prüfen. Der Bearbeitungslink ist bei Bedarf änderbar.','mut'));
  googleBox.append(node('p','Verwende den Bearbeitungslink mit Zugriff auf Fragen und Lösungen, nicht den öffentlichen forms.gle-Teilnahmelink.','mut'));
  const googleHint=node('p','Google-Anmeldung wird vorbereitet …','mut');googleHint.setAttribute('role','status');googleHint.setAttribute('aria-live','polite');googleBox.append(googleHint);
  const download=node('button','Originalexport (JSON) sichern');download.type='button';download.hidden=true;googleBox.append(download);
