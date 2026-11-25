@@ -21,7 +21,7 @@ function cleanId(string $raw): int {
 }
 function portalDesignInput(): array {
     $data=body();
-    $motifs=['wappen','verlauf','ohne','nachtblau','stahl','raster','licht','minimal','einsatzszene','streife-nacht','streife-einsatz','polizeiweste'];
+    $motifs=['wappen','verlauf','ohne','nachtblau','stahl','raster','licht','minimal','einsatzszene','streife-nacht','streife-einsatz','polizeiweste','streifenbesprechung'];
     $hex=static fn($value)=>is_string($value)&&preg_match('/^#[0-9a-fA-F]{6}$/D',$value);
     $extras=$data['extras']??[];
     if (!$hex($data['akzent']??null) || !is_int($data['schleier']??null) ||
