@@ -313,7 +313,7 @@ function run(): void {
             }
             $personalDesign=($method==='GET'&&$uri==='/api/portal-design')
                 ||(in_array($method,['PUT','DELETE'],true)&&$uri==='/api/portal-design/personal');
-            if(!str_starts_with($uri,'/api/ausbildung/')&&!$personalDesign)
+            if(!str_starts_with($uri,'/api/ausbildung/')&&!$personalDesign&&!($method==='GET'&&$uri==='/api/benachrichtigungs-einstellungen'))
                 fail(403,'Dieser Zugang ist nur für die Ausbildungsabteilung und das eigene Design freigegeben');
         }
         // Make authenticated actor available to MySQL audit triggers on every route.

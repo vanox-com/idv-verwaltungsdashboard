@@ -5,6 +5,7 @@
  const who=()=>String(ME?.id??ME?.dienstnummer??'');
  const hide=()=>{if(toast)toast.hidden=true;};
  const key=h=>h.key+':'+h.stufe+(h.stufe==='dringend'?':'+day:'');
+ const enabled=h=>h.stufe!=='hinweis'&&window.IDVNotificationSettings?.enabled('pma_'+h.stufe)===true;
  function reset(){const id=who();if(account!==id){account=id;seen=new Set();items=[];last=0;hide();}}
  function place(){
    if(!toast||toast.hidden)return;
@@ -13,7 +14,7 @@
    const top=por&&!por.hidden?Math.max(base,por.getBoundingClientRect().bottom+10):base;
    toast.style.top=top+'px';toast.style.maxHeight=Math.max(80,window.innerHeight-top-12)+'px';
  }
- function dismiss(){items.filter(x=>x.stufe!=='hinweis').forEach(x=>seen.add(key(x)));hide();}
+ function dismiss(){items.filter(enabled).forEach(x=>seen.add(key(x)));hide();}
  function ensure(){
    if(toast?.isConnected)return toast;
    toast=document.createElement('div');toast.id='idvPmaHinweis';toast.hidden=true;
@@ -26,7 +27,7 @@
  }
  function render(){
    if(!eligible()){hide();return;}
-   const relevant=items.filter(h=>h.stufe!=='hinweis');
+   const relevant=items.filter(enabled);
    const valid=new Set(relevant.map(key));for(const k of seen)if(!valid.has(k))seen.delete(k);
    const pending=relevant.filter(h=>!seen.has(key(h)));
    if(!pending.length){hide();return;}
@@ -57,5 +58,5 @@
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)start();});
  window.addEventListener('resize',place);
  new MutationObserver(records=>{if(records.some(m=>m.target.id==='idvPorHinweis'||(m.target===document.body&&[...m.addedNodes,...m.removedNodes].some(n=>n.id==='idvPorHinweis'))))place();}).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden']});
- window.IDVPMA={start,refresh,observe};
+ window.IDVPMA={start,refresh,observe,settingsChanged:render};
 })();

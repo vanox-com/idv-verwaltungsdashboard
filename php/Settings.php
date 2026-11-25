@@ -65,7 +65,35 @@ function ausbildungsZugangArchivieren(int $id,array $tables): void {
     sql('UPDATE users SET dienstnummer=?,gesperrt=1,passwort_hash=?,muss_passwort_aendern=1 WHERE id=?',[$archiv,$hash,$id]);
     sql('DELETE FROM sessions WHERE user_id=?',[$id]);
 }
+function notificationSettingsDefaults(): array {
+    return ['por_bef'=>true,'por_rang'=>true,'pma_warnung'=>true,'pma_stimmen'=>true,'pma_dringend'=>true];
+}
+function notificationSettingsRead(): array {
+    $flags=notificationSettingsDefaults();
+    foreach(sql("SELECT schluessel,werte FROM system_optionen WHERE schluessel IN ('hinweis_por_bef','hinweis_por_rang','hinweis_pma_warnung','hinweis_pma_stimmen','hinweis_pma_dringend')") as $row){
+        $key=substr((string)$row['schluessel'],8);
+        $value=json_decode((string)$row['werte'],true);
+        if(array_key_exists($key,$flags)&&is_bool($value[0]??null))$flags[$key]=$value[0];
+    }
+    return $flags;
+}
 function dispatchSettings(array $u,string $method,string $uri): bool {
+    if($method==='GET'&&$uri==='/api/benachrichtigungs-einstellungen'){
+        respond(200,['einstellungen'=>notificationSettingsRead()]);
+    }
+    if($method==='PUT'&&preg_match('#^/api/benachrichtigungs-einstellungen/([a-z_]+)$#D',$uri,$m)){
+        if(!in_array($u['rolle'],['Administrator','Leitungsdienst'],true))fail(403,'Nur Administratoren und Leitungsdienst dürfen Benachrichtigungen verwalten');
+        $key=$m[1];$b=body();$enabled=$b['aktiv']??null;
+        if(!array_key_exists($key,notificationSettingsDefaults())||!is_bool($enabled))fail(400,'Ungültige Benachrichtigungseinstellung');
+        db()->beginTransaction();
+        try{
+            sql('INSERT INTO system_optionen(schluessel,werte) VALUES(?,?) ON DUPLICATE KEY UPDATE werte=VALUES(werte),aktualisiert=UTC_TIMESTAMP(6)',
+                ['hinweis_'.$key,json_encode([$enabled],JSON_THROW_ON_ERROR)]);
+            auditAction($u,'Portalbenachrichtigung '.$key.($enabled?' aktiviert':' deaktiviert'));
+            db()->commit();
+        }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
+        respond(200,['einstellungen'=>notificationSettingsRead()]);
+    }
     if($method==='GET'&&$uri==='/api/users'){
         needAdmin($u);
         ensureDNApprovalPermissions();

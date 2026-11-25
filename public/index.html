@@ -1726,6 +1726,9 @@ body{overflow-x:clip}
 #idvPmaHinweis .pma-close:hover{color:#fff}
 @media(max-width:600px){#idvPmaHinweis{right:12px;max-width:calc(100vw - 24px)}}
 </style>
+<style>
+.notify-settings{max-width:940px}.notify-settings .ns-heading{margin:0 0 18px}.notify-settings .ns-heading p{color:var(--mut);max-width:720px}.ns-group{padding:18px 20px;margin:0 0 16px;border:1px solid var(--line,#34455c);background:var(--panel,#192536);border-radius:12px}.ns-group h2{font-size:17px;margin:0 0 4px}.ns-group>p{font-size:12px;color:var(--mut);margin:0 0 12px}.ns-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px 0;border-top:1px solid #9caec326}.ns-row strong{display:block;font-size:14px}.ns-row small{display:block;color:var(--mut);font-size:12px;margin-top:4px}.ns-control{display:flex;align-items:center;gap:8px;font-size:12px;white-space:nowrap}.ns-control button{position:relative;width:42px;height:24px;padding:0;border:1px solid #687787;border-radius:999px;background:#526070;cursor:pointer;flex-shrink:0}.ns-control button::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;background:white;border-radius:50%;transition:transform .15s}.ns-control button[aria-checked="true"]{background:#338265;border-color:#6abf9d}.ns-control button[aria-checked="true"]::after{transform:translateX(18px)}.ns-control button:disabled{opacity:.5;cursor:wait}.ns-control button:focus-visible{outline:2px solid #8fb5ed;outline-offset:3px}.ns-status{color:var(--mut);font-size:12px;min-height:20px;margin:8px 0}.ns-status.error{color:#f18e98}.ns-legend{font-size:12px;color:var(--mut)}@media(max-width:480px){.ns-group{padding:12px}.ns-row{gap:8px}.ns-control span{display:none}}
+</style>
 </head>
 <body>
 
@@ -1783,7 +1786,7 @@ const MODS = [
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],['abm','Abmeldungen','📅'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
-  ['rechtesimulator','Berechtigungs-Simulator','🛡️'],['design','Designverwaltung','🎨'],['backup','Backup-Übersicht','🗄️'],['users','Benutzer & Rollen','🔐'],['befricht','Beförderungsrichtlinien','📋'],['system','Systemverwaltung','⚙️'],['botcfg','Bot-Konfiguration','🤖'],['meldungen','Mitteilungen verwalten','📣'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾'],['papierkorb','Papierkorb','🗑️']
+  ['rechtesimulator','Berechtigungs-Simulator','🛡️'],['design','Designverwaltung','🎨'],['backup','Backup-Übersicht','🗄️'],['users','Benutzer & Rollen','🔐'],['befricht','Beförderungsrichtlinien','📋'],['system','Systemverwaltung','⚙️'],['botcfg','Bot-Konfiguration','🤖'],['meldungen','Mitteilungen verwalten','📣'],['benachrichtigungen','Benachrichtigungen','🔔'],['statistik','Personalstatistiken','📈'],['log','Protokoll','🧾'],['papierkorb','Papierkorb','🗑️']
 ];
 /* Sidebar: dieselben Module und Rechte, nur übersichtlich gruppiert.
    Ein aktives Modul hält seine Kategorie immer geöffnet. */
@@ -1793,7 +1796,7 @@ const NAV_GRUPPEN = [
   {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
   {id:'ausbildung',titel:'Ausbildung',module:['ausbildung','ausbildung-pma','ausbildung-pka','ausbildung-ausbilder','ausbildung-materialien','ausbildung-unterricht']},
-  {id:'verwaltung',titel:'Administration',module:['users','befricht','system','botcfg','meldungen','rechtesimulator','design','backup','log','papierkorb']}
+  {id:'verwaltung',titel:'Administration',module:['users','befricht','system','botcfg','meldungen','benachrichtigungen','rechtesimulator','design','backup','log','papierkorb']}
 ];
 const NAV_OFFEN = new Set(['uebersicht','personal','ausbildung']);
 let ME = null, D = null, tab = 'dash';
@@ -1808,6 +1811,7 @@ const AUSB_NAV={
 const ausbildungKonto=()=>['Ausbilder','Ausbildungsleitung'].includes(ME?.rolle);
 const can = (m,l=1) => {
   if(!ME)return false;
+  if(m==='benachrichtigungen')return ['Administrator','Leitungsdienst'].includes(ME.rolle);
   if(Object.hasOwn(AUSB_NAV,m))return (ME.rechte?.ausbildung||0)>=Math.max(l,AUSB_NAV[m].leitung?2:1);
   if(ausbildungKonto())return (m==='dash'||m==='design')&&l<=1;
   return m==='design'||m==='favoriten'?true:m==='entwicklung'?(ME.rechte.pers||0)>=l:m==='system'?ME.rolle==='Administrator':m==='meldungen'?(ME.rechte.mitteilungen||0)>=2:m==='statistik'?(ME.rechte.pers||0)>=l:(ME.rechte[m]||0)>=l;
@@ -2092,6 +2096,7 @@ async function starten() {
     $('#app').classList.remove('hide');
     if(!bereitsOffen||JSON.stringify(ME.rechte||{})!==letzteRechte)zeichneMenue();
     if(!bereitsOffen||!window.IDVLive?.updateView?.())zeichne();
+    window.IDVNotificationSettings?.start();
     window.IDVPMA?.start();
     // Isolierte Ausbildungsrollen dürfen keine Live-Personal-APIs abfragen.
     if(!['Ausbilder','Ausbildungsleitung'].includes(ME.rolle)){
@@ -2170,6 +2175,7 @@ function navIcon(id) {
     bl: '<circle cx="12" cy="12" r="9"/><path d="M5.5 5.5 18.5 18.5"/>',
     system: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="4"/>',
     meldungen: '<path d="M3 11v3l4 1 2 5h3l-2-5 9 3V7l-9 3H5a2 2 0 0 0-2 1zM21 10v5"/>',
+    benachrichtigungen: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
     design: '<path d="M12 3a9 9 0 1 0 0 18h2a2 2 0 0 0 1-4 2 2 0 0 1 1-4h2a3 3 0 0 0 3-3 9 9 0 0 0-9-7z"/><circle cx="7.5" cy="10" r="1"/><circle cx="12" cy="7" r="1"/><circle cx="17" cy="10" r="1"/>',
     backup: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 2 16 2 16 0V5M4 12v7c0 2 16 2 16 0v-7"/><path d="M9 17h6"/>',
     rechtesimulator: '<path d="M12 2 20 6v6c0 5-4 8-8 10-4-2-8-5-8-10V6z"/><path d="m8 12 3 3 5-6"/>',
@@ -2257,6 +2263,7 @@ function zeichne() {
   if (tab==='texte') { ladeTextbausteine(); return; }
   if (tab==='abm') { window.IDVAbmeldungen?.laden(); return; }
   if (tab==='botcfg') { window.IDVBotKonfiguration?.laden(); return; }
+  if (tab==='benachrichtigungen') { window.IDVNotificationSettings?.open(); return; }
   if (['sperr','geb','jub','bl'].includes(tab)) { ladeExtra(tab); return; }
   if (tab === 'log') {
     $('#inhalt').innerHTML = '<h1>Protokoll</h1><p>Lade Einträge …</p>';
@@ -5324,7 +5331,7 @@ document.addEventListener('click',e=>{
   if(btn)textbausteinKopieren(btn);
 });
 
-const RECHTE_MODULE=[...MODS.filter(m=>!m[0].startsWith('ausbildung-')&&!['users','system','statistik','meldungen'].includes(m[0])).map(m=>m[0]==='ausbildung'?['ausbildung','Ausbildung',m[2]]:m),['kuearchiv','Kündigungsarchiv',''],['mitteilungen','Mitteilungen verwalten',''],['por','POR-Freigabe',''],['dnfreigabe','DN-Anträge entscheiden',''],['rlbearb','Disziplinarrichtlinien bearbeiten',''],['ranghistorie','Rangänderungs-Historie',''],['routarchiv','Routinearchiv','']];
+const RECHTE_MODULE=[...MODS.filter(m=>!m[0].startsWith('ausbildung-')&&!['users','system','statistik','meldungen','benachrichtigungen'].includes(m[0])).map(m=>m[0]==='ausbildung'?['ausbildung','Ausbildung',m[2]]:m),['kuearchiv','Kündigungsarchiv',''],['mitteilungen','Mitteilungen verwalten',''],['por','POR-Freigabe',''],['dnfreigabe','DN-Anträge entscheiden',''],['rlbearb','Disziplinarrichtlinien bearbeiten',''],['ranghistorie','Rangänderungs-Historie',''],['routarchiv','Routinearchiv','']];
 /* Bedeutung der Stufen, wo sie vom üblichen Lesen/Bearbeiten abweicht (Matrix + Einzelrechte). */
 const RECHTE_HINWEISE={ausbildung:'Stufe 1 = Anwärtermonitore bearbeiten und Unterricht im Rahmen der Modulfreigaben · Stufe 2 = vollständige Ausbildungsleitung inklusive Ausbilderverwaltung, Unterlagen und aller Unterrichtsmodule. Leitungsdienst hat Vollzugriff. Für Polizeirat Stufe 2 als Einzelrecht vergeben.',abm:'Lesen = Abmeldungen ansehen · Bearbeiten = annehmen/ablehnen',dnfreigabe:'Lesen = alle DN-Anträge ansehen · Bearbeiten = DN-Anträge annehmen/ablehnen',rlbearb:'Bearbeiten = Richtlinieneinträge und Maßnahmenkatalog ändern · Lesen über separates Richtlinienrecht',botcfg:'Lesen = Konfiguration ansehen · Bearbeiten = ändern (Bot startet danach neu)'};
 let USER_ADMIN=null;
@@ -6503,8 +6510,9 @@ document.addEventListener('click',async e=>{
 <script src="/dokumentUI.js"></script>
 <script src="/befRichtUI.js"></script>
 <script src="/liveUpdates.js?v=20261125-1"></script>
-<script src="/porHinweise.js?v=20261125-2"></script>
-<script src="/pmaHinweise.js?v=20261125-2"></script>
+<script src="/notificationSettings.js?v=20261125-1"></script>
+<script src="/porHinweise.js?v=20261125-3"></script>
+<script src="/pmaHinweise.js?v=20261125-3"></script>
 <script src="/aktenFeatures.js"></script>
 <script src="/kuendigungsArchiv.js"></script>
 <script src="/abmeldungen.js"></script>

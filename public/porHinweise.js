@@ -5,6 +5,9 @@
   let inFlight=false,again=false,account='',seen=null,toast=null,lastChecked=0,regularIds=[],rankIds=[];
   const eligible=()=>Boolean(typeof can==='function'&&can('por',2));
   const key=()=> String(ME?.dienstnummer||'unbekannt');
+  const enabled=k=>window.IDVNotificationSettings?.enabled(k)===true;
+  const visibleRegular=()=>enabled('por_bef')?regularIds:[];
+  const visibleRank=()=>enabled('por_rang')?rankIds:[];
   function loadSeen(){
     const id=key();
     if(account===id&&seen)return seen;
@@ -15,7 +18,7 @@
   function close(){if(toast)toast.hidden=true;}
   function dismiss(){
     const known=loadSeen();
-    [...regularIds,...rankIds].forEach(id=>known.add(id));
+    [...visibleRegular(),...visibleRank()].forEach(id=>known.add(id));
     close();
   }
   function ensureToast(){
@@ -32,9 +35,9 @@
     document.body.append(toast);
     toast.querySelector('#idvPorHinweisSchliessen').addEventListener('click',dismiss);
     toast.querySelector('#idvPorHinweisOeffnen').addEventListener('click',()=>{
-      const regular=regularIds.length>0;
+      const regular=visibleRegular().length>0;
       if(can('bef'))wechsleZuModul('bef');
-      else if(can('pers')&&rankIds.length)wechsleZuModul('pers');
+      else if(can('pers')&&visibleRank().length)wechsleZuModul('pers');
       else return;
       dismiss();
       const ziel=document.getElementById(can('bef')?(regular?'befPorOffen':'rangantraegeBereich'):'personalRangantraege');
@@ -44,15 +47,17 @@
   }
   function updateToast(){
     const known=loadSeen();
-    const ids=[...rankIds,...regularIds];
+    if(!eligible()){close();return;}
+    const activeRegular=visibleRegular(),activeRank=visibleRank();
+    const ids=[...activeRank,...activeRegular];
     for(const id of known)if(!ids.includes(id))known.delete(id);
     const newer=ids.filter(id=>!known.has(id));
     if(!newer.length){close();return;}
     const box=ensureToast();
     box.querySelector('#idvPorHinweisTitel').textContent=ids.length===1?'Offene POR-Freigabeanfrage':'Offene POR-Freigabeanfragen';
     box.querySelector('#idvPorHinweisText').textContent=
-      [regularIds.length?regularIds.length+' Beförderungsfreigabe(n)':null,rankIds.length?rankIds.length+' Rangänderungsantrag/-anträge':null].filter(Boolean).join(' · ')+' warten auf Entscheidung.';
-    box.querySelector('#idvPorHinweisOeffnen').hidden=!(can('bef')||(can('pers')&&rankIds.length));
+      [activeRegular.length?activeRegular.length+' Beförderungsfreigabe(n)':null,activeRank.length?activeRank.length+' Rangänderungsantrag/-anträge':null].filter(Boolean).join(' · ')+' warten auf Entscheidung.';
+    box.querySelector('#idvPorHinweisOeffnen').hidden=!(can('bef')||(can('pers')&&activeRank.length));
     box.hidden=false;
   }
   function observe(items){
@@ -103,5 +108,5 @@
   document.addEventListener('visibilitychange',()=>{
     if(!document.hidden&&eligible()&&Date.now()-lastChecked>10000)void refresh();
   });
-  window.IDVPOR={observe,observeRegular,refresh,changed,start};
+  window.IDVPOR={observe,observeRegular,refresh,changed,start,settingsChanged:updateToast};
 })();
