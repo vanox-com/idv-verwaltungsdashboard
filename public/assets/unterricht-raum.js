@@ -274,7 +274,7 @@
   async function train() {
     $("ausbilder").classList.remove("hidden");
     const info=await trainerApi("details");
-    $("titel").textContent=info.modul_code+" · "+info.titel;
+    $("titel").textContent=(info.modul_code==="WB"?"Weiterbildung":info.modul_code)+" · "+info.titel;
     const embed=googleEmbed(info.url);
     $("extern").href=info.url;
     if(embed)$("folie").src=embed;

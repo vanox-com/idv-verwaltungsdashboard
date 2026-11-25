@@ -101,7 +101,7 @@ function dispatchUnterrichtTrainer(array $u,string $method,string $uri): bool {
     if($uri==='/api/ausbildung/unterricht'&&$method==='POST'){
         $input=body();
         $code=$input['modul_code']??null;$materialId=$input['material_id']??null;
-        if(!is_string($code)||!preg_match('/^(?:PM|PK)\.[0-9]+$/D',$code)
+        if(!is_string($code)||!preg_match('/^(?:(?:PM|PK)\.[0-9]+|WB)$/D',$code)
             ||!is_int($materialId)||$materialId<1)
             fail(400,'Gültiges Ausbildungsmodul und Präsentation erforderlich');
         ausbildungDarfModul($u,$code);

@@ -157,6 +157,8 @@ function ausbildungTrainer(array $u): ?array {
     return $rows[0]??null;
 }
 function ausbildungDarfModul(array $u,string $code): void {
+    if(!sql('SELECT 1 FROM ausbildung_module WHERE code=? AND aktiv=1',[$code]))
+        fail(400,'Dieses Unterrichtsthema ist nicht aktiv');
     if(ausbildungLeitung($u))return;
     $trainer=ausbildungTrainer($u);
     $allowed=json_decode((string)($trainer['kompetenzen']??'[]'),true);
@@ -324,6 +326,10 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
     if(!ausbildungSchemaStatus()['personalbindungBereit'])
         fail(503,'Die Verbindung zum zentralen Personalstamm muss nach einer Datenbanksicherung noch eingerichtet werden.');
     ausbildungOnboardingAktualisieren($u);
+    // Weiterbildung is a separate classroom category, never a PMA/PKA requirement.
+    sql("INSERT IGNORE INTO ausbildung_module(code,laufbahn,titel,sortierung) VALUES('WB','WB','Weiterbildungen',99)");
+    sql("UPDATE ausbildung_materialien SET modul_code='WB'
+         WHERE modul_code IS NULL AND typ='Weiterbildung' AND aktiv=1");
     if($uri==='/api/ausbildung/bootstrap'||str_starts_with($uri,'/api/ausbildung/anwaerter/'))
         ausbildungSynchronisierePersonal();
     // Unterrichtssitzungen sind innerhalb der geschützten Ausbildungs-API.

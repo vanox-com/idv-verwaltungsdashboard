@@ -24,10 +24,10 @@ function ausbildungZipDecks(): array {
         ['PK.2','PK.2 – Einsatzleitung','1pxnnkPYUp7CHhtC-P16o5Wg5Nd6ID6kbFa-_drmn9NY'],
         ['PK.3','PK.3 – Verhandlungsführung','18Cup0TsHA_oL9eLdd0Rsw_vxDD040RfYp5DJpGlOjRU'],
         ['PK.4','PK.4 – Best Practice DGL','1tnrHHe9wJgedbS25E3ZEl_sEsjGn07JsRCrDS08fr9c'],
-        [null,'Weiterbildung – Kradstaffel','1dc3nVs8uHk7KFnzqJosAur0FN0g1KwSHSVz9m9CFD5A'],
-        [null,'Weiterbildung – Langwaffen','1NxuqaZnddimtJKp83r-vyZwxKB3fHVGEeisttklf2O8'],
-        [null,'Weiterbildung – Taucher / Wasserschutzpolizei','1KnlKoGzRI12J2J6ltGndiBa2CS5JEU1CtXLM8t-zF0s'],
-        [null,'Zusatzwissen – StPO & polizeiliches Handeln','1Z8NLENX5VyJnQVTbUgLLWqPvu8AnLpvQ0Yrl-IcrVcc'],
+        ['WB','Weiterbildung – Kradstaffel','1dc3nVs8uHk7KFnzqJosAur0FN0g1KwSHSVz9m9CFD5A'],
+        ['WB','Weiterbildung – Langwaffen','1NxuqaZnddimtJKp83r-vyZwxKB3fHVGEeisttklf2O8'],
+        ['WB','Weiterbildung – Taucher / Wasserschutzpolizei','1KnlKoGzRI12J2J6ltGndiBa2CS5JEU1CtXLM8t-zF0s'],
+        ['WB','Zusatzwissen – StPO & polizeiliches Handeln','1Z8NLENX5VyJnQVTbUgLLWqPvu8AnLpvQ0Yrl-IcrVcc'],
     ];
 }
 
@@ -52,7 +52,7 @@ function ausbildungSeedZipDecks(array $u): int {
                 WHERE LEFT(url,CHAR_LENGTH(?))=? LIMIT 1',[$prefix,$prefix]))continue;
             sql('INSERT INTO ausbildung_materialien
                 (modul_code,titel,typ,url,public_aktiv,aktiv) VALUES(?,?,?,?,0,1)',
-                [$code,$title,$code===null?'Weiterbildung':'Präsentation',$url]);
+                [$code,$title,$code==='WB'?'Weiterbildung':'Präsentation',$url]);
             $count++;
         }finally{
             sql("SELECT RELEASE_LOCK('idv_decks_".substr(hash('sha256',$driveId),0,24)."')");

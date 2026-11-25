@@ -114,4 +114,5 @@ INSERT IGNORE INTO ausbildung_module(code,laufbahn,titel,sortierung) VALUES
  ('PK.1','PKA','Grundlagen Einsatztaktik',1),
  ('PK.2','PKA','Einsatzleitung',2),
  ('PK.3','PKA','Verhandlungsführung',3),
- ('PK.4','PKA','Best Practice DGL',4);
+ ('PK.4','PKA','Best Practice DGL',4),
+ ('WB','WB','Weiterbildungen',99);

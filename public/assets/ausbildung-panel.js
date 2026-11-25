@@ -28,7 +28,8 @@ const fmtTimestamp=v=>{
  const date=new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(iso)?iso:iso+'Z');
  return Number.isNaN(date.getTime())?'—':date.toLocaleString('de-DE',{timeZone:'Europe/Berlin',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' Uhr';
 };
-const modName=(m)=>m.code+' · '+m.titel;
+const modName=(m)=>m.code==='WB'?'Weiterbildungen':m.code+' · '+m.titel;
+const lessonCodeLabel=code=>code==='WB'?'Weiterbildung':code;
 const pill=(s)=>'<span class="pill '+(s==='Zugelassen'?'good':s==='Nicht bereit'?'warn':'')+'">'+esc(s)+'</span>';
 const meter=(n,d)=>'<div class="meter" title="'+n+' von '+d+'"><i style="width:'+Math.min(100,Math.max(0,d?n/d*100:0))+'%"></i></div>';
 let data=null,tab=initial.route||'uebersicht',track=initial.track||'PMA',selected=null,editing=null,busy=false,lessonInvite=null;
@@ -317,7 +318,7 @@ function trainerForm(t){
  '<label>E-Mail<input type="email" name="email" maxlength="254" '+(!t?'required':'')+' value="'+esc(t?.email||chosen?.email||'')+'" '+(!t&&chosen?.email?'readonly':'')+'><small id="trainerEmailHint">'+(!t&&chosen?.email?'Aus Personalstamm übernommen.':'Falls nicht hinterlegt, bitte selbst eingeben.')+'</small></label>'+
  (!t?'<label>Startpasswort (nur bei neuem Konto Pflicht)<input type="password" name="startpasswort" autocomplete="new-password" required minlength="8"></label>':'')+
  '<label class="full">Interne Anmerkung<textarea name="notiz" rows="2">'+esc(t?.notiz||'')+'</textarea></label>'+
- '<div class="full"><h3>Freigegebene Ausbildungsmodule</h3><div class="competence">'+codes.map(code=>'<label><input type="checkbox" name="kompetenz" value="'+esc(code)+'" '+(current.includes(code)?'checked':'')+'> '+esc(code)+'</label>').join('')+'</div></div>'+
+ '<div class="full"><h3>Freigegebene Ausbildungsmodule und Weiterbildungen</h3><div class="competence">'+codes.map(code=>'<label><input type="checkbox" name="kompetenz" value="'+esc(code)+'" '+(current.includes(code)?'checked':'')+'> '+esc(code==='WB'?'Weiterbildungen':code)+'</label>').join('')+'</div></div>'+
  '<div class="full flex"><button type="submit" class="primary" '+(!t&&!chosen?'disabled':'')+'>Speichern</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></div>';
 }
 function materials(){
@@ -341,16 +342,18 @@ function classroom(){
  const decks=(data.materialien||[]).filter(d=>d.modul_code && /^https:\/\/docs\.google\.com\/presentation\//.test(d.url||'') &&
    (data.leitung||data.eigeneKompetenzen.includes(d.modul_code)));
  const ready=data.unterrichtBereit!==false;
+ const deckOptions=items=>items.map(d=>'<option value="'+Number(d.id)+'" data-code="'+esc(d.modul_code)+'" '+(Number(editing?.material)===Number(d.id)?'selected':'')+'>'+esc((d.modul_code==='WB'?'':d.modul_code+' · ')+d.titel)+'</option>').join('');
+ const groups=[['PMA – Grundausbildung',decks.filter(d=>d.modul_code.startsWith('PM.'))],['PKA / KKA – Ausbildung',decks.filter(d=>d.modul_code.startsWith('PK.'))],['Weiterbildungen',decks.filter(d=>d.modul_code==='WB')]];
  let out='<div class="card"><div class="flex space"><div><span class="eyebrow">Digitale Ausbildung · 1:1 Live</span>'+
  '<h2>Unterrichtsraum erstellen</h2></div><span class="pill '+(ready?'good':'warn')+'">'+(ready?'Bereit':'Einrichtung erforderlich')+'</span></div>'+
- '<p>Erstelle die Sitzung erst nach Auswahl einer Präsentation. Der Einladungslink funktioniert ohne Anmeldung, gilt maximal zwei Stunden und lässt einen Anwärter zu. Nur der angemeldete Ausbilder kann den Bildschirm freigeben und steuern.</p>'+
+ '<p>Wähle ein Ausbildungsmodul oder eine Weiterbildung mit hinterlegter Google-Präsentation. Der Einladungslink funktioniert ohne Anmeldung, gilt maximal zwei Stunden und lässt einen Anwärter zu. Nur der angemeldete Ausbilder kann den Bildschirm freigeben und steuern.</p>'+
  '<div class="callout"><b>So funktioniert es:</b> Präsentation wählen → Raum erzeugen → Link kopieren → Ausbildertafel öffnen → Browser-Bildschirmfreigabe erlauben → nach dem Unterricht beenden.</div>';
  if(!ready)out+='<p class="muted">Ein Administrator muss nach einer verschlüsselten Datenbanksicherung die Unterrichtstabelle ergänzen.</p>';
- else if(!decks.length)out+='<p class="muted">Für deine Modulberechtigungen ist noch keine Google-Präsentation gespeichert. Bitte die Ausbildungsleitung um Zuordnung einer Präsentation bitten.</p>';
- else out+='<form id="lessonCreateForm" class="formgrid"><label class="full">Modul / Präsentation<select id="lessonDeck" required>'+
- decks.map(d=>'<option value="'+Number(d.id)+'" data-code="'+esc(d.modul_code)+'" '+(Number(editing?.material)===Number(d.id)?'selected':'')+'>'+esc(d.modul_code+' · '+d.titel)+'</option>').join('')+
+ else if(!decks.length)out+='<p class="muted">Für deine Modul- und Weiterbildungsberechtigungen ist noch keine Google-Präsentation gespeichert. Bitte die Ausbildungsleitung um Zuordnung einer Präsentation bitten.</p>';
+ else out+='<form id="lessonCreateForm" class="formgrid"><label class="full">Ausbildungsmodul oder Weiterbildung<select id="lessonDeck" required>'+
+ groups.filter(([,items])=>items.length).map(([label,items])=>'<optgroup label="'+esc(label)+'">'+deckOptions(items)+'</optgroup>').join('')+
  '</select></label><div class="full flex"><button type="submit" class="primary">+ Unterrichtsraum erstellen</button>'+(data.leitung?'<button type="button" data-tab="materialien">Unterlagen verwalten</button>':'')+'</div></form>';
- if(lessonInvite)out+='<section class="card" style="margin-top:16px;border-color:#5b9bc8"><h3>Neuer Unterrichtsraum · '+esc(lessonInvite.modul_code)+'</h3>'+
+ if(lessonInvite)out+='<section class="card" style="margin-top:16px;border-color:#5b9bc8"><h3>Neuer Unterrichtsraum · '+esc(lessonCodeLabel(lessonInvite.modul_code))+'</h3>'+
  '<p>Dieser persönliche Einladungslink ist jetzt für den Anwärter freigegeben. Nicht öffentlich veröffentlichen.</p>'+
  '<label>Einladung ohne Login<input id="lessonLink" readonly value="'+esc(lessonInvite.link)+'"></label>'+
  '<div class="flex" style="margin-top:13px"><button type="button" class="primary" data-action="copy-lesson">Link kopieren</button>'+
@@ -358,7 +361,7 @@ function classroom(){
  '<button type="button" data-action="end-room" data-id="'+lessonInvite.id+'" class="danger">Sitzung beenden</button></div></section>';
  out+='</div><div class="card"><h2>Meine Unterrichtsräume</h2><p class="muted">Status, Teilnehmer und Sitzungskontrolle. Beendete Räume sind nicht mehr erreichbar.</p>'+
  '<div class="tablewrap"><table><thead><tr><th>Modul</th><th>Präsentation</th><th>Erstellt von</th><th>Erstellt (UTC)</th><th>Ablauf (UTC)</th><th>Anwärter</th><th>Status</th><th></th></tr></thead><tbody>'+
- (data.raeume||[]).map(r=>'<tr><td><b>'+esc(r.modul_code)+'</b></td><td>'+esc(r.titel)+'</td><td><b>'+esc(r.erstellt_von||'Unbekannter Ausbilder')+'</b></td><td>'+esc(String(r.erstellt||'').slice(0,16))+'</td>'+
+ (data.raeume||[]).map(r=>'<tr><td><b>'+esc(lessonCodeLabel(r.modul_code))+'</b></td><td>'+esc(r.titel)+'</td><td><b>'+esc(r.erstellt_von||'Unbekannter Ausbilder')+'</b></td><td>'+esc(String(r.erstellt||'').slice(0,16))+'</td>'+
  '<td>'+esc(String(r.ablauf||'').slice(0,16))+'</td><td>'+(Number(r.teilnehmer)?'Beigetreten':'Wartet')+'</td><td>'+(!Number(r.aktiv)?'<span class="pill">Abgeschlossen</span>':'<span class="pill good">Aktiv</span>')+'</td>'+
  '<td>'+(Number(r.aktiv)?'<button class="compact" data-action="open-room" data-id="'+Number(r.id)+'">Öffnen</button> <button class="compact danger" data-action="end-room" data-id="'+Number(r.id)+'">Beenden</button>':'')+'</td></tr>').join('')+
  '</tbody></table></div>'+(data.raeume?.length?'':'<p class="muted">Noch keine Unterrichtsräume angelegt.</p>')+'</div>';
