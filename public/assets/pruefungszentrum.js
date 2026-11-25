@@ -19,6 +19,13 @@ function examIcon(key){
 }
 const date=s=>s?new Date(s.replace(' ','T')+'Z').toLocaleString('de-DE'):'—';
 async function api(path='',data,signal){const r=await fetch(root+path,{credentials:'same-origin',cache:'no-store',signal,headers:{'Content-Type':'application/json','Accept':'application/json','X-Requested-With':'XMLHttpRequest'},...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)})});const j=await r.json().catch(()=>null);if(!j)throw Error('Der Server lieferte keine JSON-Antwort (HTTP '+r.status+'). Bitte Serverprotokoll prüfen.');if(!r.ok)throw Error((j.error||'HTTP '+r.status)+(j.referenz?' · Referenz '+j.referenz:''));return j;}
+function examModelAnswer(explicit,feedback){
+ const answer=String(explicit??'').trim(),original=String(feedback??'').trim();
+ if(!answer)return original;
+ if(!original||answer.includes(original))return answer;
+ if(original===answer)return answer;
+ return answer+'\n\n'+original;
+}
 function convertGoogle(raw){
  const d=raw.definition||raw;if(!Array.isArray(d.items))throw Error('Keine Google-Forms-Definition gefunden');
  const out=[],warnings=[],blockers=[];
@@ -29,8 +36,10 @@ function convertGoogle(raw){
   const g=q.grading||{},points=Number.isFinite(g.pointValue)?g.pointValue:0;
   const correct=(g.correctAnswers?.answers||[]).map(a=>a.value);
   const feedback=[g.generalFeedback?.text&&'Allgemein: '+g.generalFeedback.text,g.whenRight?.text&&'Richtig: '+g.whenRight.text,g.whenWrong?.text&&'Falsch: '+g.whenWrong.text].filter(Boolean).join('\n');
+  const modelFeedback=[g.generalFeedback?.text,g.whenRight?.text,g.whenWrong?.text].filter(x=>typeof x==='string'&&x.trim()).map(x=>x.trim());
+  const modelAnswer=[...new Set(modelFeedback)].join('\n\n');
   const context=[intro,section,...pending].filter(Boolean).join('\n\n');intro='';pending=[];
-  const base={titel:title,punkte:points,kontext:context,bilder:[...pendingImages,...images],optionBilder,feedback,muster:'',optionen:[],richtig:[]};pendingImages=[];
+  const base={titel:title,punkte:points,kontext:context,bilder:[...pendingImages,...images],optionBilder,feedback,muster:modelAnswer,optionen:[],richtig:[]};pendingImages=[];
   if(!g.pointValue)warnings.push(title+': 0 Punkte bzw. kein Punktwert hinterlegt.');
   if(q.required===false||q.required===undefined)warnings.push(title+': ursprünglich optional; im Panel darf die Frage unbeantwortet bleiben.');
   if(q.choiceQuestion){
@@ -41,8 +50,8 @@ function convertGoogle(raw){
    if(points>0&&!idx.length)warnings.push(title+': richtige Antwort fehlt – bitte ergänzen.');
    out.push({...base,typ:ch.type==='CHECKBOX'?'multiple':'single',optionen:opts,richtig:idx.filter(i=>i>=0),optionBilder:ch.options.map((o,i)=>image(o.image,title+' · Antwort '+(i+1)))});
   }else if(q.textQuestion){
-   const muster=correct.join('\n');
-   if(points>0&&!muster)warnings.push(title+': keine explizite Musterlösung; vorhandenes Feedback prüfen und Lösung ergänzen.');
+   const muster=examModelAnswer(correct.join('\n'),modelAnswer);
+   if(points>0&&!muster)warnings.push(title+': weder Musterlösung noch Bewertungsfeedback hinterlegt – bitte ergänzen.');
    out.push({...base,typ:'text',muster});
   }else blockers.push(title+': nicht unterstützter Fragetyp');
  };
@@ -235,6 +244,7 @@ function open(host){
    const p=field(row,'Maximale Punktzahl',num(0,1000,'0.01'));p.value=q.punkte;p.oninput=()=>{q.punkte=p.value===''?'':Number(p.value);update(true)};
    const m=field(row,'Musterlösung / Bewertungskriterien',area());m.value=q.muster||'';m.oninput=()=>{q.muster=m.value;update(true)};
    const feedback=field(extra,'Originales Bewertungsfeedback (nur Prüfer)',area());feedback.value=q.feedback||'';feedback.oninput=()=>{q.feedback=feedback.value;update(true)};
+   if(q.feedback)extra.append(btn('Bewertungsfeedback in Musterlösung übernehmen',()=>{const next=examModelAnswer(q.muster,q.feedback);q.muster=next;m.value=next;update(true);message('Bewertungsfeedback als Musterlösung übernommen.');},''));
    q.bilder=q.bilder||[];q.optionBilder=q.optionBilder||[];
    q.bilder.forEach((src,j)=>{showImage(extra,src);extra.append(btn('Bild entfernen',()=>{q.bilder.splice(j,1);renderQuestions();update(true)},''))});
    const picture=field(extra,'Fragenbild hinzufügen',node('input'));picture.type='file';picture.accept='image/png,image/jpeg,image/webp,image/gif';picture.onchange=()=>{const f=picture.files[0];if(!f)return;if(f.size>450000){message('Bild darf höchstens 450 KB groß sein.',true);return}const reader=new FileReader();reader.onload=()=>{q.bilder.push(reader.result);renderQuestions();update(true)};reader.readAsDataURL(f)};
@@ -266,7 +276,7 @@ function open(host){
  function useImport(raw,art){
   const result=Array.isArray(raw)?{fragen:raw,warnings:[],blockers:[]}:Array.isArray(raw.fragen)?{fragen:raw.fragen,warnings:[],blockers:[]}:convertGoogle(raw);
   if(art){v.value=art;v.dataset.previous=art;t.value=raw.definition?.info?.title||data.arten[art];}
-  questions=result.fragen.map(q=>({...q,optionen:Array.isArray(q.optionen)?q.optionen:[],richtig:Array.isArray(q.richtig)?q.richtig:[],bilder:q.bilder||[],optionBilder:q.optionBilder||[]}));
+  questions=result.fragen.map(q=>({...q,muster:String(q.muster||'').trim()||String(q.feedback||'').trim(),optionen:Array.isArray(q.optionen)?q.optionen:[],richtig:Array.isArray(q.richtig)?q.richtig:[],bilder:q.bilder||[],optionBilder:q.optionBilder||[]}));
   importBlockers=result.blockers;importWarnings=result.warnings;acknowledged.clear();openQuestions.clear();confirmation.checked=false;renderImportReview();
   renderQuestions();dirty=true;message('Import geladen: '+questions.length+' Fragen. '+(importBlockers.length?'Offene Importprobleme zuerst beheben.':'Lösungen und Punktwerte prüfen.'));
  }
@@ -317,6 +327,7 @@ function open(host){
  }else{c.append(node('p','Der Import aus Google Forms oder JSON-Dateien ist ausschließlich Administratoren vorbehalten. Fragen und Lösungen können hier weiterhin manuell bearbeitet werden.','mut'));}
  const tools=node('div',undefined,'exam-editor-toolbar');
  tools.append(questionSearch,questionFilter,btn('Alle einklappen',()=>{openQuestions.clear();for(const r of rows.values())r.detail.open=false;},''),btn('+ Frage hinzufügen',()=>{const q=blank();questions.push(q);openQuestions.add(q);questionSearch.value='';questionFilter.value='all';renderQuestions();update(true);rows.get(q)?.detail.scrollIntoView({block:'nearest'});},''));
+ tools.append(btn('Fehlende Musterlösungen aus Feedback ergänzen',()=>{let n=0;for(const q of questions){if(!String(q.muster||'').trim()&&String(q.feedback||'').trim()){q.muster=q.feedback;n++;}}if(n){renderQuestions();update(true);}message(n+' fehlende Musterlösungen aus Bewertungsfeedback ergänzt.');},''));
  c.append(importNotes,total,tools,questionList);
  const savebar=node('div',undefined,'exam-savebar');const label=node('label',' Ich habe Fragen, Punktwerte, Musterlösungen und Bestehensgrenze fachlich geprüft.');label.className='exam-review-item';label.prepend(confirmation);savebar.append(label,saveStatus);
  const save=btn('Geprüfte Version speichern',()=>run(async()=>{
