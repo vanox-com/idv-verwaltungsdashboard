@@ -992,6 +992,22 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 #inhalt>.hello.hello--jonas{display:grid;grid-template-columns:minmax(0,1fr) minmax(270px,38%);gap:20px;align-items:center;min-height:196px;padding-right:0}
 #inhalt>.hello.hello--jonas::after{display:none}
 
+.hello--jonas .hello-copy{position:relative;z-index:1;min-width:0}
+.hello-jonas{position:relative;isolation:isolate;align-self:stretch;min-height:155px;min-width:0;display:flex;align-items:flex-start;padding:5px 0 5px 0}
+.hello-jonas::before{content:"";position:absolute;right:18px;top:50%;width:132px;height:132px;transform:translateY(-50%);border:1px solid rgba(154,188,232,.24);border-radius:50%;box-shadow:0 0 0 20px rgba(154,188,232,.035);background:radial-gradient(circle,rgba(96,153,222,.13),transparent 72%);z-index:-1}
+.hello-jonas-portrait{position:absolute;right:-8px;bottom:-26px;width:205px;height:190px;object-fit:contain;object-position:right bottom;filter:drop-shadow(-7px 6px 10px #0004);pointer-events:none;z-index:1}
+.hello-jonas-message{position:relative;z-index:2;max-width:calc(100% - 130px);min-width:0;margin-top:0;margin-right:130px}
+.hello-jonas-bubble{position:relative;background:#eaf1fb;color:#192b41;padding:10px 13px;border-radius:14px 14px 4px 14px;border:1px solid #a8c0de;box-shadow:0 4px 15px #0003}
+.hello-jonas-bubble::after{content:"";position:absolute;right:-8px;bottom:8px;width:13px;height:13px;background:#eaf1fb;border-right:1px solid #a8c0de;border-top:1px solid #a8c0de;transform:rotate(45deg);border-radius:1px}
+.hello-jonas-byline{display:block;font-size:10px;line-height:1.25;font-weight:750;color:#526782;margin-bottom:4px}
+.hello-jonas-quote{display:block;font-size:13px;font-weight:650;line-height:1.38;overflow-wrap:anywhere;white-space:pre-wrap}
+.hello-jonas-edit{margin-top:7px;padding:4px 8px!important;min-height:28px!important;font-size:11px!important;white-space:normal}
+#jonasSpruchDialog{width:min(440px,92vw);border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--txt);padding:22px;box-shadow:0 15px 65px #0007}
+#jonasSpruchDialog::backdrop{background:#0008}
+#jonasSpruchDialog textarea{box-sizing:border-box;width:100%;min-height:100px;resize:vertical;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit}
+#jonasSpruchDialog .jonas-dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:15px}
+@media(max-width:1150px){#inhalt>.hello.hello--jonas{grid-template-columns:minmax(0,1fr) minmax(250px,42%);gap:14px}.hello-jonas-portrait{width:185px;height:176px}.hello-jonas-message{max-width:calc(100% - 113px);margin-right:113px}}
+@media(max-width:680px){#inhalt>.hello.hello--jonas{grid-template-columns:minmax(0,1fr);gap:10px;padding:20px 20px 0}.hello-jonas{min-height:155px;margin-right:-20px}.hello-jonas-portrait{bottom:0;right:0;width:180px;height:165px}.hello-jonas-message{max-width:min(245px,calc(100% - 112px));margin-right:112px}.hello-jonas::before{right:15px}}
 /* Separate transparent portraits, cropped from the shared image atlas. */
 .hello-jonas-portrait.figur-sprite,.figur-thumb.figur-sprite{display:block;overflow:hidden;width:auto;aspect-ratio:var(--sprite-ratio);max-width:100%}
 .figur-sprite{position:relative;--sprite-offset:0%;--sprite-ratio:1}
@@ -1035,22 +1051,7 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 @media(max-width:1150px){.hello-jonas-message{max-width:calc(100% - 135px);margin-right:135px}}
 @media(max-width:680px){.figur-admin-grid{grid-template-columns:1fr}.figur-admin-body,.figur-admin-head{padding:13px}.figur-pool-row{grid-template-columns:1fr 1fr}.figur-pool-row textarea{grid-column:1/-1;grid-row:2}.hello-jonas .figur-sprite{bottom:0;right:0}.hello-jonas-message{max-width:min(245px,calc(100% - 120px));margin-right:120px}.figur-preview .hello-jonas{margin-right:0}}
 
-.hello--jonas .hello-copy{position:relative;z-index:1;min-width:0}
-.hello-jonas{position:relative;isolation:isolate;align-self:stretch;min-height:155px;min-width:0;display:flex;align-items:flex-start;padding:5px 0 5px 0}
-.hello-jonas::before{content:"";position:absolute;right:18px;top:50%;width:132px;height:132px;transform:translateY(-50%);border:1px solid rgba(154,188,232,.24);border-radius:50%;box-shadow:0 0 0 20px rgba(154,188,232,.035);background:radial-gradient(circle,rgba(96,153,222,.13),transparent 72%);z-index:-1}
-.hello-jonas-portrait{position:absolute;right:-8px;bottom:-26px;width:205px;height:190px;object-fit:contain;object-position:right bottom;filter:drop-shadow(-7px 6px 10px #0004);pointer-events:none;z-index:1}
-.hello-jonas-message{position:relative;z-index:2;max-width:calc(100% - 130px);min-width:0;margin-top:0;margin-right:130px}
-.hello-jonas-bubble{position:relative;background:#eaf1fb;color:#192b41;padding:10px 13px;border-radius:14px 14px 4px 14px;border:1px solid #a8c0de;box-shadow:0 4px 15px #0003}
-.hello-jonas-bubble::after{content:"";position:absolute;right:-8px;bottom:8px;width:13px;height:13px;background:#eaf1fb;border-right:1px solid #a8c0de;border-top:1px solid #a8c0de;transform:rotate(45deg);border-radius:1px}
-.hello-jonas-byline{display:block;font-size:10px;line-height:1.25;font-weight:750;color:#526782;margin-bottom:4px}
-.hello-jonas-quote{display:block;font-size:13px;font-weight:650;line-height:1.38;overflow-wrap:anywhere;white-space:pre-wrap}
-.hello-jonas-edit{margin-top:7px;padding:4px 8px!important;min-height:28px!important;font-size:11px!important;white-space:normal}
-#jonasSpruchDialog{width:min(440px,92vw);border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--txt);padding:22px;box-shadow:0 15px 65px #0007}
-#jonasSpruchDialog::backdrop{background:#0008}
-#jonasSpruchDialog textarea{box-sizing:border-box;width:100%;min-height:100px;resize:vertical;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit}
-#jonasSpruchDialog .jonas-dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:15px}
-@media(max-width:1150px){#inhalt>.hello.hello--jonas{grid-template-columns:minmax(0,1fr) minmax(250px,42%);gap:14px}.hello-jonas-portrait{width:185px;height:176px}.hello-jonas-message{max-width:calc(100% - 113px);margin-right:113px}}
-@media(max-width:680px){#inhalt>.hello.hello--jonas{grid-template-columns:minmax(0,1fr);gap:10px;padding:20px 20px 0}.hello-jonas{min-height:155px;margin-right:-20px}.hello-jonas-portrait{bottom:0;right:0;width:180px;height:165px}.hello-jonas-message{max-width:min(245px,calc(100% - 112px));margin-right:112px}.hello-jonas::before{right:15px}}
+
 
 .dash-cell>.box,.dash-cell>.kachel{
   background:linear-gradient(150deg,rgba(51,57,68,.94),rgba(37,43,52,.97));
@@ -6715,7 +6716,7 @@ document.addEventListener('click',async e=>{
 <script src="/befRichtUI.js"></script>
 <script src="/liveUpdates.js?v=20261125-exam-oauth"></script>
 <script src="/notificationSettings.js?v=20261125-3"></script>
-<script src="/assets/dashboard-figur.js?v=20261125-1"></script>
+<script src="/assets/dashboard-figur.js?v=20261125-2"></script>
 <script src="/porHinweise.js?v=20261125-3"></script>
 <script src="/pmaHinweise.js?v=20261125-3"></script>
 <script src="/aktenFeatures.js"></script>

@@ -22,6 +22,11 @@ jobs:
           for f in public/api.php php/*.php; do
             php -l "$f" || exit 1
           done
+      - name: Test shared dashboard figures and daily content
+        run: |
+          php tests/dashboard-figur.php
+          node --check public/assets/dashboard-figur.js
+          node tests/dashboard-figur-ui.mjs
       - name: Test training master-personnel rank mapping
         run: php tests/mysql8-ausbildung-personal.php
       - name: Check Ausbildung and Unterricht browser JavaScript

@@ -22,7 +22,7 @@ function markup(v,editable=false){
  const p=people[v?.person]||people['jonas-schulz'],style=['normal','denken','kompakt'].includes(v?.bubble)?v.bubble:'normal';
  const byline=[v?.rolleAnzeigen!==false?p.rolle:'',v?.nameAnzeigen!==false?p.name:''].filter(Boolean).join(' ');
  const category=cats[v?.kategorie];
- return '<div class="hello-jonas" data-dashboard-figur>'+portrait(v?.person)+'<div class="hello-jonas-message"><div class="hello-jonas-bubble figur-bubble--'+style+'">'+
+ return '<div class="hello-jonas" data-dashboard-figur data-figur-state="'+h(JSON.stringify(v))+'">'+portrait(v?.person)+'<div class="hello-jonas-message"><div class="hello-jonas-bubble figur-bubble--'+style+'">'+
  (category?'<span class="figur-category">'+h(category)+'</span>':'')+(byline?'<span class="hello-jonas-byline">'+h(byline)+'</span>':'')+
  '<span class="hello-jonas-quote" data-jonas-quote>'+h(v?.spruch||fallback)+'</span></div>'+
  (editable?'<button type="button" class="hello-jonas-edit" data-jonas-edit>✎ Figur &amp; Spruch einstellen</button>':'')+'</div></div>';
@@ -31,9 +31,8 @@ function current(){return D?.dashboard?.figur||{person:'jonas-schulz',spruch:D?.
 function render(){return markup(current(),ME?.rolle==='Administrator');}
 function apply(v){
  if(!D?.dashboard||!v||!people[v.person]||typeof v.spruch!=='string')return;
- const prev=JSON.stringify(current());D.dashboard.figur=v;
- if(prev===JSON.stringify(v))return;
- document.querySelectorAll('#inhalt [data-dashboard-figur]').forEach(el=>{el.outerHTML=render();});
+ const next=JSON.stringify(v);D.dashboard.figur=v;
+ document.querySelectorAll('#inhalt [data-dashboard-figur]').forEach(el=>{if(el.dataset.figurState!==next)el.outerHTML=render();});
 }
 let timer=null,busy=false,seq=0;
 async function refresh(){
@@ -85,7 +84,7 @@ function show(){
    preview();
   });
   body.addEventListener('click',e=>{
-   const p=e.target.closest('[data-figur-person]');if(p){cfg.person=p.dataset.figurPerson;body.querySelectorAll('[data-figur-person]').forEach(b=>b.setAttribute('aria-pressed',String(b===p)));preview();}
+   const p=e.target.closest('[data-figur-person]');if(p){cfg.person=p.dataset.figurPerson;q('#figurModus').value='fest';body.querySelectorAll('[data-figur-person]').forEach(b=>b.setAttribute('aria-pressed',String(b===p)));preview();}
    if(e.target.closest('[data-figur-add]')){if(pool.length>=250){status.textContent='Maximal 250 Inhalte.';return;}const id='custom-'+(globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+Math.random().toString(36).slice(2));pool.unshift({id,kategorie:filter==='alle'?'humor':filter,text:'',aktiv:true});paintPool();q('[data-figur-row="'+id+'"] textarea')?.focus();preview();}
    const del=e.target.closest('[data-pool-remove]');if(del&&confirm('Diesen Inhalt aus dem Spruchpool löschen?')){const id=del.closest('[data-figur-row]').dataset.figurRow;pool=pool.filter(x=>x.id!==id);paintPool();preview();}
   });
@@ -94,10 +93,10 @@ function show(){
   form.addEventListener('submit',async e=>{
    e.preventDefault();if(saving||ME?.id!==actor||ME?.rolle!=='Administrator')return;
    const config=fields();if(!config.spruch||pool.some(x=>!x.text.trim()||[...x.text.trim()].length>180)){status.textContent='Bitte alle Inhalte und den Standardspruch mit 1–180 Zeichen ausfüllen.';return;}
-   saving=true;save.disabled=true;status.textContent='Speichert …';++seq;
+   saving=true;const controls=[...form.querySelectorAll('button,input,textarea,select')];controls.forEach(c=>c.disabled=true);status.textContent='Speichert …';++seq;
    try{const r=await api('/dashboard-figur/verwaltung',{method:'PUT',body:JSON.stringify({revision,config})});if(ME?.id===actor){apply(r.anzeige);dialog.close();}}
    catch(err){status.textContent='Speichern fehlgeschlagen: '+err.message;}
-   finally{saving=false;save.disabled=false;}
+   finally{saving=false;controls.forEach(c=>c.disabled=false);}
   });
   paintPool();preview();
  })();
@@ -105,4 +104,5 @@ function show(){
 document.addEventListener('click',e=>{if(e.target.closest('[data-jonas-edit],[data-figur-settings]'))show();});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refresh();});
 window.IDVDashboardFigur={render,start,refresh,show};
+if(typeof ME!=='undefined'&&ME&&D){start();void refresh();}
 })();

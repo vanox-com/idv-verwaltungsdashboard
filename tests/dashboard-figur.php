@@ -25,4 +25,6 @@ verify(dashboardFigurResolve($cfg,$now,'session')===dashboardFigurResolve($cfg,$
 verify(dashboardFigurValidate($cfg)['person']==='lou-beckenbauer','validate');
 $cfg['pool'][0]['text']=str_repeat('x',181);
 try{dashboardFigurValidate($cfg);throw new \RuntimeException('invalid text accepted');}catch(\InvalidArgumentException $e){verify($e->getCode()===400,'invalid text rejected');}
+$legacy=dashboardFigurDefault('Ein eigener bestehender Spruch');
+verify($legacy['figurModus']==='fest'&&$legacy['textModus']==='manuell','legacy manual setting preserved');
 echo "Dashboard figure logic OK\n";
