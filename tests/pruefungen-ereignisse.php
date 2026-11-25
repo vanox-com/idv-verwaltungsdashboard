@@ -18,3 +18,7 @@ checkEvents(!isset($f['events'][0]['clipboard']),'no clipboard content');
 checkEvents(!isset($f['events'][4]['frage']),'invalid question number rejected');
 checkEvents(count(pruefungFokusMerge($f,$batch,5)['events'])===5,'retry deduplication');
 echo "Prüfungsereignisse OK\n";
+
+$next=pruefungFokusMerge($f,[['id'=>'session_006','ereignis'=>'frage_geoeffnet','frage'=>4]],5);
+checkEvents($next['aktuelleFrage']===4,'current question');
+checkEvents($next['events'][5]['ereignis']==='frage_geoeffnet','navigation recorded');

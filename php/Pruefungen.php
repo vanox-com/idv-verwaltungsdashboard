@@ -156,7 +156,7 @@ function pruefungFokusMerge(array $f,array $events,int $questionCount): array {
     foreach($events as $entry){
         if(!is_array($entry))continue;
         $kind=$entry['ereignis']??'';$id=$entry['id']??null;
-        if(!in_array($kind,['verlassen','zurueck','reload','vollbild_aus','paste','paste_versuch','copy','cut'],true))continue;
+        if(!in_array($kind,['verlassen','zurueck','reload','vollbild_aus','paste','paste_versuch','copy','cut','frage_geoeffnet'],true))continue;
         if($id!==null&&(!is_string($id)||!preg_match('/^[a-zA-Z0-9_-]{8,80}$/D',$id)))continue;
         if($id!==null&&isset($seen[$id]))continue;
         if(count($f['events'])>=1000){$f['limit']=true;break;}
@@ -167,6 +167,8 @@ function pruefungFokusMerge(array $f,array $events,int $questionCount): array {
         $item=['am'=>gmdate('c'),'ereignis'=>$kind];
         if($id!==null){$item['id']=$id;$seen[$id]=true;}
         $q=$entry['frage']??null;if(is_int($q)&&$q>=1&&$q<=$questionCount)$item['frage']=$q;
+        if($kind==='frage_geoeffnet'&&!isset($item['frage']))continue;
+        if(isset($item['frage']))$f['aktuelleFrage']=$item['frage'];
         $f['events'][]=$item;
     }
     return $f;
@@ -285,7 +287,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         require_once __DIR__.'/PruefungenKI.php';
         pruefungKiEndpoint($u,$method,(int)$aiMatch[1]);
     }
-    if(!preg_match('#^/api/ausbildung/pruefungen/([1-9][0-9]*)(?:/(korrektur|freigabe|annullieren|link|berichtigen|wiedereroeffnen))?$#D',$uri,$m))fail(404,'Nicht gefunden');
+    if(!preg_match('#^/api/ausbildung/pruefungen/([1-9][0-9]*)(?:/(korrektur|freigabe|annullieren|link|berichtigen|wiedereroeffnen|zweitpruefer))?$#D',$uri,$m))fail(404,'Nicht gefunden');
     $id=(int)$m[1];$action=$m[2]??'';
     if($method==='GET'&&$action===''){
         $p=pruefungRow($id);pruefungAccess($p,$u);if(praxisMarker($p))fail(400,'Bitte den festen Praxisbogen öffnen');
@@ -323,6 +325,13 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
                 $history[$i]['nachher']=['status'=>$status,'ergebnis'=>$total,'bewertung'=>$result];
                 sql('UPDATE ausbildung_pruefungen SET bewertung=?,ergebnis=?,revision=revision+1,protokoll=? WHERE id=?',[pruefungJson($result),$total,pruefungJson($history),$id]);
             }
+        }elseif($action==='zweitpruefer'){
+            if(!$verwaltung||$status!=='erstkorrigiert'||$p['art']==='praxis')fail(403,'Zweitprüferwechsel nur durch berechtigte Leitung während der Zweitkorrektur');
+            $new=$b['zweit']??null;
+            if(!is_int($new)||$new<1||$new===(int)$p['erst']||!pruefungReviewer($new))fail(400,'Einen anderen berechtigten Prüfer als den Erstprüfer auswählen');
+            if($note==='')fail(400,'Begründung für den Prüferwechsel erforderlich');
+            $history[count($history)-1]['zweitVorher']=(int)$p['zweit'];$history[count($history)-1]['zweitNachher']=$new;
+            sql('UPDATE ausbildung_pruefungen SET zweit=?,revision=revision+1,protokoll=? WHERE id=?',[$new,pruefungJson($history),$id]);
         }elseif($action==='korrektur'){
             $first=$status==='abgegeben'&&$uid===(int)$p['erst'];$second=$status==='erstkorrigiert'&&$uid===(int)$p['zweit'];
             if(!$first&&!$second)fail(403,'Korrektur nicht für diesen Prüfer freigegeben');
@@ -330,7 +339,14 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
                 if($note==='')fail(400,'Begründung erforderlich');
                 sql("UPDATE ausbildung_pruefungen SET status='abgegeben',revision=revision+1,protokoll=? WHERE id=?",[pruefungJson($history),$id]);
             }else{
-                [$result,$total]=pruefungBewertung(pruefungRead($p['fragen']),$b['bewertung']??null);
+                // Confirm the persisted first review, not a second browser copy of its point values.
+                $scores=$b['bewertung']??null;
+                if($second&&($b['bestaetigen']??false)===true){
+                    $scores=pruefungRead($p['bewertung']);$notes=$b['vermerke']??null;
+                    if(!is_array($notes)||!array_is_list($notes)||count($notes)!==count($scores))fail(400,'Korrekturvermerke unvollständig');
+                    foreach($scores as $i=>&$s)$s['notiz']=pruefungText($notes[$i],4000,false);unset($s);
+                }
+                [$result,$total]=pruefungBewertung(pruefungRead($p['fragen']),$scores);
                 $history[count($history)-1]['bewertung']=$result;
                 if($second){
                     $old=pruefungRead($p['bewertung']);
