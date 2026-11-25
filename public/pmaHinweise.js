@@ -18,7 +18,7 @@
    if(toast?.isConnected)return toast;
    toast=document.createElement('div');toast.id='idvPmaHinweis';toast.hidden=true;
    toast.setAttribute('role','status');toast.setAttribute('aria-live','polite');
-   toast.innerHTML='<div class="pma-icon" aria-hidden="true">!</div><div class="pma-body"><strong class="pma-title"></strong><span class="pma-text"></span><span class="pma-own"></span><button type="button" class="pma-open">PMA-Monitor öffnen</button></div><button type="button" class="pma-close" aria-label="PMA-Hinweis schließen">×</button>';
+   toast.innerHTML='<div class="pma-header"><div class="pma-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></div><div class="pma-heading"><span>Ausbildung · PMA</span><strong class="pma-title"></strong></div><button type="button" class="pma-close" aria-label="PMA-Hinweis schließen">×</button></div><div class="pma-metrics"><div><strong class="pma-total"></strong><span>Offene Fälle</span></div><div><strong class="pma-ready"></strong><span>Nur Stimmen</span></div><div><strong class="pma-overdue"></strong><span>Ab Tag 10</span></div></div><div class="pma-footer"><span class="pma-own"></span><button type="button" class="pma-open">Details <span aria-hidden="true">›</span></button></div>';
    document.body.append(toast);
    toast.querySelector('.pma-close').addEventListener('click',dismiss);
    toast.querySelector('.pma-open').addEventListener('click',()=>{if(eligible()&&wechsleZuModul('ausbildung-pma'))dismiss();});
@@ -32,10 +32,12 @@
    if(!pending.length){hide();return;}
    const overdue=pending.filter(h=>h.stufe==='dringend').length,ready=pending.filter(h=>h.nurStimmen).length;
    const box=ensure();box.dataset.urgent=overdue?'1':'0';
-   box.querySelector('.pma-title').textContent=overdue?'PMA · 10-Tage-Ziel erreicht':ready?'PMA · Nur Stimmen fehlen':'PMA · Stimmenstand prüfen';
-   box.querySelector('.pma-text').textContent=pending.length+' Anwärter mit offenen Stimmenpunkten'+(ready?' · '+ready+' warten nur auf Stimmen':'')+(overdue?' · '+overdue+' ab Tag 10':'')+'. '+pending.slice(0,3).map(h=>h.name).join(', ')+(pending.length>3?' und weitere':'')+'.';
+   box.querySelector('.pma-title').textContent=overdue?'Stimmenbedarf · Frist erreicht':ready?'Prüfungszulassung: Stimmen fehlen':'Stimmenstand prüfen';
+   box.querySelector('.pma-total').textContent=pending.length;
+   box.querySelector('.pma-ready').textContent=ready;
+   box.querySelector('.pma-overdue').textContent=overdue;
    const own=pending.filter(h=>!h.eigeneStimme).length;
-   box.querySelector('.pma-own').textContent=own?'Eigene Stimme offen bei '+own+' Anwärter(n). Bitte nach eigener Beurteilung abstimmen.':'Eigene Stimmen bereits abgegeben – Teamstand offen.';
+   box.querySelector('.pma-own').textContent=own?'Eigene Stimme offen: '+own:'Eigene Stimmen abgegeben';
    box.hidden=false;place();
  }
  function observe(rows,date){

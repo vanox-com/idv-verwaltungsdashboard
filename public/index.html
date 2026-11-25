@@ -1705,15 +1705,25 @@ body{overflow-x:clip}
 #appSidebar .sidebar-legal a:hover,#appSidebar .sidebar-legal a:focus-visible{color:var(--txt);text-decoration:underline}
 </style>
 <style>
-#idvPmaHinweis{position:fixed;top:16px;right:18px;z-index:10019;width:350px;max-width:calc(100vw - 36px);height:auto;min-height:0;max-height:calc(100dvh - 32px);overflow:auto;box-sizing:border-box;display:grid;grid-template-columns:26px minmax(0,1fr) 22px;gap:10px;align-items:start;padding:12px;border:1px solid #b9656c;border-radius:10px;background:linear-gradient(120deg,#46282f,#30262c 80%);color:#ffe3e6;box-shadow:0 8px 24px #0006;font:13px/1.4 system-ui,sans-serif}
+#idvPmaHinweis{position:fixed;top:16px;right:18px;z-index:10019;width:344px;max-width:calc(100vw - 36px);height:auto;min-height:0;max-height:calc(100dvh - 32px);overflow:auto;box-sizing:border-box;display:grid;gap:12px;padding:13px 14px 11px;border:1px solid #85505a;border-left:3px solid #c96b79;border-radius:12px;background:linear-gradient(125deg,#30252f,#25232d);color:#f5e2e7;box-shadow:0 10px 30px #0007;font:12px/1.4 system-ui,sans-serif}
 #idvPmaHinweis[hidden]{display:none!important}
-#idvPmaHinweis[data-urgent="1"]{border-color:#f1868c;background:linear-gradient(120deg,#692b38,#38252d);box-shadow:0 8px 24px #0008}
-#idvPmaHinweis .pma-icon{display:grid;place-items:center;width:26px;height:26px;border-radius:7px;background:#9a3b4b;border:1px solid #e78b95;font-weight:800;font-size:17px}
-#idvPmaHinweis .pma-body{display:grid;gap:5px;min-width:0;overflow-wrap:anywhere}
-#idvPmaHinweis .pma-body strong{color:#ffd9df;font-size:13px}
-#idvPmaHinweis .pma-body span{color:#f1c7ce}
-#idvPmaHinweis .pma-open{justify-self:start;min-height:0;width:auto;margin:3px 0 0;background:#8c3445;color:#fff0f3;border:1px solid #db808b;border-radius:7px;padding:5px 9px;font-size:12px}
-#idvPmaHinweis .pma-close{min-height:0;width:22px;height:22px;margin:0;padding:0;background:transparent;border:0;color:#f3c5ce;font-size:20px;line-height:1}
+#idvPmaHinweis[data-urgent="1"]{border-color:#ac5966;border-left-color:#ef8392}
+#idvPmaHinweis .pma-header{display:grid;grid-template-columns:32px minmax(0,1fr) 22px;align-items:center;gap:9px}
+#idvPmaHinweis .pma-icon{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:#7d384b55;border:1px solid #ad5b6a;color:#f4a6b3}
+#idvPmaHinweis .pma-heading{display:grid;gap:2px;min-width:0}
+#idvPmaHinweis .pma-heading>span{font-size:10px;color:#c9a0aa;letter-spacing:.045em}
+#idvPmaHinweis .pma-heading>strong{color:#ffe2e8;font-size:13px;line-height:1.3;overflow-wrap:anywhere}
+#idvPmaHinweis .pma-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+#idvPmaHinweis .pma-metrics>div{display:grid;gap:2px;border:1px solid #af77852b;border-radius:7px;background:#ffffff04;padding:7px 8px;min-width:0}
+#idvPmaHinweis .pma-metrics strong{color:#f9d7df;font-size:21px;line-height:1.1;font-variant-numeric:tabular-nums}
+#idvPmaHinweis .pma-metrics span{color:#d0aab4;font-size:10px;white-space:normal}
+#idvPmaHinweis[data-urgent="1"] .pma-overdue{color:#ff97a4}
+#idvPmaHinweis .pma-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#idvPmaHinweis .pma-own{color:#d4b5bd;font-size:11px;overflow-wrap:anywhere}
+#idvPmaHinweis .pma-open{display:flex;align-items:center;gap:7px;min-height:0;width:auto;margin:0;background:#743548;color:#ffe5ec;border:1px solid #ac6172;border-radius:6px;padding:5px 10px;font-size:11px;white-space:nowrap;cursor:pointer}
+#idvPmaHinweis .pma-open:hover{background:#914357}
+#idvPmaHinweis .pma-close{align-self:start;min-height:0;width:22px;height:22px;margin:0;padding:0;background:transparent;border:0;color:#cba6b0;font-size:20px;line-height:1;cursor:pointer}
+#idvPmaHinweis .pma-close:hover{color:#fff}
 @media(max-width:600px){#idvPmaHinweis{right:12px;max-width:calc(100vw - 24px)}}
 </style>
 </head>
@@ -6494,12 +6504,12 @@ document.addEventListener('click',async e=>{
 <script src="/befRichtUI.js"></script>
 <script src="/liveUpdates.js?v=20261125-1"></script>
 <script src="/porHinweise.js?v=20261125-2"></script>
-<script src="/pmaHinweise.js?v=20261125-1"></script>
+<script src="/pmaHinweise.js?v=20261125-2"></script>
 <script src="/aktenFeatures.js"></script>
 <script src="/kuendigungsArchiv.js"></script>
 <script src="/abmeldungen.js"></script>
 <script src="/botKonfiguration.js"></script>
 <script src="/responsiveNav.js"></script>
-<script src="/assets/ausbildung-panel.js?v=20261125-15" defer></script>
+<script src="/assets/ausbildung-panel.js?v=20261125-16" defer></script>
 </body>
 </html>
