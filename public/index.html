@@ -1750,6 +1750,28 @@ html:not([data-design-preset="flori"]):not([data-design-preset="schulzi"]):not([
 html[data-portal-mode="hell"] #appSidebar .sidebar-gruppe[data-sidebar-group] .sidebar-gruppe-inhalt a.on{color:var(--txt)}
 .workspace-topbar-icon[data-group="ausbildung"]{--module-accent:#99c9a6;--module-soft:rgba(89,153,108,.26);--module-border:rgba(130,196,148,.42)}
 </style>
+<style>
+/* Permission matrix: fixed module column, wrapping descriptions, expandable on demand. */
+#benutzerBereich .user-matrix{table-layout:fixed;width:100%;border-collapse:separate;border-spacing:0}
+#benutzerBereich .user-matrix col.matrix-module-col{width:240px}
+#benutzerBereich .user-matrix th,#benutzerBereich .user-matrix td{white-space:normal;overflow-wrap:anywhere;vertical-align:middle;padding:10px 10px}
+#benutzerBereich .user-matrix thead th{font-size:10px;letter-spacing:.04em;text-align:center;line-height:1.4}
+#benutzerBereich .user-matrix thead th:first-child{text-align:left}
+#benutzerBereich .user-matrix tbody th.matrix-module{position:static;vertical-align:top;max-width:240px;min-width:0}
+#benutzerBereich .user-matrix .matrix-module-name{display:block;line-height:1.45}
+#benutzerBereich .user-matrix .matrix-info{margin:5px 0 0;min-width:0;max-width:100%;text-transform:none;letter-spacing:0;font-weight:400;font-size:11px}
+#benutzerBereich .user-matrix .matrix-info summary{list-style:none;display:inline-flex;align-items:center;gap:6px;color:var(--mut);cursor:pointer;border-radius:4px;line-height:1.4;font-size:11px;font-weight:500}
+#benutzerBereich .user-matrix .matrix-info summary::-webkit-details-marker{display:none}
+#benutzerBereich .user-matrix .matrix-info summary:hover{color:var(--txt)}
+#benutzerBereich .user-matrix .matrix-info summary:focus-visible{outline:2px solid #8fb5ed;outline-offset:3px}
+#benutzerBereich .user-matrix .matrix-chevron{display:inline-block;font-size:15px;line-height:1;transition:transform .15s}
+#benutzerBereich .user-matrix .matrix-info[open] .matrix-chevron{transform:rotate(90deg)}
+#benutzerBereich .user-matrix .matrix-info-text{margin:7px 0 2px;padding:8px 9px;border-left:2px solid #829ab977;background:#8198b30c;border-radius:4px;line-height:1.55;color:var(--mut);white-space:normal;overflow-wrap:anywhere;word-break:normal;max-width:100%}
+#benutzerBereich .user-matrix .tag{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+#benutzerBereich .user-matrix .user-perm{min-width:0;width:76px;max-width:100%;padding:7px 5px;font-size:11px}
+#benutzerBereich .matrix-scroll{max-width:100%;overflow-x:auto}
+@media(prefers-reduced-motion:reduce){#benutzerBereich .matrix-chevron{transition:none}}
+</style>
 </head>
 <body>
 
@@ -5375,6 +5397,8 @@ async function ladeBenutzer() {
     (u.rolle!=='Administrator'?'<button type="button" class="p" data-user-rights="'+Number(u.id)+'">Einzelrechte</button> ':'')+
     (u.dienstnummer!==ME.dienstnummer?'<button type="button" class="user-delete" data-user-delete="'+Number(u.id)+'">Löschen</button>':'')
   ]);
+  const openMatrixHints=new Set(Array.from(document.querySelectorAll('.user-matrix details[open][data-perm-info]'),d=>d.dataset.permInfo));
+  const matrixScroll=$('#userMatrixScroll')?.scrollLeft||0;
   const matrixRows=RECHTE_MODULE.map(m=>{
     const cells=a.rollen.map(r=>{
       const p=a.perms.find(x=>x.rolle===r.name && x.modul===m[0]);
@@ -5387,15 +5411,17 @@ async function ladeBenutzer() {
         '" data-perm-role="'+esc(r.name)+'" data-perm-module="'+esc(m[0])+
         '" data-perm-value="'+st+'" title="Klicken zum Ändern'+(RECHTE_HINWEISE[m[0]]?' – '+esc(RECHTE_HINWEISE[m[0]]):'')+'">'+status+'</button></td>';
     }).join('');
-    return '<tr><th scope="row">'+esc(m[1])+(RECHTE_HINWEISE[m[0]]?'<br><small class="mut" style="text-transform:none;letter-spacing:0;font-weight:400">'+esc(RECHTE_HINWEISE[m[0]])+'</small>':'')+'</th>'+cells+'</tr>';
+    return '<tr><th scope="row" class="matrix-module"><span class="matrix-module-name">'+esc(m[1])+'</span>'+
+      (RECHTE_HINWEISE[m[0]]?'<details class="matrix-info" data-perm-info="'+esc(m[0])+'"'+(openMatrixHints.has(m[0])?' open':'')+'><summary>Zusatzinformationen <span class="matrix-chevron" aria-hidden="true">›</span></summary><div class="matrix-info-text">'+esc(RECHTE_HINWEISE[m[0]])+'</div></details>':'')+'</th>'+cells+'</tr>';
   }).join('');
   $('#benutzerBereich').innerHTML=
     '<div class="box"><h3>Benutzerkonten</h3>'+tabelle(['Dienstnummer','Name','Rolle','Passwort','Status','Aktion'],rows)+'</div>'+
     '<div class="box"><h3>Berechtigungsmatrix</h3>'+
     '<p class="mut">Gruppenrechte gelten als Standard. Klick wechselt zwischen „Kein Recht“, „Lesen“ und „Bearbeiten“. Für Dienstnummern sind Ausnahmen möglich. POR-Freigabe ist von Beförderungsrechten getrennt.</p>'+
-    '<div class="tw"><table class="user-matrix"><thead><tr><th>Modul</th>'+
-    a.rollen.map(r=>'<th>'+esc(r.name)+'</th>').join('')+'</tr></thead><tbody>'+matrixRows+
+    '<div class="tw matrix-scroll" id="userMatrixScroll"><table class="user-matrix" style="min-width:'+(240+a.rollen.length*118)+'px"><colgroup><col class="matrix-module-col">'+a.rollen.map(()=>'<col>').join('')+'</colgroup><thead><tr><th scope="col">Modul</th>'+
+    a.rollen.map(r=>'<th scope="col">'+esc(r.name)+'</th>').join('')+'</tr></thead><tbody>'+matrixRows+
     '</tbody></table></div></div>';
+  if($('#userMatrixScroll'))$('#userMatrixScroll').scrollLeft=matrixScroll;
 }
 function userDialogForm(id) {
   if(ME.rolle!=='Administrator'||!USER_ADMIN)return;
