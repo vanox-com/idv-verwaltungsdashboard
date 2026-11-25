@@ -288,10 +288,20 @@ function ausbildungTrainerInput(array $b): array {
     $kompetenzen=ausbildungKompetenzen($b['kompetenzen']??[]);
     return compact('nr','name','kuerzel','rang','funktion','email','notiz','beginn','kompetenzen');
 }
+/** Retired AuLK site: retain stored records, but never expose its old links. */
+function ausbildungAlteAuLkSeite(string $url): bool {
+    $parts=parse_url(trim($url));
+    if(!is_array($parts)||strtolower((string)($parts['host']??''))!=='sites.google.com')return false;
+    return preg_match('#^/view/aulk2026(?:/|$)#i',rawurldecode((string)($parts['path']??'')))===1;
+}
+function ausbildungAktuelleMateriallinks(array $rows): array {
+    return array_values(array_filter($rows,fn($m)=>!ausbildungAlteAuLkSeite((string)($m['url']??''))));
+}
 function ausbildungLink($url): string {
     if(!is_string($url)||strlen($url)>2048)fail(400,'Ungültiger Dokumentlink');
     $url=trim($url);
     if($url==='')return '';
+    if(ausbildungAlteAuLkSeite($url))fail(400,'Die bisherige AuLK-Seite wird nicht mehr verwendet');
     $parts=parse_url($url);
     if(!is_array($parts)||($parts['scheme']??'')!=='https'||!in_array(strtolower((string)($parts['host']??'')),
         ['docs.google.com','drive.google.com','sites.google.com'],true)||isset($parts['user'])||isset($parts['pass']))
@@ -326,7 +336,7 @@ function ausbildungOeffentlicheMaterialien(): never {
         CASE WHEN dateipfad IS NULL THEN 0 ELSE 1 END AS datei
         FROM ausbildung_materialien WHERE aktiv=1 AND public_aktiv=1
         ORDER BY modul_code,titel,id");
-    respond(200,['materialien'=>$rows]);
+    respond(200,['materialien'=>ausbildungAktuelleMateriallinks($rows)]);
 }
 /** One-time curriculum content adjustment, not a schema migration.
  * Keep historical hiring-process records separate from the new onboarding.
@@ -421,6 +431,7 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             ausbildungSeedZipDecks($u);
         }
         $materials=sql('SELECT id,modul_code,titel,typ,url,public_aktiv,CASE WHEN dateipfad IS NULL THEN 0 ELSE 1 END AS datei FROM ausbildung_materialien WHERE aktiv=1 ORDER BY modul_code,titel');
+        $materials=ausbildungAktuelleMateriallinks($materials);
         $me=ausbildungTrainer($u);
         if(!$leitung){
             $trainers=[];

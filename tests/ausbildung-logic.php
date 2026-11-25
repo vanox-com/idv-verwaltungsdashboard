@@ -5,6 +5,11 @@ require dirname(__DIR__).'/php/Ausbildung.php';
 function checkAus(bool $ok,string $message): void {
     if(!$ok)throw new RuntimeException('Ausbildung regression failed: '.$message);
 }
+checkAus(IDV\ausbildungAlteAuLkSeite('https://sites.google.com/view/aulk2026/startseite'),'retired AuLK homepage');
+checkAus(IDV\ausbildungAlteAuLkSeite('https://sites.google.com/view/aulk2026/unterlagen?x=1'),'retired AuLK subpage');
+checkAus(!IDV\ausbildungAlteAuLkSeite('https://docs.google.com/presentation/d/example/edit'),'keep Google Slides');
+checkAus(!IDV\ausbildungAlteAuLkSeite('https://sites.google.com/view/aulk2026-neu/startseite'),'keep unrelated sites');
+checkAus(count(IDV\ausbildungAktuelleMateriallinks([['url'=>'https://sites.google.com/view/aulk2026/startseite'],['url'=>'https://drive.google.com/file/d/example/view'],['url'=>'']]))===2,'filter only retired AuLK links');
 $role=['id'=>2,'rolle'=>'Ausbilder'];
 $leiter=['id'=>3,'rolle'=>'Ausbildungsleitung'];
 checkAus(IDV\hasPanelLoginRole('Ausbilder'),'trainer login enabled');
