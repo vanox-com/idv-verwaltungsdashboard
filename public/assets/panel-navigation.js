@@ -1,7 +1,7 @@
 /* Shared real panel navigation and role checks. No API calls or credentials. */
 const MODS = [
   ['dash','Dashboard','📊'],['pers','Personal','👥'],['bef','Beförderungen','⭐'],
-  ['ausbildung','Übersicht','🎓'],['ausbildung-pma','PMA-Monitor','📋'],['ausbildung-pka','PKA-/KKA-Monitor','📋'],['ausbildung-ausbilder','Ausbilderverwaltung','👥'],['ausbildung-materialien','Ausbildungsunterlagen','📚'],['ausbildung-unterricht','Unterrichtsräume','📽️'],['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
+  ['ausbildung','Übersicht','🎓'],['ausbildung-pma','PMA-Monitor','📋'],['ausbildung-pka','PKA-/KKA-Monitor','📋'],['ausbildung-ausbilder','Ausbilderverwaltung','👥'],['ausbildung-materialien','Ausbildungsunterlagen','📚'],['ausbildung-unterricht','Unterrichtsräume','📽️'],['ausbildung-pruefungen','Prüfungszentrum','📝'],['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],['abm','Abmeldungen','📅'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
@@ -14,11 +14,11 @@ const NAV_GRUPPEN = [
   {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','praktika','rout','abm','geb','jub' ,'statistik']},
   {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
-  {id:'ausbildung',titel:'Ausbildung',module:['ausbildung','ausbildung-pma','ausbildung-pka','ausbildung-ausbilder','ausbildung-materialien','ausbildung-unterricht']},
+  {id:'ausbildung',titel:'Ausbildung',module:['ausbildung','ausbildung-pma','ausbildung-pka','ausbildung-ausbilder','ausbildung-materialien','ausbildung-unterricht','ausbildung-pruefungen']},
   {id:'verwaltung',titel:'Administration',module:['users','befricht','system','botcfg','meldungen','benachrichtigungen','rechtesimulator','design','backup','log','papierkorb']}
 ];
 const AUSB_NAV={
-  ausbildung:{route:'uebersicht'},'ausbildung-pma':{route:'monitore',track:'PMA'},'ausbildung-pka':{route:'monitore',track:'PKA-KKA'},'ausbildung-ausbilder':{route:'ausbilder',leitung:true},'ausbildung-materialien':{route:'materialien',leitung:true},'ausbildung-unterricht':{route:'unterricht'}
+  ausbildung:{route:'uebersicht'},'ausbildung-pma':{route:'monitore',track:'PMA'},'ausbildung-pka':{route:'monitore',track:'PKA-KKA'},'ausbildung-ausbilder':{route:'ausbilder',leitung:true},'ausbildung-materialien':{route:'materialien',leitung:true},'ausbildung-unterricht':{route:'unterricht'},'ausbildung-pruefungen':{route:'pruefungen'}
 };
 function panelCan(user,m,l=1){
   if(!user)return false;

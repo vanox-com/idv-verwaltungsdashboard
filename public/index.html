@@ -1859,7 +1859,7 @@ html[data-portal-mode="hell"] [data-right-group]{--rights-accent:var(--txt)}
 </div>
 <dialog id="personalDialog" aria-label="Personalakte"></dialog><dialog id="sfDialog" aria-label="Sonderfunktionen bearbeiten"></dialog><dialog id="porDialog" aria-label="POR-Freigabe"></dialog>
 
-<script src="/assets/panel-navigation.js?v=20261125-1"></script>
+<script src="/assets/panel-navigation.js?v=20261125-2"></script>
 <script>
 const NAV_OFFEN = new Set(['uebersicht','personal','ausbildung']);
 let ME = null, D = null, tab = 'dash';
@@ -2256,6 +2256,10 @@ function zeichneMenue() {
 }
 
 function zeichne() {
+  if(tab==='ausbildung-pruefungen'){
+    if(!can(tab)){$('#inhalt').textContent='Kein Ausbildungsrecht.';return;}
+    window.IDVPruefungen?.open($('#inhalt'));return;
+  }
   if(Object.hasOwn(AUSB_NAV,tab)){
     if(!can(tab)){$('#inhalt').innerHTML='<p>Kein Ausbildungsrecht für dieses Konto.</p>';return;}
     if(!window.IDVAusbildung){$('#inhalt').innerHTML='<p>Ausbildungsmodul konnte nicht geladen werden. Bitte Seite neu laden.</p>';return;}
@@ -6560,5 +6564,6 @@ document.addEventListener('click',async e=>{
 <script src="/botKonfiguration.js"></script>
 <script src="/responsiveNav.js"></script>
 <script src="/assets/ausbildung-panel.js?v=20261125-17" defer></script>
+<script src="/assets/pruefungszentrum.js?v=1" defer></script>
 </body>
 </html>

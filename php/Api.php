@@ -277,6 +277,8 @@ function run(): void {
         // Einmalige, tokengebundene Schülersitzung; keine Anmeldung in die Personalverwaltung.
         require_once __DIR__.'/AusbildungUnterricht.php';
         if(dispatchUnterrichtGast($method,$uri))return;
+        require_once __DIR__.'/Pruefungen.php';
+        if(pruefungGuest($method,$uri))return;
         if($method==='POST'&&$uri==='/api/ausbildung-extern/status'){
             require_once __DIR__.'/Ausbildung.php';
             ausbildungExtern();

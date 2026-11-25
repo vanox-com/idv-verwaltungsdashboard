@@ -392,6 +392,8 @@ function ausbildungOnboardingAktualisieren(array $u): void {
 function dispatchAusbildung(array $u,string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/ausbildung/'))return false;
     ausbildungRecht($u);
+    require_once __DIR__.'/Pruefungen.php';
+    if(dispatchPruefung($u,$method,$uri))return true;
     require_once __DIR__.'/AusbildungSetup.php';
     if(dispatchAusbildungSetup($u,$method,$uri))return true;
     if(!ausbildungSchemaStatus()['bereit'])
