@@ -217,6 +217,10 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/ausbildung/pruefungen'))return false;
     ausbildungRecht($u);$lead=ausbildungLeitung($u);$verwaltung=pruefungVerwaltung($u);$importAdmin=pruefungImportAdmin($u);$uid=(int)$u['id'];
     $root='/api/ausbildung/pruefungen';
+    if($uri===$root.'/ki-einstellungen'){
+        require_once __DIR__.'/PruefungenKIConfig.php';
+        examAiConfigEndpoint($u,$method);
+    }
     if(($uri===$root.'/vorlagen'||str_starts_with($uri,$root.'/vorlagen/'))&&!$verwaltung)
         fail(403,'Prüfungsvorlagen sind nur für Administratoren, Leitungsdienst und Ausbildungsleitung zugänglich');
     if(str_starts_with($uri,$root.'/google/')&&!$importAdmin)
@@ -290,7 +294,8 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         if(in_array($p['status'],['bereit','laufend'],true)){
             unset($p['fragen'],$p['antworten'],$p['bewertung']);
         }else $p['automatisch']=array_map(fn($q,$i)=>pruefungAuto($q,$p['antworten'][$i]??null),$p['fragen'],array_keys($p['fragen']));
-        respond(200,['pruefung'=>$p,'user'=>$uid,'leitung'=>$lead,'verwaltung'=>$verwaltung,'kiBereit'=>trim((string)getenv('OPENAI_API_KEY'))!==''&&function_exists('curl_init')]);
+        require_once __DIR__.'/PruefungenKIConfig.php';
+        respond(200,['pruefung'=>$p,'user'=>$uid,'leitung'=>$lead,'verwaltung'=>$verwaltung,'kiBereit'=>examAiStatus()['bereit']]);
     }
     if($method!=='POST'||$action==='')fail(405,'Nicht erlaubt');
     $b=body();$pdo=db();$pdo->beginTransaction();

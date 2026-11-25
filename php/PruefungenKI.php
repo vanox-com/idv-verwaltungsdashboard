@@ -26,8 +26,9 @@ function pruefungKiVorschlag(array $q,string $answer,string $key): array {
 }
 function pruefungKiEndpoint(array $u,string $method,int $id): never {
     if($method!=='POST')fail(405,'Nicht erlaubt');
-    $key=trim((string)getenv('OPENAI_API_KEY'));
-    if($key===''||!function_exists('curl_init'))fail(503,'KI noch nicht eingerichtet: OPENAI_API_KEY und PHP-curl auf dem Hoster erforderlich.');
+    require_once __DIR__.'/PruefungenKIConfig.php';
+    try{$key=examAiKey();}catch(\Throwable $e){fail(503,'KI-Verbindung nicht lesbar. Administrator muss die Verbindung im Prüfungszentrum neu einrichten.');}
+    if($key===''||!function_exists('curl_init'))fail(503,'KI noch nicht eingerichtet. Administrator: Prüfungszentrum → KI-Einstellungen.');
     $p=pruefungRow($id);pruefungAccess($p,$u);
     if($p['art']==='praxis'||$p['status']!=='abgegeben'||((int)$p['erst']!==(int)$u['id']&&!pruefungVerwaltung($u)))fail(403,'KI-Vorschläge nur für berechtigte Erstkorrektur.');
     $b=body();if(($b['revision']??null)!==(int)$p['revision'])fail(409,'Prüfung wurde geändert. Neu laden.');
