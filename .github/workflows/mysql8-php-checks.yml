@@ -30,6 +30,8 @@ jobs:
           node --check public/assets/unterricht-raum.js
           node --check public/assets/pruefungszentrum.js
           node --check public/assets/pruefung-gast.js
+          node --check public/assets/pruefungen-praxis.js
+          php tests/pruefungen-praxis.php
           php tests/pruefungen-logic.php
           node tests/pruefungen-import.mjs
           php tests/auth-module-isolation.php

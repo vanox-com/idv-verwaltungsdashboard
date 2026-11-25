@@ -14,7 +14,7 @@ function calculate(schema,f,theory){
   const s=f.sections[key];let complete=true,loss=0;groups[key]=sets.map(g=>{
    let sum=0,done=true;for(const q of g.criteria){const v=s.answers[q.id];if(!v){complete=false;done=false}else sum+=q.options[v]}
    const deduction=sum*g.weight/100;loss+=deduction;return {deduction,complete:done};
-  });modules[key]=complete?Math.max(0,100-loss-s.extra):null;
+  });modules[key]=complete?Math.round((Math.max(0,100-loss-s.extra)+Number.EPSILON)*100)/100:null;
  }
  for(const r of f.drive.rounds){
   let complete=r.seconds!==null,safety=0;
@@ -24,7 +24,7 @@ function calculate(schema,f,theory){
  }
  let best=null;rounds.forEach((r,i)=>{if(r.score!==null&&(best===null||r.score>rounds[best].score))best=i});
  const selected=f.drive.selected??best;
- modules.drive=selected===null||rounds[selected].score===null?null:Math.max(0,rounds[selected].score-f.drive.extra);
+ modules.drive=selected===null||rounds[selected].score===null?null:Math.round((Math.max(0,rounds[selected].score-f.drive.extra)+Number.EPSILON)*100)/100;
  modules.theory=theory?theory.punkte/theory.max*100:null;
  let total=0,complete=rounds.every(r=>r.score!==null);const result={};
  for(const [k,w] of Object.entries(schema.weights)){const v=modules[k];if(v===null)complete=false;const weighted=v===null?null:v*w/100;total+=weighted??0;result[k]={percent:v,weight:w,weighted,status:status(v,k==='theory')}}
