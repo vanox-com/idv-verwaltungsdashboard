@@ -31,7 +31,7 @@ function eventsPanel(p){
  c.append(d);return c;
 }
 function render(host,r,ctx){
- const p=r.pruefung,uid=Number(r.user),id=Number(p.id),first=p.status==='abgegeben'&&Number(p.erst)===uid,second=p.status==='erstkorrigiert'&&Number(p.zweit)===uid;
+ const p=r.pruefung,uid=Number(r.user),id=Number(p.id),first=r.korrekturRechte?.erst===true,second=r.korrekturRechte?.zweit===true;
  const override=r.verwaltung&&['abgegeben','erstkorrigiert','zweitkorrigiert','freigegeben'].includes(p.status);
  const q=p.fragen||[],max=q.reduce((n,x)=>n+Number(x.punkte),0);
  let mode='normal',active=0,filter='all',query='',aiRunning=false;
@@ -39,7 +39,7 @@ function render(host,r,ctx){
  const editable=()=>first||mode==='override',notesEditable=()=>first||second||mode==='override';
  const header=box(p.kandidat+' · '+p.titel,'review-head');const stage=el('div',ctx.states[p.status]||p.status,'review-stage');header.prepend(stage);
  const reviewer=n=>ctx.reviewers.find(x=>Number(x.id)===Number(n))?.anzeigename||'#'+n;
- const meta=el('div',undefined,'review-meta');for(const [k,v] of [['Erstprüfer',reviewer(p.erst)],['Zweitprüfer',reviewer(p.zweit)],['Beginn',date(p.start_am)],['Abgabe',date(p.abgabe_am)],['Bearbeitungsdauer',duration(p.start_am,p.abgabe_am)],['Zeitlimit',p.minuten+' min']]){const item=el('div');item.append(el('small',k),el('strong',v));meta.append(item)}header.append(meta);host.append(header);
+ const meta=el('div',undefined,'review-meta');for(const [k,v] of [['Erstprüfer (zugeteilt)',reviewer(p.erst)],...(r.erstBearbeiter?[['Erstkorrektur durchgeführt von',reviewer(r.erstBearbeiter)]]:[]),['Zweitprüfer (zugeteilt)',reviewer(p.zweit)],['Beginn',date(p.start_am)],['Abgabe',date(p.abgabe_am)],['Bearbeitungsdauer',duration(p.start_am,p.abgabe_am)],['Zeitlimit',p.minuten+' min']]){const item=el('div');item.append(el('small',k),el('strong',v));meta.append(item)}header.append(meta);host.append(header);
  const summary=el('section',undefined,'review-summary');const totals=el('div',undefined,'review-total-grid');
  const kpis={};for(const [k,label] of [['points','Punkte aktuell'],['percent','Prozent'],['status','Voraussichtliches Ergebnis'],['open','Offene Bewertungen']]){const b=el('div',undefined,'review-kpi');const v=el('strong','—');kpis[k]=v;b.append(el('small',label),v);totals.append(b)}
  summary.append(totals);const threshold=el('p','Bestehensgrenze: '+fmt(p.grenze)+' % · Vorschau, bis die Korrektur verbindlich abgeschlossen wurde.','mut');summary.append(threshold);if(q.length)host.append(summary);
@@ -48,7 +48,8 @@ function render(host,r,ctx){
  if(r.verwaltung&&p.status==='bereit')actions.append(btn('Prüfungslink erneuern',()=>runAction('link',{})));
  if(r.leitung&&p.status!=='annulliert')actions.append(btn('Annullieren',()=>{const why=prompt('Begründung für die Annullierung:');if(why?.trim())runAction('annullieren',{notiz:why});},'danger'));
  if(r.leitung&&p.status==='zweitkorrigiert')actions.append(btn('Ergebnis freigeben',()=>{if(confirm('Endgültiges Ergebnis freigeben?'))runAction('freigabe',{});},'p'));
- if(p.status==='erstkorrigiert'&&!second){const notice=box('Zweitkorrektur · Zuständigkeit');notice.append(el('p','Zuständig: '+reviewer(p.zweit)+'. Die Leitung kann die Prüferzuteilung ändern.'));host.append(notice);}
+ if(p.status==='erstkorrigiert'&&!second){const notice=box('Zweitkorrektur · Zuständigkeit');notice.append(el('p',r.korrekturRechte?.eigeneErstkorrektur?'Du hast die Erstkorrektur durchgeführt. Die verbindliche Zweitkorrektur muss eine andere Person übernehmen. Leitungsberichtigungen bleiben möglich.':'Zuständig: '+reviewer(p.zweit)+'. Die Leitung kann die Prüferzuteilung ändern.'));host.append(notice);}
+ if(r.verwaltung&&(first&&Number(p.erst)!==uid||second&&Number(p.zweit)!==uid))host.append(el('p','Du kannst diese Korrektur aufgrund deiner Leitungsberechtigung direkt durchführen. Dein Konto wird als tatsächlicher Bearbeiter protokolliert; die ursprüngliche Zuteilung bleibt erhalten.','mut'));
  if(r.verwaltung&&p.status!=='annulliert'&&p.art!=='praxis'){
   const c=box('Prüferzuteilung');const d=el('details');d.append(el('summary','Erst- und Zweitprüfer ändern'));
   const make=(id,label)=>{const s=el('select');for(const x of ctx.reviewers){const o=el('option',x.anzeigename+(Number(x.id)===uid?' (ich)':''));o.value=String(x.id);s.append(o);}s.value=String(id);field(d,label,s);return s;};
@@ -66,7 +67,7 @@ function render(host,r,ctx){
  function canAI(i){return aiEnabled&&q[i].typ==='text'&&!(q[i].bilder||[]).length&&String(q[i].muster||'').trim()!=='';}
  async function requestAI(indices){
   if(aiRunning)return;if(!indices.length){aiStatus.textContent='Keine weiteren geeigneten Fragen vorhanden.';return;}if(!confirm('KI-Vorschläge anfordern? Fragen, Musterlösungen und Freitextantworten werden zur Bewertung an die konfigurierte GroqCloud-API übertragen. Kontonamen und Prüfungsprotokolle werden nicht mitgesendet. Die endgültige Bewertung bleibt bei dir.'))return;
-  aiRunning=true;aiStatus.textContent='KI-Vorschläge werden geladen …';let done=0,errors=0,limited=false;
+  aiRunning=true;ctx.dirty();aiStatus.textContent='KI-Vorschläge werden geladen …';let done=0,errors=0,limited=false;
   try{for(const i of indices){if(!host.isConnected)break;aiStatus.textContent='KI-Vorkorrektur '+(done+errors+1)+' / '+indices.length;try{const v=await ctx.api('/'+id+'/ki',{revision:Number(p.revision),frage:i});draft[i].suggestion=v.vorschlag;draft[i].error='';done++;ctx.dirty();}catch(e){draft[i].error=e.message;errors++;if(e.status===429){limited=true;renderQuestion();refresh();break;}}if(host.isConnected){renderQuestion();refresh();}}}finally{aiRunning=false;aiStatus.textContent=done+' Vorschläge erstellt · '+errors+' fehlgeschlagen. '+(limited?'Groq-Limit erreicht. Später fortsetzen. ':'')+'Vorschläge einzeln prüfen und übernehmen.';}
  }
  if(first||override){const aiButton=btn('KI-Vorkorrektur starten',()=>requestAI(q.map((_,i)=>i).filter(i=>canAI(i)&&!draft[i].suggestion)),'p');aiButton.disabled=!aiEnabled;aiBox.append(aiButton,aiStatus);if(!r.kiBereit){aiStatus.textContent='KI noch nicht eingerichtet. Manuelle Korrektur verfügbar.';if(ctx.configure)aiBox.append(btn('KI-Verbindung einrichten',ctx.configure,''));}else if(!aiEnabled)aiStatus.textContent='KI-Vorschläge sind nur während der Erstkorrektur verfügbar.';side.append(aiBox);}

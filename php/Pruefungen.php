@@ -143,6 +143,19 @@ function pruefungSichtbar(array $p,int $uid,bool $leitung): bool {
     return ((int)$p['erst']===$uid&&in_array($p['status'],['bereit','laufend','abgegeben'],true))
         ||((int)$p['zweit']===$uid&&$p['status']==='erstkorrigiert');
 }
+// Keep actual reviewers in the audit trail, independently of the planned assignment.
+function pruefungErstBearbeiter(array $p): int {
+    $history=is_array($p['protokoll']??null)?$p['protokoll']:pruefungRead($p['protokoll']??'[]');
+    foreach(array_reverse($history) as $entry){
+        if(($entry['aktion']??'')==='korrektur'&&isset($entry['bewertung'])&&($entry['stufe']??'erst')==='erst'&&(int)($entry['user']??0)>0)return (int)$entry['user'];
+    }
+    return (int)$p['erst'];
+}
+function pruefungKorrekturRechte(array $p,int $uid,bool $leitung): array {
+    $status=$p['status'];$erst=$status==='abgegeben'&&($leitung||$uid===(int)$p['erst']);
+    $zweit=$status==='erstkorrigiert'&&($leitung||$uid===(int)$p['zweit'])&&$uid!==pruefungErstBearbeiter($p);
+    return ['erst'=>$erst,'zweit'=>$zweit,'eigeneErstkorrektur'=>$status==='erstkorrigiert'&&$uid===pruefungErstBearbeiter($p)];
+}
 function pruefungAccess(array $p,array $u): void {
     if(!pruefungSichtbar($p,(int)$u['id'],pruefungVerwaltung($u)))fail(403,'Prüfung ist nicht deiner aktuellen Korrektur zugeteilt.');
 }
@@ -220,6 +233,12 @@ function pruefungGuest(string $method,string $uri): bool {
         respond(200,$out);
     }catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
 }
+function pruefungListenZeilen(int $uid,bool $lead): array {
+        $where=$lead?'':" WHERE (p.erst=? AND p.status IN ('bereit','laufend','abgegeben')) OR (p.zweit=? AND p.status='erstkorrigiert')";
+        $rows=sql("SELECT p.id,p.revision,p.kandidat,p.laufbahn,p.erst,p.zweit,p.status,p.start_am,p.ende_am,p.abgabe_am,p.ergebnis,p.fokus,p.antworten,v.titel,v.art,JSON_UNQUOTE(JSON_EXTRACT(v.fragen,'$.schema')) AS praxisSchema FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id".$where." ORDER BY p.id DESC",$lead?[]:[$uid,$uid]);
+        foreach($rows as &$r){$f=pruefungRead($r['fokus']);$r['tabwechsel']=$f['wechsel']??0;$r['ereignisse']=count($f['events']??[]);$r['aktuelleFrage']=$f['aktuelleFrage']??null;$a=pruefungRead($r['antworten']);$r['fragenGesamt']=count($a);$r['bearbeitet']=count(array_filter($a,fn($x)=>is_array($x)?count($x)>0:trim((string)$x)!==''));unset($r['fokus'],$r['antworten']);}unset($r);
+    return $rows;
+}
 function dispatchPruefung(array $u,string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/ausbildung/pruefungen'))return false;
     ausbildungRecht($u);$verwaltung=pruefungVerwaltung($u);$lead=$verwaltung;$importAdmin=pruefungImportAdmin($u);$uid=(int)$u['id'];
@@ -249,10 +268,9 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
     require_once __DIR__.'/PruefungenPraxis.php';
     if(dispatchPraxis($u,$method,$uri))return true;
     pruefungFinalizeExpired();
+    if($method==='GET'&&$uri===$root.'/live')respond(200,['pruefungen'=>pruefungListenZeilen($uid,$lead)]);
     if($method==='GET'&&$uri===$root){
-        $where=$lead?'':" WHERE (p.erst=? AND p.status IN ('bereit','laufend','abgegeben')) OR (p.zweit=? AND p.status='erstkorrigiert')";
-        $rows=sql("SELECT p.id,p.kandidat,p.laufbahn,p.erst,p.zweit,p.status,p.start_am,p.ende_am,p.abgabe_am,p.ergebnis,p.fokus,p.antworten,v.titel,v.art,JSON_UNQUOTE(JSON_EXTRACT(v.fragen,'$.schema')) AS praxisSchema FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id".$where." ORDER BY p.id DESC",$lead?[]:[$uid,$uid]);
-        foreach($rows as &$r){$f=pruefungRead($r['fokus']);$r['tabwechsel']=$f['wechsel']??0;$a=pruefungRead($r['antworten']);$r['fragenGesamt']=count($a);$r['bearbeitet']=count(array_filter($a,fn($x)=>is_array($x)?count($x)>0:trim((string)$x)!==''));unset($r['fokus'],$r['antworten']);}unset($r);
+        $rows=pruefungListenZeilen($uid,$lead);
         $reviewers=[];foreach(sql("SELECT id,anzeigename,dienstnummer FROM users WHERE gesperrt=0 AND muss_passwort_aendern=0 ORDER BY anzeigename") as $r)if(pruefungReviewer((int)$r['id']))$reviewers[]=$r;
         if($verwaltung)ausbildungSynchronisierePersonal();
         $trainees=$verwaltung?array_map(fn($a)=>array_intersect_key($a,array_flip(['id','name','laufbahn','personalnummer'])),ausbildungAktuelleAnwaerter()):[];
@@ -303,7 +321,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
             unset($p['fragen'],$p['antworten'],$p['bewertung']);
         }else $p['automatisch']=array_map(fn($q,$i)=>pruefungAuto($q,$p['antworten'][$i]??null),$p['fragen'],array_keys($p['fragen']));
         require_once __DIR__.'/PruefungenKIConfig.php';
-        respond(200,['pruefung'=>$p,'user'=>$uid,'leitung'=>$lead,'verwaltung'=>$verwaltung,'kiBereit'=>examAiStatus()['bereit']]);
+        respond(200,['pruefung'=>$p,'user'=>$uid,'leitung'=>$lead,'verwaltung'=>$verwaltung,'korrekturRechte'=>pruefungKorrekturRechte($p,$uid,$verwaltung),'erstBearbeiter'=>in_array($p['status'],['erstkorrigiert','zweitkorrigiert','freigegeben'],true)?pruefungErstBearbeiter($p):null,'kiBereit'=>examAiStatus()['bereit']]);
     }
     if($method!=='POST'||$action==='')fail(405,'Nicht erlaubt');
     $b=body();$pdo=db();$pdo->beginTransaction();
@@ -349,8 +367,9 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
             $history[$i]['prueferNachher']=['erst'=>$first,'zweit'=>$second,'status'=>$next];
             sql('UPDATE ausbildung_pruefungen SET erst=?,zweit=?,status=?,revision=revision+1,protokoll=? WHERE id=?',[$first,$second,$next,pruefungJson($history),$id]);
         }elseif($action==='korrektur'){
-            $first=$status==='abgegeben'&&$uid===(int)$p['erst'];$second=$status==='erstkorrigiert'&&$uid===(int)$p['zweit'];
-            if(!$first&&!$second)fail(403,'Korrektur nicht für diesen Prüfer freigegeben');
+            $rights=pruefungKorrekturRechte($p,$uid,$verwaltung);$first=$rights['erst'];$second=$rights['zweit'];
+            if(!$first&&!$second)fail(403,$rights['eigeneErstkorrektur']?'Die Zweitkorrektur muss eine andere Person als die tatsächliche Erstkorrektur durchführen.':'Korrektur nicht für diesen Prüfer freigegeben');
+            $history[count($history)-1]['stufe']=$first?'erst':'zweit';
             if($second&&($b['zurueck']??false)===true){
                 if($note==='')fail(400,'Begründung erforderlich');
                 sql("UPDATE ausbildung_pruefungen SET status='abgegeben',revision=revision+1,protokoll=? WHERE id=?",[pruefungJson($history),$id]);

@@ -41,3 +41,12 @@ foreach(['bereit','laufend','abgegeben','erstkorrigiert','zweitkorrigiert','frei
     assertExam(!IDV\pruefungSichtbar($p,30,false),'unassigned visibility '.$status);
     assertExam(IDV\pruefungSichtbar($p,30,true),'lead visibility '.$status);
 }
+
+$p=['erst'=>10,'zweit'=>20,'status'=>'abgegeben','protokoll'=>'[]'];
+assertExam(IDV\pruefungKorrekturRechte($p,30,true)['erst'],'unassigned lead first review');
+assertExam(!IDV\pruefungKorrekturRechte($p,30,false)['erst'],'unassigned ordinary reviewer blocked');
+$p['status']='erstkorrigiert';$p['protokoll']=json_encode([['aktion'=>'korrektur','stufe'=>'erst','user'=>30,'bewertung'=>[]]]);
+assertExam(IDV\pruefungKorrekturRechte($p,40,true)['zweit'],'unassigned lead second review');
+assertExam(!IDV\pruefungKorrekturRechte($p,30,true)['zweit'],'actual first reviewer cannot approve own second review');
+assertExam(IDV\pruefungKorrekturRechte($p,20,false)['zweit'],'assigned second reviewer');
+assertExam(!IDV\pruefungKorrekturRechte($p,10,false)['zweit'],'ordinary first reviewer cannot approve');
