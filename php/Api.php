@@ -274,11 +274,26 @@ function run(): void {
                 fail(503,'Datenbank wird gerade wiederhergestellt. Schreibzugriffe sind vorübergehend gesperrt.');
         }
         require_once __DIR__.'/RateLimit.php';
-        // Einmalige, tokengebundene Schülersitzung; keine Anmeldung in die Personalverwaltung.
-        require_once __DIR__.'/AusbildungUnterricht.php';
-        if(dispatchUnterrichtGast($method,$uri))return;
-        require_once __DIR__.'/Pruefungen.php';
-        if(pruefungGuest($method,$uri))return;
+        // Authentication must remain independent of optional feature files,
+        // including partially deployed or unavailable training modules.
+        if($method==='POST'&&$uri==='/api/login')handleLogin();
+        if($method==='POST'&&$uri==='/api/logout')handleLogout();
+        if($method==='GET'&&$uri==='/api/me'){
+            $u=requireLogin();
+            respond(200,sessionApiUser($u));
+        }
+        if($method==='POST'&&$uri==='/api/passwort')handlePassword();
+        // Public guest handlers are loaded only for their own URL prefix.
+        if(str_starts_with($uri,'/api/unterricht/')){
+            require_once __DIR__.'/AusbildungUnterricht.php';
+            if(dispatchUnterrichtGast($method,$uri))return;
+            fail(404,'Unterrichts-Endpunkt unbekannt');
+        }
+        if(str_starts_with($uri,'/api/pruefung-gast/')){
+            require_once __DIR__.'/Pruefungen.php';
+            if(pruefungGuest($method,$uri))return;
+            fail(404,'Prüfungs-Endpunkt unbekannt');
+        }
         if($method==='POST'&&$uri==='/api/ausbildung-extern/status'){
             require_once __DIR__.'/Ausbildung.php';
             ausbildungExtern();
@@ -298,13 +313,7 @@ function run(): void {
             require_once __DIR__.'/AusbildungFiles.php';
             ausbildungOeffentlicheDatei((int)$publicFile[1]);
         }
-        if($method==='POST'&&$uri==='/api/login')handleLogin();
-        if($method==='POST'&&$uri==='/api/logout')handleLogout();
-        if($method==='GET'&&$uri==='/api/me'){
-            $u=requireLogin();
-            respond(200,sessionApiUser($u));
-        }
-        if($method==='POST'&&$uri==='/api/passwort')handlePassword();
+
         // Unknown routes must fail closed, and no PHP code may delegate to PostgreSQL.
         $u=requireLogin();
         // Nur Ausbildungs-APIs sind für die isolierten Ausbildungsrollen zulässig.
@@ -327,8 +336,11 @@ function run(): void {
         require_once __DIR__.'/Settings.php';
         require_once __DIR__.'/DatabaseBackup.php';
         if(dispatchDatabaseBackup($u,$method,$uri))return;
-        require_once __DIR__.'/Ausbildung.php';
-        if(dispatchAusbildung($u,$method,$uri))return;
+        if(str_starts_with($uri,'/api/ausbildung/')){
+            require_once __DIR__.'/Ausbildung.php';
+            if(dispatchAusbildung($u,$method,$uri))return;
+            fail(404,'Ausbildungs-Endpunkt unbekannt');
+        }
         if($method==='GET'&&$uri==='/api/changes') {
             require_once __DIR__.'/Changes.php';
             streamChanges($u);

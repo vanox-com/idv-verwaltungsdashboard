@@ -195,8 +195,11 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/ausbildung/pruefungen'))return false;
     ausbildungRecht($u);$lead=ausbildungLeitung($u);$verwaltung=pruefungVerwaltung($u);$uid=(int)$u['id'];
     $root='/api/ausbildung/pruefungen';
-    require_once __DIR__.'/PruefungenGoogle.php';
-    if(dispatchPruefungGoogle($u,$method,$uri))return true;
+    if(str_starts_with($uri,$root.'/google/')){
+        require_once __DIR__.'/PruefungenGoogle.php';
+        if(dispatchPruefungGoogle($u,$method,$uri))return true;
+        fail(404,'Google-Import-Endpunkt unbekannt');
+    }
     if($method==='POST'&&$uri===$root.'/setup')pruefungInstall($u);
     if(!pruefungSchema()){
         if($method==='GET'&&$uri===$root)respond(200,['bereit'=>false,'leitung'=>$lead,'admin'=>$u['rolle']==='Administrator']);
