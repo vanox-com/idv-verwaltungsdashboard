@@ -159,7 +159,7 @@ function dispatchPraxis(array $u,string $method,string $uri): bool {
         $p=pruefungRow($id);pruefungAccess($p,$u);if(!praxisMarker($p))fail(404,'Kein strukturierter Praxisbogen');
         $payload=pruefungRead($p['antworten']);$theory=$p['status']==='abgegeben'?praxisTheory((int)$p['anwaerter_id']):$payload['theorie'];
         $reviewer=sql('SELECT anzeigename FROM users WHERE id=?',[(int)$p['erst']])[0]['anzeigename']??'';
-        respond(200,['schema'=>praxisSchema(),'pruefung'=>array_intersect_key($p,array_flip(['id','kandidat','erst','status','revision','ergebnis'])),'pruefer'=>$reviewer,'termin'=>$payload['termin'],'formular'=>$payload['formular'],'theorie'=>$theory,'auswertung'=>praxisCalculate($payload['formular'],$theory),'bearbeiten'=>$p['status']==='abgegeben'&&((int)$p['erst']===$uid||$manager),'berichtigen'=>$manager&&$p['status']==='freigegeben','protokoll'=>pruefungRead($p['protokoll'])]);
+        respond(200,['schema'=>praxisSchema(),'pruefung'=>array_intersect_key($p,array_flip(['id','kandidat','erst','status','revision','ergebnis']))+pruefungArchivInfo($p),'pruefer'=>$reviewer,'termin'=>$payload['termin'],'formular'=>$payload['formular'],'theorie'=>$theory,'auswertung'=>praxisCalculate($payload['formular'],$theory),'bearbeiten'=>$p['status']==='abgegeben'&&((int)$p['erst']===$uid||$manager),'berichtigen'=>$manager&&$p['status']==='freigegeben','protokoll'=>pruefungRead($p['protokoll'])]);
     }
     if($method!=='POST')fail(405,'Nicht erlaubt');
     $b=body();$pdo=db();$pdo->beginTransaction();

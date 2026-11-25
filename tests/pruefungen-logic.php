@@ -58,3 +58,19 @@ foreach(['abgegeben','freigegeben','annulliert'] as $status){
     assertExam(!IDV\pruefungSichtbar($p,30,false),'practice foreign access blocked '.$status);
     assertExam(IDV\pruefungSichtbar($p,30,true),'practice lead '.$status);
 }
+
+$now=time();
+foreach(['pm','praxis'] as $art){
+    $p=['art'=>$art,'erst'=>10,'zweit'=>$art==='praxis'?0:20,'status'=>'freigegeben','protokoll'=>[
+        ['aktion'=>$art==='praxis'?'Praxisprüfung angelegt':'erstellt','user'=>40],
+        ['aktion'=>$art==='praxis'?'abschliessen':'freigabe','am'=>gmdate('c',$now-3600),'user'=>50]
+    ]];
+    assertExam(!IDV\pruefungArchivInfo($p,$now)['archiviert'],'recent result '.$art);
+    assertExam(IDV\pruefungSichtbar($p,10,false),'assigned result '.$art);
+    assertExam(IDV\pruefungSichtbar($p,40,false),'creator result '.$art);
+    assertExam(!IDV\pruefungSichtbar($p,30,false),'foreign result blocked '.$art);
+    assertExam(IDV\pruefungArchivInfo($p,$now+82800)['archiviert'],'24h cutoff '.$art);
+    $p['protokoll'][]=['aktion'=>'archivieren','am'=>gmdate('c',$now),'user'=>10];
+    assertExam(!IDV\pruefungSichtbar($p,10,false),'manual archive blocked '.$art);
+    assertExam(IDV\pruefungSichtbar($p,50,true),'lead archive access '.$art);
+}

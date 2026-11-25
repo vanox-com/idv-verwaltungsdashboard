@@ -48,6 +48,7 @@ async function open(host,id,ctx){
  const r=await ctx.api('/praxis/'+id);if(!host.isConnected)return;
  const f=structuredClone(r.formular),schema=r.schema,readOnly=!r.bearbeiten&&!r.berichtigen;let revision=Number(r.pruefung.revision),active='overview';let locked=readOnly||!r.bearbeiten;
  const title=box(r.pruefung.kandidat+' · PM-Praxisprüfung');title.append(el('p','Termin: '+r.termin.split('-').reverse().join('.')+' · Prüfer/in: '+r.pruefer+' · '+(r.pruefung.status==='freigegeben'?'Abgeschlossen':'In Bewertung'),'mut'));host.append(title);
+ if(r.pruefung.status==='freigegeben'&&!r.pruefung.archiviert){if(r.pruefung.archivAb)title.append(el('p','Automatische Archivierung: '+new Date(r.pruefung.archivAb).toLocaleString('de-DE')+' · danach nur Leitung zugriffsberechtigt.','mut'));title.append(button('Prüfung archivieren',()=>ctx.archive(r.pruefung)));}
  const nav=el('div',undefined,'practice-tabs');title.append(nav);
  const content=el('div');host.append(content);
  const savebar=el('section',undefined,'box practice-save');const saveHint=el('p','','mut');savebar.append(saveHint);host.append(savebar);

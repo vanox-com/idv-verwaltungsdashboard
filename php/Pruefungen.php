@@ -143,9 +143,35 @@ function pruefungPraxisErsteller(array $p): int {
     $first=$history[0]??[];
     return in_array($first['aktion']??'',['Praxisprüfung angelegt','erstellt'],true)?(int)($first['user']??0):0;
 }
+// Archive is independent of release: theory transfers continue using status=freigegeben.
+function pruefungArchivInfo(array $p,?int $now=null): array {
+    $status=$p['status'];$now=$now??time();
+    $out=['archiviert'=>$status==='annulliert','archivAb'=>null,'archiviertAm'=>null];
+    if($status!=='freigegeben')return $out;
+    $history=is_array($p['protokoll']??null)?$p['protokoll']:pruefungRead($p['protokoll']??'[]');
+    foreach(array_reverse($history) as $entry){
+        $action=$entry['aktion']??'';
+        if(!in_array($action,['archivieren','freigabe','abschliessen'],true))continue;
+        $stamp=is_string($entry['am']??null)?strtotime($entry['am']):false;
+        if($action==='archivieren'){
+            $out['archiviert']=true;$out['archiviertAm']=$stamp===false?null:gmdate('c',$stamp);return $out;
+        }
+        if($stamp!==false&&$stamp<=$now){
+            $deadline=$stamp+86400;$out['archivAb']=gmdate('c',$deadline);
+            $out['archiviert']=$now>=$deadline;
+            if($out['archiviert'])$out['archiviertAm']=$out['archivAb'];
+            return $out;
+        }
+        break;
+    }
+    // Legacy records without a trustworthy release timestamp remain archived.
+    $out['archiviert']=true;return $out;
+}
 function pruefungSichtbar(array $p,int $uid,bool $leitung): bool {
     if($leitung)return true;
-    // Practice has one reviewer; creator and assigned reviewer may read active attempts only.
+    if(pruefungArchivInfo($p)['archiviert'])return false;
+    if($p['status']==='freigegeben')return $uid>0&&($uid===(int)$p['erst']||$uid===(int)$p['zweit']||$uid===pruefungPraxisErsteller($p));
+    // Practice has one reviewer; creator and assigned reviewer may read active attempts.
     if(($p['art']??'')==='praxis')return !in_array($p['status'],['freigegeben','annulliert'],true)&&$uid>0&&($uid===(int)$p['erst']||$uid===pruefungPraxisErsteller($p));
     return ((int)$p['erst']===$uid&&in_array($p['status'],['bereit','laufend','abgegeben'],true))
         ||((int)$p['zweit']===$uid&&$p['status']==='erstkorrigiert');
@@ -241,9 +267,10 @@ function pruefungGuest(string $method,string $uri): bool {
     }catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
 }
 function pruefungListenZeilen(int $uid,bool $lead): array {
-        $where=$lead?'':" WHERE (v.art='praxis' AND p.status NOT IN ('freigegeben','annulliert') AND (p.erst=? OR (JSON_UNQUOTE(JSON_EXTRACT(p.protokoll,'$[0].aktion')) IN ('Praxisprüfung angelegt','erstellt') AND JSON_UNQUOTE(JSON_EXTRACT(p.protokoll,'$[0].user'))=?))) OR (v.art<>'praxis' AND ((p.erst=? AND p.status IN ('bereit','laufend','abgegeben')) OR (p.zweit=? AND p.status='erstkorrigiert')))";
-        $rows=sql("SELECT p.id,p.revision,p.kandidat,p.laufbahn,p.erst,p.zweit,p.status,p.start_am,p.ende_am,p.abgabe_am,p.ergebnis,p.fokus,p.antworten,v.titel,v.art,JSON_UNQUOTE(JSON_EXTRACT(v.fragen,'$.schema')) AS praxisSchema FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id".$where." ORDER BY p.id DESC",$lead?[]:[$uid,(string)$uid,$uid,$uid]);
-        foreach($rows as &$r){$f=pruefungRead($r['fokus']);$r['tabwechsel']=$f['wechsel']??0;$r['ereignisse']=count($f['events']??[]);$r['aktuelleFrage']=$f['aktuelleFrage']??null;$a=pruefungRead($r['antworten']);$r['fragenGesamt']=count($a);$r['bearbeitet']=count(array_filter($a,fn($x)=>is_array($x)?count($x)>0:trim((string)$x)!==''));unset($r['fokus'],$r['antworten']);}unset($r);
+        $where=$lead?'':" WHERE ((v.art='praxis' AND p.status='abgegeben') OR p.status='freigegeben') AND (p.erst=? OR p.zweit=? OR (JSON_UNQUOTE(JSON_EXTRACT(p.protokoll,'$[0].aktion')) IN ('Praxisprüfung angelegt','erstellt') AND JSON_UNQUOTE(JSON_EXTRACT(p.protokoll,'$[0].user'))=?)) OR (v.art<>'praxis' AND ((p.erst=? AND p.status IN ('bereit','laufend','abgegeben')) OR (p.zweit=? AND p.status='erstkorrigiert')))";
+        $rows=sql("SELECT p.id,p.revision,p.kandidat,p.laufbahn,p.erst,p.zweit,p.status,p.start_am,p.ende_am,p.abgabe_am,p.ergebnis,p.fokus,p.antworten,p.protokoll,v.titel,v.art,JSON_UNQUOTE(JSON_EXTRACT(v.fragen,'$.schema')) AS praxisSchema FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id".$where." ORDER BY p.id DESC",$lead?[]:[$uid,$uid,(string)$uid,$uid,$uid]);
+        $rows=array_values(array_filter($rows,fn($r)=>pruefungSichtbar($r,$uid,$lead)));
+        foreach($rows as &$r){$r+=pruefungArchivInfo($r);unset($r['protokoll']);$f=pruefungRead($r['fokus']);$r['tabwechsel']=$f['wechsel']??0;$r['ereignisse']=count($f['events']??[]);$r['aktuelleFrage']=$f['aktuelleFrage']??null;$a=pruefungRead($r['antworten']);$r['fragenGesamt']=count($a);$r['bearbeitet']=count(array_filter($a,fn($x)=>is_array($x)?count($x)>0:trim((string)$x)!==''));unset($r['fokus'],$r['antworten']);}unset($r);
     return $rows;
 }
 function dispatchPruefung(array $u,string $method,string $uri): bool {
@@ -318,11 +345,11 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         require_once __DIR__.'/PruefungenKI.php';
         pruefungKiEndpoint($u,$method,(int)$aiMatch[1]);
     }
-    if(!preg_match('#^/api/ausbildung/pruefungen/([1-9][0-9]*)(?:/(korrektur|freigabe|annullieren|link|berichtigen|wiedereroeffnen|zweitpruefer|pruefer))?$#D',$uri,$m))fail(404,'Nicht gefunden');
+    if(!preg_match('#^/api/ausbildung/pruefungen/([1-9][0-9]*)(?:/(korrektur|freigabe|annullieren|link|berichtigen|wiedereroeffnen|zweitpruefer|pruefer|archivieren))?$#D',$uri,$m))fail(404,'Nicht gefunden');
     $id=(int)$m[1];$action=$m[2]??'';
     if($method==='GET'&&$action===''){
         $p=pruefungRow($id);pruefungAccess($p,$u);if(praxisMarker($p))fail(400,'Bitte den festen Praxisbogen öffnen');
-        unset($p['token_hash']);
+        unset($p['token_hash']);$p+=pruefungArchivInfo($p);
         foreach(['fragen','antworten','bewertung','protokoll','fokus'] as $k)$p[$k]=pruefungRead($p[$k]);
         if(in_array($p['status'],['bereit','laufend'],true)){
             unset($p['fragen'],$p['antworten'],$p['bewertung']);
@@ -333,10 +360,14 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
     if($method!=='POST'||$action==='')fail(405,'Nicht erlaubt');
     $b=body();$pdo=db();$pdo->beginTransaction();
     try{
-        $p=pruefungRow($id,true);pruefungAccess($p,$u);if(praxisMarker($p))fail(400,'Bitte den festen Praxisbogen verwenden');
+        $p=pruefungRow($id,true);pruefungAccess($p,$u);if($action!=='archivieren'&&praxisMarker($p))fail(400,'Bitte den festen Praxisbogen verwenden');
         if(($b['revision']??null)!==(int)$p['revision'])fail(409,'Prüfung wurde zwischenzeitlich geändert. Neu laden.');
         $status=$p['status'];$note=pruefungText($b['notiz']??'',4000,false);$link=null;$history=pruefungHistorie($p,$action,$uid,$note);
-        if($action==='link'){
+        if($action==='archivieren'){
+            if($status!=='freigegeben'||pruefungArchivInfo($p)['archiviert'])fail(409,'Nur abgeschlossene, noch nicht archivierte Prüfungen können archiviert werden.');
+            if(($b['bestaetigen']??false)!==true)fail(400,'Archivierung ausdrücklich bestätigen.');
+            sql('UPDATE ausbildung_pruefungen SET revision=revision+1,protokoll=? WHERE id=?',[pruefungJson($history),$id]);
+        }elseif($action==='link'){
             if(!$verwaltung)fail(403,'Nur die Leitung darf Prüfungslinks erneuern');
             if($status!=='bereit'||$p['art']==='praxis')fail(409,'Link nur vor Prüfungsbeginn erneuerbar');
             $token=bin2hex(random_bytes(32));sql('UPDATE ausbildung_pruefungen SET token_hash=?,token_ablauf=TIMESTAMPADD(HOUR,24,UTC_TIMESTAMP(6)),revision=revision+1,protokoll=? WHERE id=?',[hash('sha256',$token),pruefungJson($history),$id]);$link='/pruefung.html#'.$token;
