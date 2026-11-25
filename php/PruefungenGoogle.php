@@ -66,7 +66,7 @@ function pruefungGoogleMedien(array &$form): void {
 function dispatchPruefungGoogle(array $u,string $method,string $uri): bool {
     $root='/api/ausbildung/pruefungen/google';
     if(!in_array($uri,[$root.'/status',$root.'/import'],true))return false;
-    if(!pruefungVorlagenAdmin($u))fail(403,'Nur Administratoren dürfen Prüfungen importieren');
+    if(!pruefungImportAdmin($u))fail(403,'Nur Administratoren dürfen Prüfungen importieren');
     $cfg=googleCredentials();$origin=googlePortalOrigin();
     if($method==='GET'&&$uri===$root.'/status'){
         respond(200,['eingerichtet'=>$cfg!==null&&$origin!==null,'origin'=>$origin,

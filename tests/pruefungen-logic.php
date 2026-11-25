@@ -23,6 +23,13 @@ $public=IDV\pruefungPublicFragen([['typ'=>'text','titel'=>'Frage','punkte'=>2,'k
 assertExam(!isset($public[0]['muster'],$public[0]['richtig'],$public[0]['feedback']),'candidate must not receive solutions');
 assertExam($public[0]['kontext']==='Hinweis','public context');
 
-assertExam(IDV\pruefungVorlagenAdmin(['rolle'=>'Administrator']),'admin template access');
+assertExam(IDV\pruefungImportAdmin(['rolle'=>'Administrator']),'admin import access');
 foreach(['Leitungsdienst','Ausbildungsleitung','Ausbilder','Polizeirat',''] as $role)
-    assertExam(!IDV\pruefungVorlagenAdmin(['rolle'=>$role,'rechte'=>['ausbildung'=>2]]),'non-delegable template access '.$role);
+    assertExam(!IDV\pruefungImportAdmin(['rolle'=>$role,'rechte'=>['ausbildung'=>2]]),'non-delegable import access '.$role);
+
+$examSource=file_get_contents(dirname(__DIR__).'/php/Pruefungen.php');
+$examUi=file_get_contents(dirname(__DIR__).'/public/assets/pruefungszentrum.js');
+assertExam(str_contains($examSource, "'vorlagenBearbeiten'=>\$verwaltung,'importAdmin'=>\$importAdmin"),'separate template and import permissions');
+assertExam(str_contains($examUi,"if(!data.vorlagenBearbeiten)return;"),'leadership template editor');
+assertExam(str_contains($examUi,"if(data.importAdmin){"),'admin-only import UI');
+assertExam(str_contains($examSource,"str_starts_with(\$uri,\$root.'/google/')&&!\$importAdmin"),'server-side Google import gate');

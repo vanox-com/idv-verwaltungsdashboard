@@ -95,13 +95,13 @@ function open(host){
  const createButton=btn('Neue Prüfung',()=>navigate('create'),'p exam-new');createButton.prepend(examIcon('plus'));createButton.setAttribute('aria-pressed',String(view==='create'));actions.append(createButton);top.append(actions);wrap.append(top);
  const bar=node('nav',undefined,'exam-nav');bar.setAttribute('aria-label','Prüfungszentrum');
  const selected=view==='detail'?lastList:view;
- const groups=[['ÜBERBLICK',['overview','running']],['KORREKTUR & FREIGABE',['first','second','release']],['VERWALTUNG',['archive',...(data.vorlagenAdmin?['templates']:[])]]];
+ const groups=[['ÜBERBLICK',['overview','running']],['KORREKTUR & FREIGABE',['first','second','release']],['VERWALTUNG',['archive',...(data.vorlagenBearbeiten?['templates']:[])]]];
  for(const [label,views] of groups){
   const group=node('div',undefined,'exam-nav-group');group.append(node('span',label,'exam-nav-label'));const row=node('div',undefined,'exam-nav-items');
   for(const v of views){
    const [name,hint,icon]=EXAM_VIEWS[v],b=btn('',()=>navigate(v),'exam-nav-button');b.dataset.view=v;b.setAttribute('aria-current',selected===v?'page':'false');b.title=hint;b.append(examIcon(icon),node('span',name,'exam-nav-text'));
    if(['running','first','second','release'].includes(v)){const n=count(v);if(n)b.append(node('span',String(n),'exam-nav-count'));}
-   if(v==='templates'){const lock=examIcon('lock');lock.classList.add('exam-admin-lock');b.append(lock);b.title='Nur Administratoren · '+hint;}
+   if(v==='templates'){b.title='Ausbildungsleitung, Leitungsdienst und Administratoren · '+hint;}
    row.append(b);
   }group.append(row);bar.append(group);
  }wrap.append(bar);return wrap;
@@ -109,7 +109,7 @@ function open(host){
  function render(){
  if(!connected())return;dirty=false;main.replaceChildren();
  if(!data.bereit){const b=card('Datenbank-Erweiterung erforderlich');b.append(node('p','Das Prüfungszentrum ist vorbereitet. Nach einer aktuellen verschlüsselten Datensicherung kann der Administrator die additive Erweiterung direkt einrichten. Alternativ kann der Hoster die SQL-Migration 2026-11-25-pruefungszentrum.sql einspielen. Bestehende Ausbildungsdaten werden nicht verändert.'),btn('Erneut prüfen',()=>run(load)));if(data.admin)b.append(btn('Nach Backup einrichten',()=>run(async()=>{if(!confirm('Aktuelles verschlüsseltes Datenbankbackup erstellt und heruntergeladen?'))return;await api('/setup',{bestaetigung:'BACKUP_ERSTELLT_PRUEFUNGEN'});await load();message('Prüfungszentrum eingerichtet.');})));main.append(node('h1','Prüfungszentrum'),b);return}
- if(view==='templates'&&!data.vorlagenAdmin){view='overview';templateDraft=null;}
+ if(view==='templates'&&!data.vorlagenBearbeiten){view='overview';templateDraft=null;}
  main.append(nav());
  if(view==='create'){create();return}if(view==='templates'){templates();return}
  const selected=EXAM_VIEWS[view]||EXAM_VIEWS.overview;
@@ -145,7 +145,7 @@ function open(host){
  }
  function create(){const c=card('Prüfung vorbereiten');c.classList.add('exam-form');
  const choices=data.pruefungsauswahl||[];
- if(!choices.length){c.append(node('p','Zuerst muss ein Administrator eine geprüfte Prüfungsvorlage hinterlegen.'));main.append(c);return}
+ if(!choices.length){c.append(node('p','Zuerst muss die berechtigte Leitung oder ein Administrator eine geprüfte Prüfungsvorlage hinterlegen.'));main.append(c);return}
  const grid=node('div',undefined,'exam-form-grid');c.append(node('p','Wähle die Prüfungsart, den Prüfling und zwei unterschiedliche Prüfer.','mut'),grid);
  const v=field(grid,'Prüfungsvorlage',select(choices.map(x=>[x.id,x.titel+' · Version #'+x.id])));
  const a=field(grid,'Anwärter',select(data.anwaerter.map(x=>[x.id,x.name+' · DN '+x.personalnummer+' · '+x.laufbahn])));
@@ -155,7 +155,7 @@ function open(host){
  btn('Prüfung anlegen',()=>run(async()=>{const j=await api('',{vorlage:Number(v.value),anwaerter:Number(a.value),erst:Number(first.value),zweit:Number(second.value)});view='overview';await load();linkBox(j.link);message(j.link?'Prüfung erstellt. Link jetzt kopieren.':'Praxisbewertung zur Erstkorrektur angelegt.');})));main.append(c);
  }
  function templates(){
- if(!data.vorlagenAdmin)return;
+ if(!data.vorlagenBearbeiten)return;
  const c=card('Prüfungsvorlagen · Frageneditor');c.classList.add('exam-form');
  const draft=templateDraft;
  const v=field(c,'Prüfungsart',select(Object.entries(data.arten)));
@@ -201,7 +201,8 @@ function open(host){
  }
  v.onchange=()=>{if(questions.length&&!confirm('Prüfungsart wechseln und bisherige Fragen entfernen?')){v.value=questions[0].typ==='praxis'?'praxis':(v.dataset.previous||'pm');return}questions=[];v.dataset.previous=v.value;if(v.value==='praxis')time.value=0;renderQuestions()};v.dataset.previous=v.value;
  for(const input of [t,time,pass])input.addEventListener('input',()=>confirmation.checked=false);
- const googleBox=card('Google Forms direkt importieren');
+ if(data.importAdmin){
+ const googleBox=card('Google Forms direkt importieren · nur Admin');
  const source=field(googleBox,'Originalprüfung',select([['pm','PM-Theorieprüfung'],['pk','PK-Prüfung'],['dgl','DGL-Theorieprüfung']]));
  if(['pm','pk','dgl'].includes(v.value))source.value=v.value;
  const googleHint=node('p','Google-Anmeldung wird vorbereitet …','mut');googleBox.append(googleHint);
@@ -236,6 +237,7 @@ function open(host){
  (async()=>{try{const config=await api('/google/status');if(!config.eingerichtet)throw Error(config.hinweis||'Google OAuth nicht eingerichtet.');if(location.origin!==config.origin)throw Error('Google-Import bitte auf '+config.origin+' öffnen.');await loadFormsGoogle();if(!googleBox.isConnected)return;googleConfig=config;googleReady=true;googleButton.disabled=false;googleHint.textContent='Nur Lesezugriff auf Formularstruktur und hinterlegte Lösungen. Kein Zugriff auf Prüfungsantworten.';}catch(e){googleHint.textContent=e.message}})();
  const file=field(c,'JSON-Datei importieren (optional)',node('input'));file.type='file';file.accept='.json,application/json';
  file.onchange=async()=>{try{const f=file.files[0];if(!f)return;if(f.size>1800000)throw Error('Datei zu groß');const raw=JSON.parse(await f.text());if(questions.length&&!confirm('Fragen im aktuellen Entwurf durch Import ersetzen?'))return;useImport(raw,null)}catch(e){message(e.message,true)}};
+ }else{c.append(node('p','Der Import aus Google Forms oder JSON-Dateien ist ausschließlich Administratoren vorbehalten. Fragen und Lösungen können hier weiterhin manuell bearbeitet werden.','mut'));}
  c.append(importNotes,total,questionList,btn('+ Frage hinzufügen',()=>{questions.push(blank());renderQuestions()},''));
  const label=node('label',' Ich habe Fragen, Punktwerte, Musterlösungen und Bestehensgrenze fachlich geprüft.');label.prepend(confirmation);label.style.display='block';label.style.margin='14px 0';c.append(label);
  c.append(btn('Geprüfte Version speichern',()=>run(async()=>{if(importBlockers.length)throw Error('Offene Importprobleme zuerst beheben und bestätigen.');if(!confirmation.checked||time.value===''||pass.value==='')throw Error('Zeit, Bestehensgrenze und Bestätigung erforderlich.');await api('/vorlagen',{art:v.value,...(t.value?{titel:t.value}:{}),...(draft?{basis:Number(draft.id)}:{}),minuten:Number(time.value),grenze:Number(pass.value),fragen:questions,bestaetigt:true});templateDraft=null;await load();message('Neue Vorlagenversion gespeichert.');})));
