@@ -47,6 +47,14 @@ function pruefungNum($v,float $min,float $max): float {
     if(!is_finite((float)$v)||$v<$min||$v>$max||round((float)$v,2)!=(float)$v)fail(400,'Wert außerhalb der zulässigen Grenzen');
     return (float)$v;
 }
+function pruefungBild($value,int &$budget): ?string {
+    if($value===null||$value==='')return null;
+    if(!is_string($value)||strlen($value)>610000||!preg_match('#^data:(image/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/]+={0,2})$#D',$value,$m))fail(400,'Ungültige Bilddatei');
+    $bytes=base64_decode($m[2],true);$info=$bytes===false?false:@getimagesizefromstring($bytes);
+    if(!$info||$info['mime']!==$m[1]||$info[0]>6000||$info[1]>6000||strlen($bytes)>450000)fail(400,'Bildformat oder Größe nicht zulässig');
+    $budget-=strlen($bytes);if($budget<0)fail(400,'Gesamtbildgröße überschreitet 1 MB');
+    return 'data:'.$m[1].';base64,'.base64_encode($bytes);
+}
 function pruefungVorlage(array $b): array {
     $art=$b['art']??'';if(!is_string($art)||!isset(PRUEFUNG_ARTEN[$art]))fail(400,'Unbekannte Prüfungsart');
     $titel=pruefungText($b['titel']??PRUEFUNG_ARTEN[$art],200);
@@ -56,22 +64,31 @@ function pruefungVorlage(array $b): array {
     if(($b['bestaetigt']??false)!==true)fail(400,'Vorlage und Bewertungsregeln zuerst fachlich prüfen und bestätigen');
     $fragen=$b['fragen']??null;
     if(!is_array($fragen)||!array_is_list($fragen)||!count($fragen)||count($fragen)>200)fail(400,'1 bis 200 Fragen erforderlich');
-    $out=[];$sum=0;
+    $out=[];$sum=0;$bildBudget=1000000;
     foreach($fragen as $f){
         if(!is_array($f))fail(400,'Ungültige Frage');
         $typ=$f['typ']??'';if(!in_array($typ,['single','multiple','text','praxis'],true)||($art==='praxis')!==($typ==='praxis'))fail(400,'Unzulässiger Fragetyp');
-        $punkte=pruefungNum($f['punkte']??null,0.01,1000);$sum+=$punkte;
+        $punkte=pruefungNum($f['punkte']??null,0,1000);$sum+=$punkte;
         $q=['typ'=>$typ,'titel'=>pruefungText($f['titel']??null,12000),'punkte'=>$punkte,'muster'=>pruefungText($f['muster']??'',16000,false),'optionen'=>[],'richtig'=>[]];
+        $q['kontext']=pruefungText($f['kontext']??'',16000,false);
+        $q['feedback']=pruefungText($f['feedback']??'',16000,false);
+        $q['bilder']=[];$q['optionBilder']=[];
+        $images=$f['bilder']??[];
+        if(!is_array($images)||!array_is_list($images)||count($images)>10)fail(400,'Ungültige Fragenbilder');
+        foreach($images as $img){$valid=pruefungBild($img,$bildBudget);if($valid!==null)$q['bilder'][]=$valid;}
         if(in_array($typ,['single','multiple'],true)){
             $opt=$f['optionen']??null;$correct=$f['richtig']??null;
-            if(!is_array($opt)||!array_is_list($opt)||count($opt)<2||count($opt)>50||!is_array($correct)||!array_is_list($correct)||!count($correct)||($typ==='single'&&count($correct)!==1))fail(400,'Antwortmöglichkeiten oder Lösung fehlen');
+            if(!is_array($opt)||!array_is_list($opt)||count($opt)<2||count($opt)>50||!is_array($correct)||!array_is_list($correct)||($punkte>0&&!count($correct))||($typ==='single'&&count($correct)>1))fail(400,'Antwortmöglichkeiten oder Lösung fehlen');
             foreach($opt as $o)$q['optionen'][]=pruefungText($o,3000);
+            $ob=$f['optionBilder']??[];
+            if(!is_array($ob)||!array_is_list($ob)||($ob&&count($ob)!==count($opt)))fail(400,'Antwortbilder passen nicht zu Optionen');
+            foreach($opt as $i=>$o)$q['optionBilder'][]=pruefungBild($ob[$i]??null,$bildBudget);
             foreach($correct as $i){if(!is_int($i)||!isset($opt[$i])||in_array($i,$q['richtig'],true))fail(400,'Ungültiger Lösungsschlüssel');$q['richtig'][]=$i;}
             sort($q['richtig']);
-        }elseif($q['muster']==='')fail(400,'Musterlösung bzw. Bewertungsmaßstab fehlt');
+        }elseif($punkte>0&&$q['muster']==='')fail(400,'Musterlösung bzw. Bewertungsmaßstab fehlt');
         $out[]=$q;
     }
-    if($sum>99999)fail(400,'Gesamtpunktzahl zu hoch');
+    if($sum<=0||$sum>99999)fail(400,'Gesamtpunktzahl muss größer als 0 und höchstens 99999 sein');
     return [$art,$titel,$minuten,$grenze,$out];
 }
 function pruefungAntworten(array $fragen,$answers): array {
@@ -125,6 +142,9 @@ function pruefungReviewer(int $id): bool {
     if($r[0]['rolle']==='Ausbilder'&&!sql('SELECT 1 FROM ausbildung_ausbilder WHERE user_id=? AND aktiv=1',[$id]))return false;
     return (int)(rights($r[0])['ausbildung']??0)>=1;
 }
+function pruefungPublicFragen(array $fragen): array {
+    return array_map(fn($q)=>array_intersect_key($q,array_flip(['typ','titel','punkte','optionen','kontext','bilder','optionBilder'])),$fragen);
+}
 function pruefungGuest(string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/pruefung-gast/'))return false;
     if($method!=='POST'||!in_array($uri,['/api/pruefung-gast/status','/api/pruefung-gast/start','/api/pruefung-gast/speichern','/api/pruefung-gast/abgeben','/api/pruefung-gast/fokus'],true))fail(404,'Nicht gefunden');
@@ -164,7 +184,7 @@ function pruefungGuest(string $method,string $uri): bool {
         $p=pruefungRow($id);$pdo->commit();
         $out=['titel'=>$p['titel'],'status'=>$p['status'],'minuten'=>(int)$p['minuten'],'revision'=>(int)$p['revision'],'serverZeit'=>time(),'ende'=>$p['ende_am']?strtotime($p['ende_am'].' UTC'):null];
         if($p['status']==='laufend'){
-            $out['fragen']=array_map(fn($q)=>array_intersect_key($q,array_flip(['typ','titel','punkte','optionen'])),pruefungRead($p['fragen']));
+            if($action!=='speichern')$out['fragen']=pruefungPublicFragen(pruefungRead($p['fragen']));
             $out['antworten']=pruefungRead($p['antworten']);
         }
         if($p['status']==='freigegeben'){$max=array_sum(array_column(pruefungRead($p['fragen']),'punkte'));$out['ergebnis']=(float)$p['ergebnis'];$out['max']=$max;$out['bestanden']=100*(float)$p['ergebnis']/$max>=(float)$p['grenze'];}
@@ -175,6 +195,8 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/ausbildung/pruefungen'))return false;
     ausbildungRecht($u);$lead=ausbildungLeitung($u);$verwaltung=pruefungVerwaltung($u);$uid=(int)$u['id'];
     $root='/api/ausbildung/pruefungen';
+    require_once __DIR__.'/PruefungenGoogle.php';
+    if(dispatchPruefungGoogle($u,$method,$uri))return true;
     if($method==='POST'&&$uri===$root.'/setup')pruefungInstall($u);
     if(!pruefungSchema()){
         if($method==='GET'&&$uri===$root)respond(200,['bereit'=>false,'leitung'=>$lead,'admin'=>$u['rolle']==='Administrator']);

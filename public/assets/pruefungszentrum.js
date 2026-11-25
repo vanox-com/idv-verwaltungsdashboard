@@ -12,22 +12,60 @@ const text=(ph='')=>{const i=node('input');i.placeholder=ph;return i;};
 const area=(ph='')=>{const t=node('textarea');t.placeholder=ph;t.rows=4;t.style.width='100%';return t;};
 const card=(title)=>{const s=node('section',undefined,'box');s.style.marginBottom='14px';s.append(node('h3',title));return s;};
 const date=s=>s?new Date(s.replace(' ','T')+'Z').toLocaleString('de-DE'):'—';
-async function api(path='',data){const r=await fetch(root+path,{credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','Accept':'application/json'},...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)})});const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'HTTP '+r.status);return j;}
+async function api(path='',data){const r=await fetch(root+path,{credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','Accept':'application/json','X-Requested-With':'XMLHttpRequest'},...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)})});const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'HTTP '+r.status);return j;}
 function convertGoogle(raw){
  const d=raw.definition||raw;if(!Array.isArray(d.items))throw Error('Keine Google-Forms-Definition gefunden');
- if(raw.assets?.length||raw.warnings?.length)throw Error('Formular enthält Bilder oder Exportwarnungen. Diese müssen vor dem Import separat aufbereitet werden.');
- const out=[];
+ const out=[],warnings=[],blockers=[];
+ let section='',intro=d.info?.description||'',pending=[],pendingImages=[];
+ const image=(img,label)=>{if(!img)return null;if(typeof img.idvData==='string'&&/^data:image\/(?:png|jpeg|webp|gif);base64,/.test(img.idvData))return img.idvData;blockers.push(label+': '+(img.idvFehler||'Bild nicht eingebettet'));return null;};
+ const add=(list,img,label)=>{const b=image(img,label);if(b)list.push(b)};
+ const append=(q,title,images,optionBilder=[])=>{
+  const g=q.grading||{},points=Number.isFinite(g.pointValue)?g.pointValue:0;
+  const correct=(g.correctAnswers?.answers||[]).map(a=>a.value);
+  const feedback=[g.generalFeedback?.text&&'Allgemein: '+g.generalFeedback.text,g.whenRight?.text&&'Richtig: '+g.whenRight.text,g.whenWrong?.text&&'Falsch: '+g.whenWrong.text].filter(Boolean).join('\n');
+  const context=[intro,section,...pending].filter(Boolean).join('\n\n');intro='';pending=[];
+  const base={titel:title,punkte:points,kontext:context,bilder:[...pendingImages,...images],optionBilder,feedback,muster:'',optionen:[],richtig:[]};pendingImages=[];
+  if(!g.pointValue)warnings.push(title+': 0 Punkte bzw. kein Punktwert hinterlegt.');
+  if(q.required===false||q.required===undefined)warnings.push(title+': ursprünglich optional; im Panel darf die Frage unbeantwortet bleiben.');
+  if(q.choiceQuestion){
+   const ch=q.choiceQuestion;if(!['RADIO','CHECKBOX','DROP_DOWN'].includes(ch.type)){blockers.push(title+': unbekannter Auswahltyp');return;}
+   if(ch.options.some(o=>o.isOther||o.goToAction||o.goToSectionId)){blockers.push(title+': Sonstige-Option oder Verzweigung muss manuell umgesetzt werden');}
+   const opts=ch.options.map((o,i)=>String(o.value||('Bildantwort '+(i+1))));
+   const idx=correct.map(v=>opts.indexOf(v));if(new Set(opts).size!==opts.length||idx.some(v=>v<0))blockers.push(title+': Lösungsschlüssel nicht eindeutig');
+   if(points>0&&!idx.length)warnings.push(title+': richtige Antwort fehlt – bitte ergänzen.');
+   out.push({...base,typ:ch.type==='CHECKBOX'?'multiple':'single',optionen:opts,richtig:idx.filter(i=>i>=0),optionBilder:ch.options.map((o,i)=>image(o.image,title+' · Antwort '+(i+1)))});
+  }else if(q.textQuestion){
+   const muster=correct.join('\n');
+   if(points>0&&!muster)warnings.push(title+': keine explizite Musterlösung; vorhandenes Feedback prüfen und Lösung ergänzen.');
+   out.push({...base,typ:'text',muster});
+  }else blockers.push(title+': nicht unterstützter Fragetyp');
+ };
  for(const i of d.items){
-  if(i.pageBreakItem||i.textItem||i.imageItem||i.videoItem||i.questionGroupItem)throw Error('Abschnitte, Medien oder Fragegruppen müssen vor dem Import geprüft und aufbereitet werden.');
-  const q=i.questionItem?.question,g=q?.grading;if(!q||!g||!Number.isFinite(g.pointValue)||g.pointValue<=0||i.questionItem.image)throw Error('Unbekannter Fragetyp, Bild oder fehlender Punktwert.');
-  const title=[i.title,i.description].filter(Boolean).join('\n');const correct=(g.correctAnswers?.answers||[]).map(a=>a.value);
-  if(q.choiceQuestion){const c=q.choiceQuestion;if(!['RADIO','CHECKBOX','DROP_DOWN'].includes(c.type)||c.options.some(o=>o.image||o.isOther||o.goToAction||o.goToSectionId))throw Error('Sonderoptionen müssen manuell aufbereitet werden.');
-   const opts=c.options.map(o=>o.value), idx=correct.map(v=>opts.indexOf(v));if(idx.some(v=>v<0)||!idx.length||new Set(opts).size!==opts.length)throw Error('Eindeutiger Lösungsschlüssel fehlt.');
-   out.push({typ:c.type==='CHECKBOX'?'multiple':'single',titel:title,punkte:g.pointValue,optionen:opts,richtig:idx,muster:g.generalFeedback?.text||''});
-  }else if(q.textQuestion){const muster=correct.join('\n')||g.generalFeedback?.text||'';if(!muster)throw Error('Freitext ohne Musterlösung: '+title);out.push({typ:'text',titel:title,punkte:g.pointValue,muster});}
-  else throw Error('Nicht unterstützter Fragetyp: '+title);
+  const title=[i.title,i.description].filter(Boolean).join('\n');
+  if(i.pageBreakItem){section=title;warnings.push('Abschnitt "'+(i.title||'ohne Titel')+'" wird als Kontext statt eigener Seite übernommen.');continue;}
+  if(i.textItem){pending.push(title);continue;}
+  if(i.imageItem){pending.push(title);add(pendingImages,i.imageItem.image,title||'Abschnittsbild');continue;}
+  if(i.videoItem||i.questionGroupItem){blockers.push((title||'Element')+': Video oder Fragegruppe benötigt manuelle Umsetzung.');continue;}
+  const q=i.questionItem?.question;if(!q){blockers.push(title+': unbekanntes Formularelement');continue;}
+  const images=[];add(images,i.questionItem.image,title);append(q,title,images);
  }
- return out;
+ if(pending.some(Boolean)||pendingImages.length)blockers.push('Nach der letzten Frage stehen weitere Texte oder Bilder, die separat übernommen werden müssen.');
+ if(d.settings?.quizSettings?.isQuiz!==true)warnings.push('Formular ist nicht als Quiz konfiguriert.');
+ if(d.settings?.shuffleQuestions)warnings.push('Zufällige Fragenreihenfolge wird nicht übernommen.');
+ if(!out.length)blockers.push('Keine unterstützten Fragen gefunden.');
+ return {fragen:out,warnings,blockers};
+}
+let formsGoogleLoad;
+function loadFormsGoogle(){
+ if(window.google?.accounts?.oauth2)return Promise.resolve();
+ if(!formsGoogleLoad)formsGoogleLoad=new Promise((resolve,reject)=>{
+  const script=document.createElement('script');script.src='https://accounts.google.com/gsi/client';script.async=true;
+  script.onload=resolve;script.onerror=()=>{formsGoogleLoad=null;reject(Error('Google-Anmeldung konnte nicht geladen werden.'))};document.head.append(script);
+ });return formsGoogleLoad;
+}
+function showImage(parent,src){
+ if(!src||!/^data:image\/(?:png|jpeg|webp|gif);base64,/.test(src))return;
+ const img=node('img');img.src=src;img.alt='Prüfungsabbildung';img.style.cssText='display:block;max-width:100%;max-height:360px;object-fit:contain;margin:10px 0;border-radius:8px';parent.append(img);
 }
 function open(host){
  const mount=node('div');host.replaceChildren(mount);
@@ -71,10 +109,10 @@ function open(host){
  const time=field(c,'Bearbeitungszeit (Minuten; Praxis = 0)',num(0,480));
  const pass=field(c,'Bestehensgrenze (%)',num(1,100,'0.01'));
  if(draft){v.value=draft.art;v.disabled=true;t.value=draft.titel;time.value=draft.minuten;pass.value=draft.grenze;c.append(node('p','Bearbeitung von Version #'+draft.id+' · Speichern erzeugt eine neue Version. Bereits gestartete und archivierte Prüfungen behalten ihre ursprünglichen Fragen.','mut'));}
- const questionList=node('div');const total=node('p','','mut');let questions=structuredClone(draft?.fragen||[]);
+ const questionList=node('div');const total=node('p','','mut');let questions=structuredClone(draft?.fragen||[]);let importBlockers=[];const importNotes=node('div');
  const confirmation=node('input');confirmation.type='checkbox';
  const update=()=>{total.textContent=questions.length+' Fragen · '+questions.reduce((n,q)=>n+(Number(q.punkte)||0),0)+' Gesamtpunkte';confirmation.checked=false};
- const blank=()=>({typ:v.value==='praxis'?'praxis':'text',titel:'',punkte:1,muster:'',optionen:[],richtig:[]});
+ const blank=()=>({typ:v.value==='praxis'?'praxis':'text',titel:'',punkte:1,muster:'',kontext:'',feedback:'',bilder:[],optionBilder:[],optionen:[],richtig:[]});
  function renderQuestions(){
   questionList.replaceChildren();
   questions.forEach((q,i)=>{
@@ -86,8 +124,13 @@ function open(host){
    const typ=field(row,'Fragetyp',select(v.value==='praxis'?[['praxis','Praxis-Kriterium']]:[['text','Freitext'],['single','Single Choice'],['multiple','Multiple Choice']]));typ.value=q.typ;
    typ.onchange=()=>{q.typ=typ.value;if(['single','multiple'].includes(q.typ)&&!q.optionen.length)q.optionen=['',''];if(q.typ==='single')q.richtig=q.richtig.slice(0,1);renderQuestions();update()};
    const title=field(row,'Frage / Kriterium',area());title.value=q.titel||'';title.oninput=()=>{q.titel=title.value;update()};
-   const p=field(row,'Maximale Punktzahl',num(0.01,1000,'0.01'));p.value=q.punkte;p.oninput=()=>{q.punkte=Number(p.value);update()};
+   const context=field(row,'Abschnitt / Hinweise für den Prüfling',area());context.value=q.kontext||'';context.oninput=()=>{q.kontext=context.value;update()};
+   const p=field(row,'Maximale Punktzahl',num(0,1000,'0.01'));p.value=q.punkte;p.oninput=()=>{q.punkte=Number(p.value);update()};
    const m=field(row,'Musterlösung / Bewertungskriterien',area());m.value=q.muster||'';m.oninput=()=>{q.muster=m.value;update()};
+   const feedback=field(row,'Originales Bewertungsfeedback (nur Prüfer)',area());feedback.value=q.feedback||'';feedback.oninput=()=>{q.feedback=feedback.value;update()};
+   q.bilder=q.bilder||[];q.optionBilder=q.optionBilder||[];
+   q.bilder.forEach((src,j)=>{showImage(row,src);row.append(btn('Bild entfernen',()=>{q.bilder.splice(j,1);renderQuestions()},''))});
+   const picture=field(row,'Fragenbild hinzufügen',node('input'));picture.type='file';picture.accept='image/png,image/jpeg,image/webp,image/gif';picture.onchange=()=>{const f=picture.files[0];if(!f)return;if(f.size>450000){message('Bild darf höchstens 450 KB groß sein.',true);return}const reader=new FileReader();reader.onload=()=>{q.bilder.push(reader.result);renderQuestions()};reader.readAsDataURL(f)};
    if(['single','multiple'].includes(q.typ)){
     row.append(node('p','Antwortoptionen · richtige Antworten markieren','mut'));
     q.optionen.forEach((o,j)=>{
@@ -95,18 +138,53 @@ function open(host){
      const mark=node('input');mark.type=q.typ==='single'?'radio':'checkbox';mark.name='solution-'+i;mark.checked=q.richtig.includes(j);mark.setAttribute('aria-label','Antwort '+(j+1)+' ist richtig');
      mark.onchange=()=>{q.richtig=q.typ==='single'?[j]:mark.checked?[...q.richtig,j]:q.richtig.filter(x=>x!==j);update()};
      const value=text('Antwort '+(j+1));value.value=o;value.style.flex='1';value.oninput=()=>{q.optionen[j]=value.value;update()};
-     line.append(mark,value,btn('Entfernen',()=>{q.optionen.splice(j,1);q.richtig=q.richtig.filter(x=>x!==j).map(x=>x>j?x-1:x);renderQuestions();update()},''));row.append(line);
-    });row.append(btn('+ Antwortoption',()=>{q.optionen.push('');renderQuestions();update()},''));
+     line.append(mark,value,btn('Entfernen',()=>{q.optionen.splice(j,1);q.optionBilder.splice(j,1);q.richtig=q.richtig.filter(x=>x!==j).map(x=>x>j?x-1:x);renderQuestions();update()},''));row.append(line);showImage(row,q.optionBilder[j]);
+     if(q.optionBilder[j])row.append(btn('Antwortbild entfernen',()=>{q.optionBilder[j]=null;renderQuestions()},''));
+     const img=field(row,'Antwortbild '+(j+1),node('input'));img.type='file';img.accept='image/png,image/jpeg,image/webp,image/gif';img.onchange=()=>{const f=img.files[0];if(!f)return;if(f.size>450000){message('Bild darf höchstens 450 KB groß sein.',true);return}const r=new FileReader();r.onload=()=>{q.optionBilder=Array.from({length:q.optionen.length},(_,k)=>q.optionBilder[k]||null);q.optionBilder[j]=r.result;renderQuestions()};r.readAsDataURL(f)};
+    });row.append(btn('+ Antwortoption',()=>{q.optionen.push('');if(q.optionBilder.length)q.optionBilder.push(null);renderQuestions();update()},''));
    }questionList.append(row);
   });update();
  }
  v.onchange=()=>{if(questions.length&&!confirm('Prüfungsart wechseln und bisherige Fragen entfernen?')){v.value=questions[0].typ==='praxis'?'praxis':(v.dataset.previous||'pm');return}questions=[];v.dataset.previous=v.value;if(v.value==='praxis')time.value=0;renderQuestions()};v.dataset.previous=v.value;
  for(const input of [t,time,pass])input.addEventListener('input',()=>confirmation.checked=false);
+ const googleBox=card('Google Forms direkt importieren');
+ const source=field(googleBox,'Originalprüfung',select([['pm','PM-Theorieprüfung'],['pk','PK-Prüfung'],['dgl','DGL-Theorieprüfung']]));
+ if(['pm','pk','dgl'].includes(v.value))source.value=v.value;
+ const googleHint=node('p','Google-Anmeldung wird vorbereitet …','mut');googleBox.append(googleHint);
+ const download=node('button','Originalexport (JSON) sichern');download.type='button';download.hidden=true;googleBox.append(download);
+ let googleConfig=null,googleReady=false,lastRaw=null;
+ download.onclick=()=>{if(!lastRaw)return;const url=URL.createObjectURL(new Blob([JSON.stringify(lastRaw,null,2)],{type:'application/json'}));const a=node('a');a.href=url;a.download='IDV-'+lastRaw.art+'-Forms.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+ function useImport(raw,art){
+  const result=Array.isArray(raw)?{fragen:raw,warnings:[],blockers:[]}:Array.isArray(raw.fragen)?{fragen:raw.fragen,warnings:[],blockers:[]}:convertGoogle(raw);
+  if(art){v.value=art;v.dataset.previous=art;t.value=raw.definition?.info?.title||data.arten[art];}
+  questions=result.fragen.map(q=>({...q,optionen:Array.isArray(q.optionen)?q.optionen:[],richtig:Array.isArray(q.richtig)?q.richtig:[],bilder:q.bilder||[],optionBilder:q.optionBilder||[]}));
+  importBlockers=result.blockers;importNotes.replaceChildren();
+  if(result.warnings.length||result.blockers.length){
+   const d=node('details');d.open=true;d.append(node('summary','Importprüfung · '+result.warnings.length+' Hinweise · '+result.blockers.length+' offene Probleme'));
+   for(const x of result.blockers)d.append(node('p','OFFEN: '+x));for(const x of result.warnings)d.append(node('p','Hinweis: '+x));importNotes.append(d);
+   if(result.blockers.length)importNotes.append(btn('Offene Importprobleme nach manueller Ergänzung bestätigen',()=>{if(confirm('Hast du alle oben genannten nicht übernommenen Inhalte vollständig manuell ergänzt?')){importBlockers=[];confirmation.checked=false;message('Manuelle Ergänzung bestätigt. Bitte Vorlage fachlich prüfen.');}},''));
+  }
+  renderQuestions();message('Import geladen: '+questions.length+' Fragen. '+(importBlockers.length?'Offene Importprobleme zuerst beheben.':'Lösungen und Punktwerte prüfen.'));
+ }
+ const googleButton=btn('Mit Google verbinden und importieren',()=>{
+  if(!googleReady||!googleConfig||busy)return;
+  if(draft&&source.value!==draft.art){message('Die ausgewählte Prüfung passt nicht zur bearbeiteten Vorlage.',true);return}
+  if(questions.length&&!confirm('Aktuellen Entwurf durch Google-Import ersetzen?'))return;
+  const art=source.value;busy=true;googleButton.disabled=true;source.disabled=true;
+  const done=()=>{busy=false;googleButton.disabled=false;source.disabled=false};
+  try{
+   const client=google.accounts.oauth2.initCodeClient({client_id:googleConfig.clientId,scope:'https://www.googleapis.com/auth/forms.body.readonly',include_granted_scopes:false,ux_mode:'popup',select_account:true,
+    callback:async response=>{try{if(!response.code)throw Error('Google-Anmeldung abgebrochen.');const raw=await api('/google/import',{art,google_code:response.code});if(!googleBox.isConnected)return;lastRaw=raw;download.hidden=false;useImport(raw,art);}catch(e){message(e.message,true)}finally{done()}},
+    error_callback:e=>{done();message(e.type==='popup_closed'?'Google-Anmeldung abgebrochen.':'Google-Popup konnte nicht geöffnet werden.',true)}});
+   client.requestCode();
+  }catch(e){done();message(e.message,true)}
+ });googleButton.disabled=true;googleBox.append(googleButton);c.append(googleBox);
+ (async()=>{try{const config=await api('/google/status');if(!config.eingerichtet)throw Error(config.hinweis||'Google OAuth nicht eingerichtet.');if(location.origin!==config.origin)throw Error('Google-Import bitte auf '+config.origin+' öffnen.');await loadFormsGoogle();if(!googleBox.isConnected)return;googleConfig=config;googleReady=true;googleButton.disabled=false;googleHint.textContent='Nur Lesezugriff auf Formularstruktur und hinterlegte Lösungen. Kein Zugriff auf Prüfungsantworten.';}catch(e){googleHint.textContent=e.message}})();
  const file=field(c,'JSON-Datei importieren (optional)',node('input'));file.type='file';file.accept='.json,application/json';
- file.onchange=async()=>{try{const f=file.files[0];if(!f)return;if(f.size>1800000)throw Error('Datei zu groß');const raw=JSON.parse(await f.text());const imported=Array.isArray(raw)?raw:raw.fragen||convertGoogle(raw);if(!Array.isArray(imported))throw Error('Ungültige Fragenliste');if(questions.length&&!confirm('Fragen im aktuellen Entwurf durch Import ersetzen?'))return;questions=imported.map(q=>({...q,optionen:Array.isArray(q.optionen)?q.optionen:[],richtig:Array.isArray(q.richtig)?q.richtig:[]}));renderQuestions();message('Import geladen. Fragen und Lösungen überprüfen.')}catch(e){message(e.message,true)}};
- c.append(total,questionList,btn('+ Frage hinzufügen',()=>{questions.push(blank());renderQuestions()},''));
+ file.onchange=async()=>{try{const f=file.files[0];if(!f)return;if(f.size>1800000)throw Error('Datei zu groß');const raw=JSON.parse(await f.text());if(questions.length&&!confirm('Fragen im aktuellen Entwurf durch Import ersetzen?'))return;useImport(raw,null)}catch(e){message(e.message,true)}};
+ c.append(importNotes,total,questionList,btn('+ Frage hinzufügen',()=>{questions.push(blank());renderQuestions()},''));
  const label=node('label',' Ich habe Fragen, Punktwerte, Musterlösungen und Bestehensgrenze fachlich geprüft.');label.prepend(confirmation);label.style.display='block';label.style.margin='14px 0';c.append(label);
- c.append(btn('Geprüfte Version speichern',()=>run(async()=>{if(!confirmation.checked||time.value===''||pass.value==='')throw Error('Zeit, Bestehensgrenze und Bestätigung erforderlich.');await api('/vorlagen',{art:v.value,...(t.value?{titel:t.value}:{}),...(draft?{basis:Number(draft.id)}:{}),minuten:Number(time.value),grenze:Number(pass.value),fragen:questions,bestaetigt:true});templateDraft=null;await load();message('Neue Vorlagenversion gespeichert.');})));
+ c.append(btn('Geprüfte Version speichern',()=>run(async()=>{if(importBlockers.length)throw Error('Offene Importprobleme zuerst beheben und bestätigen.');if(!confirmation.checked||time.value===''||pass.value==='')throw Error('Zeit, Bestehensgrenze und Bestätigung erforderlich.');await api('/vorlagen',{art:v.value,...(t.value?{titel:t.value}:{}),...(draft?{basis:Number(draft.id)}:{}),minuten:Number(time.value),grenze:Number(pass.value),fragen:questions,bestaetigt:true});templateDraft=null;await load();message('Neue Vorlagenversion gespeichert.');})));
  if(draft)c.append(btn('Neue Vorlage statt Bearbeitung',()=>{if(confirm('Entwurf verwerfen?')){templateDraft=null;render()}},''));
  const l=card('Vorhandene Versionen');for(const x of data.vorlagen){const line=node('div');line.style.display='flex';line.style.justifyContent='space-between';line.style.alignItems='center';line.style.gap='8px';line.style.margin='8px 0';line.append(node('span','#'+x.id+' · '+x.titel+' · '+x.grenze+' % · '+x.minuten+' Min.'),btn('Bearbeiten',()=>run(async()=>{if(questions.length&&!confirm('Aktuellen Entwurf verwerfen und Vorlage laden?'))return;templateDraft=(await api('/vorlagen/'+x.id)).vorlage;render();}),''));
  l.append(line)}main.append(c,l);renderQuestions();
@@ -124,7 +202,7 @@ function open(host){
  const first=p.status==='abgegeben'&&Number(p.erst)===user,second=p.status==='erstkorrigiert'&&Number(p.zweit)===user;
  const override=verwaltung&&['abgegeben','erstkorrigiert','zweitkorrigiert','freigegeben'].includes(p.status);
  let editOverride=false;
- const fields=[];p.fragen.forEach((q,i)=>{const b=card('Frage '+(i+1)+' · '+q.punkte+' Punkte');b.append(node('p',q.titel));
+ const fields=[];p.fragen.forEach((q,i)=>{const b=card('Frage '+(i+1)+' · '+q.punkte+' Punkte');if(q.kontext)b.append(node('p',q.kontext));b.append(node('p',q.titel));(q.bilder||[]).forEach(img=>showImage(b,img));(q.optionBilder||[]).forEach((img,j)=>{if(img){b.append(node('p','Antwortoption: '+q.optionen[j]));showImage(b,img)}});if(q.feedback)b.append(node('p','Originales Bewertungsfeedback: '+q.feedback));
  const ans=p.antworten[i];const answer=Array.isArray(ans)?ans.map(a=>q.optionen[a]).join(' · '):ans;
  if(q.typ!=='praxis')b.append(node('p','Antwort: '+(answer||'—')));b.append(node('p','Muster / Kriterien: '+([q.muster,...(q.richtig||[]).map(a=>q.optionen[a])].filter(Boolean).join(' · ')||'—')));
  const automatic=p.automatisch[i];if(automatic!==null)b.append(node('p','Automatische Vorbewertung: '+automatic+' / '+q.punkte));
@@ -151,5 +229,5 @@ function open(host){
  run(load);
  const interval=setInterval(()=>{if(!connected()){clearInterval(interval);return}if(view==='running'&&!busy&&document.visibilityState==='visible')run(load)},10000);
 }
-window.IDVPruefungen={open};
+window.IDVPruefungen={open,convertGoogle};
 })();

@@ -31,6 +31,7 @@ jobs:
           node --check public/assets/pruefungszentrum.js
           node --check public/assets/pruefung-gast.js
           php tests/pruefungen-logic.php
+          node tests/pruefungen-import.mjs
       - name: Test CopNet managed encryption key and legacy compatibility
         run: php tests/mysql8-copnet-managed.php
       - name: Test Google OAuth origin validation and safe diagnostics

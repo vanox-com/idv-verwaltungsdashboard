@@ -65,7 +65,7 @@ function googleRequest(string $url,string $method='GET',?string $token=null,
     if(!function_exists('curl_init'))fail(503,'PHP-Erweiterung curl fehlt auf dem neuen Hoster');
     $parts=parse_url($url);
     if(!is_array($parts)||($parts['scheme']??'')!=='https'||
-        !in_array(strtolower((string)($parts['host']??'')),['www.googleapis.com','oauth2.googleapis.com'],true))
+        !in_array(strtolower((string)($parts['host']??'')),['www.googleapis.com','oauth2.googleapis.com','forms.googleapis.com'],true))
         throw new \LogicException('Google API URL not allowed');
     $c=curl_init($url);
     $headers=['Accept: application/json'];
