@@ -13,8 +13,7 @@ namespace IDV;
  */
 function ausbildungZipDecks(): array {
     return [
-        ['PM.0','PM.0 – Einstellungsprozess','1a4hu0ZcYdc6Z4XkoYRabyMkeW2MeBEFGRvZ7KjondZc'],
-        ['PM.1','PM.1 – Onboarding (EXTERN)','1qwrE5Irm08rV1iymltkkKwPJ496vlT_-BKP7z4oHTb8'],
+        ['PM.0','PM.0 – Onboarding (EXTERN)','1qwrE5Irm08rV1iymltkkKwPJ496vlT_-BKP7z4oHTb8'],
         ['PM.1','PM.1 – Funkwesen, Funkstatus & Einsatztablet','1jZi3VDJLnL-R2NcneUvj8xQSR8HavLLw3gTS5nb_Nbo'],
         ['PM.2','PM.2 – CopNet & EDV (EXTERN)','1Gxrw6gMwoo6pyXK9PPTfhH9gxUsNYbdz8PX_KEEsZ1I'],
         ['PM.3','PM.3 – Verkehrskontrolle (EXTERN)','1CJNBXLwkx5vtxpAZ0Vnt4kWoV0AbkKtpwWrKvOUeakY'],

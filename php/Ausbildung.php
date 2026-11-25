@@ -262,6 +262,57 @@ function ausbildungOeffentlicheMaterialien(): never {
         ORDER BY modul_code,titel,id");
     respond(200,['materialien'=>$rows]);
 }
+/** One-time curriculum content adjustment, not a schema migration.
+ * Keep historical hiring-process records separate from the new onboarding.
+ * Previously PM.1 was a combined onboarding/funk module, so its recorded
+ * completion is retained for both successor topics. Never infer onboarding
+ * from the old PM.0 hiring process.
+ */
+function ausbildungOnboardingAktualisieren(array $u): void {
+    $old=sql("SELECT titel FROM ausbildung_module WHERE code='PM.0'");
+    if(($old[0]['titel']??null)!=='Einstellungsprozess')return;
+    db()->beginTransaction();
+    try{
+        $rows=sql("SELECT code,titel FROM ausbildung_module WHERE code IN ('PM.0','PM.1') ORDER BY code FOR UPDATE");
+        $titles=array_column($rows,'titel','code');
+        if(($titles['PM.0']??null)!=='Einstellungsprozess'){db()->commit();return;}
+        if(($titles['PM.1']??null)!=='Onboarding')throw new RuntimeException('Unerwartete Modulstruktur');
+        sql("INSERT INTO ausbildung_module(code,laufbahn,titel,sortierung,aktiv)
+             VALUES('PM.0-ALT','PMA','Einstellungsprozess (Archiv)',0,0)");
+        // Retain old completion authors, timestamps and status, but do not count them.
+        sql("UPDATE ausbildung_abschluesse SET modul_code='PM.0-ALT' WHERE modul_code='PM.0'");
+        sql("INSERT INTO ausbildung_abschluesse(anwaerter_id,modul_code,ausbilder_user_id,abgeschlossen,aktualisiert)
+             SELECT anwaerter_id,'PM.0',ausbilder_user_id,abgeschlossen,aktualisiert
+             FROM ausbildung_abschluesse WHERE modul_code='PM.1'");
+        // Preserve material IDs, original files and room references.
+        sql("UPDATE ausbildung_materialien SET modul_code='PM.0-ALT',aktiv=0,public_aktiv=0 WHERE modul_code='PM.0'");
+        sql("UPDATE ausbildung_materialien SET modul_code='PM.0',
+             titel=CASE WHEN titel LIKE 'PM.1%' THEN CONCAT('PM.0',SUBSTRING(titel,5)) ELSE titel END
+             WHERE modul_code='PM.1' AND (url LIKE 'https://docs.google.com/presentation/d/1qwrE5Irm08rV1iymltkkKwPJ496vlT_-BKP7z4oHTb8/%'
+                 OR LOWER(titel) LIKE '%onboarding%')");
+        if(ausbildungSchemaStatus()['unterrichtBereit']){
+            sql("UPDATE ausbildung_unterricht SET modul_code='PM.0-ALT',beendet=1,angebot=NULL,antwort=NULL,aktualisiert=UTC_TIMESTAMP(6) WHERE modul_code='PM.0'");
+            sql("UPDATE ausbildung_unterricht r JOIN ausbildung_materialien m ON m.id=r.material_id
+                 SET r.modul_code='PM.0' WHERE r.modul_code='PM.1' AND m.modul_code='PM.0'");
+        }
+        // Keep former combined PM.1 teaching permissions for onboarding.
+        // Remove the old hiring-only PM.0 permission where PM.1 was not granted.
+        foreach(sql('SELECT id,kompetenzen FROM ausbildung_ausbilder FOR UPDATE') as $trainer){
+            $codes=json_decode((string)$trainer['kompetenzen'],true);
+            if(!is_array($codes))continue;
+            $next=array_values(array_filter($codes,fn($code)=>$code!=='PM.0'));
+            if(in_array('PM.1',$codes,true))$next[]='PM.0';
+            $next=array_values(array_unique($next));
+            if($next!==$codes)sql('UPDATE ausbildung_ausbilder SET kompetenzen=?,revision=revision+1 WHERE id=?',
+                [json_encode($next,JSON_THROW_ON_ERROR),$trainer['id']]);
+        }
+        sql("UPDATE ausbildung_module SET titel='Onboarding' WHERE code='PM.0'");
+        sql("UPDATE ausbildung_module SET titel='Funkwesen, Funkstatus & Einsatztablet' WHERE code='PM.1'");
+        sql("UPDATE ausbildung_anwaerter SET revision=revision+1,aktualisiert=UTC_TIMESTAMP(6) WHERE laufbahn='PMA'");
+        auditAction($u,'Ausbildung: PM.0 Onboarding, PM.1 Funkwesen; Einstellungsprozess archiviert','edit');
+        db()->commit();
+    }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
+}
 function dispatchAusbildung(array $u,string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/ausbildung/'))return false;
     ausbildungRecht($u);
@@ -272,6 +323,7 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             .'Ein Administrator kann sie im Ausbildungsbereich nach einer Sicherung einrichten.');
     if(!ausbildungSchemaStatus()['personalbindungBereit'])
         fail(503,'Die Verbindung zum zentralen Personalstamm muss nach einer Datenbanksicherung noch eingerichtet werden.');
+    ausbildungOnboardingAktualisieren($u);
     if($uri==='/api/ausbildung/bootstrap'||str_starts_with($uri,'/api/ausbildung/anwaerter/'))
         ausbildungSynchronisierePersonal();
     // Unterrichtssitzungen sind innerhalb der geschützten Ausbildungs-API.

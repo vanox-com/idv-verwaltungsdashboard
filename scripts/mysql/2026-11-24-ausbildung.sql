@@ -104,8 +104,8 @@ CREATE TABLE IF NOT EXISTS ausbildung_materialien (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 INSERT IGNORE INTO ausbildung_module(code,laufbahn,titel,sortierung) VALUES
- ('PM.0','PMA','Einstellungsprozess',0),
- ('PM.1','PMA','Onboarding',1),
+ ('PM.0','PMA','Onboarding',0),
+ ('PM.1','PMA','Funkwesen, Funkstatus & Einsatztablet',1),
  ('PM.2','PMA','CopNet & EDV',2),
  ('PM.3','PMA','Verkehrskontrolle',3),
  ('PM.4','PMA','Verfolgungsfahrt & Hochrisikokontrolle',4),
