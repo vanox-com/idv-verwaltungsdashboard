@@ -138,8 +138,15 @@ function pruefungBewertung(array $q,$scores): array {
     }
     return [$result,round($total,2)];
 }
+function pruefungPraxisErsteller(array $p): int {
+    $history=is_array($p['protokoll']??null)?$p['protokoll']:pruefungRead($p['protokoll']??'[]');
+    $first=$history[0]??[];
+    return in_array($first['aktion']??'',['Praxisprüfung angelegt','erstellt'],true)?(int)($first['user']??0):0;
+}
 function pruefungSichtbar(array $p,int $uid,bool $leitung): bool {
     if($leitung)return true;
+    // Practice has one reviewer; its creator and assigned reviewer may read the archived result.
+    if(($p['art']??'')==='praxis')return $uid>0&&($uid===(int)$p['erst']||$uid===pruefungPraxisErsteller($p));
     return ((int)$p['erst']===$uid&&in_array($p['status'],['bereit','laufend','abgegeben'],true))
         ||((int)$p['zweit']===$uid&&$p['status']==='erstkorrigiert');
 }
@@ -157,7 +164,7 @@ function pruefungKorrekturRechte(array $p,int $uid,bool $leitung): array {
     return ['erst'=>$erst,'zweit'=>$zweit,'eigeneErstkorrektur'=>$status==='erstkorrigiert'&&$uid===pruefungErstBearbeiter($p)];
 }
 function pruefungAccess(array $p,array $u): void {
-    if(!pruefungSichtbar($p,(int)$u['id'],pruefungVerwaltung($u)))fail(403,'Prüfung ist nicht deiner aktuellen Korrektur zugeteilt.');
+    if(!pruefungSichtbar($p,(int)$u['id'],pruefungVerwaltung($u)))fail(403,'Kein Zugriff auf diese Prüfung.');
 }
 function pruefungReviewer(int $id): bool {
     $r=sql("SELECT id,rolle,dienstnummer,gesperrt,muss_passwort_aendern FROM users WHERE id=? AND gesperrt=0 AND muss_passwort_aendern=0",[$id]);
@@ -234,8 +241,8 @@ function pruefungGuest(string $method,string $uri): bool {
     }catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
 }
 function pruefungListenZeilen(int $uid,bool $lead): array {
-        $where=$lead?'':" WHERE (p.erst=? AND p.status IN ('bereit','laufend','abgegeben')) OR (p.zweit=? AND p.status='erstkorrigiert')";
-        $rows=sql("SELECT p.id,p.revision,p.kandidat,p.laufbahn,p.erst,p.zweit,p.status,p.start_am,p.ende_am,p.abgabe_am,p.ergebnis,p.fokus,p.antworten,v.titel,v.art,JSON_UNQUOTE(JSON_EXTRACT(v.fragen,'$.schema')) AS praxisSchema FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id".$where." ORDER BY p.id DESC",$lead?[]:[$uid,$uid]);
+        $where=$lead?'':" WHERE (v.art='praxis' AND (p.erst=? OR (JSON_UNQUOTE(JSON_EXTRACT(p.protokoll,'$[0].aktion')) IN ('Praxisprüfung angelegt','erstellt') AND JSON_UNQUOTE(JSON_EXTRACT(p.protokoll,'$[0].user'))=?))) OR (v.art<>'praxis' AND ((p.erst=? AND p.status IN ('bereit','laufend','abgegeben')) OR (p.zweit=? AND p.status='erstkorrigiert')))";
+        $rows=sql("SELECT p.id,p.revision,p.kandidat,p.laufbahn,p.erst,p.zweit,p.status,p.start_am,p.ende_am,p.abgabe_am,p.ergebnis,p.fokus,p.antworten,v.titel,v.art,JSON_UNQUOTE(JSON_EXTRACT(v.fragen,'$.schema')) AS praxisSchema FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id".$where." ORDER BY p.id DESC",$lead?[]:[$uid,(string)$uid,$uid,$uid]);
         foreach($rows as &$r){$f=pruefungRead($r['fokus']);$r['tabwechsel']=$f['wechsel']??0;$r['ereignisse']=count($f['events']??[]);$r['aktuelleFrage']=$f['aktuelleFrage']??null;$a=pruefungRead($r['antworten']);$r['fragenGesamt']=count($a);$r['bearbeitet']=count(array_filter($a,fn($x)=>is_array($x)?count($x)>0:trim((string)$x)!==''));unset($r['fokus'],$r['antworten']);}unset($r);
     return $rows;
 }
