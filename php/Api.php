@@ -127,10 +127,9 @@ function ausbildungLeitungsprofil(array $u): bool {
         return in_array($row[0]['funktion']??'',['Ausbildungsleitung','stv. Ausbildungsleitung'],true);
     }catch(Throwable $e){return false;}
 }
-/** Sensitive training administration, not merely a delegated training permission. */
+/** Effective training level 2 grants full training leadership, including explicit individual permissions. */
 function ausbildungVerwaltungsleitung(array $u): bool {
-    return (int)(rights($u)['ausbildung']??0)>=2
-        &&(in_array($u['rolle']??'',['Administrator','Leitungsdienst','Ausbildungsleitung'],true)||ausbildungLeitungsprofil($u));
+    return (int)(rights($u)['ausbildung']??0)>=2;
 }
 /** Popup preferences are restricted to the four leadership/administrative roles, including genuine training leadership profiles on an AUS account. */
 function notificationSettingsAllowed(array $u): bool {
