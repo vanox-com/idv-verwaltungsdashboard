@@ -68,10 +68,16 @@ function ausbildungsZugangArchivieren(int $id,array $tables): void {
 function notificationSettingsDefaults(): array {
     return ['por_bef'=>true,'por_rang'=>true,'pma_warnung'=>true,'pma_stimmen'=>true,'pma_dringend'=>true];
 }
-function notificationSettingsRead(): array {
+/** Preferences belong exclusively to the authenticated user; legacy global flags are ignored. */
+function notificationSettingsPrefix(array $u): string {
+    return 'personal_hinweis:'.(int)$u['id'].':';
+}
+function notificationSettingsRead(array $u): array {
     $flags=notificationSettingsDefaults();
-    foreach(sql("SELECT schluessel,werte FROM system_optionen WHERE schluessel IN ('hinweis_por_bef','hinweis_por_rang','hinweis_pma_warnung','hinweis_pma_stimmen','hinweis_pma_dringend')") as $row){
-        $key=substr((string)$row['schluessel'],8);
+    $prefix=notificationSettingsPrefix($u);
+    $keys=array_map(fn($k)=>$prefix.$k,array_keys($flags));
+    foreach(sql('SELECT schluessel,werte FROM system_optionen WHERE schluessel IN (?,?,?,?,?)',$keys) as $row){
+        $key=substr((string)$row['schluessel'],strlen($prefix));
         $value=json_decode((string)$row['werte'],true);
         if(array_key_exists($key,$flags)&&is_bool($value[0]??null))$flags[$key]=$value[0];
     }
@@ -79,20 +85,20 @@ function notificationSettingsRead(): array {
 }
 function dispatchSettings(array $u,string $method,string $uri): bool {
     if($method==='GET'&&$uri==='/api/benachrichtigungs-einstellungen'){
-        respond(200,['einstellungen'=>notificationSettingsRead()]);
+        respond(200,['einstellungen'=>notificationSettingsRead($u)]);
     }
     if($method==='PUT'&&preg_match('#^/api/benachrichtigungs-einstellungen/([a-z_]+)$#D',$uri,$m)){
-        if(!in_array($u['rolle'],['Administrator','Leitungsdienst'],true))fail(403,'Nur Administratoren und Leitungsdienst dürfen Benachrichtigungen verwalten');
+        // Any authenticated account may adjust its own preferences, never another user's.
         $key=$m[1];$b=body();$enabled=$b['aktiv']??null;
         if(!array_key_exists($key,notificationSettingsDefaults())||!is_bool($enabled))fail(400,'Ungültige Benachrichtigungseinstellung');
         db()->beginTransaction();
         try{
             sql('INSERT INTO system_optionen(schluessel,werte) VALUES(?,?) ON DUPLICATE KEY UPDATE werte=VALUES(werte),aktualisiert=UTC_TIMESTAMP(6)',
-                ['hinweis_'.$key,json_encode([$enabled],JSON_THROW_ON_ERROR)]);
-            auditAction($u,'Portalbenachrichtigung '.$key.($enabled?' aktiviert':' deaktiviert'));
+                [notificationSettingsPrefix($u).$key,json_encode([$enabled],JSON_THROW_ON_ERROR)]);
+            auditAction($u,'Persönliche Benachrichtigung '.$key.($enabled?' aktiviert':' deaktiviert'));
             db()->commit();
         }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
-        respond(200,['einstellungen'=>notificationSettingsRead()]);
+        respond(200,['einstellungen'=>notificationSettingsRead($u)]);
     }
     if($method==='GET'&&$uri==='/api/users'){
         needAdmin($u);

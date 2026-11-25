@@ -1,11 +1,11 @@
-/* Portalweite Popup-Einstellungen. Keine Änderung fachlicher Freigaben. */
+/* Persönliche Popup-Einstellungen des angemeldeten Kontos. Keine Änderung fachlicher Freigaben. */
 (()=>{
  const groups=[
-   {title:'POR-Freigaben',desc:'Orange Hinweise für berechtigte Entscheider.',items:[
+   {right:'por',title:'POR-Freigaben',desc:'Orange Hinweise für berechtigte Entscheider.',items:[
      ['por_bef','Beförderungsfreigaben','Offene reguläre POR-Freigabeanfragen.'],
      ['por_rang','Rangänderungsanträge','Offene Anträge auf Rangänderung.']
    ]},
-   {title:'PMA · Ausbildungsbenachrichtigungen',desc:'Rote Hinweise für berechtigte Ausbilder.',items:[
+   {right:'ausbildung',title:'PMA · Ausbildungsbenachrichtigungen',desc:'Rote Hinweise für berechtigte Ausbilder.',items:[
      ['pma_warnung','Zieltermin nähert sich','Ab Tag 7 bis Tag 9, wenn noch Stimmenpunkte fehlen und weitere Voraussetzungen offen sind.'],
      ['pma_stimmen','Nur Stimmen fehlen','Sofort, wenn Module und RSA erfüllt sind und nur Stimmen fehlen (vor Tag 10 oder ohne Eintrittsdatum).'],
      ['pma_dringend','10-Tage-Ziel erreicht','Ab Tag 10 bei fehlenden Stimmenpunkten.']
@@ -43,16 +43,16 @@
    if(!allowed()||!flags||saving||!keys.includes(key))return;
    saving=true;++sequence;paint();status('Speichert …');
    const id=who();
-   try{const result=await api('/benachrichtigungs-einstellungen/'+key,{method:'PUT',body:JSON.stringify({aktiv:!enabled(key)})});if(who()===id){accept(result);status('Gespeichert. Gilt portalweit.');}}
+   try{const result=await api('/benachrichtigungs-einstellungen/'+key,{method:'PUT',body:JSON.stringify({aktiv:!enabled(key)})});if(who()===id){accept(result);status('Gespeichert. Gilt nur für deinen Zugang.');}}
    catch(e){status('Speichern fehlgeschlagen: '+e.message,true);}
    finally{saving=false;paint();}
  }
  function open(){
    const root=document.querySelector('#inhalt');if(!root)return;
    if(!allowed()){root.textContent='Keine Berechtigung.';return;}
-   root.innerHTML='<section class="notify-settings"><div class="ns-heading"><h1>Benachrichtigungen</h1><p>Hier steuerst du die automatischen Popup-Hinweise für alle berechtigten Nutzer im Portal. Änderungen werden sofort gespeichert.</p></div>'+
-     groups.map(g=>'<section class="ns-group"><h2>'+g.title+'</h2><p>'+g.desc+'</p>'+g.items.map(([key,label,desc])=>'<div class="ns-row"><div><strong>'+label+'</strong><small>'+desc+'</small></div><div class="ns-control"><span></span><button type="button" role="switch" aria-label="'+label+'" aria-checked="false" data-notify-setting="'+key+'" disabled></button></div></div>').join('')+'</section>').join('')+
-     '<div id="nsStatus" class="ns-status" role="status"></div><p class="ns-legend">Das Ausschalten blendet nur das Popup aus. Offene Anträge und Ausbildungsstände bleiben in den jeweiligen Übersichten sichtbar. Prüfungsregeln und Rechte bleiben unverändert.</p></section>';
+   root.innerHTML='<section class="notify-settings"><div class="ns-heading"><h1>Benachrichtigungen</h1><p>Hier steuerst du deine eigenen automatischen Popup-Hinweise. Die Einstellungen gelten nur für deinen Zugang und bleiben bei der nächsten Anmeldung erhalten.</p></div>'+
+     groups.filter(g=>['Administrator','Leitungsdienst'].includes(ME?.rolle)||can(g.right,g.right==='por'?2:1)).map(g=>'<section class="ns-group"><h2>'+g.title+'</h2><p>'+g.desc+'</p>'+g.items.map(([key,label,desc])=>'<div class="ns-row"><div><strong>'+label+'</strong><small>'+desc+'</small></div><div class="ns-control"><span></span><button type="button" role="switch" aria-label="'+label+'" aria-checked="false" data-notify-setting="'+key+'" disabled></button></div></div>').join('')+'</section>').join('')+
+     '<div id="nsStatus" class="ns-status" role="status"></div><p class="ns-legend">Das Ausschalten blendet nur deine eigenen Popups aus. Andere Nutzer erhalten ihre Hinweise unverändert. Offene Anträge, Ausbildungsstände, Prüfungsregeln und Rechte bleiben bestehen.</p></section>';
    root.querySelectorAll('[data-notify-setting]').forEach(b=>b.addEventListener('click',()=>void save(b.dataset.notifySetting)));
    paint();void refresh();
  }

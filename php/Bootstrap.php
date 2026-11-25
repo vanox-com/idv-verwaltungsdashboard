@@ -66,7 +66,7 @@ function routineRoster(array $p,array $staff): array{
 }
 function handleSystemOptions(array $user): never {
     $result=[];
-    foreach(normalizedRows('SELECT schluessel,werte FROM system_optionen ORDER BY schluessel',[],['werte']) as $row)
+    foreach(normalizedRows("SELECT schluessel,werte FROM system_optionen WHERE schluessel IN ('mitarbeitergruppen','beschaeftigungsarten') ORDER BY schluessel",[],['werte']) as $row)
         $result[(string)$row['schluessel']]=$row['werte'];
     respond(200,$result);
 }

@@ -1811,7 +1811,7 @@ const AUSB_NAV={
 const ausbildungKonto=()=>['Ausbilder','Ausbildungsleitung'].includes(ME?.rolle);
 const can = (m,l=1) => {
   if(!ME)return false;
-  if(m==='benachrichtigungen')return ['Administrator','Leitungsdienst'].includes(ME.rolle);
+  if(m==='benachrichtigungen')return ['Administrator','Leitungsdienst'].includes(ME.rolle)||(ME.rechte?.por||0)>=2||(ME.rechte?.ausbildung||0)>=1;
   if(Object.hasOwn(AUSB_NAV,m))return (ME.rechte?.ausbildung||0)>=Math.max(l,AUSB_NAV[m].leitung?2:1);
   if(ausbildungKonto())return (m==='dash'||m==='design')&&l<=1;
   return m==='design'||m==='favoriten'?true:m==='entwicklung'?(ME.rechte.pers||0)>=l:m==='system'?ME.rolle==='Administrator':m==='meldungen'?(ME.rechte.mitteilungen||0)>=2:m==='statistik'?(ME.rechte.pers||0)>=l:(ME.rechte[m]||0)>=l;
@@ -6510,7 +6510,7 @@ document.addEventListener('click',async e=>{
 <script src="/dokumentUI.js"></script>
 <script src="/befRichtUI.js"></script>
 <script src="/liveUpdates.js?v=20261125-1"></script>
-<script src="/notificationSettings.js?v=20261125-1"></script>
+<script src="/notificationSettings.js?v=20261125-2"></script>
 <script src="/porHinweise.js?v=20261125-3"></script>
 <script src="/pmaHinweise.js?v=20261125-3"></script>
 <script src="/aktenFeatures.js"></script>
