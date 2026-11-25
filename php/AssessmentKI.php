@@ -10,7 +10,7 @@ function assessmentKiEndpoint(array $u,string $method,int $id): never {
     try{$key=examAiKey();}catch(\Throwable $e){fail(503,'KI-Verbindung nicht lesbar. Administrator muss die Verbindung im Prüfungszentrum neu einrichten.');}
     if($key===''||!function_exists('curl_init'))fail(503,'KI noch nicht eingerichtet. Administrator: Assessment Center → KI-Einstellungen.');
     $p=assessmentRow($id);assessmentAccess($p,$u);
-    if($p['art']==='praxis'||$p['status']!=='abgegeben'||((int)$p['erst']!==(int)$u['id']&&!assessmentVerwaltung($u)))fail(403,'KI-Vorschläge nur für berechtigte Erstkorrektur.');
+    if(!assessmentKorrekturRechte($p,(int)$u['id'],assessmentVerwaltung($u))['erst'])fail(403,'KI-Vorschläge nur während der offenen Korrektur.');
     $b=body();if(($b['revision']??null)!==(int)$p['revision'])fail(409,'Prüfung wurde geändert. Neu laden.');
     $i=$b['frage']??null;$q=pruefungRead($p['fragen']);$answers=pruefungRead($p['antworten']);
     if(!is_int($i)||!isset($q[$i])||$q[$i]['typ']!=='text'||!is_string($answers[$i]??null))fail(400,'Nur Freitextfragen werden per KI vorbewertet.');
@@ -19,6 +19,6 @@ function assessmentKiEndpoint(array $u,string $method,int $id): never {
     $lock='idv_exam_ai_'.(int)$u['id'];
     $got=sql('SELECT GET_LOCK(?,0) AS ok',[$lock]);if((int)($got[0]['ok']??0)!==1)fail(429,'Ein KI-Vorschlag läuft bereits.');
     try{$result=pruefungKiVorschlag($q[$i],$answers[$i],$key);}finally{sql('SELECT RELEASE_LOCK(?)',[$lock]);}
-    $current=assessmentRow($id);if((int)$current['revision']!==(int)$p['revision']||$current['status']!=='abgegeben')fail(409,'Prüfung wurde während der KI-Bewertung geändert.');
+    $current=assessmentRow($id);if((int)$current['revision']!==(int)$p['revision']||!assessmentKorrekturOffen($current['status']))fail(409,'Prüfung wurde während der KI-Bewertung geändert.');
     respond(200,['frage'=>$i,'vorschlag'=>$result]);
 }

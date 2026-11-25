@@ -39,6 +39,7 @@ jobs:
           node tests/ausbildung-static.mjs
           php tests/assessment-logic.php
           node --check public/assets/assessment-center.js
+          node --check public/assets/assessment-korrektur.js
           node --check public/assets/assessment-gast.js
           test -f scripts/mysql/2026-11-24-ausbildung.sql
           test -f scripts/mysql/2026-11-24-aulk-public.sql

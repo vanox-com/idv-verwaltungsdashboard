@@ -15,4 +15,12 @@ foreach(array_keys(ASSESSMENT_ARTEN) as $art){
  checkAssessment(!isset(assessmentPublicFragen($questions)[0]['richtig']),'no public key');
 }
 try{assessmentVorlage(['art'=>'pm']);throw new \LogicException('training type accepted');}catch(\RuntimeException $e){checkAssessment($e->getCode()===400,'training type rejected');}
+foreach(['bereit','laufend','abgegeben','erstkorrigiert','zweitkorrigiert','freigegeben','annulliert'] as $status){
+ $p=['status'=>$status,'erst'=>12,'zweit'=>99,'protokoll'=>'[]'];
+ checkAssessment(assessmentSichtbar($p,42,true),'all council records '.$status);
+ checkAssessment(!assessmentSichtbar($p,12,false),'no access through assignment '.$status);
+ $r=assessmentKorrekturRechte($p,42,true);
+ checkAssessment($r['erst']===in_array($status,['abgegeben','erstkorrigiert','zweitkorrigiert'],true)&&!$r['zweit'],'single review '.$status);
+ checkAssessment(!assessmentKorrekturRechte($p,12,false)['erst'],'no correction through assignment '.$status);
+}
 echo "Assessment logic OK\n";

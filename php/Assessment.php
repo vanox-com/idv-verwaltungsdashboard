@@ -169,26 +169,21 @@ function assessmentArchivInfo(array $p,?int $now=null): array {
     $out['archiviert']=true;return $out;
 }
 function assessmentSichtbar(array $p,int $uid,bool $leitung): bool {
-    if($leitung)return true;
-    if(assessmentArchivInfo($p)['archiviert'])return false;
-    if($p['status']==='freigegeben')return $uid>0&&($uid===(int)$p['erst']||$uid===(int)$p['zweit']||$uid===assessmentPraxisErsteller($p));
-    // Practice has one reviewer; creator and assigned reviewer may read active attempts.
-    if(($p['art']??'')==='praxis')return !in_array($p['status'],['freigegeben','annulliert'],true)&&$uid>0&&($uid===(int)$p['erst']||$uid===assessmentPraxisErsteller($p));
-    return ((int)$p['erst']===$uid&&in_array($p['status'],['bereit','laufend','abgegeben'],true))
-        ||((int)$p['zweit']===$uid&&$p['status']==='erstkorrigiert');
+    return $uid>0&&$leitung; // Every authorised council member sees every attempt, including archives.
 }
-// Keep actual reviewers in the audit trail, independently of the planned assignment.
+function assessmentKorrekturOffen(string $status): bool {
+    // Older two-stage attempts remain correctable, without any second reviewer.
+    return in_array($status,['abgegeben','erstkorrigiert','zweitkorrigiert'],true);
+}
 function assessmentErstBearbeiter(array $p): int {
     $history=is_array($p['protokoll']??null)?$p['protokoll']:assessmentRead($p['protokoll']??'[]');
     foreach(array_reverse($history) as $entry){
-        if(($entry['aktion']??'')==='korrektur'&&isset($entry['bewertung'])&&($entry['stufe']??'erst')==='erst'&&(int)($entry['user']??0)>0)return (int)$entry['user'];
+        if(in_array($entry['aktion']??'',['korrektur','abschliessen'],true)&&isset($entry['bewertung'])&&(int)($entry['user']??0)>0)return (int)$entry['user'];
     }
-    return (int)$p['erst'];
+    return 0;
 }
 function assessmentKorrekturRechte(array $p,int $uid,bool $leitung): array {
-    $status=$p['status'];$erst=$status==='abgegeben'&&($leitung||$uid===(int)$p['erst']);
-    $zweit=$status==='erstkorrigiert'&&($leitung||$uid===(int)$p['zweit'])&&$uid!==assessmentErstBearbeiter($p);
-    return ['erst'=>$erst,'zweit'=>$zweit,'eigeneErstkorrektur'=>$status==='erstkorrigiert'&&$uid===assessmentErstBearbeiter($p)];
+    return ['erst'=>$leitung&&$uid>0&&assessmentKorrekturOffen($p['status']),'zweit'=>false,'eigeneErstkorrektur'=>false];
 }
 function assessmentAccess(array $p,array $u): void {
     if(!assessmentSichtbar($p,(int)$u['id'],assessmentVerwaltung($u)))fail(403,'Kein Zugriff auf diese Prüfung.');
@@ -267,9 +262,8 @@ function assessmentGuest(string $method,string $uri): bool {
     }catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
 }
 function assessmentListenZeilen(int $uid,bool $lead): array {
-        $where=$lead?'':" WHERE ((v.art='praxis' AND p.status='abgegeben') OR p.status='freigegeben') AND (p.erst=? OR p.zweit=? OR (JSON_UNQUOTE(JSON_EXTRACT(p.protokoll,'$[0].aktion')) IN ('Praxisprüfung angelegt','erstellt') AND JSON_UNQUOTE(JSON_EXTRACT(p.protokoll,'$[0].user'))=?)) OR (v.art<>'praxis' AND ((p.erst=? AND p.status IN ('bereit','laufend','abgegeben')) OR (p.zweit=? AND p.status='erstkorrigiert')))";
-        $rows=sql("SELECT p.id,p.revision,p.kandidat,p.erst,p.zweit,p.status,p.start_am,p.ende_am,p.abgabe_am,p.ergebnis,p.fokus,p.antworten,p.protokoll,v.titel,v.art,JSON_UNQUOTE(JSON_EXTRACT(v.fragen,'$.schema')) AS praxisSchema FROM assessment_pruefungen p JOIN assessment_pruefung_vorlagen v ON v.id=p.vorlage_id".$where." ORDER BY p.id DESC",$lead?[]:[$uid,$uid,(string)$uid,$uid,$uid]);
-        $rows=array_values(array_filter($rows,fn($r)=>assessmentSichtbar($r,$uid,$lead)));
+        if(!$lead||$uid<1)return [];
+        $rows=sql("SELECT p.id,p.revision,p.kandidat,p.erst,p.status,p.start_am,p.ende_am,p.abgabe_am,p.ergebnis,p.fokus,p.antworten,p.protokoll,v.titel,v.art FROM assessment_pruefungen p JOIN assessment_pruefung_vorlagen v ON v.id=p.vorlage_id ORDER BY p.id DESC");
         foreach($rows as &$r){$r+=assessmentArchivInfo($r);unset($r['protokoll']);$f=assessmentRead($r['fokus']);$r['tabwechsel']=$f['wechsel']??0;$r['ereignisse']=count($f['events']??[]);$r['aktuelleFrage']=$f['aktuelleFrage']??null;$a=assessmentRead($r['antworten']);$r['fragenGesamt']=count($a);$r['bearbeitet']=count(array_filter($a,fn($x)=>is_array($x)?count($x)>0:trim((string)$x)!==''));unset($r['fokus'],$r['antworten']);}unset($r);
     return $rows;
 }
@@ -321,9 +315,10 @@ function dispatchAssessment(array $u,string $method,string $uri): bool {
         respond(201,['id'=>(int)db()->lastInsertId()]);
     }
     if($method==='POST'&&$uri===$root){
-        if(!$verwaltung)fail(403,'Nur die Leitung darf Prüfungen anlegen und Prüfer einteilen');
-        $b=body();$vid=(int)($b['vorlage']??0);$candidate=assessmentText($b['bewerber']??null,200);$first=(int)($b['erst']??0);$second=(int)($b['zweit']??0);
-        if($first===$second||(!$lead&&$first!==$uid)||!assessmentReviewer($first)||!assessmentReviewer($second))fail(400,'Zwei verschiedene berechtigte Prüfer erforderlich');
+        if(!$verwaltung)fail(403,'Nur Polizeirat und Administratoren dürfen Prüfungen anlegen');
+        $b=body();$vid=(int)($b['vorlage']??0);$candidate=assessmentText($b['bewerber']??null,200);
+        // Existing schema columns are retained for non-destructive compatibility; no reviewer assignment.
+        $first=$uid;$second=0;
         $v=sql('SELECT * FROM assessment_pruefung_vorlagen WHERE id=?',[$vid]);
         if(!$v||!isset(ASSESSMENT_ARTEN[$v[0]['art']]))fail(400,'Gültige Assessment-Vorlage fehlt');
         $v=$v[0];$token=bin2hex(random_bytes(32));
@@ -336,11 +331,11 @@ function dispatchAssessment(array $u,string $method,string $uri): bool {
         require_once __DIR__.'/AssessmentKI.php';
         assessmentKiEndpoint($u,$method,(int)$aiMatch[1]);
     }
-    if(!preg_match('#^/api/assessment/([1-9][0-9]*)(?:/(korrektur|freigabe|annullieren|link|berichtigen|wiedereroeffnen|zweitpruefer|pruefer|archivieren))?$#D',$uri,$m))fail(404,'Nicht gefunden');
+    if(!preg_match('#^/api/assessment/([1-9][0-9]*)(?:/(korrektur|annullieren|link|berichtigen|wiedereroeffnen|archivieren))?$#D',$uri,$m))fail(404,'Nicht gefunden');
     $id=(int)$m[1];$action=$m[2]??'';
     if($method==='GET'&&$action===''){
         $p=assessmentRow($id);assessmentAccess($p,$u);
-        unset($p['token_hash']);$p+=assessmentArchivInfo($p);
+        unset($p['token_hash'],$p['zweit']);$p+=assessmentArchivInfo($p);
         foreach(['fragen','antworten','bewertung','protokoll','fokus'] as $k)$p[$k]=assessmentRead($p[$k]);
         if(in_array($p['status'],['bereit','laufend'],true)){
             unset($p['fragen'],$p['antworten'],$p['bewertung']);
@@ -379,48 +374,13 @@ function dispatchAssessment(array $u,string $method,string $uri): bool {
                 $history[$i]['nachher']=['status'=>$status,'ergebnis'=>$total,'bewertung'=>$result];
                 sql('UPDATE assessment_pruefungen SET bewertung=?,ergebnis=?,revision=revision+1,protokoll=? WHERE id=?',[assessmentJson($result),$total,assessmentJson($history),$id]);
             }
-        }elseif($action==='pruefer'||$action==='zweitpruefer'){
-            if(!$verwaltung||$status==='annulliert'||$p['art']==='praxis')fail(403,'Prüferwechsel nur durch die Leitung');
-            $first=$action==='zweitpruefer'?(int)$p['erst']:($b['erst']??null);$second=$b['zweit']??null;
-            if(!is_int($first)||!is_int($second)||$first===$second||!assessmentReviewer($first)||!assessmentReviewer($second))fail(400,'Zwei unterschiedliche berechtigte Prüfer auswählen');
-            if($note==='')fail(400,'Begründung für den Prüferwechsel erforderlich');
-            $firstChanged=$first!==(int)$p['erst'];$secondChanged=$second!==(int)$p['zweit'];
-            if(!$firstChanged&&!$secondChanged)fail(400,'Keine Änderung der Prüfer');
-            $next=$status;
-            // A changed reviewer must actually perform their stage again, including after release.
-            if(in_array($status,['erstkorrigiert','zweitkorrigiert','freigegeben'],true)){
-                if($firstChanged)$next='abgegeben';
-                elseif($secondChanged)$next='erstkorrigiert';
-            }
-            $i=count($history)-1;$history[$i]['prueferVorher']=['erst'=>(int)$p['erst'],'zweit'=>(int)$p['zweit'],'status'=>$status];
-            $history[$i]['prueferNachher']=['erst'=>$first,'zweit'=>$second,'status'=>$next];
-            sql('UPDATE assessment_pruefungen SET erst=?,zweit=?,status=?,revision=revision+1,protokoll=? WHERE id=?',[$first,$second,$next,assessmentJson($history),$id]);
         }elseif($action==='korrektur'){
-            $rights=assessmentKorrekturRechte($p,$uid,$verwaltung);$first=$rights['erst'];$second=$rights['zweit'];
-            if(!$first&&!$second)fail(403,$rights['eigeneErstkorrektur']?'Die Zweitkorrektur muss eine andere Person als die tatsächliche Erstkorrektur durchführen.':'Korrektur nicht für diesen Prüfer freigegeben');
-            $history[count($history)-1]['stufe']=$first?'erst':'zweit';
-            if($second&&($b['zurueck']??false)===true){
-                if($note==='')fail(400,'Begründung erforderlich');
-                sql("UPDATE assessment_pruefungen SET status='abgegeben',revision=revision+1,protokoll=? WHERE id=?",[assessmentJson($history),$id]);
-            }else{
-                // Confirm the persisted first review, not a second browser copy of its point values.
-                $scores=$b['bewertung']??null;
-                if($second&&($b['bestaetigen']??false)===true){
-                    $scores=assessmentRead($p['bewertung']);$notes=$b['vermerke']??null;
-                    if(!is_array($notes)||!array_is_list($notes)||count($notes)!==count($scores))fail(400,'Korrekturvermerke unvollständig');
-                    foreach($scores as $i=>&$s)$s['notiz']=assessmentText($notes[$i],4000,false);unset($s);
-                }
-                [$result,$total]=assessmentBewertung(assessmentRead($p['fragen']),$scores);
-                $history[count($history)-1]['bewertung']=$result;
-                if($second){
-                    $old=assessmentRead($p['bewertung']);
-                    foreach($result as $i=>$s)if((float)$s['punkte']!==(float)$old[$i]['punkte'])fail(400,'Abweichende Zweitbewertung bitte mit Begründung zurückgeben');
-                }
-                sql('UPDATE assessment_pruefungen SET status=?,bewertung=?,ergebnis=?,revision=revision+1,protokoll=? WHERE id=?',[$first?'erstkorrigiert':'zweitkorrigiert',assessmentJson($result),$total,assessmentJson($history),$id]);
-            }
-        }elseif($action==='freigabe'){
-            if(!$lead||$status!=='zweitkorrigiert')fail(403,'Freigabe erst nach beiden Korrekturen durch den Polizeirat');
-            sql("UPDATE assessment_pruefungen SET status='freigegeben',revision=revision+1,protokoll=? WHERE id=?",[assessmentJson($history),$id]);
+            if(!assessmentKorrekturRechte($p,$uid,$verwaltung)['erst'])fail(403,'Korrektur nur für abgegebene Prüfungen.');
+            if(($b['bestaetigen']??false)!==true)fail(400,'Abschluss und Ergebnisfreigabe ausdrücklich bestätigen.');
+            [$result,$total]=assessmentBewertung(assessmentRead($p['fragen']),$b['bewertung']??null);
+            $i=count($history)-1;
+            $history[$i]['aktion']='abschliessen';$history[$i]['bewertung']=$result;
+            sql("UPDATE assessment_pruefungen SET status='freigegeben',bewertung=?,ergebnis=?,revision=revision+1,protokoll=? WHERE id=?",[assessmentJson($result),$total,assessmentJson($history),$id]);
         }
         $pdo->commit();respond(200,['ok'=>true,'link'=>$link]);
     }catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
