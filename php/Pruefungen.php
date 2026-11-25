@@ -117,6 +117,10 @@ function pruefungRow(int $id,bool $lock=false): array {
     $r=sql("SELECT p.*,v.art,v.titel,v.minuten,v.grenze,v.fragen FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id WHERE p.id=?".($lock?' FOR UPDATE':''),[$id]);
     if(!$r)fail(404,'Prüfung nicht gefunden');return $r[0];
 }
+// Template access is intentionally non-delegable. Correction rights remain independent.
+function pruefungVorlagenAdmin(array $u): bool {
+    return ($u['rolle']??'')==='Administrator';
+}
 function pruefungVerwaltung(array $u): bool {
     return ausbildungLeitung($u)&&(in_array($u['rolle']??'',['Administrator','Leitungsdienst','Ausbildungsleitung'],true)||ausbildungLeitungsprofil($u));
 }
@@ -193,8 +197,10 @@ function pruefungGuest(string $method,string $uri): bool {
 }
 function dispatchPruefung(array $u,string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/ausbildung/pruefungen'))return false;
-    ausbildungRecht($u);$lead=ausbildungLeitung($u);$verwaltung=pruefungVerwaltung($u);$uid=(int)$u['id'];
+    ausbildungRecht($u);$lead=ausbildungLeitung($u);$verwaltung=pruefungVerwaltung($u);$vorlagenAdmin=pruefungVorlagenAdmin($u);$uid=(int)$u['id'];
     $root='/api/ausbildung/pruefungen';
+    if(($uri===$root.'/vorlagen'||str_starts_with($uri,$root.'/vorlagen/')||str_starts_with($uri,$root.'/google/'))&&!$vorlagenAdmin)
+        fail(403,'Prüfungsvorlagen sind ausschließlich für Administratoren zugänglich');
     if(str_starts_with($uri,$root.'/google/')){
         require_once __DIR__.'/PruefungenGoogle.php';
         if(dispatchPruefungGoogle($u,$method,$uri))return true;
@@ -217,16 +223,16 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         $reviewers=[];foreach(sql("SELECT id,anzeigename,dienstnummer FROM users WHERE gesperrt=0 AND muss_passwort_aendern=0 ORDER BY anzeigename") as $r)if(pruefungReviewer((int)$r['id']))$reviewers[]=$r;
         ausbildungSynchronisierePersonal();
         $trainees=array_map(fn($a)=>array_intersect_key($a,array_flip(['id','name','laufbahn','personalnummer'])),ausbildungAktuelleAnwaerter());
-        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM ausbildung_pruefung_vorlagen ORDER BY id DESC'),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
+        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'vorlagenAdmin'=>$vorlagenAdmin,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>($vorlagenAdmin?sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM ausbildung_pruefung_vorlagen ORDER BY id DESC'):[]),'pruefungsauswahl'=>sql('SELECT id,art,titel FROM ausbildung_pruefung_vorlagen ORDER BY id DESC'),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
     }
     if($method==='GET'&&preg_match('#^/api/ausbildung/pruefungen/vorlagen/([1-9][0-9]*)$#D',$uri,$vMatch)){
-        if(!$verwaltung)fail(403,'Nur Ausbildungsleitung und Leitungsdienst');
+        if(!$vorlagenAdmin)fail(403,'Nur Administratoren dürfen Prüfungsvorlagen einsehen und bearbeiten');
         $rows=sql('SELECT id,art,titel,minuten,grenze,fragen FROM ausbildung_pruefung_vorlagen WHERE id=?',[(int)$vMatch[1]]);
         if(!$rows)fail(404,'Vorlage nicht gefunden');
         $v=$rows[0];$v['fragen']=pruefungRead($v['fragen']);respond(200,['vorlage'=>$v]);
     }
     if($method==='POST'&&$uri===$root.'/vorlagen'){
-        if(!$verwaltung)fail(403,'Nur Ausbildungsleitung und Leitungsdienst');
+        if(!$vorlagenAdmin)fail(403,'Nur Administratoren dürfen Prüfungsvorlagen einsehen und bearbeiten');
         $b=body();[$art,$titel,$minuten,$grenze,$fragen]=pruefungVorlage($b);
         if(isset($b['basis'])){
             $basis=sql('SELECT art FROM ausbildung_pruefung_vorlagen WHERE id=?',[(int)$b['basis']]);

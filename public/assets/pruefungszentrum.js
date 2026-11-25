@@ -77,13 +77,13 @@ function open(host){
  async function load(){try{data=await api();if(connected()){message('');render();}}catch(e){if(connected()&&!data){main.replaceChildren();const b=card('Prüfungszentrum konnte nicht geladen werden');b.append(node('p',e.message),node('p','Die übrigen Panel-Funktionen bleiben verfügbar. Prüfe die Meldung oder gib sie an die Administration weiter.','mut'),btn('Erneut versuchen',()=>run(load)));main.append(b);}throw e;}}
  function linkBox(url){if(!url)return;const box=card('Prüfungslink · vertraulich weitergeben');const i=text();i.value=location.origin+url;i.readOnly=true;box.append(i,btn('Link kopieren',async()=>{try{await navigator.clipboard.writeText(i.value);message('Link kopiert.')}catch{ i.select();message('Bitte markierten Link manuell kopieren.')}}));main.prepend(box);}
  function nav(){const bar=node('div',undefined,'box');bar.style.display='flex';bar.style.gap='8px';bar.style.flexWrap='wrap';
-  for(const [v,t] of [['overview','Übersicht'],['create','Prüfung erstellen'],['running','Laufend'],['first','Erstkorrektur'],['second','Zweitkorrektur'],['archive','Archiv'],...(data.verwaltung?[['templates','Vorlagen']]:[])]){
+  for(const [v,t] of [['overview','Übersicht'],['create','Prüfung erstellen'],['running','Laufend'],['first','Erstkorrektur'],['second','Zweitkorrektur'],['archive','Archiv'],...(data.vorlagenAdmin?[['templates','Vorlagen']]:[])]){
    bar.append(btn(t,()=>{view=v;detailId=null;render()},view===v?'p':''));
   }bar.append(btn('Aktualisieren',()=>run(load),''));return bar;}
  function render(){if(!connected())return;main.replaceChildren();
  if(!data.bereit){const b=card('Datenbank-Erweiterung erforderlich');b.append(node('p','Das Prüfungszentrum ist vorbereitet. Nach einer aktuellen verschlüsselten Datensicherung kann der Administrator die additive Erweiterung direkt einrichten. Alternativ kann der Hoster die SQL-Migration 2026-11-25-pruefungszentrum.sql einspielen. Bestehende Ausbildungsdaten werden nicht verändert.'),btn('Erneut prüfen',()=>run(load)));if(data.admin)b.append(btn('Nach Backup einrichten',()=>run(async()=>{if(!confirm('Aktuelles verschlüsseltes Datenbankbackup erstellt und heruntergeladen?'))return;await api('/setup',{bestaetigung:'BACKUP_ERSTELLT_PRUEFUNGEN'});await load();message('Prüfungszentrum eingerichtet.');})));main.append(b);return}
  main.append(nav());
- if(view==='create'){create();return}if(view==='templates'){templates();return}
+ if(view==='create'){create();return}if(view==='templates'){if(data.vorlagenAdmin){templates();return}view='overview';templateDraft=null;}
  const stats=node('div');stats.style.display='grid';stats.style.gridTemplateColumns='repeat(auto-fit,minmax(160px,1fr))';stats.style.gap='12px';
  for(const [label,filter] of [['Laufend',p=>p.status==='laufend'],['Erstkorrektur',p=>p.status==='abgegeben'],['Zweitkorrektur',p=>p.status==='erstkorrigiert'],['Freigegeben',p=>p.status==='freigegeben']]){const c=card(label);c.append(node('h2',String(data.pruefungen.filter(filter).length)));stats.append(c)}main.append(stats);
  const filters={running:['bereit','laufend'],first:['abgegeben'],second:['erstkorrigiert','zweitkorrigiert'],archive:['freigegeben','annulliert']};
@@ -93,8 +93,9 @@ function open(host){
  table.append(body);if(!body.children.length)c.append(node('p','Keine Prüfungen in dieser Ansicht.','mut'));else{const scroll=node('div');scroll.style.overflowX='auto';scroll.append(table);c.append(scroll)}main.append(c);
  }
  function create(){const c=card('Neue Prüfung');
- if(!data.vorlagen.length){c.append(node('p','Zuerst muss die Ausbildungsleitung eine geprüfte Vorlage importieren.'));main.append(c);return}
- const v=field(c,'Prüfungsvorlage',select(data.vorlagen.map(x=>[x.id,x.titel+' · Version #'+x.id+' · '+x.grenze+' %'])));
+ const choices=data.pruefungsauswahl||[];
+ if(!choices.length){c.append(node('p','Zuerst muss ein Administrator eine geprüfte Prüfungsvorlage hinterlegen.'));main.append(c);return}
+ const v=field(c,'Prüfungsvorlage',select(choices.map(x=>[x.id,x.titel+' · Version #'+x.id])));
  const a=field(c,'Anwärter',select(data.anwaerter.map(x=>[x.id,x.name+' · DN '+x.personalnummer+' · '+x.laufbahn])));
  const options=data.pruefer.map(x=>[x.id,x.anzeigename+' · '+x.dienstnummer]);
  const first=field(c,'Erstprüfer',select(options)),second=field(c,'Zweitprüfer',select([['','Bitte wählen'],...options]));first.value=String(data.user);first.disabled=!data.leitung;
@@ -102,6 +103,7 @@ function open(host){
  btn('Prüfung anlegen',()=>run(async()=>{const j=await api('',{vorlage:Number(v.value),anwaerter:Number(a.value),erst:Number(first.value),zweit:Number(second.value)});view='overview';await load();linkBox(j.link);message(j.link?'Prüfung erstellt. Link jetzt kopieren.':'Praxisbewertung zur Erstkorrektur angelegt.');})));main.append(c);
  }
  function templates(){
+ if(!data.vorlagenAdmin)return;
  const c=card('Prüfungsvorlagen · Frageneditor');
  const draft=templateDraft;
  const v=field(c,'Prüfungsart',select(Object.entries(data.arten)));

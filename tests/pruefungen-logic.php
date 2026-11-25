@@ -22,3 +22,7 @@ assertExam(!IDV\pruefungGoogleBildUrl('https://lh3.googleusercontent.com:8443/ab
 $public=IDV\pruefungPublicFragen([['typ'=>'text','titel'=>'Frage','punkte'=>2,'kontext'=>'Hinweis','bilder'=>[],'muster'=>'GEHEIM','richtig'=>[0],'feedback'=>'GEHEIM']]);
 assertExam(!isset($public[0]['muster'],$public[0]['richtig'],$public[0]['feedback']),'candidate must not receive solutions');
 assertExam($public[0]['kontext']==='Hinweis','public context');
+
+assertExam(IDV\pruefungVorlagenAdmin(['rolle'=>'Administrator']),'admin template access');
+foreach(['Leitungsdienst','Ausbildungsleitung','Ausbilder','Polizeirat',''] as $role)
+    assertExam(!IDV\pruefungVorlagenAdmin(['rolle'=>$role,'rechte'=>['ausbildung'=>2]]),'non-delegable template access '.$role);
