@@ -334,18 +334,22 @@ function trainers(){
 }
 function trainerForm(t){
  const preset=(!t&&editing?.personal)||{};
- const candidates=data.ausbilderKandidaten||[];
+ const allCandidates=data.ausbilderKandidaten||[];
+ const candidates=allCandidates.filter(p=>!p.sperrgrund);
+ const blocked=allCandidates.filter(p=>p.sperrgrund);
  const chosen=!t?candidates.find(p=>Number(p.personalnummer)===Number(preset.personalnummer??preset.dienstnummer)):null;
  const presetNr=Number(preset.personalnummer??preset.dienstnummer??0);
  const existing=!t&&presetNr?data.ausbilder.find(x=>Number(x.dienstnummer)===presetNr):null;
  const missingPreset=!t&&presetNr>0&&!chosen;
- const reason=existing?'Für DN '+presetNr+' gibt es bereits ein aktives Ausbilderprofil (Login: '+(existing.login_dienstnummer||'AUS-'+presetNr)+'). Bitte das bestehende Profil in der Liste bearbeiten.':'DN '+presetNr+' ist derzeit nicht für die Neuanlage verfügbar. Prüfe den Personalstatus, den Dienstgrad, die vollständigen Namensdaten und unter Benutzer & Rollen, ob bereits ein AUS-Zugang existiert (auch gesperrte Zugänge zählen).';
+ const blockedPreset=blocked.find(x=>Number(x.personalnummer)===presetNr);
+ const reason=blockedPreset?'DN '+presetNr+' · '+blockedPreset.name+': '+blockedPreset.sperrgrund:existing?'Für DN '+presetNr+' gibt es bereits ein aktives Ausbilderprofil.':'DN '+presetNr+' ist nicht im aktuellen Personalstamm vorhanden.';
  const codes=data.module.map(m=>m.code),current=json(t?.kompetenzen);
  const funcs=['Ausbildungsleitung','stv. Ausbildungsleitung','Leitungsdienst','Ausbilder gehobener Dienst','Ausbilder mittlerer Dienst','Ausbilder auf Probe'];
  return '<div class="card"><h2>'+(t?'Ausbilder bearbeiten':'Neuen Ausbilderzugang anlegen')+'</h2><p class="muted">Die Personalakte bleibt unverändert. Für jeden Ausbilder wird ein neuer, eigenständiger Login erstellt: AUS-&lt;Dienstnummer&gt;. Beispielsweise bekommt die Ausbildungs-DN 13 den Login AUS-13. Vorhandene Polizeikonten, Dienstnummern, Passwörter und Berechtigungen bleiben unverändert.</p>'+(missingPreset?'<p class="callout" role="status">'+esc(reason)+'</p>':'')+'<form id="trainerForm" class="formgrid">'+
  (!t?'<label class="full">Person aus dem Personalstamm auswählen<select id="trainerPerson" name="personalnummer" required><option value="">Bitte auswählen · ab Polizeiobermeister (alle Gruppen)</option>'+
- candidates.map(p=>'<option value="'+Number(p.personalnummer)+'" '+(chosen&&Number(chosen.personalnummer)===Number(p.personalnummer)?'selected':'')+'>'+esc(p.dienstnummer+' · '+p.name+' · '+p.rang)+'</option>').join('')+
- '</select><small>'+ (candidates.length?candidates.length+' geeignete Personen ohne bestehenden AUS-Zugang.':'Keine geeigneten Personen ohne bestehenden Ausbildungszugang verfügbar.')+'</small></label><input type="hidden" name="personal_quelle" value="'+esc(chosen?.quelle||'')+'">':'')+
+ '<optgroup label="Auswählbar">'+candidates.map(p=>'<option value="'+Number(p.personalnummer)+'" '+(chosen&&Number(chosen.personalnummer)===Number(p.personalnummer)?'selected':'')+'>'+esc(p.dienstnummer+' · '+p.name+' · '+p.rang)+'</option>').join('')+'</optgroup>'+
+ (blocked.length?'<optgroup label="Nicht auswählbar · Grund angezeigt">'+blocked.map(p=>'<option disabled value="'+Number(p.personalnummer)+'">'+esc(p.dienstnummer+' · '+p.name+' · '+p.rang+' — '+p.sperrgrund)+'</option>').join('')+'</optgroup>':'')+
+ '</select><small>'+ (candidates.length+' auswählbar · '+blocked.length+' nicht auswählbar (Grund im Menü).')+'</small></label><input type="hidden" name="personal_quelle" value="'+esc(chosen?.quelle||'')+'">':'')+
  '<label>Dienstnummer<input name="dienstnummer" required maxlength="32" value="'+esc(t?.dienstnummer||chosen?.dienstnummer||'')+'" readonly></label>'+
  '<label>Name<input name="name" required maxlength="180" value="'+esc(t?.name||chosen?.name||'')+'" '+(!t?'readonly':'')+'></label>'+
  '<label>Kürzel<input name="kuerzel" maxlength="16" required value="'+esc(t?.kuerzel||chosen?.kuerzel||'')+'" '+(!t?'readonly':'')+'></label>'+
@@ -625,7 +629,7 @@ shadow.addEventListener('change',e=>{
  if(['vote','voteReason'].includes(e.target?.id))updateVoteForm();
  if(e.target?.id==='trainerPerson'){
    const f=e.target.form;
-   const p=(data.ausbilderKandidaten||[]).find(x=>Number(x.personalnummer)===Number(e.target.value));
+   const p=(data.ausbilderKandidaten||[]).find(x=>!x.sperrgrund&&Number(x.personalnummer)===Number(e.target.value));
    for(const k of ['dienstnummer','name','kuerzel','rang','email'])f.elements.namedItem(k).value=p?.[k]||'';
    f.elements.namedItem('personal_quelle').value=p?.quelle||'';
    f.elements.namedItem('email').readOnly=Boolean(p?.email);

@@ -2818,7 +2818,12 @@ async function personalFreieNummernLaden(){
 // Keep the shortcut aligned with the server's eligible ranks; group membership is irrelevant.
 function ausbilderZugangGeeignet(p){
  const ranks=new Set(["polizeiobermeister","polizeihauptmeister","polizeihauptmeister az","polizeihauptmeister mit amtszulage","polizeikommissar","kriminalkommissar","polizeioberkommissar","kriminaloberkommissar","polizeioberkommissar der leitung","polizeihauptkommissar","kriminalhauptkommissar","polizeihauptkommissar a12","erster polizeihauptkommissar","polizeiratanwärter","polizeirat","polizeioberrat","polizeidirektor","leitender polizeidirektor","polizeivizepräsident","polizeipräsident"]);
- return ranks.has(String(p?.dienstgrad||'').trim().replace(/\s+/gu,' ').toLowerCase())&&['Aktiv','Abgemeldet'].includes(p?.status);
+ const normal=x=>String(x||'').trim().replace(/\s+/gu,' ').toLowerCase();
+ const rank=normal(p?.dienstgrad);
+ const catalog=D?.raenge||[];
+ const min=catalog.find(x=>normal(x.name)==='polizeiobermeister'),current=catalog.find(x=>normal(x.name)===rank);
+ const known=ranks.has(rank)||(!['','polizeimeisteranwärter','polizeimeister','polizeikommissaranwärter','kriminalkommissaranwärter'].includes(rank)&&min&&current&&Number(current.sortierung)>Number(min.sortierung));
+ return Boolean(known)&&['Aktiv','Abgemeldet','Inaktiv'].includes(String(p?.status||'').trim());
 }
 function vPers() {
   // Ausgeschiedene bleiben in der Datenbank und ihrer Kündigungsakte, nicht in der aktiven Personalliste.
@@ -6740,7 +6745,7 @@ document.addEventListener('click',async e=>{
 <script src="/abmeldungen.js"></script>
 <script src="/botKonfiguration.js"></script>
 <script src="/responsiveNav.js"></script>
-<script src="/assets/ausbildung-panel.js?v=20261125-20" defer></script>
+<script src="/assets/ausbildung-panel.js?v=20261125-21" defer></script>
 <script src="/assets/pruefungen-praxis.js?v=5" defer></script>
 <script src="/assets/pruefungen-korrektur.js?v=7" defer></script>
 <script src="/assets/pruefungszentrum.js?v=20" defer></script>

@@ -16,7 +16,7 @@ checkAus(IDV\hasPanelLoginRole('Ausbilder'),'trainer login enabled');
 checkAus(IDV\hasPanelLoginRole('Ausbildungsleitung'),'lead login enabled');
 checkAus(!IDV\hasPanelLoginRole('Mitarbeiter'),'normal staff still cannot sign in');
 checkAus(IDV\rights($role)===['ausbildung'=>1,'dash'=>1,'design'=>1,'assessment'=>0],'trainer must have isolated training and personal design rights');
-checkAus(IDV\rights($leiter)===['ausbildung'=>2,'dash'=>1,'design'=>1],'lead must have isolated training management and personal design rights');
+checkAus(IDV\rights($leiter)===['ausbildung'=>2,'dash'=>1,'design'=>1,'assessment'=>0],'lead must have isolated training management and personal design rights');
 checkAus(IDV\ausbildungRechtsstufe('Leitungsdienst',0,null)===2,'Leitungsdienst always full training access');
 checkAus(IDV\ausbildungRechtsstufe('Leitungsdienst',0,0)===2,'Leitungsdienst training access is fixed');
 checkAus(IDV\ausbildungRechtsstufe('Polizeirat',2,null)===1,'no accidental leadership grant from old role defaults');
@@ -85,3 +85,8 @@ echo "Ausbildung: isolated roles, PMA votes, PKA/KKA module rules OK\n";
 foreach(['Polizeiobermeister','Polizeihauptmeister','Polizeihauptmeister AZ','Polizeihauptmeister mit Amtszulage','Polizeikommissar','Kriminalkommissar','Polizeioberkommissar','Kriminaloberkommissar','Polizeioberkommissar der Leitung','Polizeihauptkommissar','Kriminalhauptkommissar','Polizeihauptkommissar A12','Erster Polizeihauptkommissar','Polizeiratanwärter','Polizeirat','Polizeioberrat','Polizeidirektor','Leitender Polizeidirektor','Polizeivizepräsident','Polizeipräsident'] as $rang)checkAus(IDV\ausbildungTrainerRangErlaubt($rang),'eligible trainer '.$rang);
 foreach(['Polizeimeisteranwärter','Polizeimeister','Polizeikommissaranwärter','Kriminalkommissaranwärter',''] as $rang)checkAus(!IDV\ausbildungTrainerRangErlaubt($rang),'ineligible trainer '.$rang);
 checkAus(IDV\ausbildungTrainerRangErlaubt(' POLIZEIOBERMEISTER '),'normalized trainer rank');
+
+$catalog=[['name'=>'Polizeiobermeister','sortierung'=>3],['name'=>'Kriminalobermeister','sortierung'=>4],['name'=>'Polizeimeister','sortierung'=>2],['name'=>'Polizeikommissaranwärter','sortierung'=>7]];
+checkAus(IDV\ausbildungTrainerRangErlaubt('Kriminalobermeister',$catalog),'custom eligible rank from current catalogue');
+checkAus(!IDV\ausbildungTrainerRangErlaubt('Polizeikommissaranwärter',$catalog),'trainee remains excluded even above sort threshold');
+checkAus(!IDV\ausbildungTrainerRangErlaubt('Unbekannt',$catalog),'unknown rank denied');
