@@ -79,11 +79,38 @@ function dispatchPruefungGoogle(array $u,string $method,string $uri): bool {
     if(!is_string($art)||!isset(IDV_FORM_SOURCES[$art])||!is_string($code))fail(400,'Prüfungsart oder Google-Anmeldung ungültig');
     // Reuse the existing origin-checked popup code exchange. Tokens stay
     // server-side, live only for this request, and are never persisted.
-    $token=googleCodeForSession($code,$origin,$cfg);
-    $r=googleRequest('https://forms.googleapis.com/v1/forms/'.rawurlencode(IDV_FORM_SOURCES[$art]),'GET',$token);
+    // Provide a useful, non-secret OAuth error rather than a generic login failure.
+    if(strlen($code)<15||strlen($code)>2048)fail(400,'Google hat keinen gültigen Autorisierungscode zurückgegeben.');
+    $exchange=googleRequest('https://oauth2.googleapis.com/token','POST',null,[
+        'code'=>$code,'client_id'=>$cfg['id'],'client_secret'=>$cfg['secret'],
+        'grant_type'=>'authorization_code','redirect_uri'=>$origin
+    ],'application/x-www-form-urlencoded',15);
+    $grant=json_decode($exchange['body'],true);
+    if($exchange['code']!==200||!is_array($grant)||empty($grant['access_token'])){
+        $reason=is_array($grant)?($grant['error']??''):'';
+        $hint=match($reason){
+            'redirect_uri_mismatch'=>'OAuth-Weiterleitungsadresse stimmt nicht mit der Portaladresse überein.',
+            'invalid_client','unauthorized_client'=>'Google-OAuth-Client auf dem Hoster oder in Google Cloud prüfen.',
+            'invalid_grant'=>'Autorisierungscode ungültig oder bereits verwendet. Bitte erneut verbinden.',
+            'access_denied'=>'Google-Zugriff wurde abgelehnt.',
+            default=>'Google-Anmeldung konnte nicht abgeschlossen werden (HTTP '.$exchange['code'].').'
+        };
+        fail(401,$hint);
+    }
+    $token=(string)$grant['access_token'];
+    if(isset($grant['scope'])&&!in_array(IDV_FORM_SCOPE,preg_split('/\\s+/',trim((string)$grant['scope'])),true))
+        fail(403,'Forms-Lesezugriff wurde nicht freigegeben. Bitte bei Google bestätigen.');
+    unset($grant,$exchange);
+    $r=googleRequest('https://forms.googleapis.com/v1/forms/'.rawurlencode(IDV_FORM_SOURCES[$art]),'GET',$token,null,null,15);
     unset($token,$code,$b);
     if($r['code']===401)fail(401,'Google-Anmeldung abgelaufen. Bitte erneut verbinden.');
-    if($r['code']===403)fail(403,'Google verweigert den Formularzugriff. Forms API im bestehenden Cloud-Projekt aktivieren und das berechtigte Google-Konto mit Forms-Lesezugriff auswählen.');
+    if($r['code']===403){
+        $error=json_decode($r['body'],true);
+        $reasons=array_column($error['error']['details']??[],'reason');
+        if(in_array('SERVICE_DISABLED',$reasons,true))fail(403,'Google Forms API ist im OAuth-Cloud-Projekt nicht aktiviert. Forms API aktivieren und erneut verbinden.');
+        if(in_array('ACCESS_TOKEN_SCOPE_INSUFFICIENT',$reasons,true))fail(403,'Google-Token hat keinen Forms-Lesezugriff. Erneut verbinden und den Zugriff bestätigen.');
+        fail(403,'Google verweigert den Formularzugriff. Berechtigtes Google-Konto auswählen und Forms API im OAuth-Cloud-Projekt prüfen.');
+    }
     if($r['code']===404)fail(404,'Google-Formular nicht gefunden oder für dieses Google-Konto nicht freigegeben.');
     if($r['code']!==200)fail(502,'Google Forms konnte nicht gelesen werden (HTTP '.$r['code'].')');
     $form=json_decode($r['body'],true,64,JSON_THROW_ON_ERROR);

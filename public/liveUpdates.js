@@ -48,6 +48,8 @@
 
   function updateView(){
     if(!ME||!D)return false;
+    // The exam module owns its live refresh; never detach an OAuth callback or editor.
+    if(tab==='ausbildung-pruefungen'&&window.IDVPruefungen?.isMounted?.()&&can(tab))return true;
     if(editorOpen())return true;
     const render={
       dash:()=>vDash(),pers:()=>vPers(),bef:()=>vBef(),

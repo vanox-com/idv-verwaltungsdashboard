@@ -18,7 +18,7 @@ function examIcon(key){
  const e=node('span',undefined,'exam-icon');e.setAttribute('aria-hidden','true');e.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(paths[key]||'')+'</svg>';return e;
 }
 const date=s=>s?new Date(s.replace(' ','T')+'Z').toLocaleString('de-DE'):'—';
-async function api(path='',data){const r=await fetch(root+path,{credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','Accept':'application/json','X-Requested-With':'XMLHttpRequest'},...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)})});const j=await r.json().catch(()=>({}));if(!r.ok)throw Error((j.error||'HTTP '+r.status)+(j.referenz?' · Referenz '+j.referenz:''));return j;}
+async function api(path='',data,signal){const r=await fetch(root+path,{credentials:'same-origin',cache:'no-store',signal,headers:{'Content-Type':'application/json','Accept':'application/json','X-Requested-With':'XMLHttpRequest'},...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)})});const j=await r.json().catch(()=>null);if(!j)throw Error('Der Server lieferte keine JSON-Antwort (HTTP '+r.status+'). Bitte Serverprotokoll prüfen.');if(!r.ok)throw Error((j.error||'HTTP '+r.status)+(j.referenz?' · Referenz '+j.referenz:''));return j;}
 function convertGoogle(raw){
  const d=raw.definition||raw;if(!Array.isArray(d.items))throw Error('Keine Google-Forms-Definition gefunden');
  const out=[],warnings=[],blockers=[];
@@ -77,6 +77,7 @@ function open(host){
  const mount=node('div',undefined,'exam-center');host.replaceChildren(mount);
  const note=node('p','','exam-message');note.hidden=true;note.setAttribute('role','status');const main=node('div',undefined,'exam-body');mount.append(note,main);
  let data=null,busy=false,view='overview',detailId=null,templateDraft=null,lastList='overview',search='',kind='',dirty=false;
+ mount.id='idvExamMount';
  main.addEventListener('input',e=>{if(['create','templates','detail'].includes(view)&&e.target.matches('input,select,textarea'))dirty=true;});
  main.addEventListener('change',e=>{if(['create','templates','detail'].includes(view)&&e.target.matches('input,select,textarea'))dirty=true;});
  function canLeave(){return !dirty||confirm('Ungespeicherte Eingaben verwerfen?');}
@@ -205,9 +206,10 @@ function open(host){
  const googleBox=card('Google Forms direkt importieren · nur Admin');
  const source=field(googleBox,'Originalprüfung',select([['pm','PM-Theorieprüfung'],['pk','PK-Prüfung'],['dgl','DGL-Theorieprüfung']]));
  if(['pm','pk','dgl'].includes(v.value))source.value=v.value;
- const googleHint=node('p','Google-Anmeldung wird vorbereitet …','mut');googleBox.append(googleHint);
+ const googleHint=node('p','Google-Anmeldung wird vorbereitet …','mut');googleHint.setAttribute('role','status');googleHint.setAttribute('aria-live','polite');googleBox.append(googleHint);
  const download=node('button','Originalexport (JSON) sichern');download.type='button';download.hidden=true;googleBox.append(download);
- let googleConfig=null,googleReady=false,lastRaw=null;
+ let googleConfig=null,googleReady=false,lastRaw=null,googleClient=null,job=null;
+ const importStatus=(text,bad=false)=>{googleHint.textContent=text;googleHint.style.color=bad?'var(--bad)':'';};
  download.onclick=()=>{if(!lastRaw)return;const url=URL.createObjectURL(new Blob([JSON.stringify(lastRaw,null,2)],{type:'application/json'}));const a=node('a');a.href=url;a.download='IDV-'+lastRaw.art+'-Forms.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
  function useImport(raw,art){
   const result=Array.isArray(raw)?{fragen:raw,warnings:[],blockers:[]}:Array.isArray(raw.fragen)?{fragen:raw.fragen,warnings:[],blockers:[]}:convertGoogle(raw);
@@ -219,22 +221,49 @@ function open(host){
    for(const x of result.blockers)d.append(node('p','OFFEN: '+x));for(const x of result.warnings)d.append(node('p','Hinweis: '+x));importNotes.append(d);
    if(result.blockers.length)importNotes.append(btn('Offene Importprobleme nach manueller Ergänzung bestätigen',()=>{if(confirm('Hast du alle oben genannten nicht übernommenen Inhalte vollständig manuell ergänzt?')){importBlockers=[];confirmation.checked=false;message('Manuelle Ergänzung bestätigt. Bitte Vorlage fachlich prüfen.');}},''));
   }
-  renderQuestions();message('Import geladen: '+questions.length+' Fragen. '+(importBlockers.length?'Offene Importprobleme zuerst beheben.':'Lösungen und Punktwerte prüfen.'));
+  renderQuestions();dirty=true;message('Import geladen: '+questions.length+' Fragen. '+(importBlockers.length?'Offene Importprobleme zuerst beheben.':'Lösungen und Punktwerte prüfen.'));
  }
- const googleButton=btn('Mit Google verbinden und importieren',()=>{
-  if(!googleReady||!googleConfig||busy)return;
-  if(draft&&source.value!==draft.art){message('Die ausgewählte Prüfung passt nicht zur bearbeiteten Vorlage.',true);return}
-  if(questions.length&&!confirm('Aktuellen Entwurf durch Google-Import ersetzen?'))return;
-  const art=source.value;busy=true;googleButton.disabled=true;source.disabled=true;
-  const done=()=>{busy=false;googleButton.disabled=false;source.disabled=false};
+ const idleLabel='Mit Google verbinden und importieren';
+ function finish(current,text,bad=false){
+  if(job!==current)return;
+  clearTimeout(current.timer);job=null;busy=false;
+  if(googleBox.isConnected){googleButton.disabled=!googleReady;source.disabled=false;googleButton.textContent=idleLabel;cancelImport.hidden=true;importStatus(text,bad);}
+ }
+ function oauthError(response){
+  const code=String(response?.error||response?.type||'');
+  return ({access_denied:'Google-Zugriff wurde nicht erteilt.',popup_closed:'Google-Fenster wurde geschlossen, ohne dass ein Autorisierungscode angekommen ist.',popup_failed_to_open:'Google-Popup konnte nicht geöffnet werden. Popups für diese Website zulassen.',invalid_scope:'Google hat den Forms-Lesezugriff abgelehnt.',interaction_required:'Google benötigt eine erneute Bestätigung.'})[code]||'Google-Anmeldung konnte nicht abgeschlossen werden'+(/^[a-z_]{1,60}$/.test(code)?' ('+code+')':'')+'.';
+ }
+ async function receiveCode(response){
+  const current=job;if(!current||current.phase!=='oauth')return;
+  if(response?.error||!response?.code){finish(current,oauthError(response),true);return;}
+  clearTimeout(current.timer);current.phase='fetch';current.controller=new AbortController();
+  importStatus('Google-Konto verbunden. Fragen, Lösungen, Punktwerte und Bilder werden abgerufen …');
+  googleButton.textContent='Prüfung wird importiert …';
+  current.timer=setTimeout(()=>{current.controller.abort();finish(current,'Zeitlimit beim Formularabruf erreicht. Bitte erneut verbinden.',true)},75000);
   try{
-   const client=google.accounts.oauth2.initCodeClient({client_id:googleConfig.clientId,scope:'https://www.googleapis.com/auth/forms.body.readonly',include_granted_scopes:false,ux_mode:'popup',select_account:true,
-    callback:async response=>{try{if(!response.code)throw Error('Google-Anmeldung abgebrochen.');const raw=await api('/google/import',{art,google_code:response.code});if(!googleBox.isConnected)return;lastRaw=raw;download.hidden=false;useImport(raw,art);}catch(e){message(e.message,true)}finally{done()}},
-    error_callback:e=>{done();message(e.type==='popup_closed'?'Google-Anmeldung abgebrochen.':'Google-Popup konnte nicht geöffnet werden.',true)}});
-   client.requestCode();
-  }catch(e){done();message(e.message,true)}
- });googleButton.disabled=true;googleBox.append(googleButton);c.append(googleBox);
- (async()=>{try{const config=await api('/google/status');if(!config.eingerichtet)throw Error(config.hinweis||'Google OAuth nicht eingerichtet.');if(location.origin!==config.origin)throw Error('Google-Import bitte auf '+config.origin+' öffnen.');await loadFormsGoogle();if(!googleBox.isConnected)return;googleConfig=config;googleReady=true;googleButton.disabled=false;googleHint.textContent='Nur Lesezugriff auf Formularstruktur und hinterlegte Lösungen. Kein Zugriff auf Prüfungsantworten.';}catch(e){googleHint.textContent=e.message}})();
+   const raw=await api('/google/import',{art:current.art,google_code:response.code},current.controller.signal);
+   if(job!==current||!googleBox.isConnected)return;
+   useImport(raw,current.art);lastRaw=raw;download.hidden=false;
+   finish(current,'Import erfolgreich: '+questions.length+' Fragen · '+questions.reduce((n,q)=>n+(Number(q.punkte)||0),0)+' Gesamtpunkte. '+(importBlockers.length?'Offene Importprobleme prüfen.':'Lösungen prüfen und Vorlage speichern.'));
+  }catch(e){if(job===current)finish(current,'Import fehlgeschlagen: '+e.message,true);}
+ }
+ const googleButton=btn(idleLabel,()=>{
+  if(!googleReady||!googleClient||busy)return;
+  if(draft&&source.value!==draft.art){importStatus('Die ausgewählte Prüfung passt nicht zur bearbeiteten Vorlage.',true);return;}
+  if(questions.length&&!confirm('Aktuellen Entwurf durch Google-Import ersetzen?'))return;
+  const current={art:source.value,phase:'oauth',timer:null,controller:null};job=current;busy=true;googleButton.disabled=true;source.disabled=true;cancelImport.hidden=false;
+  googleButton.textContent='Warte auf Google …';importStatus('Google-Fenster geöffnet. Konto auswählen und Forms-Lesezugriff bestätigen.');
+  current.timer=setTimeout(()=>finish(current,'Google hat keinen Autorisierungscode zurückgegeben. Popups zulassen und erneut versuchen. Falls nötig: COOP-Konfiguration des Hosters prüfen.',true),120000);
+  try{googleClient.requestCode();}catch(e){finish(current,'Google-Popup konnte nicht geöffnet werden: '+e.message,true);}
+ });
+ const cancelImport=btn('Abbrechen',()=>{const current=job;if(!current)return;current.controller?.abort();finish(current,'Import abgebrochen. Du kannst dich erneut verbinden.');},'');cancelImport.hidden=true;
+ googleButton.disabled=true;googleBox.append(googleButton,cancelImport);c.append(googleBox);
+ (async()=>{try{
+  const config=await api('/google/status');if(!config.eingerichtet)throw Error(config.hinweis||'Google OAuth nicht eingerichtet.');if(location.origin!==config.origin)throw Error('Google-Import bitte auf '+config.origin+' öffnen.');
+  await loadFormsGoogle();if(!googleBox.isConnected)return;googleConfig=config;
+  googleClient=google.accounts.oauth2.initCodeClient({client_id:config.clientId,scope:'https://www.googleapis.com/auth/forms.body.readonly',include_granted_scopes:false,ux_mode:'popup',select_account:true,callback:receiveCode,error_callback:e=>{if(job)finish(job,oauthError(e),true)}});
+  googleReady=true;googleButton.disabled=false;importStatus('Bereit. Lesezugriff auf Fragen, hinterlegte Lösungen, Punkte und Feedback. Keine Prüfungsantworten.');
+ }catch(e){importStatus('Google-Verbindung nicht bereit: '+e.message,true)}})();
  const file=field(c,'JSON-Datei importieren (optional)',node('input'));file.type='file';file.accept='.json,application/json';
  file.onchange=async()=>{try{const f=file.files[0];if(!f)return;if(f.size>1800000)throw Error('Datei zu groß');const raw=JSON.parse(await f.text());if(questions.length&&!confirm('Fragen im aktuellen Entwurf durch Import ersetzen?'))return;useImport(raw,null)}catch(e){message(e.message,true)}};
  }else{c.append(node('p','Der Import aus Google Forms oder JSON-Dateien ist ausschließlich Administratoren vorbehalten. Fragen und Lösungen können hier weiterhin manuell bearbeitet werden.','mut'));}
@@ -285,5 +314,5 @@ function open(host){
  main.append(node('h1','Prüfungszentrum'),node('p','Prüfungen werden geladen …','mut'));run(load);
  const interval=setInterval(()=>{if(!connected()){clearInterval(interval);return}if(view==='running'&&!busy&&document.visibilityState==='visible')run(load)},10000);
 }
-window.IDVPruefungen={open,convertGoogle};
+window.IDVPruefungen={open,convertGoogle,isMounted:()=>!!document.getElementById('idvExamMount')};
 })();
