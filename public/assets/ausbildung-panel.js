@@ -30,7 +30,7 @@ const fmtTimestamp=v=>{
 };
 const modName=(m)=>m.code==='WB'?'Weiterbildungen':m.code+' · '+m.titel;
 const lessonCodeLabel=code=>code==='WB'?'Weiterbildung':code;
-const pill=(s)=>'<span class="pill '+(s==='Zugelassen'?'good':s==='Nicht bereit'?'warn':'')+'">'+esc(s)+'</span>';
+const pill=(s)=>'<span class="pill '+(s==='Zugelassen'?'good':/ausstehend|unvollständig|Nicht bereit/.test(s)?'warn':'')+'">'+esc(s)+'</span>';
 const meter=(n,d)=>'<div class="meter" title="'+n+' von '+d+'"><i style="width:'+Math.min(100,Math.max(0,d?n/d*100:0))+'%"></i></div>';
 let data=null,tab=initial.route||'uebersicht',track=initial.track||'PMA',selected=null,editing=null,busy=false,lessonInvite=null;
 try{
@@ -131,6 +131,9 @@ async function load(){
  }
 }
 function voteDraftDirty(){
+ const points=el('#dglPoints'),percent=el('#dglPercent');
+ if(points&&percent&&selected){const d=selected.fortschritt.dgl||{};
+   if(points.value!==String(d.punkte??'')||percent.value!==String(d.prozent??''))return true;}
  const v=el('#vote'),reason=el('#voteReason'),date=el('#votePatrolDate'),note=el('#voteNote');
  if(!v||!reason||!date||!note||!selected)return false;
  const old=selected.fortschritt.stimmen?.find(x=>Number(x.ausbilder_user_id)===Number(data?.user.id));
@@ -197,7 +200,7 @@ function examOverviewRow(x){
  const track=['PMA','PKA','KKA'].includes(x.laufbahn)?x.laufbahn:'';
  const total=Math.max(0,Number(f.moduleGesamt)||0),done=Math.max(0,Math.min(total,Number(f.moduleFertig)||0));
  const pct=total?Math.round(done/total*100):0;
- const state=f.status==='Zugelassen'?'ready':f.status==='Nicht bereit'?'not-ready':(f.status==='Module unvollständig'||f.status==='RSA ausstehend')?'incomplete':'unknown';
+ const state=f.status==='Zugelassen'?'ready':f.status==='Nicht bereit'?'not-ready':(f.status==='Module unvollständig'||f.status==='RSA ausstehend'||f.status==='DGL-Praxis ausstehend'||f.status==='DGL-Prüfung ausstehend')?'incomplete':'unknown';
  return '<div class="exam-row '+track.toLowerCase()+'"><div><div class="exam-name">'+esc(x.name)+'</div>'+
  '<div class="exam-meta"><span class="exam-track">'+esc(track||x.laufbahn)+'</span><span>'+done+' / '+total+' Module</span><span>'+pct+' %</span>'+(track==='PMA'?'<span class="exam-status '+(f.rsa?'ready':'incomplete')+'">RSA '+(f.rsa?'erhalten':'offen')+'</span>':'')+'</div>'+
  '<div class="exam-meter" role="progressbar" aria-label="Modulfortschritt" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+pct+'"><i style="width:'+pct+'%"></i></div></div>'+
@@ -209,7 +212,7 @@ function overview(){
  '<div class="kpis"><div class="kpi"><strong>'+a.length+'</strong><span>Anwärter insgesamt</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='PMA').length+'</strong><span>PMA</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='PKA').length+'</strong><span>PKA</span></div><div class="kpi"><strong>'+a.filter(x=>x.laufbahn==='KKA').length+'</strong><span>KKA</span></div><div class="kpi"><strong>'+n+'</strong><span>Zur Prüfung zugelassen</span></div></div>'+
  '<div class="grid"><section class="card"><h2>Prüfungsstand</h2>'+'<div class="exam-list">'+a.slice(0,12).map(examOverviewRow).join('')+'</div>'+
  (a.length?'':'<p class="muted">Noch keine Anwärter angelegt.</p>')+
- '</section><section class="card"><h2>Ausbildungsstruktur</h2><p>Die PMA-Ausbildung umfasst sieben Pflichtmodule: PM.0 Onboarding, PM.1 Funkwesen und PM.2 bis PM.6. Die PMA-Prüfungsbereitschaft setzt vollständige Module, die <b>RSA-Schulung</b> und mindestens <b>2,5 gewichtete Stimmenpunkte</b> voraus.</p><p>PKA und KKA verwenden derzeit PK.1–PK.4. Hier gilt laut Vorlage: alle vier Module abgeschlossen = zugelassen.</p><p class="muted">PK.5, PK.7 und PM.7 sind in der Kompetenzmatrix beziehungsweise Übersicht genannt, aber mangels eindeutiger Bewertungsregel noch keine Pflichtmodule.</p><button data-tab="monitore" class="primary">Zu den Monitoren</button></section></div>';
+ '</section><section class="card"><h2>Ausbildungsstruktur</h2><p>Die PMA-Ausbildung umfasst sieben Pflichtmodule: PM.0 Onboarding, PM.1 Funkwesen und PM.2 bis PM.6. Die PMA-Prüfungsbereitschaft setzt vollständige Module, die <b>RSA-Schulung</b> und mindestens <b>2,5 gewichtete Stimmenpunkte</b> voraus.</p><p>PKA und KKA verwenden derzeit PK.1–PK.4. Für die PK-/KK-Prüfung sind vier Pflichtmodule und die DGL-Prüfung erforderlich. Die DGL-Prüfung setzt je zwei Stunden DGL und Führungsassistenz voraus.</p><p class="muted">PK.5, PK.7 und PM.7 sind in der Kompetenzmatrix beziehungsweise Übersicht genannt, aber mangels eindeutiger Bewertungsregel noch keine Pflichtmodule.</p><button data-tab="monitore" class="primary">Zu den Monitoren</button></section></div>';
 }
 function monitorMatches(laufbahn,monitor){
  return monitor==='PMA'?laufbahn==='PMA':['PKA','KKA'].includes(laufbahn);
@@ -217,8 +220,8 @@ function monitorMatches(laufbahn,monitor){
 function monitors(){
  let list=data.anwaerter.filter(a=>monitorMatches(a.laufbahn,track)).sort((a,b)=>String(a.name).localeCompare(String(b.name),'de'));
  let html='<div class="card"><div class="flex space"><div class="flex">'+['PMA','PKA-KKA'].map(t=>'<button data-track="'+t+'" class="'+(track===t?'primary':'')+'">'+(t==='PMA'?'PMA':'PKA / KKA')+' ('+data.anwaerter.filter(x=>monitorMatches(x.laufbahn,t)).length+')</button>').join('')+'</div>'+
- '<span class="pill good">Live aus dem zentralen Personalstamm</span></div><div class="tablewrap"><table><thead><tr><th>Dienstnr.</th><th>Anwärter</th>'+(track!=='PMA'?'<th>Laufbahn</th>':'')+'<th>Beginn</th><th>Module</th>'+(track==='PMA'?'<th>RSA</th>':'')+'<th>Prüfungsstand</th><th></th></tr></thead><tbody>'+
- list.map(x=>'<tr><td>'+esc(x.personalnummer??'—')+'</td><td><b>'+esc(x.name)+'</b><br><small>'+esc(x.nebenberuf||'')+'</small></td>'+(track!=='PMA'?'<td><span class="exam-row '+esc(x.laufbahn.toLowerCase())+'" style="display:inline-block;padding:0;border:0;background:none"><span class="exam-track">'+esc(x.laufbahn)+'</span></span></td>':'')+'<td>'+fmt(x.beginn)+'</td><td>'+x.fortschritt.moduleFertig+'/'+x.fortschritt.moduleGesamt+meter(x.fortschritt.moduleFertig,x.fortschritt.moduleGesamt)+'</td>'+(track==='PMA'?'<td><span class="exam-status '+(x.fortschritt.rsa?'ready':'incomplete')+'">'+(x.fortschritt.rsa?'Erhalten':'Offen')+'</span></td>':'')+'<td>'+pill(x.fortschritt.status)+'</td><td><button class="compact" data-action="open" data-id="'+x.id+'">Öffnen</button></td></tr>').join('')+
+ '<span class="pill good">Live aus dem zentralen Personalstamm</span></div><div class="tablewrap"><table><thead><tr><th>Dienstnr.</th><th>Anwärter</th>'+(track!=='PMA'?'<th>Laufbahn</th>':'')+'<th>Beginn</th><th>Module</th>'+(track==='PMA'?'<th>RSA</th>':'<th>DGL-Praxis</th><th>DGL-Prüfung</th>')+'<th>Prüfungsstand</th><th></th></tr></thead><tbody>'+
+ list.map(x=>'<tr><td>'+esc(x.personalnummer??'—')+'</td><td><b>'+esc(x.name)+'</b><br><small>'+esc(x.nebenberuf||'')+'</small></td>'+(track!=='PMA'?'<td><span class="exam-row '+esc(x.laufbahn.toLowerCase())+'" style="display:inline-block;padding:0;border:0;background:none"><span class="exam-track">'+esc(x.laufbahn)+'</span></span></td>':'')+'<td>'+fmt(x.beginn)+'</td><td>'+x.fortschritt.moduleFertig+'/'+x.fortschritt.moduleGesamt+meter(x.fortschritt.moduleFertig,x.fortschritt.moduleGesamt)+'</td>'+(track==='PMA'?'<td><span class="exam-status '+(x.fortschritt.rsa?'ready':'incomplete')+'">'+(x.fortschritt.rsa?'Erhalten':'Offen')+'</span></td>':'<td>'+dglBadge(x.fortschritt.dgl?.pruefungMoeglich,((x.fortschritt.dgl?.dgl?1:0)+(x.fortschritt.dgl?.assistenz?1:0))+' / 2')+'</td><td>'+dglBadge(x.fortschritt.dgl?.pruefung,x.fortschritt.dgl?.pruefung?'Abgeschlossen':'Offen')+'</td>')+'<td>'+pill(x.fortschritt.status)+'</td><td><button class="compact" data-action="open" data-id="'+x.id+'">Öffnen</button></td></tr>').join('')+
  '</tbody></table></div>'+(list.length?'':'<p class="muted">Für diese Laufbahn sind noch keine Datensätze angelegt.</p>')+'</div>';
  // Anwärter werden nur im Personalstamm angelegt.
  if(selected?.anwaerter && monitorMatches(selected.anwaerter.laufbahn,track))html+=traineeDetails(selected);
@@ -230,6 +233,18 @@ function traineeForm(a){
  '<p><b>'+esc(a?.name||'')+'</b> · '+esc(a?.laufbahn||'')+' · Dienstnummer '+esc(a?.personalnummer||'—')+'</p>'+
  '<form id="traineeForm" class="formgrid"><label class="full">Interne Ausbildungsbemerkung<textarea name="bemerkung" maxlength="2000" rows="3">'+esc(a?.bemerkung||'')+'</textarea></label>'+
  '<div class="full flex"><button type="submit" class="primary">Ausbildungsnotiz speichern</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></section>';
+}
+function dglBadge(done,label){return '<span class="exam-status '+(done?'ready':'incomplete')+'">'+esc(label)+'</span>';}
+function dglSection(p){
+ if(!data.dglBereit)return '<section class="card"><h3>DGL-Praxis und Prüfung</h3><p>Die DGL-Erweiterung muss eingerichtet werden. Bis dahin erfolgt keine PK-/KK-Prüfungszulassung.</p>'+(data.user.rolle==='Administrator'?'<button data-action="setup-schema" class="primary">DGL-Erweiterung nach Backup einrichten</button>':'<p class="muted">Bitte den Administrator informieren.</p>')+'</section>';
+ const d=p.dgl||{};
+ const row=(key,title)=>'<div class="modrow"><b>2 Std.</b><div><b>'+esc(title)+'</b><div>'+dglBadge(d[key],d[key]?'Abgeschlossen':'Offen')+'</div>'+(d[key]?'<small>Bestätigt durch '+esc(d[key+'_von']||'—')+' · '+esc(fmtTimestamp(d[key+'_am']))+'</small>':'')+'</div><button class="compact '+(d[key]?'':'primary')+'" data-action="dgl-practice" data-part="'+key+'" data-done="'+(d[key]?'1':'0')+'" '+(d.pruefung&&d[key]?'disabled title="Zuerst DGL-Prüfung zurücksetzen"':'')+'>'+(d[key]?'↶ Zurücksetzen':'✓ Abschließen')+'</button></div>';
+ return '<section class="card" style="margin-top:16px"><h3>DGL-Praxis · Pflichtnachweise</h3><p class="muted">Beide Praxisnachweise sind zwingend vor der DGL-Prüfung zu bestätigen.</p>'+row('dgl','Dienstgruppenleitung')+row('assistenz','Führungsassistenz')+
+ '<h3 style="margin-top:20px">DGL-Prüfung</h3>'+dglBadge(d.pruefung,d.pruefung?'Abgeschlossen':d.pruefungMoeglich?'Zur DGL-Prüfung zugelassen':'Praxis ausstehend')+
+ '<p class="muted">'+(d.pruefungMoeglich?'Punkte und Prozentwert der abgenommenen Prüfung eintragen.':'Die Prüfung ist gesperrt, bis beide Praxisnachweise abgeschlossen sind.')+'</p>'+
+ '<div class="formgrid"><label>Erreichte Punkte<input id="dglPoints" type="number" min="0" max="99999999.99" step="0.01" value="'+esc(d.punkte??'')+'" '+(!d.pruefungMoeglich?'disabled':'')+'></label><label>Erreichte Prozent (%)<input id="dglPercent" type="number" min="0" max="100" step="0.01" value="'+esc(d.prozent??'')+'" '+(!d.pruefungMoeglich?'disabled':'')+'></label></div>'+
+ (d.pruefung?'<p class="muted">Abgenommen durch '+esc(d.pruefung_von||'—')+' · '+esc(fmtTimestamp(d.pruefung_am))+'</p>':'')+
+ '<div class="flex"><button class="primary" data-action="dgl-exam" '+(!d.pruefungMoeglich?'disabled':'')+'>'+(d.pruefung?'Ergebnis aktualisieren':'✓ DGL-Prüfung abschließen')+'</button>'+(d.pruefung?'<button class="danger" data-action="dgl-reset">Prüfung zurücksetzen</button>':'')+'</div></section>';
 }
 function traineeDetails(d){
  const a=d.anwaerter,p=d.fortschritt;
@@ -254,7 +269,7 @@ function traineeDetails(d){
  '<div class="kpis"><div class="kpi"><strong>'+p.moduleFertig+' / '+p.moduleGesamt+'</strong><span>Module abgeschlossen</span></div><div class="kpi"><strong>'+Number(p.stimmenSaldo).toLocaleString('de-DE')+'</strong><span>Punktesaldo</span></div><div class="kpi"><strong>'+Number(p.jaPunkte).toLocaleString('de-DE')+'</strong><span>Ja-Punkte ('+p.stimmenJa+' Stimmen)</span></div><div class="kpi"><strong>'+Number(p.neinPunkte).toLocaleString('de-DE')+'</strong><span>Nein-Punkte ('+p.stimmenNein+' Stimmen)</span></div></div>'+
  (a.laufbahn==='PMA'?'<h3>Verpflichtende Zusatzschulung</h3><div class="modrow"><b>RSA</b><div><b>RSA-Schulung</b><div class="muted">Zwingend für die PMA-Prüfungszulassung · mit Personalstamm synchronisiert</div><span class="exam-status '+(p.rsa?'ready':'incomplete')+'">'+(p.rsa?'Erhalten':'Offen')+'</span></div><button type="button" class="compact '+(!p.rsa?'primary':'')+'" data-action="rsa" data-done="'+(p.rsa?'1':'0')+'">'+(p.rsa?'↶ Zurücksetzen':'✓ Abschließen')+'</button></div>':'')+
  '<h3>Ausbildungsmodule</h3>'+modules+
- (a.laufbahn==='PMA'?voteSection(p,myVoteRecord,canEdit):'')+
+ (a.laufbahn==='PMA'?voteSection(p,myVoteRecord,canEdit):dglSection(p))+
  '<div class="flex" style="margin-top:20px">'+'<button data-action="edit-trainee">Ausbildungsnotiz bearbeiten</button><button data-action="create-link" class="primary">Externen Link erzeugen / erneuern</button><button data-action="remove-link" class="danger">Externen Link sperren</button>'+'</div>'+
  '<p class="muted">Externe Links zeigen Modulfortschritte, PMA-Stimmenanzahl und Prüfungsstatus, keine Namen oder internen Bewertungen.</p><div id="createdLink"></div>'+
  '</section>';
@@ -426,6 +441,20 @@ shadow.addEventListener('click',async(e)=>{
  if(mode==='open'){await act(async()=>{selected=await request('anwaerter/'+id);editing=null;render();el('#details')?.scrollIntoView({behavior:'smooth'})});return}
  if(mode==='edit-trainee'){editing={type:'trainee-edit'};render();return}
  if(mode==='module'){await act(async()=>{const id=selected.anwaerter.id;await request('anwaerter/'+id+'/modul/'+encodeURIComponent(btn.dataset.code),{method:'PUT',body:JSON.stringify({abgeschlossen:btn.dataset.done!=='1',revision:Number(selected.anwaerter.revision)})});selected=await request('anwaerter/'+id);await load();message('Modul gespeichert.')});return}
+ if(['dgl-practice','dgl-exam','dgl-reset'].includes(mode)){await act(async()=>{
+   const part=mode==='dgl-practice'?btn.dataset.part:'pruefung';
+   const done=mode==='dgl-exam'||(mode==='dgl-practice'&&btn.dataset.done!=='1');
+   if(!done&&!confirm('DGL-Nachweis zurücksetzen? Die Prüfungszulassung kann dadurch entfallen.'))return;
+   const body={bereich:part,abgeschlossen:done,revision:Number(selected.anwaerter.revision)};
+   if(mode==='dgl-exam'){
+     const points=el('#dglPoints'),percent=el('#dglPercent');
+     if(!points?.value||!percent?.value||!points.checkValidity()||!percent.checkValidity())throw Error('Bitte gültige Punkte und Prozent (0–100) eintragen.');
+     body.punkte=Number(points.value);body.prozent=Number(percent.value);
+   }
+   const id=selected.anwaerter.id;
+   await request('anwaerter/'+id+'/dgl',{method:'PUT',body:JSON.stringify(body)});
+   selected=await request('anwaerter/'+id);await load();message('DGL-Nachweis und Prüfungsstatus aktualisiert.');
+ });return}
  if(mode==='rsa'){await act(async()=>{
    const id=selected.anwaerter.id,bisher=btn.dataset.done==='1';
    if(bisher&&!confirm('RSA-Schulung zurücksetzen? Die Prüfungszulassung kann dadurch entfallen.'))return;
@@ -492,7 +521,7 @@ shadow.addEventListener('submit',async(e)=>{
  });
 });
 el('#reload').addEventListener('click',()=>{
- if(voteDraftDirty()&&!confirm('Nicht gespeicherte Stimmangaben verwerfen und aktuelle Daten laden?'))return;
+ if(voteDraftDirty()&&!confirm('Nicht gespeicherte Prüfungs- oder Stimmangaben verwerfen und aktuelle Daten laden?'))return;
  void act(refreshSelected);
 });
 shadow.addEventListener('change',e=>{

@@ -174,13 +174,17 @@ function ausbildungOeffentlicheMonitore(): never {
     // gültigen und aktuell zugewiesenen Personen-Identitätsschlüssel gelesen.
     $records=sql("SELECT id,personal_quelle,laufbahn FROM ausbildung_anwaerter
         WHERE personal_quelle IS NOT NULL");
-    $activeIds=[];
+    $activeIds=[];$dglRows=[];
     foreach($records as $record){
         $key=(string)$record['personal_quelle'];
         if(isset($tracked[$key]) && $tracked[$key]['laufbahn']===$record['laufbahn'])
             $activeIds[(int)$record['id']]=$key;
     }
     if($activeIds){
+        if(ausbildungDglSchemaBereit())foreach(sql('SELECT anwaerter_id,dgl_am,assistenz_am,pruefung_am,punkte,prozent FROM ausbildung_dgl') as $row){
+            $id=(int)$row['anwaerter_id'];
+            if(isset($activeIds[$id]))$dglRows[$activeIds[$id]]=$row;
+        }
         $moduleRows=sql("SELECT a.id,c.modul_code FROM ausbildung_abschluesse c
             JOIN ausbildung_anwaerter a ON a.id=c.anwaerter_id
             WHERE a.personal_quelle IS NOT NULL AND c.abgeschlossen=1");
@@ -214,15 +218,13 @@ function ausbildungOeffentlicheMonitore(): never {
         $track=$person['laufbahn'];
         $requiredCodes=array_column($required[$track],'code');
         $doneCodes=array_keys($completed[$key]??[]);
-        $result=ausbildungStatus($track,$requiredCodes,$doneCodes,$votes[$key]??[],$person['rsa']);
+        $result=ausbildungStatus($track,$requiredCodes,$doneCodes,$votes[$key]??[],$person['rsa'],$dglRows[$key]??[]);
         $modulesFinished=$result['moduleGesamt']>0
             && $result['moduleFertig']===$result['moduleGesamt'];
         $admitted=$result['bereit'];
 
-        // Erst Modulabschluss, dann bei PMA der Stimmen-/Punktestand.
-        // PKA/KKA: in der aktuellen PK-Regel bereits nach allen vier Modulen.
-        $status= !$modulesFinished ? 'Module ausstehend' :
-            ($admitted ? 'Zur Prüfung zugelassen' : ($track==='PMA'&&!$person['rsa']?'RSA ausstehend':'Module abgeschlossen – Stimmen fehlen'));
+        $status=$admitted?'Zur Prüfung zugelassen':(!$modulesFinished?'Module ausstehend':
+            ($track==='PMA'&&$person['rsa']?'Module abgeschlossen – Stimmen fehlen':$result['status']));
 
         $modules=[];
         foreach($required[$track] as $module){
@@ -246,7 +248,7 @@ function ausbildungOeffentlicheMonitore(): never {
             // und verantwortliche Ausbilder werden NIEMALS ausgegeben.
             $entry['stimmenAnzahl']=$result['stimmenJa']+$result['stimmenNein'];
             $entry['rsa']=$person['rsa'];
-        }
+        }else $entry['dgl']=$result['dgl'];
         $output[$track]['personen'][]=$entry;
         $output[$track]['anzahl']++;
         $output[$track]['moduleAbgeschlossen']+=$result['moduleFertig'];

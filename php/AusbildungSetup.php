@@ -11,13 +11,13 @@ function ausbildungSchemaStatus(): array {
     $required=[
         'ausbildung_ausbilder','ausbildung_anwaerter','ausbildung_module',
         'ausbildung_abschluesse','ausbildung_stimmen','ausbildung_materialien',
-        'ausbildung_unterricht'
+        'ausbildung_unterricht','ausbildung_dgl'
     ];
     $found=sql("SELECT TABLE_NAME AS name FROM information_schema.TABLES
                 WHERE TABLE_SCHEMA=DATABASE()
                   AND TABLE_NAME IN ('ausbildung_ausbilder','ausbildung_anwaerter',
                   'ausbildung_module','ausbildung_abschluesse','ausbildung_stimmen','ausbildung_materialien',
-                  'ausbildung_unterricht')");
+                  'ausbildung_unterricht','ausbildung_dgl')");
     $have=array_column($found,'name');
     $missing=array_values(array_diff($required,$have));
     $column=false;
@@ -47,13 +47,13 @@ function ausbildungSchemaStatus(): array {
         WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='ausbildung_stimmen'
           AND COLUMN_NAME IN ('anlass','streifenfahrt_datum','bemerkung')");
     $votesReady=(int)($detailCols[0]['n']??0)===3;
-    $criticalMissing=array_values(array_diff($missing,['ausbildung_unterricht']));
+    $criticalMissing=array_values(array_diff($missing,['ausbildung_unterricht','ausbildung_dgl']));
     $ready=$criticalMissing===[] && $column && $moduleCount>=11
         && in_array('Ausbildungsleitung',$roleNames,true)
         && in_array('Ausbilder',$roleNames,true);
     return [
         'bereit'=>$ready,
-        'unterrichtBereit'=>$roomReady,
+        'unterrichtBereit'=>$roomReady,'dglBereit'=>in_array('ausbildung_dgl',$have,true),
         'personalbindungBereit'=>$personalReady,
         'stimmenDetailsBereit'=>$votesReady,
         'fehlendeTabellen'=>$missing,
@@ -63,7 +63,7 @@ function ausbildungSchemaStatus(): array {
     ];
 }
 function ausbildungMigrationsdatei(string $filename): array {
-    if(!in_array($filename,['2026-11-24-ausbildung.sql','2026-11-24-aulk-public.sql','2026-11-24-ausbildung-unterricht.sql','2026-11-24-ausbildung-personal.sql','2026-11-24-ausbildung-vote-details.sql'],true))
+    if(!in_array($filename,['2026-11-24-ausbildung.sql','2026-11-24-aulk-public.sql','2026-11-24-ausbildung-unterricht.sql','2026-11-24-ausbildung-personal.sql','2026-11-24-ausbildung-vote-details.sql','2026-11-25-ausbildung-dgl.sql'],true))
         throw new \RuntimeException('Unbekannte Ausbildungsmigration');
     $path=dirname(__DIR__).'/scripts/mysql/'.$filename;
     if(!is_file($path)||!is_readable($path))
@@ -104,7 +104,7 @@ function dispatchAusbildungSetup(array $u,string $method,string $uri): bool {
             fail(400,'Vor der Einrichtung muss ein Datenbankbackup bestätigt werden');
         $schemaBefore=ausbildungSchemaStatus();
         if($schemaBefore['bereit'] && $schemaBefore['unterrichtBereit']
-            && $schemaBefore['personalbindungBereit'] && $schemaBefore['stimmenDetailsBereit']){
+            && $schemaBefore['personalbindungBereit'] && $schemaBefore['stimmenDetailsBereit'] && $schemaBefore['dglBereit']){
             respond(200,['ok'=>true,'bereitsEingerichtet'=>true,'schema'=>ausbildungSchemaStatus()]);
         }
         // A verbal "I made a backup" is not enough. Require an actual
@@ -133,7 +133,7 @@ function dispatchAusbildungSetup(array $u,string $method,string $uri): bool {
         try {
             // MySQL DDL implicitly commits. Both checked-in scripts are additive
             // and idempotent so a partially completed install can be retried.
-            foreach(['2026-11-24-ausbildung.sql','2026-11-24-aulk-public.sql','2026-11-24-ausbildung-unterricht.sql','2026-11-24-ausbildung-personal.sql','2026-11-24-ausbildung-vote-details.sql'] as $file){
+            foreach(['2026-11-24-ausbildung.sql','2026-11-24-aulk-public.sql','2026-11-24-ausbildung-unterricht.sql','2026-11-24-ausbildung-personal.sql','2026-11-24-ausbildung-vote-details.sql','2026-11-25-ausbildung-dgl.sql'] as $file){
                 foreach(ausbildungMigrationsdatei($file) as $step=>$statement){
                     try{
                         // EXECUTE aulk_stmt can return a SELECT result for an
@@ -153,7 +153,7 @@ function dispatchAusbildungSetup(array $u,string $method,string $uri): bool {
                 }
             }
             $status=ausbildungSchemaStatus();
-            if(!$status['bereit']||!$status['unterrichtBereit']||!$status['personalbindungBereit']||!$status['stimmenDetailsBereit'])throw new \RuntimeException('Schema nach Einrichtung unvollständig');
+            if(!$status['bereit']||!$status['unterrichtBereit']||!$status['personalbindungBereit']||!$status['stimmenDetailsBereit']||!$status['dglBereit'])throw new \RuntimeException('Schema nach Einrichtung unvollständig');
             auditAction($u,'Ausbildungsdatenbank additiv eingerichtet','add');
         }catch(\Throwable $error){
             $migrationError=$error;

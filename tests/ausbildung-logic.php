@@ -34,8 +34,14 @@ $incomplete=IDV\ausbildungStatus('PMA',$modules,array_slice($modules,0,6),$votes
 checkAus($incomplete['status']==='Module unvollständig','no admission without all seven modules');
 $pk=['PK.1','PK.2','PK.3','PK.4'];
 foreach(['PKA','KKA'] as $track){
- $pass=IDV\ausbildungStatus($track,$pk,$pk,[],false);
- checkAus($pass['bereit']===true&&$pass['schwelle']===null,$track.' four modules sufficient');
+ $practice=['dgl_am'=>'2026-11-25 10:00:00','assistenz_am'=>'2026-11-25 12:00:00'];
+ $exam=$practice+['pruefung_am'=>'2026-11-25 14:00:00','punkte'=>80,'prozent'=>80];
+ $pass=IDV\ausbildungStatus($track,$pk,$pk,[],false,$exam);
+ checkAus($pass['bereit']===true&&$pass['schwelle']===null,$track.' modules plus DGL exam sufficient');
+ checkAus(!IDV\ausbildungStatus($track,$pk,$pk,[],false)['bereit'],$track.' modules alone insufficient');
+ checkAus(!IDV\ausbildungStatus($track,$pk,$pk,[],false,$practice)['bereit'],$track.' practice without exam insufficient');
+ checkAus(!IDV\ausbildungStatus($track,$pk,array_slice($pk,0,3),[],false,$exam)['bereit'],$track.' exam without all modules insufficient');
+ checkAus(!IDV\ausbildungDglStatus(['pruefung_am'=>'2026-11-25','punkte'=>80,'prozent'=>80])['pruefung'],$track.' exam cannot bypass practice');
  $miss=IDV\ausbildungStatus($track,$pk,['PK.1','PK.2','PK.3'],[]);
  checkAus(!$miss['bereit'],$track.' missing module blocks admission');
 }

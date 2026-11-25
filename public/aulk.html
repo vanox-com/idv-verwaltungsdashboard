@@ -71,14 +71,14 @@ footer{border-top:1px solid var(--edge);padding:22px 0;font-size:12px;color:var(
 <div class="module"><span class="code">PM.6</span><span>ED-Behandlung &amp; Abhandlung</span></div>
 </article>
 <article class="card"><span class="tag">Gehobener Dienst · PKA</span><h3>Polizeikommissaranwärter</h3><p>Die Ausbildung im gehobenen operativen Dienst nutzt die vier PK-Module.</p>
-<div class="requirements"><b>Zulassungsvoraussetzungen</b><ol><li>PK.1, PK.2, PK.3 und PK.4 abschließen.</li><li>Nach vollständigem Modulabschluss weist der Monitor den Status „Zugelassen“ aus.</li></ol></div>
+<div class="requirements"><b>Zulassungsvoraussetzungen</b><ol><li>PK.1, PK.2, PK.3 und PK.4 abschließen.</li><li>Je zwei Stunden DGL und Führungsassistenz abschließen.</li><li>DGL-Prüfung abnehmen lassen; erst zusammen mit allen vier Modulen erfolgt die PK-Prüfungszulassung.</li></ol></div>
 <div class="module"><span class="code">PK.1</span><span>Grundlagen Einsatztaktik</span></div>
 <div class="module"><span class="code">PK.2</span><span>Einsatzleitung</span></div>
 <div class="module"><span class="code">PK.3</span><span>Verhandlungsführung</span></div>
 <div class="module"><span class="code">PK.4</span><span>Best Practice DGL</span></div>
 </article>
 <article class="card"><span class="tag">Gehobener Dienst · KKA</span><h3>Kriminalkommissaranwärter</h3><p>Die kriminalpolizeiliche Laufbahn wird als eigener Monitor geführt. Die aktuell hinterlegte Pflichtmodulreihe ist dieselbe PK.1 bis PK.4.</p>
-<div class="requirements"><b>Zulassungsvoraussetzungen</b><ol><li>Alle vier PK-Module vollständig abschließen.</li><li>Die Zulassung wird getrennt vom PKA-Monitor angezeigt.</li></ol></div>
+<div class="requirements"><b>Zulassungsvoraussetzungen</b><ol><li>Alle vier PK-Module vollständig abschließen.</li><li>Je zwei Stunden DGL und Führungsassistenz abschließen.</li><li>DGL-Prüfung abnehmen lassen; erst zusammen mit allen vier Modulen erfolgt die KK-Prüfungszulassung.</li></ol></div>
 <div class="module"><span class="code">PK.1</span><span>Grundlagen Einsatztaktik</span></div>
 <div class="module"><span class="code">PK.2</span><span>Einsatzleitung</span></div>
 <div class="module"><span class="code">PK.3</span><span>Verhandlungsführung</span></div>
@@ -187,6 +187,15 @@ function renderMonitors(){
     else
       vote.append(make('p','Zunächst müssen alle Pflichtmodule abgeschlossen werden.','muted'));
     box.append(vote);
+   }else{
+    const d=person.dgl||{},extra=make('div',undefined,'vote-box');
+    extra.append(make('strong','DGL-Praxis und Prüfung'));
+    for(const [key,label] of [['dgl','2 Stunden DGL'],['assistenz','2 Stunden Führungsassistenz'],['pruefung','DGL-Prüfung']]){
+      const line=make('div',undefined,'vote-row');
+      line.append(make('span',label),make('span',d[key]?'✓ Abgeschlossen':key==='pruefung'&&!d.pruefungMoeglich?'Gesperrt':'Offen','state'+(d[key]?' ready':' wait')));
+      extra.append(line);
+    }
+    box.append(extra);
    }
    grid.append(box);
   }

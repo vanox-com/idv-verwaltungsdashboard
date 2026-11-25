@@ -81,8 +81,18 @@ function ausbildungModule(string $laufbahn): array {
     $track=$laufbahn==='PMA'?'PMA':'PKA';
     return sql('SELECT code,titel,laufbahn FROM ausbildung_module WHERE laufbahn=? AND aktiv=1 ORDER BY sortierung,code',[$track]);
 }
-/** Pure status rules sourced from the uploaded spreadsheets. */
-function ausbildungStatus(string $laufbahn,array $required,array $completed,array $votes,bool $rsa=false): array {
+function ausbildungDglSchemaBereit(): bool {
+    static $ready=null;
+    if($ready===null)$ready=(bool)sql("SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='ausbildung_dgl'");
+    return $ready;
+}
+function ausbildungDglStatus(array $row=[]): array {
+    $dgl=!empty($row['dgl_am']);$assistenz=!empty($row['assistenz_am']);
+    return ['dgl'=>$dgl,'assistenz'=>$assistenz,'pruefungMoeglich'=>$dgl&&$assistenz,
+        'pruefung'=>$dgl&&$assistenz&&!empty($row['pruefung_am'])&&isset($row['punkte'],$row['prozent'])];
+}
+/** Training status rules. */
+function ausbildungStatus(string $laufbahn,array $required,array $completed,array $votes,bool $rsa=false,array $dgl=[]): array {
     $required=array_values(array_unique($required));
     $done=count(array_intersect($required,array_values(array_unique($completed))));
     $all=count($required)>0&&$done===count($required);
@@ -93,8 +103,12 @@ function ausbildungStatus(string $laufbahn,array $required,array $completed,arra
         elseif(($v['stimme']??'')==='Nein'){$score-=$weight;$neinPunkte+=$weight;$no++;}
     }
     $rsaPflicht=$laufbahn==='PMA';
-    $ready=$all&&(!$rsaPflicht||($rsa&&$score>=2.5));
-    return ['status'=>!$all?'Module unvollständig':($ready?'Zugelassen':($rsaPflicht&&!$rsa?'RSA ausstehend':'Nicht bereit')),
+    $dglPflicht=in_array($laufbahn,['PKA','KKA'],true);
+    $dglStatus=ausbildungDglStatus($dgl);
+    $ready=$all&&(!$rsaPflicht||($rsa&&$score>=2.5))&&(!$dglPflicht||$dglStatus['pruefung']);
+    $status=!$all?'Module unvollständig':($ready?'Zugelassen':($rsaPflicht?(!$rsa?'RSA ausstehend':'Nicht bereit'):
+        (!$dglStatus['pruefungMoeglich']?'DGL-Praxis ausstehend':'DGL-Prüfung ausstehend')));
+    return ['status'=>$status,'dglPflicht'=>$dglPflicht,'dgl'=>$dglPflicht?$dglStatus:null,
         'rsaPflicht'=>$rsaPflicht,'rsa'=>$rsaPflicht&&$rsa,
         'bereit'=>$ready,'moduleGesamt'=>count($required),'moduleFertig'=>$done,
         'stimmenJa'=>$yes,'stimmenNein'=>$no,'stimmenSaldo'=>round($score,2),
@@ -128,7 +142,10 @@ function ausbildungFortschritt(array $a,bool $details=false): array {
     // Read the current personnel value even for a public token with an old mirror.
     $source=$a['laufbahn']==='PMA'?ausbildungPersonalQuelleLesen($a):null;
     $rsa=ausbildungRsaErhalten($source['rsa']??null);
-    $s=ausbildungStatus((string)$a['laufbahn'],array_column($modules,'code'),$done,$votes,$rsa);
+    $dgl=in_array($a['laufbahn'],['PKA','KKA'],true)&&ausbildungDglSchemaBereit()
+        ?(sql('SELECT * FROM ausbildung_dgl WHERE anwaerter_id=?',[$id])[0]??[]):[];
+    $s=ausbildungStatus((string)$a['laufbahn'],array_column($modules,'code'),$done,$votes,$rsa,$dgl);
+    if($details&&$s['dglPflicht'])$s['dgl']+=array_intersect_key($dgl,array_flip(['dgl_am','dgl_von','assistenz_am','assistenz_von','pruefung_am','pruefung_von','punkte','prozent']));
     if($details){
         $s['module']=array_map(static function($m)use($doneRows){
             $record=null;foreach($doneRows as $row)if($row['modul_code']===$m['code']){$record=$row;break;}
@@ -252,7 +269,7 @@ function ausbildungExtern(): never {
     if($a['laufbahn']==='PMA'){
         $result['stimmenAnzahl']=$s['stimmenJa']+$s['stimmenNein'];
         $result['rsa']=$s['rsa'];
-    }
+    }else $result['dgl']=array_intersect_key($s['dgl']??[],array_flip(['dgl','assistenz','pruefung','pruefungMoeglich']));
     respond(200,$result);
 }
 /** Only explicitly approved AuLK materials may be seen without a login. */
@@ -366,7 +383,7 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             'anwaerter'=>$trainees,'materialien'=>$materials,
             'ausbilderKandidaten'=>(int)(rights($u)['ausbildung']??0)>=2?ausbildungTrainerKandidaten():[],
             'unterrichtBereit'=>ausbildungSchemaStatus()['unterrichtBereit'],
-            'stimmenDetailsBereit'=>ausbildungStimmenDetailsVerfuegbar(),
+            'stimmenDetailsBereit'=>ausbildungStimmenDetailsVerfuegbar(),'dglBereit'=>ausbildungDglSchemaBereit(),
             'eigeneKompetenzen'=>json_decode((string)($me['kompetenzen']??'[]'),true)??[]]);
     }
     if($uri==='/api/ausbildung/ausbilder'&&$method==='POST'){
@@ -452,6 +469,42 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             auditAction($u,'Anwärter aktualisiert: ID '.$id);
             respond(200,['ok'=>true]);
         }
+    }
+    if(preg_match('#^/api/ausbildung/anwaerter/([1-9]\d*)/dgl$#D',$uri,$m)&&$method==='PUT'){
+        ausbildungRecht($u);$id=cleanId($m[1]);$b=body();
+        if(!ausbildungDglSchemaBereit())fail(503,'DGL-Datenbankerweiterung fehlt');
+        $part=$b['bereich']??null;$done=$b['abgeschlossen']??null;
+        if(!in_array($part,['dgl','assistenz','pruefung'],true)||!is_bool($done))fail(400,'Ungültiger DGL-Nachweis');
+        $points=null;$percent=null;
+        if($part==='pruefung'&&$done){
+            $points=$b['punkte']??null;$percent=$b['prozent']??null;
+            if((!is_int($points)&&!is_float($points))||(!is_int($percent)&&!is_float($percent))||
+                !is_finite((float)$points)||!is_finite((float)$percent)||$points<0||$points>99999999.99||$percent<0||$percent>100)
+                fail(400,'Bitte gültige Punkte und Prozentzahl (0–100) eingeben');
+            $points=round((float)$points,2);$percent=round((float)$percent,2);
+        }
+        db()->beginTransaction();
+        try{
+            $a=ausbildungAnwaerter($id,true);ausbildungPruefeRevision($a,$b['revision']??null);
+            if(!in_array($a['laufbahn'],['PKA','KKA'],true))fail(400,'Nur PKA und KKA');
+            sql('INSERT IGNORE INTO ausbildung_dgl(anwaerter_id) VALUES(?)',[$id]);
+            $row=sql('SELECT * FROM ausbildung_dgl WHERE anwaerter_id=? FOR UPDATE',[$id])[0];
+            $name=ausbildungTrainer($u)['name']??userName($u);
+            if($part==='pruefung'){
+                if($done&&(empty($row['dgl_am'])||empty($row['assistenz_am'])))fail(409,'Zuerst beide Praxisnachweise (je 2 Stunden) abschließen');
+                if($done)sql('UPDATE ausbildung_dgl SET pruefung_am=UTC_TIMESTAMP(6),pruefung_von=?,punkte=?,prozent=? WHERE anwaerter_id=?',[$name,$points,$percent,$id]);
+                else sql('UPDATE ausbildung_dgl SET pruefung_am=NULL,pruefung_von=NULL,punkte=NULL,prozent=NULL WHERE anwaerter_id=?',[$id]);
+            }else{
+                if(!$done&&!empty($row['pruefung_am']))fail(409,'Zuerst die DGL-Prüfung zurücksetzen');
+                $am=$part.'_am';$von=$part.'_von';
+                if($done)sql("UPDATE ausbildung_dgl SET ".$am."=UTC_TIMESTAMP(6),".$von."=? WHERE anwaerter_id=?",[$name,$id]);
+                else sql("UPDATE ausbildung_dgl SET ".$am."=NULL,".$von."=NULL WHERE anwaerter_id=?",[$id]);
+            }
+            sql('UPDATE ausbildung_anwaerter SET revision=revision+1,aktualisiert=UTC_TIMESTAMP(6) WHERE id=?',[$id]);
+            auditAction($u,'DGL '.$part.' für Anwärter-ID '.$id.($done?' bestätigt':' zurückgesetzt'));
+            db()->commit();
+        }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
+        respond(200,['ok'=>true]);
     }
     // Only PMA RSA can be edited here. No general personnel write permission.
     if(preg_match('#^/api/ausbildung/anwaerter/([1-9]\d*)/rsa$#D',$uri,$m)&&$method==='PUT'){

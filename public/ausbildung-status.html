@@ -51,6 +51,14 @@ async function refresh(){
     const votes=make('div','vote-total');
     votes.append(make('strong','',Number.isFinite(d.stimmenAnzahl)?d.stimmenAnzahl:'—'),make('span','','Abgegebene Stimmen insgesamt'));
     box.append(votes);
+  }else{
+    const dgl=d.dgl||{};
+    box.append(make('h2','','DGL-Praxis und Prüfung'));
+    for(const [key,label] of [['dgl','2 Stunden DGL'],['assistenz','2 Stunden Führungsassistenz'],['pruefung','DGL-Prüfung']]){
+      const row=make('div','row');
+      row.append(make('span','label',label),make('span','state',dgl[key]?'✓ Abgeschlossen':key==='pruefung'&&!dgl.pruefungMoeglich?'Gesperrt':'Offen'));
+      box.append(row);
+    }
   }
   box.append(make('h2','','Ausbildungsmodule'));
   (d.module||[]).forEach(m=>{const row=make('div','row');row.append(make('span','code',m.code),make('span','label',m.titel),make('span','state',m.abgeschlossen?'✓ Abgeschlossen':'Offen'));box.append(row)});
