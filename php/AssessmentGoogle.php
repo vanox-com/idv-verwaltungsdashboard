@@ -6,7 +6,7 @@ require_once __DIR__.'/PruefungenGoogle.php';
 function dispatchAssessmentGoogle(array $u,string $method,string $uri): bool {
     $root='/api/assessment/google';
     if(!in_array($uri,[$root.'/status',$root.'/import'],true))return false;
-    if(!assessmentImportAdmin($u))fail(403,'Nur Polizeirat und Administratoren dürfen Assessment-Formulare importieren');
+    if(!assessmentImportAdmin($u))fail(403,'Nur Polizeirat, Leitungsdienst und Administratoren dürfen Assessment-Formulare importieren');
     $cfg=googleCredentials();$origin=googlePortalOrigin();
     if($method==='GET'&&$uri===$root.'/status'){
         respond(200,['eingerichtet'=>$cfg!==null&&$origin!==null,'origin'=>$origin,

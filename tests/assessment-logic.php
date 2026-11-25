@@ -5,8 +5,8 @@ require_once __DIR__.'/../php/Assessment.php';
 require_once __DIR__.'/../php/Pruefungen.php';
 function fail(int $code,string $message): never {throw new \RuntimeException($message,$code);}
 function checkAssessment(bool $ok,string $label): void {if(!$ok)throw new \RuntimeException($label);}
-foreach(['Polizeirat','Administrator'] as $role)checkAssessment(assessmentVerwaltung(['rolle'=>$role]),$role);
-foreach(['Ausbilder','Ausbildungsleitung','Leitungsdienst','Polizeimeister',''] as $role)checkAssessment(!assessmentVerwaltung(['rolle'=>$role]),'blocked '.$role);
+foreach(['Polizeirat','Leitungsdienst','Administrator'] as $role)checkAssessment(assessmentVerwaltung(['rolle'=>$role]),$role);
+foreach(['Ausbilder','Ausbildungsleitung','Polizeimeister',''] as $role)checkAssessment(!assessmentVerwaltung(['rolle'=>$role]),'blocked '.$role);
 checkAssessment(count(ASSESSMENT_ARTEN)===3,'three types');
 foreach(array_keys(ASSESSMENT_ARTEN) as $art){
  $q=['typ'=>'single','titel'=>'Test','punkte'=>1,'optionen'=>['A','B'],'richtig'=>[0]];

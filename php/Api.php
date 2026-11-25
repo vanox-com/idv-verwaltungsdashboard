@@ -146,9 +146,13 @@ function ausbildungRechtsstufe(string $rolle,int $rollenstufe,?int $einzelrecht,
     if($einzelrecht!==null)return max(0,min(2,$einzelrecht));
     return $leitungsprofil?2:max(0,min(1,$rollenstufe));
 }
+/** Fixed role permission: assessment is independent of training and individual overrides. */
+function assessmentRoleLevel(string $role): int {
+    return in_array($role,['Administrator','Leitungsdienst','Polizeirat'],true)?2:0;
+}
 function rights(array $u,bool $nurRolle=false): array {
     if(in_array($u['rolle'],['Ausbilder','Ausbildungsleitung'],true))
-        return ['ausbildung'=>($nurRolle?$u['rolle']==='Ausbildungsleitung':ausbildungLeitungsprofil($u))?2:1,'dash'=>1,'design'=>1];
+        return ['ausbildung'=>($nurRolle?$u['rolle']==='Ausbildungsleitung':ausbildungLeitungsprofil($u))?2:1,'dash'=>1,'design'=>1,'assessment'=>0];
     ensureDNApprovalPermissions();
     $rights=[];
     foreach(sql("SELECT modul,stufe FROM role_perms WHERE rolle=?",[$u['rolle']]) as $row)
@@ -165,6 +169,7 @@ function rights(array $u,bool $nurRolle=false): array {
         !$nurRolle&&!in_array($u['rolle'],['Administrator','Leitungsdienst'],true)&&$ausbildungEinzel===null&&ausbildungLeitungsprofil($u));
     // Never delegate the simulator via saved role permissions or overrides.
     $rights['rechtesimulator']=$u['rolle']==='Administrator'?2:0;
+    $rights['assessment']=assessmentRoleLevel((string)$u['rolle']);
     return $rights;
 }
 /* Neues, eigenständiges Entscheidungsrecht. Fügt fehlende Rollenstandards hinzu,

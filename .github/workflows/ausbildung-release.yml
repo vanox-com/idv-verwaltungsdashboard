@@ -38,6 +38,7 @@ jobs:
           php tests/mysql8-copnet-managed.php
           node tests/ausbildung-static.mjs
           php tests/assessment-logic.php
+          node tests/assessment-navigation.mjs
           node --check public/assets/assessment-center.js
           node --check public/assets/assessment-korrektur.js
           node --check public/assets/assessment-gast.js

@@ -1978,7 +1978,7 @@ html[data-portal-mode="hell"] [data-right-group]{--rights-accent:var(--txt)}
 </div>
 <dialog id="personalDialog" aria-label="Personalakte"></dialog><dialog id="sfDialog" aria-label="Sonderfunktionen bearbeiten"></dialog><dialog id="porDialog" aria-label="POR-Freigabe"></dialog>
 
-<script src="/assets/panel-navigation.js?v=20261125-5"></script>
+<script src="/assets/panel-navigation.js?v=20261125-6"></script>
 <script>
 const NAV_OFFEN = new Set(['uebersicht','personal','ausbildung']);
 let ME = null, D = null, tab = 'dash';
@@ -2385,7 +2385,8 @@ function dashboardJonasHtml(){return window.IDVDashboardFigur?.render()||'<div c
 function zeichne() {
   if(tab==='assessment'){
     if(!can(tab)){$('#inhalt').textContent='Kein Assessment-Recht.';return;}
-    window.IDVAssessment?.open($('#inhalt'));return;
+    if(!window.IDVAssessment||!window.IDVAssessmentReview){$('#inhalt').textContent='Assessment Center konnte nicht geladen werden. Bitte Seite vollständig neu laden oder Deployment prüfen.';return;}
+    window.IDVAssessment.open($('#inhalt'));return;
   }
   if(tab==='ausbildung-pruefungen'){
     if(!can(tab)){$('#inhalt').textContent='Kein Ausbildungsrecht.';return;}
@@ -5482,7 +5483,7 @@ const RECHTE_MODULE=[...MODS.filter(m=>!m[0].startsWith('ausbildung-')&&!['users
 // Shared categories for role matrix, personal exceptions and effective rights.
 const RECHTE_GRUPPEN=[
  ['uebersicht','Übersicht',['dash']],
- ['personal','Personal & Dienst',['pers','bef','por','dnfreigabe','ranghistorie','sonder','praktika','rout','routarchiv','abm','geb','jub']],
+ ['personal','Personal & Dienst',['pers','assessment','bef','por','dnfreigabe','ranghistorie','sonder','praktika','rout','routarchiv','abm','geb','jub']],
  ['organisation','Organisation & Vorlagen',['org','chk','texte']],
  ['vorgaenge','Vorgänge & Regelwerk',['kue','kuearchiv','dis','rl','rlbearb','sperr','bl','befricht']],
  ['ausbildung','Ausbildung',['ausbildung']],
@@ -5495,6 +5496,7 @@ function rechteGruppen(){
  return groups;
 }
 function rechteFix(rolle,modul){
+ if(modul==='assessment')return ['Administrator','Leitungsdienst','Polizeirat'].includes(rolle)?2:0;
  if(modul==='rechtesimulator')return rolle==='Administrator'?2:0;
  if(['Ausbilder','Ausbildungsleitung'].includes(rolle)){
    if(modul==='ausbildung')return rolle==='Ausbildungsleitung'?2:1;
@@ -5507,7 +5509,7 @@ function rechteBezeichnung(modul,stufe){
  return modul==='ausbildung'?(['–','Ausbilder','Vollzugriff'][stufe]||'–'):(RECHTE_STUFEN[stufe]||'–');
 }
 /* Bedeutung der Stufen, wo sie vom üblichen Lesen/Bearbeiten abweicht (Matrix + Einzelrechte). */
-const RECHTE_HINWEISE={ausbildung:'Stufe 1: Übersicht, PMA- und PKA-/KKA-Monitor, Module, RSA, DGL und PMA-Stimmen bearbeiten; Unterricht nur mit aktivem Ausbilderprofil und freigegebenen Modulkompetenzen. Stufe 2: zusätzlich Ausbilderverwaltung, Ausbildungsunterlagen und Unterricht für alle aktiven Module inklusive Weiterbildungen. Administrator und Leitungsdienst haben fest Vollzugriff. Für einen bestehenden Polizeirat-Zugang Stufe 2 als Einzelrecht vergeben; kein zweiter Zugang erforderlich.',abm:'Lesen = Abmeldungen ansehen · Bearbeiten = annehmen/ablehnen',dnfreigabe:'Lesen = alle DN-Anträge ansehen · Bearbeiten = DN-Anträge annehmen/ablehnen',rlbearb:'Bearbeiten = Richtlinieneinträge und Maßnahmenkatalog ändern · Lesen über separates Richtlinienrecht',botcfg:'Lesen = Konfiguration ansehen · Bearbeiten = ändern (Bot startet danach neu)'};
+const RECHTE_HINWEISE={assessment:'Fester Vollzugriff für Polizeirat, Leitungsdienst und Administratoren einschließlich aller Prüfungen, Korrekturen und Archiv. Unabhängig von Ausbildungsrechten. KI-Verbindung und Datenbankschema nur durch Administratoren verwaltbar.',ausbildung:'Stufe 1: Übersicht, PMA- und PKA-/KKA-Monitor, Module, RSA, DGL und PMA-Stimmen bearbeiten; Unterricht nur mit aktivem Ausbilderprofil und freigegebenen Modulkompetenzen. Stufe 2: zusätzlich Ausbilderverwaltung, Ausbildungsunterlagen und Unterricht für alle aktiven Module inklusive Weiterbildungen. Administrator und Leitungsdienst haben fest Vollzugriff. Für einen bestehenden Polizeirat-Zugang Stufe 2 als Einzelrecht vergeben; kein zweiter Zugang erforderlich.',abm:'Lesen = Abmeldungen ansehen · Bearbeiten = annehmen/ablehnen',dnfreigabe:'Lesen = alle DN-Anträge ansehen · Bearbeiten = DN-Anträge annehmen/ablehnen',rlbearb:'Bearbeiten = Richtlinieneinträge und Maßnahmenkatalog ändern · Lesen über separates Richtlinienrecht',botcfg:'Lesen = Konfiguration ansehen · Bearbeiten = ändern (Bot startet danach neu)'};
 let USER_ADMIN=null;
 function vUsers() {
   if(ME.rolle!=='Administrator')return '<p>Nur der Administrator darf Zugänge verwalten.</p>';
@@ -6737,7 +6739,7 @@ document.addEventListener('click',async e=>{
 <script src="/assets/pruefungen-praxis.js?v=5" defer></script>
 <script src="/assets/pruefungen-korrektur.js?v=7" defer></script>
 <script src="/assets/pruefungszentrum.js?v=20" defer></script>
-<script src="/assets/assessment-korrektur.js?v=1" defer></script>
-<script src="/assets/assessment-center.js?v=3" defer></script>
+<script src="/assets/assessment-korrektur.js?v=2" defer></script>
+<script src="/assets/assessment-center.js?v=4" defer></script>
 </body>
 </html>

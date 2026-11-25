@@ -120,10 +120,10 @@ function assessmentRow(int $id,bool $lock=false): array {
 }
 // Role-bound: training rights never grant recruiting access.
 function assessmentVerwaltung(array $u): bool {
-    return in_array($u['rolle']??'', ['Polizeirat','Administrator'],true);
+    return in_array($u['rolle']??'', ['Polizeirat','Leitungsdienst','Administrator'],true);
 }
 function assessmentRecht(array $u): void {
-    if(!assessmentVerwaltung($u))fail(403,'Assessment Center nur für Polizeirat und Administratoren.');
+    if(!assessmentVerwaltung($u))fail(403,'Assessment Center nur für Polizeirat, Leitungsdienst und Administratoren.');
 }
 function assessmentImportAdmin(array $u): bool {return assessmentVerwaltung($u);}
 function assessmentBerichtigungStatus(string $status): bool {
@@ -278,9 +278,9 @@ function dispatchAssessment(array $u,string $method,string $uri): bool {
         examAiConfigEndpoint($u,$method);
     }
     if(($uri===$root.'/vorlagen'||str_starts_with($uri,$root.'/vorlagen/'))&&!$verwaltung)
-        fail(403,'Assessment-Vorlagen sind nur für Polizeirat und Administratoren zugänglich');
+        fail(403,'Assessment-Vorlagen sind nur für Polizeirat, Leitungsdienst und Administratoren zugänglich');
     if(str_starts_with($uri,$root.'/google/')&&!$importAdmin)
-        fail(403,'Nur Polizeirat und Administratoren dürfen Assessment-Vorlagen importieren');
+        fail(403,'Nur Polizeirat, Leitungsdienst und Administratoren dürfen Assessment-Vorlagen importieren');
     if(str_starts_with($uri,$root.'/google/')){
         require_once __DIR__.'/AssessmentGoogle.php';
         if(dispatchAssessmentGoogle($u,$method,$uri))return true;
@@ -315,7 +315,7 @@ function dispatchAssessment(array $u,string $method,string $uri): bool {
         respond(201,['id'=>(int)db()->lastInsertId()]);
     }
     if($method==='POST'&&$uri===$root){
-        if(!$verwaltung)fail(403,'Nur Polizeirat und Administratoren dürfen Prüfungen anlegen');
+        if(!$verwaltung)fail(403,'Nur Polizeirat, Leitungsdienst und Administratoren dürfen Prüfungen anlegen');
         $b=body();$vid=(int)($b['vorlage']??0);$candidate=assessmentText($b['bewerber']??null,200);
         // Existing schema columns are retained for non-destructive compatibility; no reviewer assignment.
         $first=$uid;$second=0;
@@ -361,7 +361,7 @@ function dispatchAssessment(array $u,string $method,string $uri): bool {
             if(!$lead||$status==='annulliert'||$note==='')fail(403,'Nur die Leitung, mit Begründung');
             sql("UPDATE assessment_pruefungen SET status='annulliert',revision=revision+1,protokoll=? WHERE id=?",[assessmentJson($history),$id]);
         }elseif($action==='berichtigen'||$action==='wiedereroeffnen'){
-            if(!$verwaltung)fail(403,'Nur Polizeirat und Administratoren dürfen die Korrektursperre umgehen');
+            if(!$verwaltung)fail(403,'Nur Polizeirat, Leitungsdienst und Administratoren dürfen die Korrektursperre umgehen');
             if(!assessmentBerichtigungStatus($status))fail(409,'Nur abgegebene Prüfungen können korrigiert werden');
             if($note==='')fail(400,'Begründung für die Berichtigung ist erforderlich');
             $i=count($history)-1;

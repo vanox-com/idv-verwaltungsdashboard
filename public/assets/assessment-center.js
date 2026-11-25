@@ -115,7 +115,7 @@ function open(host){
  function linkBox(url){if(!url)return;const box=card('Prüfungslink · vertraulich weitergeben');const i=text();i.value=location.origin+url;i.readOnly=true;box.append(i,btn('Link kopieren',async()=>{try{await navigator.clipboard.writeText(i.value);message('Link kopiert.')}catch{ i.select();message('Bitte markierten Link manuell kopieren.')}}));main.prepend(box);}
  function archiveExam(p){
   if(busy||!canLeave())return;
-  if(!confirm('Prüfung endgültig archivieren? Alle Polizeiräte und Administratoren behalten Zugriff im Archiv. Die Prüfung wird nicht gelöscht.'))return;
+  if(!confirm('Prüfung endgültig archivieren? Alle Polizeiräte, Leitungsdienst und Administratoren behalten Zugriff im Archiv. Die Prüfung wird nicht gelöscht.'))return;
   run(async()=>{await api('/'+p.id+'/archivieren',{revision:Number(p.revision),bestaetigen:true});dirty=false;detailId=null;view=data.verwaltung?'archive':'results';kind='';await load();message('Prüfung archiviert.');});
  }
  function nav(){
@@ -132,7 +132,7 @@ function open(host){
   for(const v of views){
    const [name,hint,icon]=EXAM_VIEWS[v],b=btn('',()=>navigate(v),'exam-nav-button');b.dataset.view=v;b.setAttribute('aria-current',selected===v?'page':'false');b.title=hint;b.append(examIcon(icon),node('span',name,'exam-nav-text'));
    if(['running','practice','first','second','release','results'].includes(v)){const n=count(v);if(n)b.append(node('span',String(n),'exam-nav-count'));}
-   if(v==='templates'){b.title='Polizeirat und Administratoren · '+hint;}
+   if(v==='templates'){b.title='Polizeirat, Leitungsdienst und Administratoren · '+hint;}
    row.append(b);
   }group.append(row);bar.append(group);
  }wrap.append(bar);return wrap;
@@ -148,7 +148,7 @@ function open(host){
  if(view==='practice-create'){main.append(btn('← PM-Praxisprüfung',()=>navigate('practice'),'exam-back'));void window.IDVPractice.create(main,{api,data,run,open:async id=>{data=await api();lastList='practice';await details(id);}}).catch(e=>message(e.message,true));return}if(view==='create'){create(false);return}if(view==='practice-template'){view='practice';}if(view==='templates'){templates(false);return}
  const selected=EXAM_VIEWS[view]||EXAM_VIEWS.overview;
  const title=node('div',undefined,'exam-section-heading');title.append(node('h2',selected[0]),node('p',selected[1],'mut'));main.append(title);
- if(view==='results')main.append(node('p','Abgeschlossene Prüfungen werden spätestens 24 Stunden nach Freigabe automatisch archiviert. Du kannst sie auch vorher archivieren. Alle Polizeiräte und Administratoren können die Ergebnisse weiterhin im Archiv einsehen und bearbeiten.','mut'));
+ if(view==='results')main.append(node('p','Abgeschlossene Prüfungen werden spätestens 24 Stunden nach Freigabe automatisch archiviert. Du kannst sie auch vorher archivieren. Alle Polizeiräte, Leitungsdienst und Administratoren können die Ergebnisse weiterhin im Archiv einsehen und bearbeiten.','mut'));
  if(view==='practice'){
  const panel=card('Praktische Prüfung');panel.classList.add('exam-practice-tools');const desc=node('div');desc.append(node('p','Bewertung durch Prüfer · kein externer Prüfungslink','mut'),node('p',count('practice')+' praktische Prüfungen · '+'fester Bewertungsbogen','mut'));const actions=node('div',undefined,'exam-practice-actions');if(data.verwaltung)actions.append(btn('Neue Praxisprüfung',()=>navigate('practice-create'),'p'));actions.append(node('span','Excel-Schema · 5 Module','mut'));panel.append(desc,actions);main.append(panel);
  }
@@ -197,7 +197,7 @@ function open(host){
  function create(practice=false){if(practice)main.append(btn('← PM-Praxisprüfung',()=>navigate('practice'),'exam-back'));const c=card(practice?'PM-Praxisprüfung anlegen':'Prüfung vorbereiten');c.classList.add('exam-form');
  const choices=(data.pruefungsauswahl||[]).filter(x=>practice?x.art==='praxis':x.art!=='praxis');
  if(!choices.length){c.append(node('p','Zuerst muss die berechtigte Leitung oder ein Administrator eine geprüfte Prüfungsvorlage hinterlegen.'));if(practice&&data.vorlagenBearbeiten)c.append(btn('Bewertungsbogen erstellen',()=>navigate('practice-template'),'p'));main.append(c);return}
- const grid=node('div',undefined,'exam-form-grid');c.append(node('p','Wähle die Prüfungsvorlage und gib den Bewerbernamen ein. Jeder Polizeirat kann die Prüfung bearbeiten und abschließen.','mut'),grid);
+ const grid=node('div',undefined,'exam-form-grid');c.append(node('p','Wähle die Prüfungsvorlage und gib den Bewerbernamen ein. Polizeirat, Leitungsdienst und Administratoren können jede Prüfung bearbeiten und abschließen.','mut'),grid);
  const v=field(grid,'Prüfungsvorlage',select(choices.map(x=>[x.id,x.titel+' · Version #'+x.id])));
  const a=field(grid,'Bewerber (RP-Name)',text('Vorname Nachname'));a.maxLength=200;a.required=true;
  c.append(node('p',practice?'Die Praxisprüfung wird zur Erstbewertung angelegt. Kein Prüflingslink und kein Zeitlimit.':'Einmaliger Prüfungsversuch. Der Link kann vor dem Start erneuert werden und gilt 24 Stunden für den Prüfungsbeginn.','mut'),

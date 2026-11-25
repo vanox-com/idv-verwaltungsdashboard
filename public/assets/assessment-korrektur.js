@@ -44,11 +44,11 @@ function render(host,r,ctx){
  const kpis={};for(const [k,label] of [['points','Punkte aktuell'],['percent','Prozent'],['status','Voraussichtliches Ergebnis'],['open','Offene Bewertungen']]){const b=el('div',undefined,'review-kpi');const v=el('strong','—');kpis[k]=v;b.append(el('small',label),v);totals.append(b)}
  summary.append(totals);const threshold=el('p','Bestehensgrenze: '+fmt(p.grenze)+' % · Vorschau, bis die Korrektur verbindlich abgeschlossen wurde.','mut');summary.append(threshold);if(q.length)host.append(summary);
  const actions=el('div',undefined,'review-top-actions');header.append(actions);
- if(p.status==='freigegeben'&&!p.archiviert){actions.append(btn('Prüfung archivieren',()=>ctx.archive(p)));if(p.archivAb)header.append(el('p','Automatische Archivierung: '+date(p.archivAb)+' · alle Polizeiräte behalten Zugriff im Archiv.','mut'));}
+ if(p.status==='freigegeben'&&!p.archiviert){actions.append(btn('Prüfung archivieren',()=>ctx.archive(p)));if(p.archivAb)header.append(el('p','Automatische Archivierung: '+date(p.archivAb)+' · alle berechtigten Rollen behalten Zugriff im Archiv.','mut'));}
  function runAction(action,body){return ctx.run(async()=>{const result=await ctx.api('/'+id+'/'+action,{revision:Number(p.revision),...body});await ctx.reload(id);if(result.link)ctx.link(result.link);ctx.message('Änderung gespeichert.');});}
  if(r.verwaltung&&p.status==='bereit')actions.append(btn('Prüfungslink erneuern',()=>runAction('link',{})));
  if(r.leitung&&p.status!=='annulliert')actions.append(btn('Annullieren',()=>{const why=prompt('Begründung für die Annullierung:');if(why?.trim())runAction('annullieren',{notiz:why});},'danger'));
- if(first)host.append(el('p','Alle Polizeiräte können diese Prüfung korrigieren und abschließen. Der tatsächliche Bearbeiter wird protokolliert.','mut'));
+ if(first)host.append(el('p','Polizeirat, Leitungsdienst und Administratoren können diese Prüfung korrigieren und abschließen. Der tatsächliche Bearbeiter wird protokolliert.','mut'));
  const events=eventsPanel(p);host.append(events);
  if(!q.length){host.append(box('Antworten werden erst nach Abgabe angezeigt'));return;}
  const layout=el('div',undefined,'review-layout'),side=box('Fragen','review-sidebar'),content=el('div',undefined,'review-content');layout.append(side,content);host.append(layout);

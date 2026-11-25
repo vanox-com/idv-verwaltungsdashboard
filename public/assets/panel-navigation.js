@@ -22,7 +22,7 @@ const AUSB_NAV={
 };
 function panelCan(user,m,l=1){
   if(!user)return false;
-  if(m==='assessment')return ['Polizeirat','Administrator'].includes(user.rolle);
+  if(m==='assessment')return l<=2&&['Polizeirat','Leitungsdienst','Administrator'].includes(user.rolle);
   if(m==='rechtesimulator'||m==='users')return user.rolle==='Administrator';
   if(m==='benachrichtigungen')return ['Administrator','Leitungsdienst','Polizeirat','Ausbildungsleitung'].includes(user.rolle)||(user.rolle==='Ausbilder'&&Number(user.rechte?.ausbildung||0)>=2);
   if(Object.hasOwn(AUSB_NAV,m))return (user.rechte?.ausbildung||0)>=Math.max(l,AUSB_NAV[m].leitung?2:1);
