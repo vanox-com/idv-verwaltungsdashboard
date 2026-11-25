@@ -17,3 +17,20 @@ $result=praxisCalculate($f,$theory);checkPraxis($result['modules']['traffic']['p
 $f['drive']['rounds'][2]['seconds']=null;checkPraxis(praxisCalculate($f,$theory)['total']===null,'incomplete round');
 checkPraxis(praxisStatus(80.0)==='Bestanden'&&praxisStatus(70.0)==='Nachprüfung erforderlich','threshold boundaries');
 echo "PM-Praxisprüfung OK\n";
+
+$f['drive']['rounds'][2]['seconds']=107;
+$f['sections']['traffic']['answers']['id']='Ja';
+$f['drive']['rounds'][1]['seconds']=107;
+$f['drive']['selected']=null;
+$perfect=praxisCalculate($f,['punkte'=>100,'max'=>100]);
+checkPraxis($perfect['total']===100.0,'maximum total');
+$decimal=praxisCalculate($f,['punkte'=>2,'max'=>3]);
+checkPraxis($decimal['total']===86.67&&$decimal['modules']['theory']['weighted']===26.6667,'theory full precision');
+checkPraxis($decimal['modules']['theory']['percent']===66.67,'theory display percent');
+foreach([null,['punkte'=>1,'max'=>0],['punkte'=>101,'max'=>100],['punkte'=>-1,'max'=>100]] as $invalid)
+    checkPraxis(praxisCalculate($f,$invalid)['total']===null,'invalid theory stays open');
+foreach($s['sections'] as $k=>$groups){checkPraxis(array_sum(array_column($groups,'weight'))===100,'section weights '.$k);foreach($groups as $g)foreach($g['criteria'] as $q)$f['sections'][$k]['answers'][$q['id']]=array_key_last($q['options']);}
+foreach($f['drive']['rounds'] as &$r){$r['seconds']=117;foreach($s['drive'] as $q)$r[$q['id']]=array_key_last($q['options']);}unset($r);
+foreach($f['sections'] as &$sec)$sec['extra']=1000;unset($sec);$f['drive']['extra']=1000;
+checkPraxis(praxisCalculate($f,['punkte'=>0,'max'=>100])['total']===0.0,'lower bound');
+checkPraxis(array_sum($s['weights'])===100,'overall weights');

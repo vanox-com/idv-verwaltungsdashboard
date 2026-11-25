@@ -145,8 +145,8 @@ function pruefungPraxisErsteller(array $p): int {
 }
 function pruefungSichtbar(array $p,int $uid,bool $leitung): bool {
     if($leitung)return true;
-    // Practice has one reviewer; its creator and assigned reviewer may read the archived result.
-    if(($p['art']??'')==='praxis')return $uid>0&&($uid===(int)$p['erst']||$uid===pruefungPraxisErsteller($p));
+    // Practice has one reviewer; creator and assigned reviewer may read active attempts only.
+    if(($p['art']??'')==='praxis')return !in_array($p['status'],['freigegeben','annulliert'],true)&&$uid>0&&($uid===(int)$p['erst']||$uid===pruefungPraxisErsteller($p));
     return ((int)$p['erst']===$uid&&in_array($p['status'],['bereit','laufend','abgegeben'],true))
         ||((int)$p['zweit']===$uid&&$p['status']==='erstkorrigiert');
 }
@@ -241,7 +241,7 @@ function pruefungGuest(string $method,string $uri): bool {
     }catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
 }
 function pruefungListenZeilen(int $uid,bool $lead): array {
-        $where=$lead?'':" WHERE (v.art='praxis' AND (p.erst=? OR (JSON_UNQUOTE(JSON_EXTRACT(p.protokoll,'$[0].aktion')) IN ('Praxisprüfung angelegt','erstellt') AND JSON_UNQUOTE(JSON_EXTRACT(p.protokoll,'$[0].user'))=?))) OR (v.art<>'praxis' AND ((p.erst=? AND p.status IN ('bereit','laufend','abgegeben')) OR (p.zweit=? AND p.status='erstkorrigiert')))";
+        $where=$lead?'':" WHERE (v.art='praxis' AND p.status NOT IN ('freigegeben','annulliert') AND (p.erst=? OR (JSON_UNQUOTE(JSON_EXTRACT(p.protokoll,'$[0].aktion')) IN ('Praxisprüfung angelegt','erstellt') AND JSON_UNQUOTE(JSON_EXTRACT(p.protokoll,'$[0].user'))=?))) OR (v.art<>'praxis' AND ((p.erst=? AND p.status IN ('bereit','laufend','abgegeben')) OR (p.zweit=? AND p.status='erstkorrigiert')))";
         $rows=sql("SELECT p.id,p.revision,p.kandidat,p.laufbahn,p.erst,p.zweit,p.status,p.start_am,p.ende_am,p.abgabe_am,p.ergebnis,p.fokus,p.antworten,v.titel,v.art,JSON_UNQUOTE(JSON_EXTRACT(v.fragen,'$.schema')) AS praxisSchema FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id".$where." ORDER BY p.id DESC",$lead?[]:[$uid,(string)$uid,$uid,$uid]);
         foreach($rows as &$r){$f=pruefungRead($r['fokus']);$r['tabwechsel']=$f['wechsel']??0;$r['ereignisse']=count($f['events']??[]);$r['aktuelleFrage']=$f['aktuelleFrage']??null;$a=pruefungRead($r['antworten']);$r['fragenGesamt']=count($a);$r['bearbeitet']=count(array_filter($a,fn($x)=>is_array($x)?count($x)>0:trim((string)$x)!==''));unset($r['fokus'],$r['antworten']);}unset($r);
     return $rows;

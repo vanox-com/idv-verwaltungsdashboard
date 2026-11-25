@@ -7,6 +7,9 @@ const field=(p,label,input)=>{const l=el('label',label);l.append(input);p.append
 const box=(title)=>{const b=el('section',undefined,'box exam-form');b.append(el('h3',title));return b};
 const pct=v=>v===null?'—':Number(v).toLocaleString('de-DE',{maximumFractionDigits:2})+' %';
 const pts=v=>Number(v).toLocaleString('de-DE',{maximumFractionDigits:2});
+const round2=n=>Math.round((n+1e-9)*100)/100;
+const validExtra=n=>typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=1000&&Math.abs(n*100-Math.round(n*100))<1e-7;
+const theoryRaw=t=>t&&t.punkte!=null&&t.max!=null&&String(t.punkte).trim()!==''&&String(t.max).trim()!==''&&Number.isFinite(Number(t.punkte))&&Number.isFinite(Number(t.max))&&Number(t.max)>0&&Number(t.punkte)>=0&&Number(t.punkte)<=Number(t.max)?Number(t.punkte)/Number(t.max)*100:null;
 const status=(n,theory=false)=>n===null?'Offen':n>=(theory?75:80)?'Bestanden':n>=70?'Nachprüfung erforderlich':'Nicht bestanden';
 function calculate(schema,f,theory){
  const modules={},groups={},rounds=[];
@@ -14,21 +17,21 @@ function calculate(schema,f,theory){
   const s=f.sections[key];let complete=true,loss=0;groups[key]=sets.map(g=>{
    let sum=0,done=true;for(const q of g.criteria){const v=s.answers[q.id];if(!v){complete=false;done=false}else sum+=q.options[v]}
    const deduction=sum*g.weight/100;loss+=deduction;return {deduction,complete:done};
-  });modules[key]=complete?Math.round((Math.max(0,100-loss-s.extra)+Number.EPSILON)*100)/100:null;
+  });modules[key]=complete&&validExtra(s.extra)?round2(Math.max(0,100-loss-s.extra)):null;
  }
  for(const r of f.drive.rounds){
   let complete=r.seconds!==null,safety=0;
   for(const q of schema.drive){const v=r[q.id];if(!v)complete=false;else safety+=q.options[v]}
   const delta=r.seconds===null?null:Math.abs(r.seconds-schema.targetSeconds),time=delta===null?null:delta<=2?0:delta<=5?20:delta<=8?40:60;
-  rounds.push({difference:delta,timeDeduction:time===null?null:time*.3,safetyDeduction:safety*.7,score:complete?Math.max(0,100-time*.3-safety*.7):null});
+  rounds.push({difference:delta,timeDeduction:time===null?null:time*.3,safetyDeduction:safety*.7,score:complete?round2(Math.max(0,100-time*.3-safety*.7)):null});
  }
  let best=null;rounds.forEach((r,i)=>{if(r.score!==null&&(best===null||r.score>rounds[best].score))best=i});
  const selected=f.drive.selected??best;
- modules.drive=selected===null||rounds[selected].score===null?null:Math.round((Math.max(0,rounds[selected].score-f.drive.extra)+Number.EPSILON)*100)/100;
- modules.theory=theory?theory.punkte/theory.max*100:null;
+ modules.drive=selected===null||rounds[selected].score===null||!validExtra(f.drive.extra)?null:round2(Math.max(0,rounds[selected].score-f.drive.extra));
+ const rawTheory=theoryRaw(theory);modules.theory=rawTheory===null?null:round2(rawTheory);
  let total=0,complete=rounds.every(r=>r.score!==null);const result={};
- for(const [k,w] of Object.entries(schema.weights)){const v=modules[k];if(v===null)complete=false;const weighted=v===null?null:v*w/100;total+=weighted??0;result[k]={percent:v,weight:w,weighted,status:status(v,k==='theory')}}
- return {modules:result,groups,rounds,best,selected,total:complete?Math.round((total+Number.EPSILON)*100)/100:null};
+ for(const [k,w] of Object.entries(schema.weights)){const v=modules[k];if(v===null)complete=false;const weighted=v===null?null:(k==='theory'?rawTheory:v)*w/100;total+=weighted??0;result[k]={percent:v,weight:w,weighted:weighted===null?null:Math.round((weighted+1e-9)*10000)/10000,status:status(v,k==='theory')}}
+ return {modules:result,groups,rounds,best,selected,total:complete?round2(total):null};
 }
 async function create(host,ctx){
  const b=box('Neue PM-Praxisprüfung');host.append(b);b.append(el('p','Es werden nur PMA angezeigt, die laut aktuellem Ausbildungsmonitor zugelassen sind.','mut'));
@@ -50,16 +53,16 @@ async function open(host,id,ctx){
  const savebar=el('section',undefined,'box practice-save');const saveHint=el('p','','mut');savebar.append(saveHint);host.append(savebar);
  const reason=el('textarea');reason.placeholder='Pflichtbegründung für nachträgliche Änderung';reason.rows=2;reason.hidden=true;
  if(r.berichtigen){savebar.append(button('Berichtigung aktivieren',()=>{locked=false;reason.hidden=false;render();},''),reason);}
- function persist(action){ctx.run(async()=>{if(locked)throw Error('Bewertung ist gesperrt.');if(action==='berichtigen'&&!reason.value.trim())throw Error('Begründung erforderlich.');if(action==='abschliessen'&&!confirm('Prüfung verbindlich abschließen?'))return;
-   const res=await ctx.api('/praxis/'+id,{revision,aktion:action,formular:f,begruendung:reason.value});revision=res.revision;ctx.clean();ctx.message(action==='speichern'?'Zwischenstand gespeichert.':'Praxisprüfung verbindlich gespeichert.');if(action==='abschliessen')await ctx.afterHandoff();else if(action==='berichtigen')await ctx.reload(id);
+ function persist(action){ctx.run(async()=>{if(locked)throw Error('Bewertung ist gesperrt.');if(![...Object.values(f.sections),f.drive].every(s=>validExtra(s.extra)))throw Error('Zusätzliche Minuspunkte müssen zwischen 0 und 1000 liegen (maximal zwei Nachkommastellen).');if(action==='berichtigen'&&!reason.value.trim())throw Error('Begründung erforderlich.');if(action==='abschliessen'&&!confirm('Prüfung verbindlich abschließen?'))return;
+   const res=await ctx.api('/praxis/'+id,{revision,aktion:action,formular:f,begruendung:reason.value});revision=res.revision;r.theorie=res.theorie;refresh();ctx.clean();ctx.message(action==='speichern'?'Zwischenstand gespeichert.':'Praxisprüfung verbindlich gespeichert.');if(action==='abschliessen')await ctx.afterHandoff();else if(action==='berichtigen')await ctx.reload(id);
  });}
  if(r.bearbeiten)savebar.append(button('Zwischenstand speichern',()=>persist('speichern'),''),button('Prüfung abschließen',()=>persist('abschliessen'),'p'));
  if(r.berichtigen)savebar.append(button('Berichtigung speichern',()=>persist('berichtigen'),'p'));
  let updates=[];
  function changed(){ctx.dirty();refresh();}
- function refresh(){const result=calculate(schema,f,r.theorie);for(const fn of updates)fn(result);saveHint.textContent=result.total===null?'Gesamtergebnis offen · alle Module, drei Runden und Theorie erforderlich.':'Gesamtergebnis: '+pct(result.total)+' · '+status(result.total);}
+ function refresh(){const result=calculate(schema,f,r.theorie);if(locked&&r.pruefung.status==='freigegeben'&&r.pruefung.ergebnis!=null){result.recalculatedTotal=result.total;result.total=Number(r.pruefung.ergebnis);}for(const fn of updates)fn(result);saveHint.textContent=result.total===null?'Gesamtergebnis offen · alle Module, drei Runden und Theorie erforderlich.':'Gesamtergebnis: '+pct(result.total)+' · '+status(result.total);}
  function infoField(parent,label,value,fn,number=false){
-  const input=el(number?'input':'textarea');if(number){input.type='number';input.min='0';input.max='1000';input.step='.01';input.value=value;}else{input.rows=2;input.value=value||'';}input.disabled=locked;input.oninput=()=>{if(number){const n=Number(input.value);if(!Number.isFinite(n)||n<0||n>1000)return;fn(n)}else fn(input.value);changed()};field(parent,label,input);return input;
+  const input=el(number?'input':'textarea');if(number){input.type='number';input.min='0';input.max='1000';input.step='.01';input.value=value??'';}else{input.rows=2;input.value=value||'';}input.disabled=locked;input.oninput=()=>{if(number){const n=Number(input.value);const valid=!input.validity.badInput&&validExtra(n);input.setCustomValidity(valid?'':'0 bis 1000 Minuspunkte, maximal zwei Nachkommastellen.');fn(valid?n:null)}else fn(input.value);changed()};field(parent,label,input);return input;
  }
  function options(parent,q,value,onchange){
   const row=el('div',undefined,'practice-criterion');const label=el('div');label.append(el('strong',q.label),el('small',Object.entries(q.options).map(([k,v])=>k+': −'+v).join(' · '),'mut'));const input=select([['','Bitte bewerten'],...Object.entries(q.options).map(([k,v])=>[k,(k==='grün'?'Gut (grün)':k==='gelb'?'Mittel (gelb)':k==='rot'?'Schlecht (rot)':k)])]);input.value=value||'';input.disabled=locked;
@@ -68,10 +71,10 @@ async function open(host,id,ctx){
  function extra(parent,s){const wrap=el('div',undefined,'exam-form-grid');parent.append(wrap);infoField(wrap,'Zusätzliche Minuspunkte',s.extra,v=>s.extra=v,true);infoField(wrap,'Begründung / Notiz zu Minuspunkten',s.extraNote,v=>s.extraNote=v);infoField(parent,'Notizen',s.notes,v=>s.notes=v);}
  function overview(){
   const b=box('Gesamtauswertung');const table=el('table',undefined,'practice-results');const thead=el('thead'),tr=el('tr');for(const t of ['Modul','Anteil','Ergebnis','Gewichtet','Status'])tr.append(el('th',t));thead.append(tr);table.append(thead);const tbody=el('tbody');table.append(tbody);
-  for(const [key,w] of Object.entries(schema.weights)){const row=el('tr');const link=button(schema.labels[key],()=>{active=key;render()},'');const a=el('td');a.append(link);const p=el('td'),weight=el('td'),st=el('td');row.append(a,el('td',w+' %'),p,weight,st);tbody.append(row);updates.push(result=>{const m=result.modules[key];p.textContent=pct(m.percent);weight.textContent=m.weighted===null?'—':pts(m.weighted)+' / '+w;st.textContent=m.status;st.dataset.status=m.status;});}
-  const sc=el('div',undefined,'practice-scroll');sc.append(table);b.append(sc);const total=el('div','','practice-total');b.append(total);updates.push(x=>{total.textContent=x.total===null?'Warte auf vollständige Ergebnisse':'Gesamtergebnis: '+pct(x.total)+' · '+status(x.total);});infoField(b,'Gesamtnotizen',f.notes,v=>f.notes=v);content.append(b);
+  for(const [key,w] of Object.entries(schema.weights)){const row=el('tr');const link=button(schema.labels[key],()=>{active=key;render()},'');const a=el('td');a.append(link);const p=el('td'),weight=el('td'),st=el('td');row.append(a,el('td',w+' %'),p,weight,st);tbody.append(row);updates.push(result=>{const m=result.modules[key];p.textContent=pct(m.percent);weight.textContent=m.weighted===null?'—':Number(m.weighted).toLocaleString('de-DE',{maximumFractionDigits:4})+' / '+w;st.textContent=m.status;st.dataset.status=m.status;});}
+  const sc=el('div',undefined,'practice-scroll');sc.append(table);b.append(sc,el('p','Gesamtergebnis = Summe der gewichteten Modulwerte. Die Theorie wird aus den erreichten / maximalen Punkten berechnet; gerundet wird erst beim Gesamtergebnis auf zwei Nachkommastellen. Gewichtete Beiträge werden mit bis zu vier Nachkommastellen angezeigt.','mut'));const total=el('div','','practice-total');b.append(total);updates.push(x=>{total.textContent=x.total===null?'Warte auf vollständige Ergebnisse':'Gesamtergebnis: '+pct(x.total)+' · '+status(x.total)+(x.recalculatedTotal!==undefined&&x.recalculatedTotal!==x.total?' (gespeicherter Abschlusswert; aktuelle Nachrechnung: '+pct(x.recalculatedTotal)+')':'');});infoField(b,'Gesamtnotizen',f.notes,v=>f.notes=v);content.append(b);
  }
- function theory(){const b=box('Theorieprüfung · 40 %');if(r.theorie){b.append(el('p',pts(r.theorie.punkte)+' von '+pts(r.theorie.max)+' Punkten'),el('h2',pct(r.theorie.punkte/r.theorie.max*100)),el('p','Freigegebenes Ergebnis aus PM-Theorieprüfung #'+r.theorie.id+' · '+status(r.theorie.punkte/r.theorie.max*100,true),'mut'));}else b.append(el('p','Noch keine freigegebene PM-Theorieprüfung vorhanden. Das Ergebnis wird automatisch nach Freigabe beim nächsten Laden übernommen.','mut'));content.append(b);}
+ function theory(){const b=box('Theorieprüfung · 40 %');if(theoryRaw(r.theorie)!==null){const n=round2(theoryRaw(r.theorie));b.append(el('p',pts(r.theorie.punkte)+' von '+pts(r.theorie.max)+' Punkten'),el('h2',pct(n)),el('p','Freigegebenes Ergebnis aus PM-Theorieprüfung #'+r.theorie.id+' · '+status(n,true),'mut'));}else b.append(el('p','Noch keine freigegebene PM-Theorieprüfung vorhanden. Das Ergebnis wird automatisch nach Freigabe beim nächsten Laden übernommen.','mut'));content.append(b);}
  function module(key){const b=box(schema.labels[key]+' · '+schema.weights[key]+' %'),s=f.sections[key];schema.sections[key].forEach((g,i)=>{const group=el('section',undefined,'practice-group');const h=el('div',undefined,'practice-group-head');const loss=el('span');h.append(el('strong',g.label+' · '+g.weight+' %'),loss);group.append(h);g.criteria.forEach(q=>options(group,q,s.answers[q.id],v=>s.answers[q.id]=v));b.append(group);updates.push(result=>{const x=result.groups[key][i];loss.textContent='Gewichteter Abzug: −'+pts(x.deduction)+(x.complete?'':' · offen');});});extra(b,s);const total=el('p','','practice-total');b.append(total);updates.push(result=>{total.textContent='Ergebnis: '+pct(result.modules[key].percent);});content.append(b);}
  function driving(){const b=box('Fahrprüfung · 15 %');b.append(el('p','Wunschzeit 1:47 Minuten · Zeit 30 %, Sicherheit 70 %. Abweichung bis 2 / 5 / 8 Sekunden: 0 / 20 / 40 / 60 rohe Zeit-Minuspunkte.','mut'));
   const rounds=el('div',undefined,'practice-rounds');b.append(rounds);

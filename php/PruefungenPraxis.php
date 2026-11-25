@@ -78,6 +78,11 @@ function praxisNormalize(array $input): array {
     $out['drive']+=['selected'=>$selected,'extra'=>praxisNumber($src['extra']??0),'extraNote'=>praxisText($src['extraNote']??''),'notes'=>praxisText($src['notes']??'')];
     return $out;
 }
+function praxisTheoryGueltig(?array $theory): bool {
+    if($theory===null)return false;
+    $points=$theory['punkte']??null;$max=$theory['max']??null;
+    return is_numeric($points)&&is_numeric($max)&&is_finite((float)$points)&&is_finite((float)$max)&&(float)$max>0&&(float)$points>=0&&(float)$points<=(float)$max;
+}
 function praxisCalculate(array $data,?array $theory): array {
     $schema=praxisSchema();$modules=[];$breakdown=[];$rounds=[];
     foreach($schema['sections'] as $key=>$groups){
@@ -104,10 +109,11 @@ function praxisCalculate(array $data,?array $theory): array {
     $best=null;foreach($rounds as $i=>$r)if($r['score']!==null&&($best===null||$r['score']>$rounds[$best]['score']))$best=$i;
     $selected=$data['drive']['selected']??$best;
     $modules['drive']=$selected===null||$rounds[$selected]['score']===null?null:round(max(0,$rounds[$selected]['score']-$data['drive']['extra']),2);
-    $modules['theory']=$theory===null?null:round((float)$theory['punkte']/(float)$theory['max']*100,2);
+    $theoryRaw=praxisTheoryGueltig($theory)?(float)$theory['punkte']/(float)$theory['max']*100:null;
+    $modules['theory']=$theoryRaw===null?null:round($theoryRaw,2);
     $total=0;$complete=true;$results=[];
-    foreach($schema['weights'] as $k=>$weight){$v=$modules[$k]??null;if($v===null)$complete=false;$weighted=$v===null?null:($k==='theory'?(float)$theory['punkte']/(float)$theory['max']*$weight:$v*$weight/100);$total+=$weighted??0;
-        $results[$k]=['percent'=>$v,'weight'=>$weight,'weighted'=>$weighted===null?null:round($weighted,2),'status'=>praxisStatus($v,$k==='theory')];}
+    foreach($schema['weights'] as $k=>$weight){$v=$modules[$k]??null;if($v===null)$complete=false;$weighted=$v===null?null:(($k==='theory'?$theoryRaw:$v)*$weight/100);$total+=$weighted??0;
+        $results[$k]=['percent'=>$v,'weight'=>$weight,'weighted'=>$weighted===null?null:round($weighted,4),'status'=>praxisStatus($v,$k==='theory')];}
     // All three rounds must be recorded before completion; the best complete round is preselected.
     foreach($rounds as $r)if($r['score']===null)$complete=false;
     return ['modules'=>$results,'breakdown'=>$breakdown,'rounds'=>$rounds,'best'=>$best,'selected'=>$selected,'total'=>$complete?round($total,2):null,'status'=>praxisStatus($complete?round($total,2):null)];
@@ -115,7 +121,7 @@ function praxisCalculate(array $data,?array $theory): array {
 function praxisTheory(int $aid): ?array {
     $rows=sql("SELECT p.id,p.ergebnis,p.abgabe_am,v.fragen FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id WHERE p.anwaerter_id=? AND v.art='pm' AND p.status='freigegeben' AND p.ergebnis IS NOT NULL ORDER BY p.id DESC LIMIT 1",[$aid]);
     if(!$rows)return null;$r=$rows[0];$max=array_sum(array_map(fn($q)=>(float)$q['punkte'],pruefungRead($r['fragen'])));
-    if($max<=0)return null;return ['id'=>(int)$r['id'],'punkte'=>(float)$r['ergebnis'],'max'=>$max,'abgabe'=>$r['abgabe_am']];
+    $theory=['id'=>(int)$r['id'],'punkte'=>(float)$r['ergebnis'],'max'=>$max,'abgabe'=>$r['abgabe_am']];return praxisTheoryGueltig($theory)?$theory:null;
 }
 function praxisEligible(array $a): bool {return $a['laufbahn']==='PMA'&&ausbildungPersonalQuelleGueltig($a)&&ausbildungFortschritt($a)['bereit'];}
 function praxisTemplate(int $uid): int {
@@ -174,6 +180,6 @@ function dispatchPraxis(array $u,string $method,string $uri): bool {
         $history=pruefungHistorie($p,$action,$uid,$reason);
         if($correction){$history[count($history)-1]['vorher']=$old;$history[count($history)-1]['nachher']=$payload;}
         sql('UPDATE ausbildung_pruefungen SET antworten=?,ergebnis=?,status=?,revision=revision+1,protokoll=?,abgabe_am=IF(?=\'freigegeben\',UTC_TIMESTAMP(6),abgabe_am) WHERE id=?',[pruefungJson($payload),$result['total'],$status,pruefungJson($history),$status,$id]);
-        $pdo->commit();respond(200,['ok'=>true,'auswertung'=>$result,'revision'=>(int)$p['revision']+1]);
+        $pdo->commit();respond(200,['ok'=>true,'auswertung'=>$result,'theorie'=>$theory,'revision'=>(int)$p['revision']+1]);
     }catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
 }

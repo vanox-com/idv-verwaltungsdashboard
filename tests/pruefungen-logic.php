@@ -53,8 +53,8 @@ assertExam(!IDV\pruefungKorrekturRechte($p,10,false)['zweit'],'ordinary first re
 
 foreach(['abgegeben','freigegeben','annulliert'] as $status){
     $p=['art'=>'praxis','erst'=>10,'zweit'=>0,'status'=>$status,'protokoll'=>json_encode([['aktion'=>'Praxisprüfung angelegt','user'=>20]])];
-    assertExam(IDV\pruefungSichtbar($p,10,false),'practice assigned reviewer '.$status);
-    assertExam(IDV\pruefungSichtbar($p,20,false),'practice creator '.$status);
+    assertExam(IDV\pruefungSichtbar($p,10,false)===($status==='abgegeben'),'practice assigned reviewer '.$status);
+    assertExam(IDV\pruefungSichtbar($p,20,false)===($status==='abgegeben'),'practice creator '.$status);
     assertExam(!IDV\pruefungSichtbar($p,30,false),'practice foreign access blocked '.$status);
     assertExam(IDV\pruefungSichtbar($p,30,true),'practice lead '.$status);
 }
