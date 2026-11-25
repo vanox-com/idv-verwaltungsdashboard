@@ -218,21 +218,23 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
     $trainingSchema=ausbildungSchemaStatus();
     if(!($trainingSchema['bereit']??false)||!($trainingSchema['personalbindungBereit']??false))
         fail(503,'Zuerst die Ausbildungsdatenbank und Personalbindung unter Ausbildung → Übersicht einrichten.');
+    require_once __DIR__.'/PruefungenPraxis.php';
+    if(dispatchPraxis($u,$method,$uri))return true;
     pruefungFinalizeExpired();
     if($method==='GET'&&$uri===$root){
         $where=$lead?'':' WHERE p.erst=? OR p.zweit=?';
-        $rows=sql("SELECT p.id,p.kandidat,p.laufbahn,p.erst,p.zweit,p.status,p.start_am,p.ende_am,p.abgabe_am,p.ergebnis,p.fokus,p.antworten,v.titel,v.art FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id".$where." ORDER BY p.id DESC LIMIT 300",$lead?[]:[$uid,$uid]);
+        $rows=sql("SELECT p.id,p.kandidat,p.laufbahn,p.erst,p.zweit,p.status,p.start_am,p.ende_am,p.abgabe_am,p.ergebnis,p.fokus,p.antworten,v.titel,v.art,JSON_UNQUOTE(JSON_EXTRACT(v.fragen,'$.schema')) AS praxisSchema FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id".$where." ORDER BY p.id DESC LIMIT 300",$lead?[]:[$uid,$uid]);
         foreach($rows as &$r){$f=pruefungRead($r['fokus']);$r['tabwechsel']=$f['wechsel']??0;$a=pruefungRead($r['antworten']);$r['fragenGesamt']=count($a);$r['bearbeitet']=count(array_filter($a,fn($x)=>is_array($x)?count($x)>0:trim((string)$x)!==''));unset($r['fokus'],$r['antworten']);}unset($r);
         $reviewers=[];foreach(sql("SELECT id,anzeigename,dienstnummer FROM users WHERE gesperrt=0 AND muss_passwort_aendern=0 ORDER BY anzeigename") as $r)if(pruefungReviewer((int)$r['id']))$reviewers[]=$r;
         ausbildungSynchronisierePersonal();
         $trainees=array_map(fn($a)=>array_intersect_key($a,array_flip(['id','name','laufbahn','personalnummer'])),ausbildungAktuelleAnwaerter());
-        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM ausbildung_pruefung_vorlagen ORDER BY id DESC'):[]),'pruefungsauswahl'=>sql('SELECT id,art,titel FROM ausbildung_pruefung_vorlagen ORDER BY id DESC'),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
+        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM ausbildung_pruefung_vorlagen WHERE JSON_TYPE(fragen)=\'ARRAY\' ORDER BY id DESC'):[]),'pruefungsauswahl'=>sql('SELECT id,art,titel FROM ausbildung_pruefung_vorlagen WHERE art<>\'praxis\' ORDER BY id DESC'),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
     }
     if($method==='GET'&&preg_match('#^/api/ausbildung/pruefungen/vorlagen/([1-9][0-9]*)$#D',$uri,$vMatch)){
         if(!$verwaltung)fail(403,'Nur berechtigte Leitung und Administratoren dürfen Prüfungsvorlagen einsehen und bearbeiten');
         $rows=sql('SELECT id,art,titel,minuten,grenze,fragen FROM ausbildung_pruefung_vorlagen WHERE id=?',[(int)$vMatch[1]]);
         if(!$rows)fail(404,'Vorlage nicht gefunden');
-        $v=$rows[0];$v['fragen']=pruefungRead($v['fragen']);respond(200,['vorlage'=>$v]);
+        $v=$rows[0];if($v['art']==='praxis'&&!array_is_list(pruefungRead($v['fragen'])))fail(403,'Fester Praxisbogen');$v['fragen']=pruefungRead($v['fragen']);respond(200,['vorlage'=>$v]);
     }
     if($method==='POST'&&$uri===$root.'/vorlagen'){
         if(!$verwaltung)fail(403,'Nur berechtigte Leitung und Administratoren dürfen Prüfungsvorlagen einsehen und bearbeiten');
@@ -250,7 +252,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         $v=sql('SELECT * FROM ausbildung_pruefung_vorlagen WHERE id=?',[$vid]);
         $a=sql('SELECT * FROM ausbildung_anwaerter WHERE id=?',[$aid]);
         if(!$v||!$a||!ausbildungPersonalQuelleGueltig($a[0]))fail(400,'Vorlage oder aktueller Anwärter fehlt');
-        $v=$v[0];$a=$a[0];$track=$a['laufbahn'];
+        $v=$v[0];$a=$a[0];$track=$a['laufbahn'];if($v['art']==='praxis')fail(400,'Praxisprüfungen ausschließlich über den festen PM-Praxisbogen anlegen');
         if(in_array($v['art'],['pm','praxis'],true)?$track!=='PMA':!in_array($track,['PKA','KKA'],true))fail(400,'Prüfung passt nicht zur Laufbahn');
         $token=bin2hex(random_bytes(32));$practice=$v['art']==='praxis';
         $answers=array_map(fn($q)=>$q['typ']==='text'?'':[],pruefungRead($v['fragen']));
@@ -261,7 +263,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
     if(!preg_match('#^/api/ausbildung/pruefungen/([1-9][0-9]*)(?:/(korrektur|freigabe|annullieren|link|berichtigen|wiedereroeffnen))?$#D',$uri,$m))fail(404,'Nicht gefunden');
     $id=(int)$m[1];$action=$m[2]??'';
     if($method==='GET'&&$action===''){
-        $p=pruefungRow($id);pruefungAccess($p,$u);
+        $p=pruefungRow($id);pruefungAccess($p,$u);if(praxisMarker($p))fail(400,'Bitte den festen Praxisbogen öffnen');
         unset($p['token_hash']);
         foreach(['fragen','antworten','bewertung','protokoll','fokus'] as $k)$p[$k]=pruefungRead($p[$k]);
         if(in_array($p['status'],['bereit','laufend'],true)){
@@ -272,7 +274,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
     if($method!=='POST'||$action==='')fail(405,'Nicht erlaubt');
     $b=body();$pdo=db();$pdo->beginTransaction();
     try{
-        $p=pruefungRow($id,true);pruefungAccess($p,$u);
+        $p=pruefungRow($id,true);pruefungAccess($p,$u);if(praxisMarker($p))fail(400,'Bitte den festen Praxisbogen verwenden');
         if(($b['revision']??null)!==(int)$p['revision'])fail(409,'Prüfung wurde zwischenzeitlich geändert. Neu laden.');
         $status=$p['status'];$note=pruefungText($b['notiz']??'',4000,false);$link=null;$history=pruefungHistorie($p,$action,$uid,$note);
         if($action==='link'){
