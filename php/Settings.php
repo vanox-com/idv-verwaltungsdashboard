@@ -30,8 +30,9 @@ function portalDesignInput(): array {
         !is_array($extras) || array_is_list($extras)&&$extras!==[]) fail(400,'Ungültige Designeinstellungen');
     $keys=['flaeche','seitenleiste','rahmen','schrift','sekundaer','highlight'];
     foreach($extras as $name=>$value){
-        if(!in_array($name,[...$keys,'modus','preset'],true)) fail(400,'Ungültige Designeinstellungen');
+        if(!in_array($name,[...$keys,'modus','preset','hintergrundBlur'],true)) fail(400,'Ungültige Designeinstellungen');
         if(in_array($name,$keys,true) && !$hex($value))fail(400,'Ungültige Designeinstellungen');
+        if($name==='hintergrundBlur'&&(!is_int($value)||$value<0||$value>24))fail(400,'Ungültige Hintergrund-Weichzeichnung');
         if($name==='modus'&&!in_array($value,['dunkel','hell'],true))fail(400,'Ungültige Designeinstellungen');
         if($name==='preset'&&!in_array($value,['flori','schulzi','chem'],true))fail(400,'Ungültige Designeinstellungen');
     }
