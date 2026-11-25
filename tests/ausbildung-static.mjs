@@ -113,3 +113,5 @@ if(navigation.includes("'ausbildung-kka'")||!index.includes("track:'PKA-KKA'")||
  throw Error('PKA and KKA must share a monitor while retaining their track identity and detail views');
 if(!embedded.includes('data-action="rsa"')||!embedded.includes("a.laufbahn==='PMA'")||!aulk.includes('RSA-Schulung (Pflicht)'))
  throw Error('PMA RSA control or public status missing');
+
+if(!embedded.includes('data-action="open" data-id="'+ "'+Number(x.id)+'"+'" aria-label=')||!embedded.includes("detail.anwaerter.laufbahn==='PMA'?'PMA':'PKA-KKA'")||!embedded.includes("tab='monitore';track=targetTrack;selected=detail"))throw Error('Exam overview must open the correct individual trainee monitor');

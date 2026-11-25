@@ -13,6 +13,7 @@
     container.append(host);
     const shadow=host.attachShadow({mode:'open'});
     const style=document.createElement('style');style.textContent=css+"\n.exam-list{display:grid;gap:10px}\n.exam-row{--track:#83a9e3;--track-bg:#264266;--track-border:#486c9d;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 14px;border:1px solid #ffffff18;border-left:3px solid var(--track);border-radius:10px;background:linear-gradient(110deg,var(--track-bg),#192536 48%);transition:border-color .15s,background-color .15s}\n.exam-row.pka{--track:#6ddccc;--track-bg:#173f42;--track-border:#387a79}\n.exam-row.kka{--track:#c1a4f4;--track-bg:#342b51;--track-border:#725b9c}\n.exam-row:hover{border-color:var(--track)}\n.exam-name{font-size:14px;font-weight:750;overflow-wrap:anywhere;color:#eff5fc}\n.exam-meta{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:5px;font-size:12px;color:#b6c5d7}\n.exam-track{display:inline-block;color:var(--track);background:var(--track-bg);border:1px solid var(--track-border);border-radius:5px;padding:1px 7px;font-size:11px;font-weight:800;letter-spacing:.05em}\n.exam-meter{height:6px;background:#ffffff13;border-radius:99px;margin-top:9px;overflow:hidden;max-width:310px}\n.exam-meter i{display:block;height:100%;border-radius:99px;background:var(--track)}\n.exam-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid;border-radius:7px;font-size:11px;font-weight:700;line-height:1.4;max-width:150px}\n.exam-status::before{content:\"\";height:6px;width:6px;border-radius:50%;background:currentColor;flex-shrink:0}\n.exam-status.incomplete{color:#ffd28c;background:#61451f55;border-color:#936b39}\n.exam-status.ready{color:#9ce8bc;background:#235a3b66;border-color:#4a9168}\n.exam-status.not-ready{color:#ffb1b1;background:#682d3766;border-color:#a75d66}\n.exam-status.unknown{color:#c7d2df;background:#37475b55;border-color:#65788d}\n@media(max-width:540px){.exam-row{grid-template-columns:1fr;gap:8px}.exam-status{justify-self:start;max-width:none}}\n";
+    style.textContent+="\nbutton.exam-row{width:100%;text-align:left;color:inherit;line-height:inherit;cursor:pointer}button.exam-row:hover{border-color:var(--track);filter:brightness(1.09)}button.exam-row:focus-visible{outline:2px solid var(--track);outline-offset:3px}button.exam-row .exam-name,button.exam-row .exam-meter{display:block}button.exam-row .exam-side{display:flex;align-items:center;gap:9px}button.exam-row .exam-arrow{font-size:20px;color:var(--track);line-height:1} @media(max-width:540px){button.exam-row .exam-side{justify-content:space-between}}";
     shadow.append(style);
     const surface=document.createElement('div');surface.innerHTML=template;
     shadow.append(surface);
@@ -202,10 +203,10 @@ function examOverviewRow(x){
  const total=Math.max(0,Number(f.moduleGesamt)||0),done=Math.max(0,Math.min(total,Number(f.moduleFertig)||0));
  const pct=total?Math.round(done/total*100):0;
  const state=f.status==='Zugelassen'?'ready':f.status==='Nicht bereit'?'not-ready':(f.status==='Module unvollständig'||f.status==='RSA ausstehend'||f.status==='DGL-Praxis ausstehend'||f.status==='DGL-Prüfung ausstehend')?'incomplete':'unknown';
- return '<div class="exam-row '+track.toLowerCase()+'"><div><div class="exam-name">'+esc(x.name)+'</div>'+
- '<div class="exam-meta"><span class="exam-track">'+esc(track||x.laufbahn)+'</span><span>'+done+' / '+total+' Module</span><span>'+pct+' %</span>'+(track==='PMA'?'<span class="exam-status '+(f.rsa?'ready':'incomplete')+'">RSA '+(f.rsa?'erhalten':'offen')+'</span>':'')+'</div>'+
- '<div class="exam-meter" role="progressbar" aria-label="Modulfortschritt" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+pct+'"><i style="width:'+pct+'%"></i></div></div>'+
- '<span class="exam-status '+state+'">'+esc(f.status||'Unbekannt')+'</span></div>';
+ return '<button type="button" class="exam-row '+track.toLowerCase()+'" data-action="open" data-id="'+Number(x.id)+'" aria-label="'+esc(x.name+' – Ausbildungsakte öffnen')+'" title="Ausbildungsakte öffnen"><span><span class="exam-name">'+esc(x.name)+'</span>'+
+ '<span class="exam-meta"><span class="exam-track">'+esc(track||x.laufbahn)+'</span><span>'+done+' / '+total+' Module</span><span>'+pct+' %</span>'+(track==='PMA'?'<span class="exam-status '+(f.rsa?'ready':'incomplete')+'">RSA '+(f.rsa?'erhalten':'offen')+'</span>':'')+'</span>'+
+ '<span class="exam-meter" role="progressbar" aria-label="Modulfortschritt" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+pct+'"><i style="width:'+pct+'%"></i></span></span>'+
+ '<span class="exam-side"><span class="exam-status '+state+'">'+esc(f.status||'Unbekannt')+'</span><span class="exam-arrow" aria-hidden="true">›</span></span></button>';
 }
 function overview(){
  const a=data.anwaerter;const n=a.filter(x=>x.fortschritt.bereit).length;
@@ -446,7 +447,17 @@ shadow.addEventListener('click',async(e)=>{
    await act(async()=>{await request('unterricht/'+id+'/beenden',{method:'POST',body:'{}'});if(lessonInvite?.id===id)lessonInvite=null;await load();message('Unterricht beendet.')});return}
  if(mode==='upload-material'){editing={type:'upload'};render();return}
  if(mode==='close'){selected=null;editing=null;render();return}
- if(mode==='open'){await act(async()=>{selected=await request('anwaerter/'+id);editing=null;render();el('#details')?.scrollIntoView({behavior:'smooth'})});return}
+ if(mode==='open'){
+   if(voteDraftDirty()&&!confirm('Ungespeicherte Prüfungs- oder Stimmangaben verwerfen?'))return;
+   await act(async()=>{
+     const fromTab=tab,fromTrack=track;
+     const detail=await request('anwaerter/'+id);
+     if(!host.isConnected||tab!==fromTab||track!==fromTrack)return;
+     const targetTrack=detail.anwaerter.laufbahn==='PMA'?'PMA':'PKA-KKA';
+     tab='monitore';track=targetTrack;selected=detail;editing=null;
+     render();el('#details')?.scrollIntoView({block:'start',behavior:'smooth'});
+   });return
+ }
  if(mode==='edit-trainee'){editing={type:'trainee-edit'};render();return}
  if(mode==='module'){await act(async()=>{const id=selected.anwaerter.id;await request('anwaerter/'+id+'/modul/'+encodeURIComponent(btn.dataset.code),{method:'PUT',body:JSON.stringify({abgeschlossen:btn.dataset.done!=='1',revision:Number(selected.anwaerter.revision)})});selected=await request('anwaerter/'+id);await load();message('Modul gespeichert.')});return}
  if(['dgl-practice','dgl-exam','dgl-reset'].includes(mode)){await act(async()=>{
