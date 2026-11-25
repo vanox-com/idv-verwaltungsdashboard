@@ -31,7 +31,7 @@ function pruefungInstall(array $u): never {
         $content=preg_replace('/^--[^\\r\\n]*$/m','',file_get_contents($file));
         foreach(explode(';',$content) as $statement){
             $statement=trim($statement);if($statement==='')continue;
-            if(!preg_match('/^CREATE TABLE IF NOT EXISTS ausbildung_pruefung(?:en|_vorlagen)\\s*\\(/D',$statement))throw new \\RuntimeException('Unzulässige Prüfungsmigration');
+            if(!preg_match('/^CREATE TABLE IF NOT EXISTS ausbildung_pruefung(?:en|_vorlagen)\\s*\\(/D',$statement))throw new \RuntimeException('Unzulässige Prüfungsmigration');
             db()->exec($statement);
         }
     }finally{sql("SELECT RELEASE_LOCK('idv_pruefung_schema_v1')");}
