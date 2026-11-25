@@ -350,43 +350,10 @@ function open(host){
  const l=card('Vorhandene Versionen');for(const x of data.vorlagen.filter(x=>practice?x.art==='praxis':x.art!=='praxis')){const line=node('div');line.style.display='flex';line.style.justifyContent='space-between';line.style.alignItems='center';line.style.gap='8px';line.style.margin='8px 0';line.append(node('span','#'+x.id+' · '+x.titel+' · '+x.grenze+' % · '+x.minuten+' Min.'),btn('Bearbeiten',()=>run(async()=>{if(questions.length&&!confirm('Aktuellen Entwurf verwerfen und Vorlage laden?'))return;templateDraft=(await api('/vorlagen/'+x.id)).vorlage;render();}),''));
  l.append(line)}main.append(c,l);renderQuestions();
  }
- async function details(id){if(data.pruefungen.some(p=>Number(p.id)===Number(id)&&p.praxisSchema==='pm-praxis-v1')||lastList==='practice'&&!data.pruefungen.some(p=>Number(p.id)===Number(id))){detailId=id;view='detail';dirty=false;main.replaceChildren(nav());const back=btn('← Zurück zur Prüfungsliste',()=>navigate(lastList),'exam-back');main.append(back);await window.IDVPractice.open(main,id,{api,run,message,dirty:()=>{dirty=true;},clean:()=>{dirty=false;},reload:async id=>{data=await api();await details(id);}});return;}const {pruefung:p,user,leitung,verwaltung}=await api('/'+id);if(!connected())return;detailId=id;view='detail';dirty=false;main.replaceChildren(nav());const back=btn('Zurück zur Prüfungsliste',()=>navigate(lastList),'exam-back');back.prepend(examIcon('back'));main.append(back);
- const c=card(p.kandidat+' · '+p.titel);c.append(node('p',states[p.status]+' · Erstprüfer #'+p.erst+' · Zweitprüfer #'+p.zweit),node('p','Start: '+date(p.start_am)+' · Ende: '+date(p.ende_am)+' · Abgabe: '+date(p.abgabe_am)));
- const actions=node('div');actions.style.display='flex';actions.style.gap='8px';actions.style.flexWrap='wrap';c.append(actions);
- if(p.status==='bereit'&&p.art!=='praxis')actions.append(btn('Link erneuern',()=>run(async()=>{const r=await api('/'+id+'/link',{revision:Number(p.revision)});await details(id);linkBox(r.link);}), ''));
- if(leitung&&!['freigegeben','annulliert'].includes(p.status))actions.append(btn('Annullieren',()=>run(async()=>{const n=prompt('Begründung für die Annullierung:');if(!n)return;await api('/'+id+'/annullieren',{revision:Number(p.revision),notiz:n});view='archive';await load();}),'danger'));
- if(leitung&&p.status==='zweitkorrigiert')actions.append(btn('Ergebnis freigeben',()=>run(async()=>{if(!confirm('Endgültiges Ergebnis für den Prüfling freigeben?'))return;await api('/'+id+'/freigabe',{revision:Number(p.revision)});await details(id);message('Ergebnis freigegeben.');})));
- if(p.ergebnis!==null&&p.fragen){const max=p.fragen.reduce((n,q)=>n+Number(q.punkte),0);c.append(node('h2',Number(p.ergebnis)+' / '+max+' Punkte · '+(100*Number(p.ergebnis)/max>=Number(p.grenze)?'Bestanden':'Nicht bestanden')));}
- main.append(c);
- const f=card('Fokusprotokoll · Hinweise, kein Täuschungsnachweis');f.append(node('p','Tab-/Fensterwechsel: '+(p.fokus.wechsel||0)));for(const e of (p.fokus.events||[]))f.append(node('p',new Date(e.am).toLocaleString('de-DE')+' · '+e.ereignis));main.append(f);
- if(p.fragen){
- const first=p.status==='abgegeben'&&Number(p.erst)===user,second=p.status==='erstkorrigiert'&&Number(p.zweit)===user;
- const override=verwaltung&&['abgegeben','erstkorrigiert','zweitkorrigiert','freigegeben'].includes(p.status);
- let editOverride=false;
- const fields=[];p.fragen.forEach((q,i)=>{const b=card((q.typ==='praxis'?'Bewertungskriterium ':'Frage ')+(i+1)+' · '+q.punkte+' Punkte');if(q.kontext)b.append(node('p',q.kontext));b.append(node('p',q.titel));(q.bilder||[]).forEach(img=>showImage(b,img));(q.optionBilder||[]).forEach((img,j)=>{if(img){b.append(node('p','Antwortoption: '+q.optionen[j]));showImage(b,img)}});if(q.feedback)b.append(node('p','Originales Bewertungsfeedback: '+q.feedback));
- const ans=p.antworten[i];const answer=Array.isArray(ans)?ans.map(a=>q.optionen[a]).join(' · '):ans;
- if(q.typ!=='praxis')b.append(node('p','Antwort: '+(answer||'—')));b.append(node('p','Muster / Kriterien: '+([q.muster,...(q.richtig||[]).map(a=>q.optionen[a])].filter(Boolean).join(' · ')||'—')));
- const automatic=p.automatisch[i];if(automatic!==null)b.append(node('p','Automatische Vorbewertung: '+automatic+' / '+q.punkte));
- const score=field(b,'Punkte',num(0,q.punkte,'0.01'));score.value=p.bewertung[i]?.punkte??automatic??'';score.disabled=!first;
- const n=field(b,'Korrekturvermerk',area());n.value=p.bewertung[i]?.notiz||'';n.disabled=!first&&!second;fields.push({score,n});main.append(b);
- });
- if(override){
- const b=card('Leitung · Korrektursperre übergehen');
- b.append(node('p','Auch nach der Zweitkorrektur und Ergebnisfreigabe darf die Leitung Punkte und Vermerke berichtigen. Ursprüngliche Antworten bleiben unverändert; der alte und neue Bewertungsstand werden protokolliert. Bei bereits freigegebenen Ergebnissen wird die neue Punktzahl unmittelbar im Ergebnislink angezeigt.','mut'));
- const why=field(b,'Pflichtbegründung',area('Warum ist die Berichtigung erforderlich?'));
- const saveOverride=btn('Berichtigung verbindlich speichern',()=>run(async()=>{if(!editOverride||!why.value.trim())throw Error('Berichtigungsmodus aktivieren und Begründung eingeben.');if(fields.some(x=>x.score.value===''||!x.score.checkValidity()))throw Error('Alle Punkte vollständig und gültig eintragen.');if(!confirm('Bewertung mit Leitungsrecht berichtigen?'))return;await api('/'+id+'/berichtigen',{revision:Number(p.revision),notiz:why.value,bewertung:fields.map(x=>({punkte:Number(x.score.value),notiz:x.n.value}))});await details(id);message('Berichtigung protokolliert.');}));
- saveOverride.disabled=true;
- b.append(btn('Berichtigung aktivieren',()=>{editOverride=true;fields.forEach(x=>{x.score.disabled=false;x.n.disabled=false});saveOverride.disabled=false;message('Berichtigungsmodus aktiv. Begründung ist Pflicht.');}),saveOverride);
- if(p.status!=='abgegeben')b.append(btn('Erst- und Zweitkorrektur erneut öffnen',()=>run(async()=>{if(!why.value.trim())throw Error('Begründung erforderlich.');if(!confirm('Korrektur erneut öffnen? Ein freigegebenes Ergebnis wird bis zur erneuten Freigabe ausgeblendet.'))return;await api('/'+id+'/wiedereroeffnen',{revision:Number(p.revision),notiz:why.value});await details(id);message('Korrektur erneut geöffnet.');}),''));
- main.append(b);
+ async function details(id){if(data.pruefungen.some(p=>Number(p.id)===Number(id)&&p.praxisSchema==='pm-praxis-v1')||lastList==='practice'&&!data.pruefungen.some(p=>Number(p.id)===Number(id))){detailId=id;view='detail';dirty=false;main.replaceChildren(nav());const back=btn('← Zurück zur Prüfungsliste',()=>navigate(lastList),'exam-back');main.append(back);await window.IDVPractice.open(main,id,{api,run,message,dirty:()=>{dirty=true;},clean:()=>{dirty=false;},reload:async id=>{data=await api();await details(id);}});return;}const result=await api('/'+id);if(!connected())return;detailId=id;view='detail';dirty=false;main.replaceChildren(nav());const back=btn('Zurück zur Prüfungsliste',()=>navigate(lastList),'exam-back');back.prepend(examIcon('back'));main.append(back);
+ window.IDVReview.render(main,result,{api,run,message,states,reviewers:data.pruefer||[],dirty:()=>{dirty=true;},clean:()=>{dirty=false;},link:linkBox,reload:async id=>{data=await api();await details(id);}});
  }
- if(first||second){const b=card(first?'Erstkorrektur abschließen':'Zweitkorrektur abschließen');const note=field(b,'Gesamtvermerk / Begründung',area());
- b.append(btn(first?'An Zweitprüfer übergeben':'Zweitkorrektur bestätigen',()=>run(async()=>{if(fields.some(x=>x.score.value===''||!x.score.checkValidity()))throw Error('Alle Punkte vollständig und gültig eintragen.');await api('/'+id+'/korrektur',{revision:Number(p.revision),notiz:note.value,bewertung:fields.map(x=>({punkte:Number(x.score.value),notiz:x.n.value}))});await details(id);message('Korrektur gespeichert.');})));
- if(second)b.append(btn('Mit Begründung an Erstprüfer zurückgeben',()=>run(async()=>{await api('/'+id+'/korrektur',{revision:Number(p.revision),notiz:note.value,zurueck:true});await details(id);message('Zurückgegeben.');}),''));
- main.append(b);}
- }
- const h=card('Verlauf');for(const e of p.protokoll){h.append(node('p',new Date(e.am).toLocaleString('de-DE')+' · '+e.aktion+' · '+(e.user?'#'+e.user:'System')+(e.notiz?' · '+e.notiz:'')));if(e.vorher&&e.nachher){const d=node('details');d.append(node('summary','Bewertungsänderungen: '+(e.vorher.ergebnis??'offen')+' → '+(e.nachher.ergebnis??'offen')+' Punkte · '+e.vorher.status+' → '+e.nachher.status));const old=e.vorher.bewertung||[],next=e.nachher.bewertung||[];for(let i=0;i<Math.max(old.length,next.length);i++){const a=old[i],b=next[i];if(JSON.stringify(a)!==JSON.stringify(b))d.append(node('p','Frage '+(i+1)+': '+(a?.punkte??'offen')+' → '+(b?.punkte??'offen')+' Punkte · '+(a?.notiz||'—')+' → '+(b?.notiz||'—')));}h.append(d);}}main.append(h);
- }
+
  main.append(node('h1','Prüfungszentrum'),node('p','Prüfungen werden geladen …','mut'));run(load);
  const interval=setInterval(()=>{if(!connected()){clearInterval(interval);return}if(view==='running'&&!busy&&document.visibilityState==='visible')run(load)},10000);
 }

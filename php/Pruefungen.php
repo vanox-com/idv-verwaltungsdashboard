@@ -150,6 +150,27 @@ function pruefungReviewer(int $id): bool {
 function pruefungPublicFragen(array $fragen): array {
     return array_map(fn($q)=>array_intersect_key($q,array_flip(['typ','titel','punkte','optionen','kontext','bilder','optionBilder'])),$fragen);
 }
+function pruefungFokusMerge(array $f,array $events,int $questionCount): array {
+    $f['events']=$f['events']??[];$f['wechsel']=(int)($f['wechsel']??0);
+    $seen=[];foreach($f['events'] as $entry)if(isset($entry['id']))$seen[$entry['id']]=true;
+    foreach($events as $entry){
+        if(!is_array($entry))continue;
+        $kind=$entry['ereignis']??'';$id=$entry['id']??null;
+        if(!in_array($kind,['verlassen','zurueck','reload','vollbild_aus','paste','paste_versuch','copy','cut'],true))continue;
+        if($id!==null&&(!is_string($id)||!preg_match('/^[a-zA-Z0-9_-]{8,80}$/D',$id)))continue;
+        if($id!==null&&isset($seen[$id]))continue;
+        if(count($f['events'])>=1000){$f['limit']=true;break;}
+        if($kind==='verlassen'&&($f['offen']??false))continue;
+        if($kind==='zurueck'&&!($f['offen']??false))continue;
+        if($kind==='verlassen'){$f['wechsel']++;$f['offen']=true;}
+        if($kind==='zurueck')$f['offen']=false;
+        $item=['am'=>gmdate('c'),'ereignis'=>$kind];
+        if($id!==null){$item['id']=$id;$seen[$id]=true;}
+        $q=$entry['frage']??null;if(is_int($q)&&$q>=1&&$q<=$questionCount)$item['frage']=$q;
+        $f['events'][]=$item;
+    }
+    return $f;
+}
 function pruefungGuest(string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/pruefung-gast/'))return false;
     if($method!=='POST'||!in_array($uri,['/api/pruefung-gast/status','/api/pruefung-gast/start','/api/pruefung-gast/speichern','/api/pruefung-gast/abgeben','/api/pruefung-gast/fokus'],true))fail(404,'Nicht gefunden');
@@ -169,18 +190,14 @@ function pruefungGuest(string $method,string $uri): bool {
             }elseif($p['status']!=='laufend')fail(409,'Prüfung wurde bereits abgegeben');
         }elseif(in_array($action,['speichern','abgeben','fokus'],true)){
             if($p['status']!=='laufend'||strtotime($p['ende_am'].' UTC')<=time())fail(409,'Bearbeitungszeit beendet');
-            if($action==='fokus'){
-                $event=$b['ereignis']??'';
-                if(!in_array($event,['verlassen','zurueck','reload','vollbild_aus','paste'],true))fail(400,'Unbekanntes Ereignis');
-                $f=pruefungRead($p['fokus']);$f['events']=$f['events']??[];
-                if($event==='verlassen'&&($f['offen']??false)){$pdo->commit();respond(200,['ok'=>true]);}
-                if($event==='zurueck'&&!($f['offen']??false)){$pdo->commit();respond(200,['ok'=>true]);}
-                if($event==='verlassen'){$f['wechsel']=($f['wechsel']??0)+1;$f['offen']=true;}
-                if($event==='zurueck')$f['offen']=false;
-                if(count($f['events'])<1000)$f['events'][]=['am'=>gmdate('c'),'ereignis'=>$event];
+            $events=$b['ereignisse']??[];
+            if(!is_array($events)||!array_is_list($events)||count($events)>100)fail(400,'Ungültige Ereignisliste');
+            if($action==='fokus'&&isset($b['ereignis']))$events[]=['ereignis'=>$b['ereignis']];
+            if($events){
+                $f=pruefungFokusMerge(pruefungRead($p['fokus']),$events,count(pruefungRead($p['fragen'])));
                 sql('UPDATE ausbildung_pruefungen SET fokus=? WHERE id=?',[pruefungJson($f),$id]);
-                $pdo->commit();respond(200,['ok'=>true]);
             }
+            if($action==='fokus'){$pdo->commit();respond(200,['ok'=>true]);}
             if(($b['revision']??null)!==(int)$p['revision'])fail(409,'Antwortstand wurde geändert. Bitte neu laden.');
             $answers=pruefungAntworten(pruefungRead($p['fragen']),$b['antworten']??null);
             if($action==='abgeben')sql("UPDATE ausbildung_pruefungen SET antworten=?,status='abgegeben',abgabe_am=UTC_TIMESTAMP(6),revision=revision+1 WHERE id=? AND status='laufend' AND ende_am>UTC_TIMESTAMP(6)",[pruefungJson($answers),$id]);
@@ -260,6 +277,10 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
             [$vid,$aid,$a['name'],$track,$first,$second,$practice?'abgegeben':'bereit',hash('sha256',$token),pruefungJson($answers),'[]',pruefungJson([['am'=>gmdate('c'),'aktion'=>'erstellt','user'=>$uid]]),'{"wechsel":0,"events":[]}']);
         respond(201,['id'=>(int)db()->lastInsertId(),'link'=>$practice?null:'/pruefung.html#'.$token]);
     }
+    if(preg_match('#^/api/ausbildung/pruefungen/([1-9][0-9]*)/ki$#D',$uri,$aiMatch)){
+        require_once __DIR__.'/PruefungenKI.php';
+        pruefungKiEndpoint($u,$method,(int)$aiMatch[1]);
+    }
     if(!preg_match('#^/api/ausbildung/pruefungen/([1-9][0-9]*)(?:/(korrektur|freigabe|annullieren|link|berichtigen|wiedereroeffnen))?$#D',$uri,$m))fail(404,'Nicht gefunden');
     $id=(int)$m[1];$action=$m[2]??'';
     if($method==='GET'&&$action===''){
@@ -269,7 +290,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         if(in_array($p['status'],['bereit','laufend'],true)){
             unset($p['fragen'],$p['antworten'],$p['bewertung']);
         }else $p['automatisch']=array_map(fn($q,$i)=>pruefungAuto($q,$p['antworten'][$i]??null),$p['fragen'],array_keys($p['fragen']));
-        respond(200,['pruefung'=>$p,'user'=>$uid,'leitung'=>$lead,'verwaltung'=>$verwaltung]);
+        respond(200,['pruefung'=>$p,'user'=>$uid,'leitung'=>$lead,'verwaltung'=>$verwaltung,'kiBereit'=>trim((string)getenv('OPENAI_API_KEY'))!==''&&function_exists('curl_init')]);
     }
     if($method!=='POST'||$action==='')fail(405,'Nicht erlaubt');
     $b=body();$pdo=db();$pdo->beginTransaction();

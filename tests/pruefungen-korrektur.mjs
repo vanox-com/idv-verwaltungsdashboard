@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+const ctx=vm.createContext({window:{}});
+vm.runInContext(readFileSync(new URL('../public/assets/pruefungen-korrektur.js',import.meta.url),'utf8'),ctx);
+const {scoreSummary,duration}=ctx.window.IDVReview;
+const q=[{punkte:10},{punkte:10}];
+let s=scoreSummary(q,[8,8],80);assert.equal(s.total,16);assert.equal(s.passed,true);assert.equal(s.open,0);
+s=scoreSummary(q,[8,''],80);assert.equal(s.total,8);assert.equal(s.open,1);assert.equal(s.passed,false);
+assert.equal(scoreSummary(q,[11,-1],80).open,2);
+assert.equal(scoreSummary(q,[7.25,8.75],80).percent,80);
+assert.equal(duration('2026-11-25 02:00:00','2026-11-25 02:01:47'),'1 min 47 s');
+console.log('Korrekturansicht: Punkte und Dauer OK');
