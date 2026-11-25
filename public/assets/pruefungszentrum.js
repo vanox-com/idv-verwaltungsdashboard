@@ -12,7 +12,8 @@ const text=(ph='')=>{const i=node('input');i.placeholder=ph;return i;};
 const area=(ph='')=>{const t=node('textarea');t.placeholder=ph;t.rows=4;t.style.width='100%';return t;};
 const card=(title)=>{const s=node('section',undefined,'box');s.style.marginBottom='14px';s.append(node('h3',title));return s;};
 const EXAM_FILTERS={running:['bereit','laufend'],first:['abgegeben'],second:['erstkorrigiert'],release:['zweitkorrigiert'],archive:['freigegeben','annulliert']};
-const EXAM_VIEWS={overview:['Übersicht','Alle Prüfungen im Überblick','dashboard'],running:['Durchführung','Erstellte Links und laufende Prüfungen','clock'],first:['Erstkorrektur','Abgegebene Prüfungen bewerten','clipboard'],second:['Zweitkorrektur','Erstbewertungen kontrollieren','check'],release:['Freigabe','Zweitkorrigierte Ergebnisse freigeben','unlock'],archive:['Archiv','Freigegebene und annullierte Prüfungen','archive'],templates:['Vorlagen','Fragenkatalog und Google-Import','settings'],create:['Neue Prüfung','Prüfling und Prüfer auswählen','plus']};
+function examMatchesView(p,view){return (view!=='practice'||p.art==='praxis')&&(!EXAM_FILTERS[view]||EXAM_FILTERS[view].includes(p.status));}
+const EXAM_VIEWS={practice:['PM-Praxisprüfung','Praktische Prüfung vorbereiten und bewerten','clipboard'],overview:['Übersicht','Alle Prüfungen im Überblick','dashboard'],running:['Durchführung','Erstellte Links und laufende Prüfungen','clock'],first:['Erstkorrektur','Abgegebene Prüfungen bewerten','clipboard'],second:['Zweitkorrektur','Erstbewertungen kontrollieren','check'],release:['Freigabe','Zweitkorrigierte Ergebnisse freigeben','unlock'],archive:['Archiv','Freigegebene und annullierte Prüfungen','archive'],templates:['Vorlagen','Fragenkatalog und Google-Import','settings'],create:['Neue Prüfung','Prüfling und Prüfer auswählen','plus']};
 function examIcon(key){
  const paths={dashboard:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',clipboard:'<rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M8 11h8M8 15h5"/>',check:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/>',unlock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M9 10V6a4 4 0 0 1 8 0M12 14v3"/>',archive:'<rect x="3" y="3" width="18" height="5" rx="1"/><path d="M5 8v12h14V8M10 12h4"/>',settings:'<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--panel)"/><circle cx="15" cy="17" r="3" fill="var(--panel)"/>',plus:'<path d="M12 5v14M5 12h14"/>',refresh:'<path d="M20 7v5h-5M4 17v-5h5M5 8a8 8 0 0 1 14-1M5 17a8 8 0 0 0 14-1"/>',search:'<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>',arrow:'<path d="m10 6 6 6-6 6"/>',back:'<path d="m14 6-6 6 6 6"/>',lock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/>'};
  const e=node('span',undefined,'exam-icon');e.setAttribute('aria-hidden','true');e.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(paths[key]||'')+'</svg>';return e;
@@ -101,11 +102,11 @@ function open(host){
  const note=node('p','','exam-message');note.hidden=true;note.setAttribute('role','status');const main=node('div',undefined,'exam-body');mount.append(note,main);
  let data=null,busy=false,view='overview',detailId=null,templateDraft=null,lastList='overview',search='',kind='',dirty=false;
  mount.id='idvExamMount';
- main.addEventListener('input',e=>{if(['create','templates','detail'].includes(view)&&e.target.matches('input,select,textarea'))dirty=true;});
- main.addEventListener('change',e=>{if(['create','templates','detail'].includes(view)&&e.target.matches('input,select,textarea'))dirty=true;});
+ main.addEventListener('input',e=>{if(['create','practice-create','templates','practice-template','detail'].includes(view)&&e.target.matches('input,select,textarea'))dirty=true;});
+ main.addEventListener('change',e=>{if(['create','practice-create','templates','practice-template','detail'].includes(view)&&e.target.matches('input,select,textarea'))dirty=true;});
  function canLeave(){return !dirty||confirm('Ungespeicherte Eingaben verwerfen?');}
  function navigate(v){if(busy||v===view||!canLeave())return;dirty=false;templateDraft=null;detailId=null;view=v;message('');render();}
- function count(v){const rows=data?.pruefungen||[];return rows.filter(p=>!EXAM_FILTERS[v]||EXAM_FILTERS[v].includes(p.status)).length;}
+ function count(v){const rows=data?.pruefungen||[];return rows.filter(p=>examMatchesView(p,v)).length;}
  const connected=()=>mount.isConnected;
  function message(t,bad=false){if(connected()){note.textContent=t;note.hidden=!t;note.classList.toggle('is-error',bad);}}
  async function run(fn){if(busy)return;busy=true;try{await fn()}catch(e){message(e.message,true)}finally{busy=false}}
@@ -118,13 +119,13 @@ function open(host){
  const refresh=btn('Aktualisieren',()=>{if(busy||!canLeave())return;dirty=false;run(load)},'exam-refresh');refresh.prepend(examIcon('refresh'));actions.append(refresh);
  const createButton=btn('Neue Prüfung',()=>navigate('create'),'p exam-new');createButton.prepend(examIcon('plus'));createButton.setAttribute('aria-pressed',String(view==='create'));actions.append(createButton);top.append(actions);wrap.append(top);
  const bar=node('nav',undefined,'exam-nav');bar.setAttribute('aria-label','Prüfungszentrum');
- const selected=view==='detail'?lastList:view;
- const groups=[['ÜBERBLICK',['overview','running']],['KORREKTUR & FREIGABE',['first','second','release']],['VERWALTUNG',['archive',...(data.vorlagenBearbeiten?['templates']:[])]]];
+ const selected=view==='detail'?lastList:view.startsWith('practice-')?'practice':view;
+ const groups=[['ÜBERBLICK',['overview','running','practice']],['KORREKTUR & FREIGABE',['first','second','release']],['VERWALTUNG',['archive',...(data.vorlagenBearbeiten?['templates']:[])]]];
  for(const [label,views] of groups){
   const group=node('div',undefined,'exam-nav-group');group.append(node('span',label,'exam-nav-label'));const row=node('div',undefined,'exam-nav-items');
   for(const v of views){
    const [name,hint,icon]=EXAM_VIEWS[v],b=btn('',()=>navigate(v),'exam-nav-button');b.dataset.view=v;b.setAttribute('aria-current',selected===v?'page':'false');b.title=hint;b.append(examIcon(icon),node('span',name,'exam-nav-text'));
-   if(['running','first','second','release'].includes(v)){const n=count(v);if(n)b.append(node('span',String(n),'exam-nav-count'));}
+   if(['running','practice','first','second','release'].includes(v)){const n=count(v);if(n)b.append(node('span',String(n),'exam-nav-count'));}
    if(v==='templates'){b.title='Ausbildungsleitung, Leitungsdienst und Administratoren · '+hint;}
    row.append(b);
   }group.append(row);bar.append(group);
@@ -133,11 +134,14 @@ function open(host){
  function render(){
  if(!connected())return;dirty=false;main.replaceChildren();
  if(!data.bereit){const b=card('Datenbank-Erweiterung erforderlich');b.append(node('p','Das Prüfungszentrum ist vorbereitet. Nach einer aktuellen verschlüsselten Datensicherung kann der Administrator die additive Erweiterung direkt einrichten. Alternativ kann der Hoster die SQL-Migration 2026-11-25-pruefungszentrum.sql einspielen. Bestehende Ausbildungsdaten werden nicht verändert.'),btn('Erneut prüfen',()=>run(load)));if(data.admin)b.append(btn('Nach Backup einrichten',()=>run(async()=>{if(!confirm('Aktuelles verschlüsseltes Datenbankbackup erstellt und heruntergeladen?'))return;await api('/setup',{bestaetigung:'BACKUP_ERSTELLT_PRUEFUNGEN'});await load();message('Prüfungszentrum eingerichtet.');})));main.append(node('h1','Prüfungszentrum'),b);return}
- if(view==='templates'&&!data.vorlagenBearbeiten){view='overview';templateDraft=null;}
+ if(['templates','practice-template'].includes(view)&&!data.vorlagenBearbeiten){view='overview';templateDraft=null;}
  main.append(nav());
- if(view==='create'){create();return}if(view==='templates'){templates();return}
+ if(view==='create'||view==='practice-create'){create(view==='practice-create');return}if(view==='templates'||view==='practice-template'){templates(view==='practice-template');return}
  const selected=EXAM_VIEWS[view]||EXAM_VIEWS.overview;
  const title=node('div',undefined,'exam-section-heading');title.append(node('h2',selected[0]),node('p',selected[1],'mut'));main.append(title);
+ if(view==='practice'){
+ const panel=card('Praktische Prüfung');panel.classList.add('exam-practice-tools');const desc=node('div');desc.append(node('p','Bewertung durch Prüfer · kein externer Prüfungslink','mut'),node('p',count('practice')+' praktische Prüfungen · '+(data.pruefungsauswahl||[]).filter(x=>x.art==='praxis').length+' Vorlagen','mut'));const actions=node('div',undefined,'exam-practice-actions');actions.append(btn('Neue Praxisprüfung',()=>navigate('practice-create'),'p'));if(data.vorlagenBearbeiten)actions.append(btn('Bewertungsbogen / Vorlagen',()=>navigate('practice-template'),''));panel.append(desc,actions);main.append(panel);
+ }
  if(view==='overview'){
   const stats=node('div',undefined,'exam-stats');
   for(const [v,label,hint,filter,icon,tone] of [
@@ -150,43 +154,45 @@ function open(host){
  }
  const c=card(view==='overview'?'Prüfungsliste':selected[0]+' · Prüfungsliste');c.classList.add('exam-list');
  const toolbar=node('div',undefined,'exam-list-toolbar');const searchWrap=node('div',undefined,'exam-search');const s=text('Anwärter oder Prüfung suchen …');s.value=search;s.type='search';s.setAttribute('aria-label','Prüfungen suchen');searchWrap.append(examIcon('search'),s);
- const k=select([['','Alle Prüfungsarten'],...Object.entries(data.arten||{})]);k.value=kind;k.setAttribute('aria-label','Prüfungsart filtern');const counter=node('span','','exam-count-label');toolbar.append(searchWrap,k,counter);c.append(toolbar);
- const tableWrap=node('div',undefined,'exam-table-wrap');const table=node('table',undefined,'exam-table');const h=node('tr');for(const label of ['Prüfling / Prüfung','Status','Fortschritt','Prüfungsende','Tabwechsel','Aktion'])h.append(node('th',label));const thead=node('thead');thead.append(h);table.append(thead);const body=node('tbody');table.append(body);tableWrap.append(table);const empty=node('div',undefined,'exam-empty');c.append(tableWrap,empty);main.append(c);
+ const k=select(view==='practice'?[['praxis','PM-Praxisprüfung']]:[['','Alle Prüfungsarten'],...Object.entries(data.arten||{})]);k.value=view==='practice'?'praxis':kind;k.setAttribute('aria-label','Prüfungsart filtern');const counter=node('span','','exam-count-label');toolbar.append(searchWrap,k,counter);c.append(toolbar);
+ const tableWrap=node('div',undefined,'exam-table-wrap');const table=node('table',undefined,'exam-table');const h=node('tr');for(const label of (view==='practice'?['Prüfling / Prüfung','Status','Bewertung','Aktion']:['Prüfling / Prüfung','Status','Fortschritt','Prüfungsende','Tabwechsel','Aktion']))h.append(node('th',label));const thead=node('thead');thead.append(h);table.append(thead);const body=node('tbody');table.append(body);tableWrap.append(table);const empty=node('div',undefined,'exam-empty');c.append(tableWrap,empty);main.append(c);
  function renderRows(){
   const needle=search.trim().toLocaleLowerCase('de-DE');
-  const rows=data.pruefungen.filter(p=>(!EXAM_FILTERS[view]||EXAM_FILTERS[view].includes(p.status))&&(!kind||p.art===kind)&&(!needle||[p.kandidat,p.titel,kinds[p.art]||''].join(' ').toLocaleLowerCase('de-DE').includes(needle)));
+  const rows=data.pruefungen.filter(p=>examMatchesView(p,view)&&(view==='practice'||!kind||p.art===kind)&&(!needle||[p.kandidat,p.titel,kinds[p.art]||''].join(' ').toLocaleLowerCase('de-DE').includes(needle)));
   counter.textContent=rows.length+' Prüfungen';body.replaceChildren();tableWrap.hidden=!rows.length;empty.hidden=!!rows.length;empty.replaceChildren();
   if(!rows.length){empty.append(examIcon('clipboard'),node('strong',needle||kind?'Keine passenden Prüfungen':'Keine Prüfungen in diesem Bereich'),node('p',needle||kind?'Passe die Suche oder den Prüfungsfilter an.':'Neue Vorgänge erscheinen hier automatisch.','mut'));return}
   for(const p of rows){
    const tr=node('tr');const who=node('td');who.append(node('strong',p.kandidat),node('small',p.titel));tr.append(who);
    const status=node('td');const pill=node('span',states[p.status]||p.status,'exam-status');pill.dataset.status=p.status;status.append(pill);tr.append(status);
-   const progress=node('td');if(p.art==='praxis')progress.textContent='—';else{const total=Number(p.fragenGesamt)||0,done=Number(p.bearbeitet)||0,percent=total?Math.min(100,Math.max(0,done/total*100)):0;const meter=node('div',undefined,'exam-meter'),fill=node('i');fill.style.width=percent+'%';meter.append(fill);progress.append(node('span',done+' / '+total,'exam-progress-label'),meter);}tr.append(progress);
-   tr.append(node('td',date(p.ende_am)));const focus=node('td');const f=node('span',String(p.tabwechsel??0),'exam-focus-count');if(Number(p.tabwechsel)>0)f.classList.add('has-events');focus.append(f);tr.append(focus);
+   const progress=node('td');if(p.art==='praxis')progress.textContent=view==='practice'?(p.status==='abgegeben'?'Ausstehend':p.status==='erstkorrigiert'?'Erstbewertet':p.status==='zweitkorrigiert'||p.status==='freigegeben'?'Zweitbewertet':'—'):'—';else{const total=Number(p.fragenGesamt)||0,done=Number(p.bearbeitet)||0,percent=total?Math.min(100,Math.max(0,done/total*100)):0;const meter=node('div',undefined,'exam-meter'),fill=node('i');fill.style.width=percent+'%';meter.append(fill);progress.append(node('span',done+' / '+total,'exam-progress-label'),meter);}tr.append(progress);
+   if(view!=='practice'){tr.append(node('td',date(p.ende_am)));const focus=node('td');const f=node('span',String(p.tabwechsel??0),'exam-focus-count');if(Number(p.tabwechsel)>0)f.classList.add('has-events');focus.append(f);tr.append(focus);}
    const td=node('td');const openButton=btn('Öffnen',()=>run(async()=>{lastList=view;await details(p.id)}),'exam-open');openButton.append(examIcon('arrow'));td.append(openButton);tr.append(td);body.append(tr);
   }
  }
  s.oninput=()=>{search=s.value;renderRows()};k.onchange=()=>{kind=k.value;renderRows()};renderRows();
  }
- function create(){const c=card('Prüfung vorbereiten');c.classList.add('exam-form');
- const choices=data.pruefungsauswahl||[];
- if(!choices.length){c.append(node('p','Zuerst muss die berechtigte Leitung oder ein Administrator eine geprüfte Prüfungsvorlage hinterlegen.'));main.append(c);return}
+ function create(practice=false){if(practice)main.append(btn('← PM-Praxisprüfung',()=>navigate('practice'),'exam-back'));const c=card(practice?'PM-Praxisprüfung anlegen':'Prüfung vorbereiten');c.classList.add('exam-form');
+ const choices=(data.pruefungsauswahl||[]).filter(x=>practice?x.art==='praxis':x.art!=='praxis');
+ if(!choices.length){c.append(node('p','Zuerst muss die berechtigte Leitung oder ein Administrator eine geprüfte Prüfungsvorlage hinterlegen.'));if(practice&&data.vorlagenBearbeiten)c.append(btn('Bewertungsbogen erstellen',()=>navigate('practice-template'),'p'));main.append(c);return}
  const grid=node('div',undefined,'exam-form-grid');c.append(node('p','Wähle die Prüfungsart, den Prüfling und zwei unterschiedliche Prüfer.','mut'),grid);
  const v=field(grid,'Prüfungsvorlage',select(choices.map(x=>[x.id,x.titel+' · Version #'+x.id])));
- const a=field(grid,'Anwärter',select(data.anwaerter.map(x=>[x.id,x.name+' · DN '+x.personalnummer+' · '+x.laufbahn])));
+ const a=field(grid,'Anwärter',select(data.anwaerter.filter(x=>!practice||x.laufbahn==='PMA').map(x=>[x.id,x.name+' · DN '+x.personalnummer+' · '+x.laufbahn])));
  const options=data.pruefer.map(x=>[x.id,x.anzeigename+' · '+x.dienstnummer]);
  const first=field(grid,'Erstprüfer',select(options)),second=field(grid,'Zweitprüfer',select([['','Bitte wählen'],...options]));first.value=String(data.user);first.disabled=!data.leitung;
- c.append(node('p','Einmaliger Prüfungsversuch. Der Link kann vor dem Start erneuert werden und gilt 24 Stunden für den Prüfungsbeginn.','mut'),
- btn('Prüfung anlegen',()=>run(async()=>{const j=await api('',{vorlage:Number(v.value),anwaerter:Number(a.value),erst:Number(first.value),zweit:Number(second.value)});view='overview';await load();linkBox(j.link);message(j.link?'Prüfung erstellt. Link jetzt kopieren.':'Praxisbewertung zur Erstkorrektur angelegt.');})));main.append(c);
+ c.append(node('p',practice?'Die Praxisprüfung wird zur Erstbewertung angelegt. Kein Prüflingslink und kein Zeitlimit.':'Einmaliger Prüfungsversuch. Der Link kann vor dem Start erneuert werden und gilt 24 Stunden für den Prüfungsbeginn.','mut'),
+ btn('Prüfung anlegen',()=>run(async()=>{const j=await api('',{vorlage:Number(v.value),anwaerter:Number(a.value),erst:Number(first.value),zweit:Number(second.value)});view=practice?'practice':'overview';await load();linkBox(j.link);message(j.link?'Prüfung erstellt. Link jetzt kopieren.':'Praxisbewertung zur Erstkorrektur angelegt.');})));main.append(c);
  }
- function templates(){
+ function templates(practice=false){
  if(!data.vorlagenBearbeiten)return;
- const c=card('Prüfungsvorlagen · Frageneditor');c.classList.add('exam-form','exam-template');
+ if(practice)main.append(btn('← PM-Praxisprüfung',()=>navigate('practice'),'exam-back'));
+ const c=card(practice?'PM-Praxisprüfung · Bewertungsbogen':'Prüfungsvorlagen · Frageneditor');c.classList.add('exam-form','exam-template');
  const draft=templateDraft;
  const meta=node('div',undefined,'exam-form-grid');c.append(meta);
- const v=field(meta,'Prüfungsart',select(Object.entries(data.arten)));
+ const v=field(meta,'Prüfungsart',select(Object.entries(data.arten).filter(([id])=>practice?id==='praxis':id!=='praxis')));
  const t=field(meta,'Titel (optional)',text('Standardtitel'));
  const time=field(meta,'Bearbeitungszeit (Minuten; Praxis = 0)',num(0,480));
  const pass=field(meta,'Bestehensgrenze (%)',num(1,100,'0.01'));
+ if(practice){v.value='praxis';v.disabled=true;time.value=0;time.disabled=true;c.append(node('p','Kriterien, maximal erreichbare Punkte und Bewertungsmaßstäbe festlegen. Die Bestehensgrenze bitte entsprechend der gültigen Praxisprüfungsrichtlinie eintragen.','mut'));}
  if(draft){v.value=draft.art;v.disabled=true;t.value=draft.titel;time.value=draft.minuten;pass.value=draft.grenze;c.append(node('p','Bearbeitung von Version #'+draft.id+' · Speichern erzeugt eine neue Version. Bereits gestartete und archivierte Prüfungen behalten ihre ursprünglichen Fragen.','mut'));}
  const questionList=node('div',undefined,'exam-question-list');const total=node('p','','exam-editor-total');let questions=structuredClone(draft?.fragen||[]);let importBlockers=[],importWarnings=[];const acknowledged=new Set();const importNotes=node('div',undefined,'exam-import-review');
  const confirmation=node('input');confirmation.type='checkbox';
@@ -264,7 +270,7 @@ function open(host){
  }
  v.onchange=()=>{if(questions.length&&!confirm('Prüfungsart wechseln und bisherige Fragen entfernen?')){v.value=questions[0].typ==='praxis'?'praxis':(v.dataset.previous||'pm');return}questions=[];openQuestions.clear();importBlockers=[];importWarnings=[];acknowledged.clear();renderImportReview();v.dataset.previous=v.value;if(v.value==='praxis')time.value=0;renderQuestions();update(true)};v.dataset.previous=v.value;
  for(const input of [t,time,pass])input.addEventListener('input',()=>update(true));confirmation.onchange=()=>update();questionSearch.oninput=()=>update();questionFilter.onchange=()=>update();
- if(data.importAdmin){
+ if(data.importAdmin&&!practice){
  const googleBox=card('Google Forms direkt importieren · nur Admin');
  const source=field(googleBox,'Originalprüfung',select([['pm','PM-Theorieprüfung'],['pk','PK-Prüfung'],['dgl','DGL-Theorieprüfung']]));
  if(['pm','pk','dgl'].includes(v.value))source.value=v.value;
@@ -324,9 +330,9 @@ function open(host){
  const fallback=node('details',undefined,'exam-question-extra');fallback.append(node('summary','Alternative Importmöglichkeit · JSON-Datei (optional)'));c.append(fallback);
  const file=field(fallback,'Vorhandenen JSON-Export auswählen',node('input'));file.type='file';file.accept='.json,application/json';
  file.onchange=async()=>{try{const f=file.files[0];if(!f)return;if(f.size>1800000)throw Error('Datei zu groß');const raw=JSON.parse(await f.text());if(questions.length&&!confirm('Fragen im aktuellen Entwurf durch Import ersetzen?'))return;useImport(raw,null)}catch(e){message(e.message,true)}};
- }else{c.append(node('p','Der Import aus Google Forms oder JSON-Dateien ist ausschließlich Administratoren vorbehalten. Fragen und Lösungen können hier weiterhin manuell bearbeitet werden.','mut'));}
+ }else if(!practice){c.append(node('p','Der Import aus Google Forms oder JSON-Dateien ist ausschließlich Administratoren vorbehalten. Fragen und Lösungen können hier weiterhin manuell bearbeitet werden.','mut'));}
  const tools=node('div',undefined,'exam-editor-toolbar');
- tools.append(questionSearch,questionFilter,btn('Alle einklappen',()=>{openQuestions.clear();for(const r of rows.values())r.detail.open=false;},''),btn('+ Frage hinzufügen',()=>{const q=blank();questions.push(q);openQuestions.add(q);questionSearch.value='';questionFilter.value='all';renderQuestions();update(true);rows.get(q)?.detail.scrollIntoView({block:'nearest'});},''));
+ tools.append(questionSearch,questionFilter,btn('Alle einklappen',()=>{openQuestions.clear();for(const r of rows.values())r.detail.open=false;},''),btn(practice?'+ Bewertungskriterium hinzufügen':'+ Frage hinzufügen',()=>{const q=blank();questions.push(q);openQuestions.add(q);questionSearch.value='';questionFilter.value='all';renderQuestions();update(true);rows.get(q)?.detail.scrollIntoView({block:'nearest'});},''));
  tools.append(btn('Fehlende Musterlösungen aus Feedback ergänzen',()=>{let n=0;for(const q of questions){if(!String(q.muster||'').trim()&&String(q.feedback||'').trim()){q.muster=q.feedback;n++;}}if(n){renderQuestions();update(true);}message(n+' fehlende Musterlösungen aus Bewertungsfeedback ergänzt.');},''));
  c.append(importNotes,total,tools,questionList);
  const savebar=node('div',undefined,'exam-savebar');const label=node('label',' Ich habe Fragen, Punktwerte, Musterlösungen und Bestehensgrenze fachlich geprüft.');label.className='exam-review-item';label.prepend(confirmation);savebar.append(label,saveStatus);
@@ -341,7 +347,7 @@ function open(host){
  }));
  savebar.append(save);c.append(savebar);
  if(draft)c.append(btn('Neue Vorlage statt Bearbeitung',()=>{if(confirm('Entwurf verwerfen?')){templateDraft=null;render()}},''));
- const l=card('Vorhandene Versionen');for(const x of data.vorlagen){const line=node('div');line.style.display='flex';line.style.justifyContent='space-between';line.style.alignItems='center';line.style.gap='8px';line.style.margin='8px 0';line.append(node('span','#'+x.id+' · '+x.titel+' · '+x.grenze+' % · '+x.minuten+' Min.'),btn('Bearbeiten',()=>run(async()=>{if(questions.length&&!confirm('Aktuellen Entwurf verwerfen und Vorlage laden?'))return;templateDraft=(await api('/vorlagen/'+x.id)).vorlage;render();}),''));
+ const l=card('Vorhandene Versionen');for(const x of data.vorlagen.filter(x=>practice?x.art==='praxis':x.art!=='praxis')){const line=node('div');line.style.display='flex';line.style.justifyContent='space-between';line.style.alignItems='center';line.style.gap='8px';line.style.margin='8px 0';line.append(node('span','#'+x.id+' · '+x.titel+' · '+x.grenze+' % · '+x.minuten+' Min.'),btn('Bearbeiten',()=>run(async()=>{if(questions.length&&!confirm('Aktuellen Entwurf verwerfen und Vorlage laden?'))return;templateDraft=(await api('/vorlagen/'+x.id)).vorlage;render();}),''));
  l.append(line)}main.append(c,l);renderQuestions();
  }
  async function details(id){const {pruefung:p,user,leitung,verwaltung}=await api('/'+id);if(!connected())return;detailId=id;view='detail';dirty=false;main.replaceChildren(nav());const back=btn('Zurück zur Prüfungsliste',()=>navigate(lastList),'exam-back');back.prepend(examIcon('back'));main.append(back);
@@ -357,7 +363,7 @@ function open(host){
  const first=p.status==='abgegeben'&&Number(p.erst)===user,second=p.status==='erstkorrigiert'&&Number(p.zweit)===user;
  const override=verwaltung&&['abgegeben','erstkorrigiert','zweitkorrigiert','freigegeben'].includes(p.status);
  let editOverride=false;
- const fields=[];p.fragen.forEach((q,i)=>{const b=card('Frage '+(i+1)+' · '+q.punkte+' Punkte');if(q.kontext)b.append(node('p',q.kontext));b.append(node('p',q.titel));(q.bilder||[]).forEach(img=>showImage(b,img));(q.optionBilder||[]).forEach((img,j)=>{if(img){b.append(node('p','Antwortoption: '+q.optionen[j]));showImage(b,img)}});if(q.feedback)b.append(node('p','Originales Bewertungsfeedback: '+q.feedback));
+ const fields=[];p.fragen.forEach((q,i)=>{const b=card((q.typ==='praxis'?'Bewertungskriterium ':'Frage ')+(i+1)+' · '+q.punkte+' Punkte');if(q.kontext)b.append(node('p',q.kontext));b.append(node('p',q.titel));(q.bilder||[]).forEach(img=>showImage(b,img));(q.optionBilder||[]).forEach((img,j)=>{if(img){b.append(node('p','Antwortoption: '+q.optionen[j]));showImage(b,img)}});if(q.feedback)b.append(node('p','Originales Bewertungsfeedback: '+q.feedback));
  const ans=p.antworten[i];const answer=Array.isArray(ans)?ans.map(a=>q.optionen[a]).join(' · '):ans;
  if(q.typ!=='praxis')b.append(node('p','Antwort: '+(answer||'—')));b.append(node('p','Muster / Kriterien: '+([q.muster,...(q.richtig||[]).map(a=>q.optionen[a])].filter(Boolean).join(' · ')||'—')));
  const automatic=p.automatisch[i];if(automatic!==null)b.append(node('p','Automatische Vorbewertung: '+automatic+' / '+q.punkte));
@@ -384,5 +390,5 @@ function open(host){
  main.append(node('h1','Prüfungszentrum'),node('p','Prüfungen werden geladen …','mut'));run(load);
  const interval=setInterval(()=>{if(!connected()){clearInterval(interval);return}if(view==='running'&&!busy&&document.visibilityState==='visible')run(load)},10000);
 }
-window.IDVPruefungen={open,convertGoogle,examQuestionIssues,examImportReview,isMounted:()=>!!document.getElementById('idvExamMount')};
+window.IDVPruefungen={open,convertGoogle,examQuestionIssues,examImportReview,examMatchesView,isMounted:()=>!!document.getElementById('idvExamMount')};
 })();
