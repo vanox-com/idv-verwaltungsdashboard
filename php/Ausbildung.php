@@ -393,9 +393,25 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/ausbildung/'))return false;
     ausbildungRecht($u);
     if($uri==='/api/ausbildung/pruefungen'||str_starts_with($uri,'/api/ausbildung/pruefungen/')){
-        require_once __DIR__.'/Pruefungen.php';
-        if(dispatchPruefung($u,$method,$uri))return true;
-        fail(404,'Prüfungs-Endpunkt unbekannt');
+        $examFile=__DIR__.'/Pruefungen.php';
+        if(!is_file($examFile)||!is_readable($examFile))
+            fail(503,'Prüfungszentrum: Backend-Datei Pruefungen.php fehlt auf dem Hoster oder ist nicht lesbar. Bitte vollständigen Branch bereitstellen.');
+        try{
+            require_once $examFile;
+            if(dispatchPruefung($u,$method,$uri))return true;
+            fail(404,'Prüfungs-Endpunkt unbekannt');
+        }catch(\Throwable $e){
+            $reference=bin2hex(random_bytes(5));
+            error_log('[IDV Prüfung '.$reference.'] '.$e::class.' in '.basename($e->getFile()).':'.$e->getLine());
+            if(($u['rolle']??'')==='Administrator'){
+                $kind=$e instanceof \PDOException?'Datenbankfehler':($e instanceof \ParseError?'PHP-Syntaxfehler':'PHP-Laufzeitfehler');
+                $detail=basename($e->getFile()).':'.$e->getLine().' · '.$e::class;
+                if($e instanceof \PDOException)$detail.=' · SQLSTATE '.preg_replace('/[^A-Z0-9]/','',(string)$e->getCode());
+                if($e instanceof \Error&&preg_match('/^Call to undefined function ([A-Za-z0-9_\\\\]+)\(\)$/D',$e->getMessage(),$missing))$detail.=' · Funktion '.$missing[1].' fehlt';
+                respond(500,['error'=>'Prüfungszentrum: '.$kind.' ('.$detail.').','referenz'=>$reference]);
+            }
+            respond(500,['error'=>'Prüfungszentrum momentan nicht verfügbar. Bitte Administration informieren.','referenz'=>$reference]);
+        }
     }
     require_once __DIR__.'/AusbildungSetup.php';
     if(dispatchAusbildungSetup($u,$method,$uri))return true;

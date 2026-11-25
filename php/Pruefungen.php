@@ -205,6 +205,10 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         if($method==='GET'&&$uri===$root)respond(200,['bereit'=>false,'leitung'=>$lead,'admin'=>$u['rolle']==='Administrator']);
         fail(503,'Prüfungsdatenbank noch nicht eingerichtet');
     }
+    require_once __DIR__.'/AusbildungSetup.php';
+    $trainingSchema=ausbildungSchemaStatus();
+    if(!($trainingSchema['bereit']??false)||!($trainingSchema['personalbindungBereit']??false))
+        fail(503,'Zuerst die Ausbildungsdatenbank und Personalbindung unter Ausbildung → Übersicht einrichten.');
     pruefungFinalizeExpired();
     if($method==='GET'&&$uri===$root){
         $where=$lead?'':' WHERE p.erst=? OR p.zweit=?';

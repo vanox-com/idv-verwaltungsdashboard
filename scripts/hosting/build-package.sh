@@ -4,8 +4,8 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 if [[ $# -ge 1 ]];then out="$1";else out="migration-output/IDV-PHP-MySQL8-STAGING.zip";fi
 mkdir -p "$(dirname "$out")"
-git archive --format=zip --output="$out" HEAD public php scripts/hosting/preflight.php HOSTING-SETUP.md
-for path in public/index.html public/.htaccess public/api.php php/Api.php php/GoogleDocuments.php php/CopNet.php scripts/hosting/preflight.php HOSTING-SETUP.md;do
+git archive --format=zip --output="$out" HEAD public php scripts/hosting/preflight.php scripts/mysql/2026-11-25-pruefungszentrum.sql HOSTING-SETUP.md
+for path in public/index.html public/.htaccess public/api.php php/Api.php php/GoogleDocuments.php php/CopNet.php php/Pruefungen.php php/PruefungenGoogle.php scripts/mysql/2026-11-25-pruefungszentrum.sql scripts/hosting/preflight.php HOSTING-SETUP.md;do
  if ! unzip -Z -1 "$out" | grep -Fqx "$path";then
    echo "Required staged file is missing: $path" >&2
    exit 1
@@ -17,7 +17,14 @@ if printf '%s\n' "$entries" | grep -Eq '(^|/)(src|node_modules|migration-output)
  rm -f "$out"
  exit 1
 fi
-if printf '%s\n' "$entries" | grep '^scripts/' | grep -Ev '^scripts/$|^scripts/hosting/$|^scripts/hosting/preflight.php$';then
+if printf '%s\n' "$entries" | grep '^scripts/' | grep -Ev '^scripts/$|^scripts/hosting/$|^scripts/hosting/preflight.php$|^scripts/mysql/$|^scripts/mysql/2026-11-25-pruefungszentrum.sql;then
+ echo "Unexpected tools in staging package" >&2
+ rm -f "$out"
+ exit 1
+fi
+echo "Staging package created: $out"
+echo "Use public/ as DocumentRoot. No passwords or database exports are included."
+;then
  echo "Unexpected tools in staging package" >&2
  rm -f "$out"
  exit 1

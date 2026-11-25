@@ -12,7 +12,7 @@ const text=(ph='')=>{const i=node('input');i.placeholder=ph;return i;};
 const area=(ph='')=>{const t=node('textarea');t.placeholder=ph;t.rows=4;t.style.width='100%';return t;};
 const card=(title)=>{const s=node('section',undefined,'box');s.style.marginBottom='14px';s.append(node('h3',title));return s;};
 const date=s=>s?new Date(s.replace(' ','T')+'Z').toLocaleString('de-DE'):'—';
-async function api(path='',data){const r=await fetch(root+path,{credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','Accept':'application/json','X-Requested-With':'XMLHttpRequest'},...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)})});const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'HTTP '+r.status);return j;}
+async function api(path='',data){const r=await fetch(root+path,{credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','Accept':'application/json','X-Requested-With':'XMLHttpRequest'},...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)})});const j=await r.json().catch(()=>({}));if(!r.ok)throw Error((j.error||'HTTP '+r.status)+(j.referenz?' · Referenz '+j.referenz:''));return j;}
 function convertGoogle(raw){
  const d=raw.definition||raw;if(!Array.isArray(d.items))throw Error('Keine Google-Forms-Definition gefunden');
  const out=[],warnings=[],blockers=[];
@@ -74,7 +74,7 @@ function open(host){
  const connected=()=>mount.isConnected;
  function message(t,bad=false){if(connected()){note.textContent=t;note.style.color=bad?'#e7a3a3':'';}}
  async function run(fn){if(busy)return;busy=true;try{await fn()}catch(e){message(e.message,true)}finally{busy=false}}
- async function load(){data=await api();if(connected())render();}
+ async function load(){try{data=await api();if(connected()){message('');render();}}catch(e){if(connected()&&!data){main.replaceChildren();const b=card('Prüfungszentrum konnte nicht geladen werden');b.append(node('p',e.message),node('p','Die übrigen Panel-Funktionen bleiben verfügbar. Prüfe die Meldung oder gib sie an die Administration weiter.','mut'),btn('Erneut versuchen',()=>run(load)));main.append(b);}throw e;}}
  function linkBox(url){if(!url)return;const box=card('Prüfungslink · vertraulich weitergeben');const i=text();i.value=location.origin+url;i.readOnly=true;box.append(i,btn('Link kopieren',async()=>{try{await navigator.clipboard.writeText(i.value);message('Link kopiert.')}catch{ i.select();message('Bitte markierten Link manuell kopieren.')}}));main.prepend(box);}
  function nav(){const bar=node('div',undefined,'box');bar.style.display='flex';bar.style.gap='8px';bar.style.flexWrap='wrap';
   for(const [v,t] of [['overview','Übersicht'],['create','Prüfung erstellen'],['running','Laufend'],['first','Erstkorrektur'],['second','Zweitkorrektur'],['archive','Archiv'],...(data.verwaltung?[['templates','Vorlagen']]:[])]){
