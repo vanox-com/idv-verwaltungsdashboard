@@ -2817,12 +2817,12 @@ async function personalFreieNummernLaden(){
 }
 // Keep the shortcut aligned with the server's eligible ranks; group membership is irrelevant.
 function ausbilderZugangGeeignet(p){
- const ranks=new Set(["polizeiobermeister","polizeihauptmeister","polizeihauptmeister az","polizeihauptmeister mit amtszulage","polizeikommissar","kriminalkommissar","polizeioberkommissar","kriminaloberkommissar","polizeioberkommissar der leitung","polizeihauptkommissar","kriminalhauptkommissar","polizeihauptkommissar a12","erster polizeihauptkommissar","polizeiratanwärter","polizeirat","polizeioberrat","polizeidirektor","leitender polizeidirektor","polizeivizepräsident","polizeipräsident"]);
+ const ranks=new Set(["polizeiobermeister","polizeihauptmeister","polizeihauptmeister az","polizeihauptmeister mit amtszulage","polizeikommissaranwärter","kriminalkommissaranwärter","polizeikommissar","kriminalkommissar","polizeioberkommissar","kriminaloberkommissar","polizeioberkommissar der leitung","polizeihauptkommissar","kriminalhauptkommissar","polizeihauptkommissar a12","erster polizeihauptkommissar","polizeiratanwärter","polizeirat","polizeioberrat","polizeidirektor","leitender polizeidirektor","polizeivizepräsident","polizeipräsident"]);
  const normal=x=>String(x||'').trim().replace(/\s+/gu,' ').toLowerCase();
  const rank=normal(p?.dienstgrad);
  const catalog=D?.raenge||[];
  const min=catalog.find(x=>normal(x.name)==='polizeiobermeister'),current=catalog.find(x=>normal(x.name)===rank);
- const known=ranks.has(rank)||(!['','polizeimeisteranwärter','polizeimeister','polizeikommissaranwärter','kriminalkommissaranwärter'].includes(rank)&&min&&current&&Number(current.sortierung)>Number(min.sortierung));
+ const known=ranks.has(rank)||(!['','polizeimeisteranwärter','polizeimeister'].includes(rank)&&min&&current&&Number(current.sortierung)>Number(min.sortierung));
  return Boolean(known)&&['Aktiv','Abgemeldet','Inaktiv'].includes(String(p?.status||'').trim());
 }
 function vPers() {

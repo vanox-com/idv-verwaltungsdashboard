@@ -82,11 +82,12 @@ checkAus(IDV\ausbildungPmaHinweis('2026-11-15',array_replace($base,['stimmenSald
 echo "Ausbildung: isolated roles, PMA votes, PKA/KKA module rules OK\n";
 
 // Recruiting trainers is based on rank, not the personnel group.
-foreach(['Polizeiobermeister','Polizeihauptmeister','Polizeihauptmeister AZ','Polizeihauptmeister mit Amtszulage','Polizeikommissar','Kriminalkommissar','Polizeioberkommissar','Kriminaloberkommissar','Polizeioberkommissar der Leitung','Polizeihauptkommissar','Kriminalhauptkommissar','Polizeihauptkommissar A12','Erster Polizeihauptkommissar','Polizeiratanwärter','Polizeirat','Polizeioberrat','Polizeidirektor','Leitender Polizeidirektor','Polizeivizepräsident','Polizeipräsident'] as $rang)checkAus(IDV\ausbildungTrainerRangErlaubt($rang),'eligible trainer '.$rang);
-foreach(['Polizeimeisteranwärter','Polizeimeister','Polizeikommissaranwärter','Kriminalkommissaranwärter',''] as $rang)checkAus(!IDV\ausbildungTrainerRangErlaubt($rang),'ineligible trainer '.$rang);
+foreach(['Polizeiobermeister','Polizeihauptmeister','Polizeihauptmeister AZ','Polizeihauptmeister mit Amtszulage','Polizeikommissaranwärter','Kriminalkommissaranwärter','Polizeikommissar','Kriminalkommissar','Polizeioberkommissar','Kriminaloberkommissar','Polizeioberkommissar der Leitung','Polizeihauptkommissar','Kriminalhauptkommissar','Polizeihauptkommissar A12','Erster Polizeihauptkommissar','Polizeiratanwärter','Polizeirat','Polizeioberrat','Polizeidirektor','Leitender Polizeidirektor','Polizeivizepräsident','Polizeipräsident'] as $rang)checkAus(IDV\ausbildungTrainerRangErlaubt($rang),'eligible trainer '.$rang);
+foreach(['Polizeimeisteranwärter','Polizeimeister',''] as $rang)checkAus(!IDV\ausbildungTrainerRangErlaubt($rang),'ineligible trainer '.$rang);
 checkAus(IDV\ausbildungTrainerRangErlaubt(' POLIZEIOBERMEISTER '),'normalized trainer rank');
 
 $catalog=[['name'=>'Polizeiobermeister','sortierung'=>3],['name'=>'Kriminalobermeister','sortierung'=>4],['name'=>'Polizeimeister','sortierung'=>2],['name'=>'Polizeikommissaranwärter','sortierung'=>7]];
 checkAus(IDV\ausbildungTrainerRangErlaubt('Kriminalobermeister',$catalog),'custom eligible rank from current catalogue');
-checkAus(!IDV\ausbildungTrainerRangErlaubt('Polizeikommissaranwärter',$catalog),'trainee remains excluded even above sort threshold');
+checkAus(IDV\ausbildungTrainerRangErlaubt('Polizeikommissaranwärter',$catalog),'PKA eligible above POM');
+checkAus(IDV\ausbildungTrainerRangErlaubt('Kriminalkommissaranwärter',$catalog),'KKA eligible above POM');
 checkAus(!IDV\ausbildungTrainerRangErlaubt('Unbekannt',$catalog),'unknown rank denied');

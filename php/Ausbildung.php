@@ -240,9 +240,9 @@ function ausbildungKompetenzen($value): array {
     return array_keys($result);
 }
 function ausbildungTrainerRangErlaubt(string $rang,array $catalog=[]): bool {
-    $ranks=['polizeiobermeister','polizeihauptmeister','polizeihauptmeister az','polizeihauptmeister mit amtszulage','polizeikommissar','kriminalkommissar','polizeioberkommissar','kriminaloberkommissar','polizeioberkommissar der leitung','polizeihauptkommissar','kriminalhauptkommissar','polizeihauptkommissar a12','erster polizeihauptkommissar','polizeiratanwärter','polizeirat','polizeioberrat','polizeidirektor','leitender polizeidirektor','polizeivizepräsident','polizeipräsident'];
+    $ranks=['polizeiobermeister','polizeihauptmeister','polizeihauptmeister az','polizeihauptmeister mit amtszulage','polizeikommissaranwärter','kriminalkommissaranwärter','polizeikommissar','kriminalkommissar','polizeioberkommissar','kriminaloberkommissar','polizeioberkommissar der leitung','polizeihauptkommissar','kriminalhauptkommissar','polizeihauptkommissar a12','erster polizeihauptkommissar','polizeiratanwärter','polizeirat','polizeioberrat','polizeidirektor','leitender polizeidirektor','polizeivizepräsident','polizeipräsident'];
     $normal=strtolower(trim(preg_replace('/\\s+/u',' ',$rang)??$rang));
-    if(in_array($normal,['polizeimeisteranwärter','polizeimeister','polizeikommissaranwärter','kriminalkommissaranwärter'],true)||$normal==='')return false;
+    if(in_array($normal,['polizeimeisteranwärter','polizeimeister'],true)||$normal==='')return false;
     if(in_array($normal,$ranks,true))return true;
     // Include additional ranks maintained in the live rank catalogue, not only the original hard-coded names.
     $minimum=null;$rankOrder=null;
@@ -268,7 +268,7 @@ function ausbildungTrainerPersonal(?int $nr=null,bool $lock=false,bool $includeB
         $first=trim((string)$p['vorname']);$last=trim((string)$p['nachname']);$n=(int)$p['personalnummer'];
         if($n<1)continue;
         $reason='';
-        if(!ausbildungTrainerRangErlaubt((string)$p['dienstgrad'],$catalog))$reason='Dienstgrad unter Polizeiobermeister oder nicht zugeordnet';
+        if(!ausbildungTrainerRangErlaubt((string)$p['dienstgrad'],$catalog))$reason='Dienstgrad unter Polizeiobermeister oder nicht zugeordnet (PMA und PM ausgeschlossen)';
         elseif(!in_array(trim((string)$p['status']),['Aktiv','Abgemeldet','Inaktiv'],true))$reason='Personalstatus: '.(string)$p['status'];
         elseif($first===''||$last===''||$first==='-'||$last==='-')$reason='Vor- oder Nachname fehlt';
         if($reason!==''&&!$includeBlocked)continue;
