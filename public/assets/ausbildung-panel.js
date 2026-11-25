@@ -63,7 +63,7 @@ async function load(){
    data=await request('bootstrap');
    if(Array.isArray(data.pmaHinweise))window.IDVPMA?.observe(data.pmaHinweise);
    if(data.unterrichtBereit){
-     try{data.raeume=(await request('unterricht')).raeume||[]}catch(_){data.raeume=[]}
+     try{const rooms=await request('unterricht');data.raeume=rooms.raeume||[];data.raumProtokoll=rooms.raumProtokoll||[];data.raumProtokollErlaubt=rooms.protokollErlaubt===true;}catch(_){data.raeume=[];data.raumProtokoll=[];data.raumProtokollErlaubt=false;}
    }else data.raeume=[];
    if(!lessonInvite)for(const room of data.raeume){
      if(!Number(room.aktiv))continue;
@@ -390,12 +390,13 @@ function classroom(){
  '<div class="flex" style="margin-top:13px"><button type="button" class="primary" data-action="copy-lesson">Link kopieren</button>'+
  '<button type="button" data-action="open-room" data-id="'+lessonInvite.id+'">Ausbildertafel öffnen ↗</button>'+
  '<button type="button" data-action="end-room" data-id="'+lessonInvite.id+'" class="danger">Sitzung beenden</button></div></section>';
- out+='</div><div class="card"><h2>Meine Unterrichtsräume</h2><p class="muted">Status, Teilnehmer und Sitzungskontrolle. Beendete Räume sind nicht mehr erreichbar.</p>'+
- '<div class="tablewrap"><table><thead><tr><th>Modul</th><th>Präsentation</th><th>Erstellt von</th><th>Erstellt (UTC)</th><th>Ablauf (UTC)</th><th>Anwärter</th><th>Status</th><th></th></tr></thead><tbody>'+
- (data.raeume||[]).map(r=>'<tr><td><b>'+esc(lessonCodeLabel(r.modul_code))+'</b></td><td>'+esc(r.titel)+'</td><td><b>'+esc(r.erstellt_von||'Unbekannter Ausbilder')+'</b></td><td>'+esc(String(r.erstellt||'').slice(0,16))+'</td>'+
+ out+='</div><div class="card"><h2>Meine aktiven Unterrichtsräume</h2><p class="muted">Status, Teilnehmer und Sitzungskontrolle. Beendete Räume werden hier nicht angezeigt.</p>'+
+ '<div class="tablewrap"><table><thead><tr><th>Modul</th><th>Präsentation</th>'+(data.raumProtokollErlaubt?'<th>Erstellt von</th><th>Erstellt (UTC)</th>':'')+'<th>Ablauf (UTC)</th><th>Anwärter</th><th>Status</th><th></th></tr></thead><tbody>'+
+ (data.raeume||[]).map(r=>'<tr><td><b>'+esc(lessonCodeLabel(r.modul_code))+'</b></td><td>'+esc(r.titel)+'</td>'+(data.raumProtokollErlaubt?'<td><b>'+esc(r.erstellt_von||'Unbekannter Ausbilder')+'</b></td><td>'+esc(String(r.erstellt||'').slice(0,16))+'</td>':'')+
  '<td>'+esc(String(r.ablauf||'').slice(0,16))+'</td><td>'+(Number(r.teilnehmer)?'Beigetreten':'Wartet')+'</td><td>'+(!Number(r.aktiv)?'<span class="pill">Abgeschlossen</span>':'<span class="pill good">Aktiv</span>')+'</td>'+
  '<td>'+(Number(r.aktiv)?'<button class="compact" data-action="open-room" data-id="'+Number(r.id)+'">Öffnen</button> <button class="compact danger" data-action="end-room" data-id="'+Number(r.id)+'">Beenden</button>':'')+'</td></tr>').join('')+
- '</tbody></table></div>'+(data.raeume?.length?'':'<p class="muted">Noch keine Unterrichtsräume angelegt.</p>')+'</div>';
+ '</tbody></table></div>'+(data.raeume?.length?'':'<p class="muted">Keine aktiven Unterrichtsräume.</p>')+'</div>';
+ if(data.raumProtokollErlaubt)out+='<div class="card"><h2>Unterrichtsraum-Protokoll</h2><p class="muted">Nur Leitung und Administratoren · letzte 500 dokumentierte Raumvorgänge.</p><div class="tablewrap"><table><thead><tr><th>Zeit (UTC)</th><th>Ausbilder</th><th>Vorgang / Raum-ID</th></tr></thead><tbody>'+ (data.raumProtokoll||[]).map(x=>'<tr><td>'+esc(String(x.zeit||'').slice(0,19))+'</td><td>'+esc(x.benutzer)+'</td><td>'+esc(x.aktion)+'</td></tr>').join('')+'</tbody></table></div>'+(!data.raumProtokoll?.length?'<p class="muted">Keine protokollierten Vorgänge.</p>':'')+'</div>';
  return out;
 }
 async function act(fn){

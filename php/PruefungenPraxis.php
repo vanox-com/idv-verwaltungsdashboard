@@ -126,8 +126,9 @@ function praxisTemplate(int $uid): int {
 }
 function dispatchPraxis(array $u,string $method,string $uri): bool {
     $root='/api/ausbildung/pruefungen/praxis';if($uri!==$root&&!str_starts_with($uri,$root.'/'))return false;
-    $uid=(int)$u['id'];$lead=ausbildungLeitung($u);$manager=pruefungVerwaltung($u);
+    $uid=(int)$u['id'];$manager=pruefungVerwaltung($u);$lead=$manager;
     if($uri===$root&&$method==='GET'){
+        if(!$manager)fail(403,'Nur die Leitung darf Praxisprüfungen vorbereiten');
         ausbildungSynchronisierePersonal();$candidates=[];
         foreach(ausbildungAktuelleAnwaerter() as $a)if(praxisEligible($a)){
             $candidates[]=array_intersect_key($a,array_flip(['id','name','personalnummer']))+['theorie'=>praxisTheory((int)$a['id'])];
@@ -135,6 +136,7 @@ function dispatchPraxis(array $u,string $method,string $uri): bool {
         respond(200,['schema'=>praxisSchema(),'anwaerter'=>$candidates]);
     }
     if($uri===$root&&$method==='POST'){
+        if(!$manager)fail(403,'Nur die Leitung darf Praxisprüfungen anlegen');
         $b=body();$aid=(int)($b['anwaerter']??0);$first=(int)($b['pruefer']??0);$date=ausbildungDatum($b['termin']??null);
         if(!$date||!pruefungReviewer($first)||(!$lead&&$first!==$uid))fail(400,'Prüfungstermin und einen berechtigten Prüfer auswählen');
         $pdo=db();$pdo->beginTransaction();try{

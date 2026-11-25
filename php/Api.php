@@ -127,6 +127,11 @@ function ausbildungLeitungsprofil(array $u): bool {
         return in_array($row[0]['funktion']??'',['Ausbildungsleitung','stv. Ausbildungsleitung'],true);
     }catch(Throwable $e){return false;}
 }
+/** Sensitive training administration, not merely a delegated training permission. */
+function ausbildungVerwaltungsleitung(array $u): bool {
+    return (int)(rights($u)['ausbildung']??0)>=2
+        &&(in_array($u['rolle']??'',['Administrator','Leitungsdienst','Ausbildungsleitung'],true)||ausbildungLeitungsprofil($u));
+}
 /** Role defaults are deliberately limited; an administrator's explicit user override
  * can grant training leadership to an existing police account. */
 function ausbildungRechtsstufe(string $rolle,int $rollenstufe,?int $einzelrecht,bool $leitungsprofil=false): int {

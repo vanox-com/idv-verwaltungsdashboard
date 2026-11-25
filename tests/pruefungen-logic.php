@@ -31,5 +31,13 @@ $examSource=file_get_contents(dirname(__DIR__).'/php/Pruefungen.php');
 $examUi=file_get_contents(dirname(__DIR__).'/public/assets/pruefungszentrum.js');
 assertExam(str_contains($examSource, "'vorlagenBearbeiten'=>\$verwaltung,'importAdmin'=>\$importAdmin"),'separate template and import permissions');
 assertExam(str_contains($examUi,"if(!data.vorlagenBearbeiten)return;"),'leadership template editor');
-assertExam(str_contains($examUi,"if(data.importAdmin){"),'admin-only import UI');
+assertExam(str_contains($examUi,"if(data.importAdmin&&!practice){"),'admin-only import UI');
 assertExam(str_contains($examSource,"str_starts_with(\$uri,\$root.'/google/')&&!\$importAdmin"),'server-side Google import gate');
+
+foreach(['bereit','laufend','abgegeben','erstkorrigiert','zweitkorrigiert','freigegeben','annulliert'] as $status){
+    $p=['erst'=>10,'zweit'=>20,'status'=>$status];
+    assertExam(IDV\pruefungSichtbar($p,10,false)===in_array($status,['bereit','laufend','abgegeben'],true),'first visibility '.$status);
+    assertExam(IDV\pruefungSichtbar($p,20,false)===($status==='erstkorrigiert'),'second visibility '.$status);
+    assertExam(!IDV\pruefungSichtbar($p,30,false),'unassigned visibility '.$status);
+    assertExam(IDV\pruefungSichtbar($p,30,true),'lead visibility '.$status);
+}

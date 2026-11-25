@@ -51,7 +51,7 @@ async function open(host,id,ctx){
  const reason=el('textarea');reason.placeholder='Pflichtbegründung für nachträgliche Änderung';reason.rows=2;reason.hidden=true;
  if(r.berichtigen){savebar.append(button('Berichtigung aktivieren',()=>{locked=false;reason.hidden=false;render();},''),reason);}
  function persist(action){ctx.run(async()=>{if(locked)throw Error('Bewertung ist gesperrt.');if(action==='berichtigen'&&!reason.value.trim())throw Error('Begründung erforderlich.');if(action==='abschliessen'&&!confirm('Prüfung verbindlich abschließen?'))return;
-   const res=await ctx.api('/praxis/'+id,{revision,aktion:action,formular:f,begruendung:reason.value});revision=res.revision;ctx.clean();ctx.message(action==='speichern'?'Zwischenstand gespeichert.':'Praxisprüfung verbindlich gespeichert.');if(action!=='speichern')await ctx.reload(id);
+   const res=await ctx.api('/praxis/'+id,{revision,aktion:action,formular:f,begruendung:reason.value});revision=res.revision;ctx.clean();ctx.message(action==='speichern'?'Zwischenstand gespeichert.':'Praxisprüfung verbindlich gespeichert.');if(action!=='speichern'){if(ctx.manager)await ctx.reload(id);else await ctx.afterHandoff();}
  });}
  if(r.bearbeiten)savebar.append(button('Zwischenstand speichern',()=>persist('speichern'),''),button('Prüfung abschließen',()=>persist('abschliessen'),'p'));
  if(r.berichtigen)savebar.append(button('Berichtigung speichern',()=>persist('berichtigen'),'p'));

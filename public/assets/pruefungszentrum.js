@@ -117,10 +117,10 @@ function open(host){
  const top=node('div',undefined,'exam-heading');const copy=node('div');copy.append(node('div','AUSBILDUNG / PRÜFUNGSWESEN','exam-kicker'),node('h1','Prüfungszentrum'),node('p','Prüfungen durchführen, bewerten und Ergebnisse freigeben.','mut'));top.append(copy);
  const actions=node('div',undefined,'exam-heading-actions');
  const refresh=btn('Aktualisieren',()=>{if(busy||!canLeave())return;dirty=false;run(load)},'exam-refresh');refresh.prepend(examIcon('refresh'));actions.append(refresh);
- const createButton=btn('Neue Prüfung',()=>navigate('create'),'p exam-new');createButton.prepend(examIcon('plus'));createButton.setAttribute('aria-pressed',String(view==='create'));actions.append(createButton);top.append(actions);wrap.append(top);
+ const createButton=btn('Neue Prüfung',()=>navigate('create'),'p exam-new');createButton.prepend(examIcon('plus'));createButton.setAttribute('aria-pressed',String(view==='create'));if(data.verwaltung)actions.append(createButton);top.append(actions);wrap.append(top);
  const bar=node('nav',undefined,'exam-nav');bar.setAttribute('aria-label','Prüfungszentrum');
  const selected=view==='detail'?lastList:view.startsWith('practice-')?'practice':view;
- const groups=[['ÜBERBLICK',['overview','running','practice']],['KORREKTUR & FREIGABE',['first','second','release']],['VERWALTUNG',['archive',...(data.vorlagenBearbeiten?['templates']:[]),...(data.importAdmin?['ki']:[])]]];
+ const groups=data.verwaltung?[['ÜBERBLICK',['overview','running','practice']],['KORREKTUR & FREIGABE',['first','second','release']],['VERWALTUNG',['archive',...(data.vorlagenBearbeiten?['templates']:[]),...(data.importAdmin?['ki']:[])]]]:[['MEINE PRÜFUNGEN',['overview','running','first','second','practice']]];
  for(const [label,views] of groups){
   const group=node('div',undefined,'exam-nav-group');group.append(node('span',label,'exam-nav-label'));const row=node('div',undefined,'exam-nav-items');
   for(const v of views){
@@ -136,13 +136,14 @@ function open(host){
  if(!data.bereit){const b=card('Datenbank-Erweiterung erforderlich');b.append(node('p','Das Prüfungszentrum ist vorbereitet. Nach einer aktuellen verschlüsselten Datensicherung kann der Administrator die additive Erweiterung direkt einrichten. Alternativ kann der Hoster die SQL-Migration 2026-11-25-pruefungszentrum.sql einspielen. Bestehende Ausbildungsdaten werden nicht verändert.'),btn('Erneut prüfen',()=>run(load)));if(data.admin)b.append(btn('Nach Backup einrichten',()=>run(async()=>{if(!confirm('Aktuelles verschlüsseltes Datenbankbackup erstellt und heruntergeladen?'))return;await api('/setup',{bestaetigung:'BACKUP_ERSTELLT_PRUEFUNGEN'});await load();message('Prüfungszentrum eingerichtet.');})));main.append(node('h1','Prüfungszentrum'),b);return}
  if(['templates','practice-template'].includes(view)&&!data.vorlagenBearbeiten){view='overview';templateDraft=null;}
  if(view==='ki'&&!data.importAdmin)view='overview';
+ if(!data.verwaltung&&['create','practice-create','practice-template','archive','release'].includes(view))view='overview';
  main.append(nav());
  if(view==='ki'){void kiSettings().catch(e=>message(e.message,true));return}
  if(view==='practice-create'){main.append(btn('← PM-Praxisprüfung',()=>navigate('practice'),'exam-back'));void window.IDVPractice.create(main,{api,data,run,open:async id=>{data=await api();lastList='practice';await details(id);}}).catch(e=>message(e.message,true));return}if(view==='create'){create(false);return}if(view==='practice-template'){view='practice';}if(view==='templates'){templates(false);return}
  const selected=EXAM_VIEWS[view]||EXAM_VIEWS.overview;
  const title=node('div',undefined,'exam-section-heading');title.append(node('h2',selected[0]),node('p',selected[1],'mut'));main.append(title);
  if(view==='practice'){
- const panel=card('Praktische Prüfung');panel.classList.add('exam-practice-tools');const desc=node('div');desc.append(node('p','Bewertung durch Prüfer · kein externer Prüfungslink','mut'),node('p',count('practice')+' praktische Prüfungen · '+'fester Bewertungsbogen','mut'));const actions=node('div',undefined,'exam-practice-actions');actions.append(btn('Neue Praxisprüfung',()=>navigate('practice-create'),'p'));actions.append(node('span','Excel-Schema · 5 Module','mut'));panel.append(desc,actions);main.append(panel);
+ const panel=card('Praktische Prüfung');panel.classList.add('exam-practice-tools');const desc=node('div');desc.append(node('p','Bewertung durch Prüfer · kein externer Prüfungslink','mut'),node('p',count('practice')+' praktische Prüfungen · '+'fester Bewertungsbogen','mut'));const actions=node('div',undefined,'exam-practice-actions');if(data.verwaltung)actions.append(btn('Neue Praxisprüfung',()=>navigate('practice-create'),'p'));actions.append(node('span','Excel-Schema · 5 Module','mut'));panel.append(desc,actions);main.append(panel);
  }
  if(view==='overview'){
   const stats=node('div',undefined,'exam-stats');
@@ -151,6 +152,7 @@ function open(host){
    ['first','Erstkorrektur','Zur Bewertung eingereicht',p=>p.status==='abgegeben','clipboard','amber'],
    ['second','Zweitkorrektur','Bewertung kontrollieren',p=>p.status==='erstkorrigiert','check','violet'],
    ['release','Freigabe','Ergebnis wartet auf Freigabe',p=>p.status==='zweitkorrigiert','unlock','green']]){
+   if(v==='release'&&!data.verwaltung)continue;
    const b=btn('',()=>navigate(v),'exam-kpi');b.dataset.tone=tone;const top=node('div',undefined,'exam-kpi-top');top.append(node('span',label),examIcon(icon));b.append(top,node('strong',String(data.pruefungen.filter(filter).length)),node('span',hint,'exam-kpi-hint'));stats.append(b);
   }main.append(stats);
  }
@@ -364,8 +366,8 @@ function open(host){
  const l=card('Vorhandene Versionen');for(const x of data.vorlagen.filter(x=>practice?x.art==='praxis':x.art!=='praxis')){const line=node('div');line.style.display='flex';line.style.justifyContent='space-between';line.style.alignItems='center';line.style.gap='8px';line.style.margin='8px 0';line.append(node('span','#'+x.id+' · '+x.titel+' · '+x.grenze+' % · '+x.minuten+' Min.'),btn('Bearbeiten',()=>run(async()=>{if(questions.length&&!confirm('Aktuellen Entwurf verwerfen und Vorlage laden?'))return;templateDraft=(await api('/vorlagen/'+x.id)).vorlage;render();}),''));
  l.append(line)}main.append(c,l);renderQuestions();
  }
- async function details(id){if(data.pruefungen.some(p=>Number(p.id)===Number(id)&&p.praxisSchema==='pm-praxis-v1')||lastList==='practice'&&!data.pruefungen.some(p=>Number(p.id)===Number(id))){detailId=id;view='detail';dirty=false;main.replaceChildren(nav());const back=btn('← Zurück zur Prüfungsliste',()=>navigate(lastList),'exam-back');main.append(back);await window.IDVPractice.open(main,id,{api,run,message,dirty:()=>{dirty=true;},clean:()=>{dirty=false;},reload:async id=>{data=await api();await details(id);}});return;}const result=await api('/'+id);if(!connected())return;detailId=id;view='detail';dirty=false;main.replaceChildren(nav());const back=btn('Zurück zur Prüfungsliste',()=>navigate(lastList),'exam-back');back.prepend(examIcon('back'));main.append(back);
- window.IDVReview.render(main,result,{api,run,message,states,reviewers:data.pruefer||[],configure:data.importAdmin?()=>navigate('ki'):null,dirty:()=>{dirty=true;},clean:()=>{dirty=false;},link:linkBox,reload:async id=>{data=await api();await details(id);}});
+ async function details(id){if(data.pruefungen.some(p=>Number(p.id)===Number(id)&&p.praxisSchema==='pm-praxis-v1')||lastList==='practice'&&!data.pruefungen.some(p=>Number(p.id)===Number(id))){detailId=id;view='detail';dirty=false;main.replaceChildren(nav());const back=btn('← Zurück zur Prüfungsliste',()=>navigate(lastList),'exam-back');main.append(back);await window.IDVPractice.open(main,id,{api,run,message,dirty:()=>{dirty=true;},clean:()=>{dirty=false;},manager:data.verwaltung,afterHandoff:async()=>{detailId=null;dirty=false;view='practice';await load();},reload:async id=>{data=await api();await details(id);}});return;}const result=await api('/'+id);if(!connected())return;detailId=id;view='detail';dirty=false;main.replaceChildren(nav());const back=btn('Zurück zur Prüfungsliste',()=>navigate(lastList),'exam-back');back.prepend(examIcon('back'));main.append(back);
+ window.IDVReview.render(main,result,{api,run,message,states,reviewers:data.pruefer||[],afterHandoff:async()=>{detailId=null;dirty=false;view='overview';await load();},configure:data.importAdmin?()=>navigate('ki'):null,dirty:()=>{dirty=true;},clean:()=>{dirty=false;},link:linkBox,reload:async id=>{data=await api();await details(id);}});
  }
 
  main.append(node('h1','Prüfungszentrum'),node('p','Prüfungen werden geladen …','mut'));run(load);

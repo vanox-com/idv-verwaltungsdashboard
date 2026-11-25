@@ -123,7 +123,7 @@ function pruefungImportAdmin(array $u): bool {
     return ($u['rolle']??'')==='Administrator';
 }
 function pruefungVerwaltung(array $u): bool {
-    return ausbildungLeitung($u)&&(in_array($u['rolle']??'',['Administrator','Leitungsdienst','Ausbildungsleitung'],true)||ausbildungLeitungsprofil($u));
+    return ausbildungVerwaltungsleitung($u);
 }
 function pruefungBerichtigungStatus(string $status): bool {
     return in_array($status,['abgegeben','erstkorrigiert','zweitkorrigiert','freigegeben'],true);
@@ -138,8 +138,13 @@ function pruefungBewertung(array $q,$scores): array {
     }
     return [$result,round($total,2)];
 }
+function pruefungSichtbar(array $p,int $uid,bool $leitung): bool {
+    if($leitung)return true;
+    return ((int)$p['erst']===$uid&&in_array($p['status'],['bereit','laufend','abgegeben'],true))
+        ||((int)$p['zweit']===$uid&&$p['status']==='erstkorrigiert');
+}
 function pruefungAccess(array $p,array $u): void {
-    if(!ausbildungLeitung($u)&&!in_array((int)$u['id'],[(int)$p['erst'],(int)$p['zweit']],true))fail(403,'Nicht für diese Prüfung eingeteilt');
+    if(!pruefungSichtbar($p,(int)$u['id'],pruefungVerwaltung($u)))fail(403,'Prüfung ist nicht deiner aktuellen Korrektur zugeteilt.');
 }
 function pruefungReviewer(int $id): bool {
     $r=sql("SELECT id,rolle,dienstnummer,gesperrt,muss_passwort_aendern FROM users WHERE id=? AND gesperrt=0 AND muss_passwort_aendern=0",[$id]);
@@ -217,7 +222,7 @@ function pruefungGuest(string $method,string $uri): bool {
 }
 function dispatchPruefung(array $u,string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/ausbildung/pruefungen'))return false;
-    ausbildungRecht($u);$lead=ausbildungLeitung($u);$verwaltung=pruefungVerwaltung($u);$importAdmin=pruefungImportAdmin($u);$uid=(int)$u['id'];
+    ausbildungRecht($u);$verwaltung=pruefungVerwaltung($u);$lead=$verwaltung;$importAdmin=pruefungImportAdmin($u);$uid=(int)$u['id'];
     $root='/api/ausbildung/pruefungen';
     if($uri===$root.'/ki-einstellungen'){
         require_once __DIR__.'/PruefungenKIConfig.php';
@@ -245,13 +250,13 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
     if(dispatchPraxis($u,$method,$uri))return true;
     pruefungFinalizeExpired();
     if($method==='GET'&&$uri===$root){
-        $where=$lead?'':' WHERE p.erst=? OR p.zweit=?';
-        $rows=sql("SELECT p.id,p.kandidat,p.laufbahn,p.erst,p.zweit,p.status,p.start_am,p.ende_am,p.abgabe_am,p.ergebnis,p.fokus,p.antworten,v.titel,v.art,JSON_UNQUOTE(JSON_EXTRACT(v.fragen,'$.schema')) AS praxisSchema FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id".$where." ORDER BY p.id DESC LIMIT 300",$lead?[]:[$uid,$uid]);
+        $where=$lead?'':" WHERE (p.erst=? AND p.status IN ('bereit','laufend','abgegeben')) OR (p.zweit=? AND p.status='erstkorrigiert')";
+        $rows=sql("SELECT p.id,p.kandidat,p.laufbahn,p.erst,p.zweit,p.status,p.start_am,p.ende_am,p.abgabe_am,p.ergebnis,p.fokus,p.antworten,v.titel,v.art,JSON_UNQUOTE(JSON_EXTRACT(v.fragen,'$.schema')) AS praxisSchema FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id".$where." ORDER BY p.id DESC",$lead?[]:[$uid,$uid]);
         foreach($rows as &$r){$f=pruefungRead($r['fokus']);$r['tabwechsel']=$f['wechsel']??0;$a=pruefungRead($r['antworten']);$r['fragenGesamt']=count($a);$r['bearbeitet']=count(array_filter($a,fn($x)=>is_array($x)?count($x)>0:trim((string)$x)!==''));unset($r['fokus'],$r['antworten']);}unset($r);
         $reviewers=[];foreach(sql("SELECT id,anzeigename,dienstnummer FROM users WHERE gesperrt=0 AND muss_passwort_aendern=0 ORDER BY anzeigename") as $r)if(pruefungReviewer((int)$r['id']))$reviewers[]=$r;
-        ausbildungSynchronisierePersonal();
-        $trainees=array_map(fn($a)=>array_intersect_key($a,array_flip(['id','name','laufbahn','personalnummer'])),ausbildungAktuelleAnwaerter());
-        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM ausbildung_pruefung_vorlagen WHERE JSON_TYPE(fragen)=\'ARRAY\' ORDER BY id DESC'):[]),'pruefungsauswahl'=>sql('SELECT id,art,titel FROM ausbildung_pruefung_vorlagen WHERE art<>\'praxis\' ORDER BY id DESC'),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
+        if($verwaltung)ausbildungSynchronisierePersonal();
+        $trainees=$verwaltung?array_map(fn($a)=>array_intersect_key($a,array_flip(['id','name','laufbahn','personalnummer'])),ausbildungAktuelleAnwaerter()):[];
+        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM ausbildung_pruefung_vorlagen WHERE JSON_TYPE(fragen)=\'ARRAY\' ORDER BY id DESC'):[]),'pruefungsauswahl'=>($verwaltung?sql('SELECT id,art,titel FROM ausbildung_pruefung_vorlagen WHERE art<>\'praxis\' ORDER BY id DESC'):[]),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
     }
     if($method==='GET'&&preg_match('#^/api/ausbildung/pruefungen/vorlagen/([1-9][0-9]*)$#D',$uri,$vMatch)){
         if(!$verwaltung)fail(403,'Nur berechtigte Leitung und Administratoren dürfen Prüfungsvorlagen einsehen und bearbeiten');
@@ -270,6 +275,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         respond(201,['id'=>(int)db()->lastInsertId()]);
     }
     if($method==='POST'&&$uri===$root){
+        if(!$verwaltung)fail(403,'Nur die Leitung darf Prüfungen anlegen und Prüfer einteilen');
         $b=body();$vid=(int)($b['vorlage']??0);$aid=(int)($b['anwaerter']??0);$first=(int)($b['erst']??0);$second=(int)($b['zweit']??0);
         if($first===$second||(!$lead&&$first!==$uid)||!pruefungReviewer($first)||!pruefungReviewer($second))fail(400,'Zwei verschiedene berechtigte Prüfer erforderlich');
         $v=sql('SELECT * FROM ausbildung_pruefung_vorlagen WHERE id=?',[$vid]);
@@ -287,7 +293,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         require_once __DIR__.'/PruefungenKI.php';
         pruefungKiEndpoint($u,$method,(int)$aiMatch[1]);
     }
-    if(!preg_match('#^/api/ausbildung/pruefungen/([1-9][0-9]*)(?:/(korrektur|freigabe|annullieren|link|berichtigen|wiedereroeffnen|zweitpruefer))?$#D',$uri,$m))fail(404,'Nicht gefunden');
+    if(!preg_match('#^/api/ausbildung/pruefungen/([1-9][0-9]*)(?:/(korrektur|freigabe|annullieren|link|berichtigen|wiedereroeffnen|zweitpruefer|pruefer))?$#D',$uri,$m))fail(404,'Nicht gefunden');
     $id=(int)$m[1];$action=$m[2]??'';
     if($method==='GET'&&$action===''){
         $p=pruefungRow($id);pruefungAccess($p,$u);if(praxisMarker($p))fail(400,'Bitte den festen Praxisbogen öffnen');
@@ -306,10 +312,11 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         if(($b['revision']??null)!==(int)$p['revision'])fail(409,'Prüfung wurde zwischenzeitlich geändert. Neu laden.');
         $status=$p['status'];$note=pruefungText($b['notiz']??'',4000,false);$link=null;$history=pruefungHistorie($p,$action,$uid,$note);
         if($action==='link'){
+            if(!$verwaltung)fail(403,'Nur die Leitung darf Prüfungslinks erneuern');
             if($status!=='bereit'||$p['art']==='praxis')fail(409,'Link nur vor Prüfungsbeginn erneuerbar');
             $token=bin2hex(random_bytes(32));sql('UPDATE ausbildung_pruefungen SET token_hash=?,token_ablauf=TIMESTAMPADD(HOUR,24,UTC_TIMESTAMP(6)),revision=revision+1,protokoll=? WHERE id=?',[hash('sha256',$token),pruefungJson($history),$id]);$link='/pruefung.html#'.$token;
         }elseif($action==='annullieren'){
-            if(!$lead||in_array($status,['freigegeben','annulliert'],true)||$note==='')fail(403,'Nur Ausbildungsleitung, mit Begründung, vor Freigabe');
+            if(!$lead||$status==='annulliert'||$note==='')fail(403,'Nur die Leitung, mit Begründung');
             sql("UPDATE ausbildung_pruefungen SET status='annulliert',revision=revision+1,protokoll=? WHERE id=?",[pruefungJson($history),$id]);
         }elseif($action==='berichtigen'||$action==='wiedereroeffnen'){
             if(!$verwaltung)fail(403,'Nur Ausbildungsleitung und Leitungsdienst dürfen die Korrektursperre umgehen');
@@ -325,13 +332,22 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
                 $history[$i]['nachher']=['status'=>$status,'ergebnis'=>$total,'bewertung'=>$result];
                 sql('UPDATE ausbildung_pruefungen SET bewertung=?,ergebnis=?,revision=revision+1,protokoll=? WHERE id=?',[pruefungJson($result),$total,pruefungJson($history),$id]);
             }
-        }elseif($action==='zweitpruefer'){
-            if(!$verwaltung||$status!=='erstkorrigiert'||$p['art']==='praxis')fail(403,'Zweitprüferwechsel nur durch berechtigte Leitung während der Zweitkorrektur');
-            $new=$b['zweit']??null;
-            if(!is_int($new)||$new<1||$new===(int)$p['erst']||!pruefungReviewer($new))fail(400,'Einen anderen berechtigten Prüfer als den Erstprüfer auswählen');
+        }elseif($action==='pruefer'||$action==='zweitpruefer'){
+            if(!$verwaltung||$status==='annulliert'||$p['art']==='praxis')fail(403,'Prüferwechsel nur durch die Leitung');
+            $first=$action==='zweitpruefer'?(int)$p['erst']:($b['erst']??null);$second=$b['zweit']??null;
+            if(!is_int($first)||!is_int($second)||$first===$second||!pruefungReviewer($first)||!pruefungReviewer($second))fail(400,'Zwei unterschiedliche berechtigte Prüfer auswählen');
             if($note==='')fail(400,'Begründung für den Prüferwechsel erforderlich');
-            $history[count($history)-1]['zweitVorher']=(int)$p['zweit'];$history[count($history)-1]['zweitNachher']=$new;
-            sql('UPDATE ausbildung_pruefungen SET zweit=?,revision=revision+1,protokoll=? WHERE id=?',[$new,pruefungJson($history),$id]);
+            $firstChanged=$first!==(int)$p['erst'];$secondChanged=$second!==(int)$p['zweit'];
+            if(!$firstChanged&&!$secondChanged)fail(400,'Keine Änderung der Prüfer');
+            $next=$status;
+            // A changed reviewer must actually perform their stage again, including after release.
+            if(in_array($status,['erstkorrigiert','zweitkorrigiert','freigegeben'],true)){
+                if($firstChanged)$next='abgegeben';
+                elseif($secondChanged)$next='erstkorrigiert';
+            }
+            $i=count($history)-1;$history[$i]['prueferVorher']=['erst'=>(int)$p['erst'],'zweit'=>(int)$p['zweit'],'status'=>$status];
+            $history[$i]['prueferNachher']=['erst'=>$first,'zweit'=>$second,'status'=>$next];
+            sql('UPDATE ausbildung_pruefungen SET erst=?,zweit=?,status=?,revision=revision+1,protokoll=? WHERE id=?',[$first,$second,$next,pruefungJson($history),$id]);
         }elseif($action==='korrektur'){
             $first=$status==='abgegeben'&&$uid===(int)$p['erst'];$second=$status==='erstkorrigiert'&&$uid===(int)$p['zweit'];
             if(!$first&&!$second)fail(403,'Korrektur nicht für diesen Prüfer freigegeben');

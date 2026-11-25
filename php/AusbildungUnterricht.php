@@ -87,6 +87,7 @@ function dispatchUnterrichtTrainer(array $u,string $method,string $uri): bool {
     if(!ausbildungSchemaStatus()['unterrichtBereit'])
         fail(503,'Die Unterrichtsdatenbank fehlt. Bitte als Administrator zuerst eine verschlüsselte Sicherung erstellen und anschließend im Ausbildungsbereich die Ergänzung einrichten.');
     if($uri==='/api/ausbildung/unterricht'&&$method==='GET'){
+        $leitung=ausbildungVerwaltungsleitung($u);
         $rows=sql("SELECT i.id,i.modul_code,m.titel,i.erstellt,i.ablauf,
                     COALESCE(NULLIF(TRIM(ersteller.anzeigename),''),'Unbekannter Ausbilder') AS erstellt_von,
                     CASE WHEN i.teilnehmer_hash IS NOT NULL THEN 1 ELSE 0 END AS teilnehmer,
@@ -94,9 +95,14 @@ function dispatchUnterrichtTrainer(array $u,string $method,string $uri): bool {
                 FROM ausbildung_unterricht i
                 JOIN ausbildung_materialien m ON m.id=i.material_id
                 LEFT JOIN users ersteller ON ersteller.id=i.ausbilder_user_id
-                WHERE i.ausbilder_user_id=?
+                WHERE i.ausbilder_user_id=? AND i.beendet=0 AND i.ablauf>UTC_TIMESTAMP()
                 ORDER BY i.erstellt DESC LIMIT 40",[(int)$u['id']]);
-        respond(200,['raeume'=>$rows]);
+        if(!$leitung)foreach($rows as &$row){unset($row['erstellt_von'],$row['erstellt']);}unset($row);
+        $history=$leitung?sql("SELECT l.id,l.zeit,l.aktion,COALESCE(NULLIF(u.anzeigename,''),'Unbekannt') AS benutzer
+            FROM log l LEFT JOIN users u ON u.id=l.user_id
+            WHERE l.aktion LIKE 'Unterricht für % gestartet; Sitzungs-ID %' OR l.aktion LIKE 'Unterrichtssitzung % beendet'
+            ORDER BY l.zeit DESC,l.id DESC LIMIT 500"):[];
+        respond(200,['raeume'=>$rows,'protokollErlaubt'=>$leitung,'raumProtokoll'=>$history]);
     }
     if($uri==='/api/ausbildung/unterricht'&&$method==='POST'){
         $input=body();
@@ -127,7 +133,7 @@ function dispatchUnterrichtTrainer(array $u,string $method,string $uri): bool {
         sql('UPDATE ausbildung_unterricht SET beendet=1,angebot=NULL,antwort=NULL,
              aktualisiert=UTC_TIMESTAMP(6) WHERE id=? AND ausbilder_user_id=?',
              [$id,(int)$u['id']]);
-        auditAction($u,'Unterrichtssitzung '.$id.' beendet','edit');
+        if((int)$room['beendet']===0)auditAction($u,'Unterrichtssitzung '.$id.' beendet','edit');
         respond(200,['ok'=>true]);
     }
     unterrichtAktiv($room);
