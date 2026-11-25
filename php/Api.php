@@ -299,6 +299,11 @@ function run(): void {
             if(dispatchUnterrichtGast($method,$uri))return;
             fail(404,'Unterrichts-Endpunkt unbekannt');
         }
+        if(str_starts_with($uri,'/api/assessment-gast/')){
+            require_once __DIR__.'/Assessment.php';
+            if(assessmentGuest($method,$uri))return;
+            fail(404,'Assessment-Endpunkt unbekannt');
+        }
         if(str_starts_with($uri,'/api/pruefung-gast/')){
             require_once __DIR__.'/Pruefungen.php';
             if(pruefungGuest($method,$uri))return;
@@ -353,6 +358,11 @@ function run(): void {
         require_once __DIR__.'/Settings.php';
         require_once __DIR__.'/DatabaseBackup.php';
         if(dispatchDatabaseBackup($u,$method,$uri))return;
+        if($uri==='/api/assessment'||str_starts_with($uri,'/api/assessment/')){
+            require_once __DIR__.'/Assessment.php';
+            if(dispatchAssessment($u,$method,$uri))return;
+            fail(404,'Assessment-Endpunkt unbekannt');
+        }
         if(str_starts_with($uri,'/api/ausbildung/')){
             require_once __DIR__.'/Ausbildung.php';
             if(dispatchAusbildung($u,$method,$uri))return;

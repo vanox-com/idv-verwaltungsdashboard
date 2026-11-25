@@ -1,6 +1,6 @@
 /* Shared real panel navigation and role checks. No API calls or credentials. */
 const MODS = [
-  ['dash','Dashboard','📊'],['pers','Personal','👥'],['bef','Beförderungen','⭐'],
+  ['dash','Dashboard','📊'],['pers','Personal','👥'],['assessment','Assessment Center','📝'],['bef','Beförderungen','⭐'],
   ['ausbildung','Übersicht','🎓'],['ausbildung-pma','PMA-Monitor','📋'],['ausbildung-pka','PKA-/KKA-Monitor','📋'],['ausbildung-ausbilder','Ausbilderverwaltung','👥'],['ausbildung-materialien','Ausbildungsunterlagen','📚'],['ausbildung-unterricht','Unterrichtsräume','📽️'],['ausbildung-pruefungen','Prüfungszentrum','📝'],['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],['abm','Abmeldungen','📅'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
@@ -11,7 +11,7 @@ const MODS = [
    Ein aktives Modul hält seine Kategorie immer geöffnet. */
 const NAV_GRUPPEN = [
   {id:'uebersicht',titel:'Übersicht',module:['dash']},
-  {id:'personal',titel:'Personal & Dienst',module:['pers','bef','sonder','praktika','rout','abm','geb','jub' ,'statistik']},
+  {id:'personal',titel:'Personal & Dienst',module:['pers','assessment','bef','sonder','praktika','rout','abm','geb','jub' ,'statistik']},
   {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
   {id:'ausbildung',titel:'Ausbildung',module:['ausbildung','ausbildung-pma','ausbildung-pka','ausbildung-ausbilder','ausbildung-materialien','ausbildung-unterricht','ausbildung-pruefungen']},
@@ -22,6 +22,7 @@ const AUSB_NAV={
 };
 function panelCan(user,m,l=1){
   if(!user)return false;
+  if(m==='assessment')return ['Polizeirat','Administrator'].includes(user.rolle);
   if(m==='rechtesimulator'||m==='users')return user.rolle==='Administrator';
   if(m==='benachrichtigungen')return ['Administrator','Leitungsdienst','Polizeirat','Ausbildungsleitung'].includes(user.rolle)||(user.rolle==='Ausbilder'&&Number(user.rechte?.ausbildung||0)>=2);
   if(Object.hasOwn(AUSB_NAV,m))return (user.rechte?.ausbildung||0)>=Math.max(l,AUSB_NAV[m].leitung?2:1);
@@ -42,6 +43,7 @@ function navIcon(id) {
     'ausbildung-ausbilder':'<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 7a3 3 0 0 1 0 6M17 15a5 5 0 0 1 4 5"/>',
     'ausbildung-materialien':'<path d="M4 4h6a3 3 0 0 1 2 2 3 3 0 0 1 2-2h6v15h-6a3 3 0 0 0-2 2-3-2H4zM12 6v15"/>',
     'ausbildung-unterricht':'<rect x="3" y="3" width="18" height="13" rx="2"/><path d="m12 16-5 5m5-5 5 5M10 7l5 3-5 3z"/>',
+    assessment:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v4H9zM8 11h8m-7 4 2 2 4-4"/>',
     'ausbildung-pruefungen':'<rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M8 10h8M8 14h4m1 3 2 2 3-4"/>',
     praktika: '<path d="m2 10 10-5 10 5-10 5z"/><path d="M6 12v5c3.5 3 8.5 3 12 0v-5M22 10v7"/>',
     kue: '<path d="M13 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M13 3v5h5M10 13h11m-4-4 4 4-4 4"/>',

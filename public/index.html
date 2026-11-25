@@ -1978,7 +1978,7 @@ html[data-portal-mode="hell"] [data-right-group]{--rights-accent:var(--txt)}
 </div>
 <dialog id="personalDialog" aria-label="Personalakte"></dialog><dialog id="sfDialog" aria-label="Sonderfunktionen bearbeiten"></dialog><dialog id="porDialog" aria-label="POR-Freigabe"></dialog>
 
-<script src="/assets/panel-navigation.js?v=20261125-4"></script>
+<script src="/assets/panel-navigation.js?v=20261125-5"></script>
 <script>
 const NAV_OFFEN = new Set(['uebersicht','personal','ausbildung']);
 let ME = null, D = null, tab = 'dash';
@@ -2383,6 +2383,10 @@ function zeichneMenue() {
 function dashboardJonasHtml(){return window.IDVDashboardFigur?.render()||'<div class="hello-jonas"><img class="hello-jonas-portrait" src="/assets/idv-jonas-schulz-dashboard.png" alt="Jonas Schulz"><div class="hello-jonas-message"><div class="hello-jonas-bubble">'+esc(D?.dashboard?.jonasSpruch||'Schon wieder hier? Na dann, ran an die Arbeit!')+'</div></div></div>';}
 
 function zeichne() {
+  if(tab==='assessment'){
+    if(!can(tab)){$('#inhalt').textContent='Kein Assessment-Recht.';return;}
+    window.IDVAssessment?.open($('#inhalt'));return;
+  }
   if(tab==='ausbildung-pruefungen'){
     if(!can(tab)){$('#inhalt').textContent='Kein Ausbildungsrecht.';return;}
     window.IDVPruefungen?.open($('#inhalt'));return;
@@ -6733,5 +6737,6 @@ document.addEventListener('click',async e=>{
 <script src="/assets/pruefungen-praxis.js?v=5" defer></script>
 <script src="/assets/pruefungen-korrektur.js?v=7" defer></script>
 <script src="/assets/pruefungszentrum.js?v=20" defer></script>
+<script src="/assets/assessment-center.js?v=1" defer></script>
 </body>
 </html>

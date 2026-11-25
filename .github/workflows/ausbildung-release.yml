@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/ausbildung-release.yml'
       - 'php/**'
+      - 'scripts/mysql/2026-11-25-assessment.sql'
       - 'public/**'
       - 'scripts/mysql/2026-11-24-ausbildung.sql'
       - 'scripts/mysql/2026-11-24-aulk-public.sql'
@@ -36,6 +37,9 @@ jobs:
           php tests/mysql8-ausbildung-personal.php
           php tests/mysql8-copnet-managed.php
           node tests/ausbildung-static.mjs
+          php tests/assessment-logic.php
+          node --check public/assets/assessment-center.js
+          node --check public/assets/assessment-gast.js
           test -f scripts/mysql/2026-11-24-ausbildung.sql
           test -f scripts/mysql/2026-11-24-aulk-public.sql
           test -f scripts/mysql/2026-11-24-ausbildung-unterricht.sql
@@ -53,6 +57,7 @@ jobs:
           mkdir -p migration-output
           git archive --format=zip --output=migration-output/IDV-AUSBILDUNG-LIVE-PAKET.zip HEAD \
             public php \
+            scripts/mysql/2026-11-25-assessment.sql \
             scripts/mysql/2026-11-24-ausbildung.sql \
             scripts/mysql/2026-11-24-aulk-public.sql \
             scripts/mysql/2026-11-24-ausbildung-unterricht.sql \
