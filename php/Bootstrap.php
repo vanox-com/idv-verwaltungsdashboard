@@ -195,6 +195,7 @@ function handleBootstrap(array $user): never {
     if(allow($rights,'org'))$d['organigramm']=normalizedRows('SELECT * FROM organigramm ORDER BY sortierung');
 
     if(allow($rights,'dash')){
+        $d['dashboard']['jonasSpruch']=dashboardSpruchRead();
         $layout=normalizedRows('SELECT items,version FROM dashboard_layout WHERE id=1',[],['items']);
         $d['dashboard']['layout']=$layout[0]??['items'=>[],'version'=>0];
         $d['dashboard']['bekanntmachungen']=normalizedRows('SELECT id,titel,inhalt,erstellt FROM bekanntmachungen ORDER BY erstellt DESC,id DESC LIMIT 30');

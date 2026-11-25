@@ -84,7 +84,37 @@ function notificationSettingsRead(array $u): array {
     }
     return $flags;
 }
+
+/** Public-to-authenticated-dashboard text, writable only by the administrator. */
+function dashboardSpruchDefault(): string {return 'Schon wieder hier? Na dann, ran an die Arbeit!';}
+function dashboardSpruchDecode(?string $raw): string {
+    $v=json_decode($raw??'',true);
+    return is_array($v)&&is_string($v[0]??null)&&trim($v[0])!==''?$v[0]:dashboardSpruchDefault();
+}
+function dashboardSpruchRead(): string {
+    $rows=sql("SELECT werte FROM system_optionen WHERE schluessel='dashboard_jonas_spruch' LIMIT 1");
+    return dashboardSpruchDecode($rows[0]['werte']??null);
+}
+function dashboardSpruchSave(array $u): never {
+    needAdmin($u);$b=body();$spruch=$b['spruch']??null;$expected=$b['erwartet']??null;
+    if(!is_string($spruch)||!is_string($expected))fail(400,'Ungültiger Spruch');
+    $spruch=trim($spruch);
+    if(!preg_match('/\A.{1,180}\z/us',$spruch))fail(400,'Der Spruch muss 1 bis 180 Zeichen enthalten');
+    db()->beginTransaction();
+    try{
+        sql("INSERT IGNORE INTO system_optionen(schluessel,werte) VALUES('dashboard_jonas_spruch',?)",[json_encode([dashboardSpruchDefault()],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)]);
+        $rows=sql("SELECT werte FROM system_optionen WHERE schluessel='dashboard_jonas_spruch' FOR UPDATE");
+        $current=dashboardSpruchDecode($rows[0]['werte']??null);
+        if($current!==$expected){db()->rollBack();fail(409,'Der Spruch wurde inzwischen geändert. Bitte Dashboard aktualisieren und erneut öffnen.');}
+        sql("UPDATE system_optionen SET werte=?,aktualisiert=UTC_TIMESTAMP(6) WHERE schluessel='dashboard_jonas_spruch'",[json_encode([$spruch],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)]);
+        auditAction($u,'Dashboard-Spruch des Polizeipräsidenten geändert');
+        db()->commit();
+    }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
+    respond(200,['spruch'=>$spruch]);
+}
+
 function dispatchSettings(array $u,string $method,string $uri): bool {
+    if($method==='PUT'&&$uri==='/api/dashboard-spruch')dashboardSpruchSave($u);
     if($method==='GET'&&$uri==='/api/benachrichtigungs-einstellungen'){
         if(!notificationSettingsAllowed($u))fail(403,'Keine Berechtigung für Benachrichtigungseinstellungen');
         respond(200,['einstellungen'=>notificationSettingsRead($u)]);

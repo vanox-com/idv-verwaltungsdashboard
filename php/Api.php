@@ -332,8 +332,9 @@ function run(): void {
             if($method==='GET'&&$uri==='/api/bootstrap'){
                 // Minimales Dashboard-Grundgerüst – keinerlei Personal-,
                 // Polizeirat-, Disziplinar- oder sonstige Verwaltungsdaten.
+                require_once __DIR__.'/Settings.php';
                 respond(200,['user'=>sessionApiUser($u),'daten'=>['dashboard'=>['summary'=>new \stdClass(),
-                    'layout'=>['items'=>[],'version'=>0]]]]);
+                    'layout'=>['items'=>[],'version'=>0],'jonasSpruch'=>dashboardSpruchRead()]]]);
             }
             $personalDesign=($method==='GET'&&$uri==='/api/portal-design')
                 ||(in_array($method,['PUT','DELETE'],true)&&$uri==='/api/portal-design/personal');

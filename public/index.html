@@ -987,6 +987,27 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
   opacity:.11;pointer-events:none;border:1px solid #c1c9db;border-radius:50%;
   box-shadow:0 0 0 23px rgba(179,188,211,.065),0 0 0 47px rgba(179,188,211,.04);
 }
+
+/* The president is a separate transparent illustration, never baked into the editable text. */
+#inhalt>.hello.hello--jonas{display:grid;grid-template-columns:minmax(0,1fr) minmax(270px,38%);gap:20px;align-items:center;min-height:196px;padding-right:0}
+#inhalt>.hello.hello--jonas::after{display:none}
+.hello--jonas .hello-copy{position:relative;z-index:1;min-width:0}
+.hello-jonas{position:relative;isolation:isolate;align-self:stretch;min-height:155px;min-width:0;display:flex;align-items:flex-start;padding:5px 0 5px 0}
+.hello-jonas::before{content:"";position:absolute;right:18px;top:50%;width:132px;height:132px;transform:translateY(-50%);border:1px solid rgba(154,188,232,.24);border-radius:50%;box-shadow:0 0 0 20px rgba(154,188,232,.035);background:radial-gradient(circle,rgba(96,153,222,.13),transparent 72%);z-index:-1}
+.hello-jonas-portrait{position:absolute;right:-8px;bottom:-26px;width:205px;height:190px;object-fit:contain;object-position:right bottom;filter:drop-shadow(-7px 6px 10px #0004);pointer-events:none;z-index:1}
+.hello-jonas-message{position:relative;z-index:2;max-width:calc(100% - 130px);min-width:0;margin-top:0;margin-right:130px}
+.hello-jonas-bubble{position:relative;background:#eaf1fb;color:#192b41;padding:10px 13px;border-radius:14px 14px 4px 14px;border:1px solid #a8c0de;box-shadow:0 4px 15px #0003}
+.hello-jonas-bubble::after{content:"";position:absolute;right:-8px;bottom:8px;width:13px;height:13px;background:#eaf1fb;border-right:1px solid #a8c0de;border-top:1px solid #a8c0de;transform:rotate(45deg);border-radius:1px}
+.hello-jonas-byline{display:block;font-size:10px;line-height:1.25;font-weight:750;color:#526782;margin-bottom:4px}
+.hello-jonas-quote{display:block;font-size:13px;font-weight:650;line-height:1.38;overflow-wrap:anywhere;white-space:pre-wrap}
+.hello-jonas-edit{margin-top:7px;padding:4px 8px!important;min-height:28px!important;font-size:11px!important;white-space:normal}
+#jonasSpruchDialog{width:min(440px,92vw);border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--txt);padding:22px;box-shadow:0 15px 65px #0007}
+#jonasSpruchDialog::backdrop{background:#0008}
+#jonasSpruchDialog textarea{box-sizing:border-box;width:100%;min-height:100px;resize:vertical;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit}
+#jonasSpruchDialog .jonas-dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:15px}
+@media(max-width:1150px){#inhalt>.hello.hello--jonas{grid-template-columns:minmax(0,1fr) minmax(250px,42%);gap:14px}.hello-jonas-portrait{width:185px;height:176px}.hello-jonas-message{max-width:calc(100% - 113px);margin-right:113px}}
+@media(max-width:680px){#inhalt>.hello.hello--jonas{grid-template-columns:minmax(0,1fr);gap:10px;padding:20px 20px 0}.hello-jonas{min-height:155px;margin-right:-20px}.hello-jonas-portrait{bottom:0;right:0;width:180px;height:165px}.hello-jonas-message{max-width:min(245px,calc(100% - 112px));margin-right:112px}.hello-jonas::before{right:15px}}
+
 .dash-cell>.box,.dash-cell>.kachel{
   background:linear-gradient(150deg,rgba(51,57,68,.94),rgba(37,43,52,.97));
   backdrop-filter:blur(3px);
@@ -2303,6 +2324,45 @@ function zeichneMenue() {
     }));
 }
 
+
+const JONAS_DEFAULT_SPRUCH="Schon wieder hier? Na dann, ran an die Arbeit!";
+function jonasSpruch(){return typeof D?.dashboard?.jonasSpruch==='string'?D.dashboard.jonasSpruch:JONAS_DEFAULT_SPRUCH;}
+function dashboardJonasHtml(){
+ return '<div class="hello-jonas"><img class="hello-jonas-portrait" src="/assets/idv-jonas-schulz-dashboard.png" alt="Polizeipräsident Jonas Schulz" decoding="async"><div class="hello-jonas-message"><div class="hello-jonas-bubble"><span class="hello-jonas-byline">Polizeipräsident Jonas Schulz</span><span class="hello-jonas-quote" data-jonas-quote>'+esc(jonasSpruch())+'</span></div>'+(ME?.rolle==='Administrator'?'<button type="button" class="hello-jonas-edit" data-jonas-edit>✎ Spruch bearbeiten</button>':'')+'</div></div>';
+}
+function jonasSpruchDialog(){
+ if(ME?.rolle!=='Administrator')return;
+ if(document.getElementById('jonasSpruchDialog')?.open)return;
+ document.getElementById('jonasSpruchDialog')?.remove();
+ const expected=jonasSpruch(),actor=ME.id;
+ const dialog=document.createElement('dialog');dialog.id='jonasSpruchDialog';dialog.setAttribute('aria-labelledby','jonasSpruchTitel');
+ dialog.innerHTML='<form><h2 id="jonasSpruchTitel">Spruch des Polizeipräsidenten</h2><p class="mut">Der Text gilt für alle angemeldeten Nutzer auf der Startseite.</p><label for="jonasSpruchText">Sprechblase (max. 180 Zeichen)</label><textarea id="jonasSpruchText" maxlength="180" required></textarea><p class="mut" id="jonasSpruchStatus" role="status"></p><div class="jonas-dialog-actions"><button type="button" data-jonas-default>Standardspruch</button><button type="button" data-jonas-cancel>Abbrechen</button><button type="submit" class="p">Speichern</button></div></form>';
+ document.body.append(dialog);
+ const form=dialog.querySelector('form'),field=dialog.querySelector('textarea'),status=dialog.querySelector('[role="status"]'),save=dialog.querySelector('[type="submit"]');
+ field.value=expected;
+ let saving=false;
+ dialog.querySelector('[data-jonas-default]').onclick=()=>{field.value=JONAS_DEFAULT_SPRUCH;field.focus();};
+ dialog.querySelector('[data-jonas-cancel]').onclick=()=>{if(!saving)dialog.close();};
+ dialog.addEventListener('cancel',e=>{if(saving)e.preventDefault();});
+ dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+ form.addEventListener('submit',async e=>{
+  e.preventDefault();if(saving||ME?.rolle!=='Administrator'||ME.id!==actor)return;
+  const spruch=field.value.trim();if(!spruch){status.textContent='Bitte einen Spruch eingeben.';return;}
+  saving=true;save.disabled=true;status.textContent='Wird gespeichert …';
+  try{
+   const result=await api('/dashboard-spruch',{method:'PUT',body:JSON.stringify({spruch,erwartet:expected})});
+   if(ME?.id===actor&&D?.dashboard&&typeof result.spruch==='string'){
+    D.dashboard.jonasSpruch=result.spruch;
+    document.querySelectorAll('[data-jonas-quote]').forEach(el=>el.textContent=result.spruch);
+   }
+   dialog.close();
+  }catch(err){status.textContent='Speichern fehlgeschlagen: '+err.message;}
+  finally{saving=false;save.disabled=false;}
+ });
+ dialog.showModal();field.focus();
+}
+document.addEventListener('click',e=>{if(e.target.closest('[data-jonas-edit]'))jonasSpruchDialog();});
+
 function zeichne() {
   if(tab==='ausbildung-pruefungen'){
     if(!can(tab)){$('#inhalt').textContent='Kein Ausbildungsrecht.';return;}
@@ -2318,7 +2378,7 @@ function zeichne() {
     return;
   }
   if(tab==='dash'&&ausbildungKonto()){
-    $('#inhalt').innerHTML='<section class="hello"><span class="eyebrow">IdentityValley · Ausbildungsabteilung</span><h1>Willkommen, '+esc(ME.anzeigename||'Ausbilder')+'.</h1><p>Dein Zugang ist für die Ausbildungsabteilung freigegeben.</p></section><div class="box"><h3>Ausbildung</h3><p>Öffne die Übersicht, die Anwärtermonitore oder deine Unterrichtsräume über die Navigation.</p><button class="p" id="ausbildungDashboardOpen">Zur Ausbildungsübersicht</button></div>';
+    $('#inhalt').innerHTML='<section class="hello hello--jonas"><div class="hello-copy"><span class="eyebrow">IdentityValley · Ausbildungsabteilung</span><h1>Willkommen, '+esc(ME.anzeigename||'Ausbilder')+'.</h1><p>Dein Zugang ist für die Ausbildungsabteilung freigegeben.</p></div>'+dashboardJonasHtml()+'</section><div class="box"><h3>Ausbildung</h3><p>Öffne die Übersicht, die Anwärtermonitore oder deine Unterrichtsräume über die Navigation.</p><button class="p" id="ausbildungDashboardOpen">Zur Ausbildungsübersicht</button></div>';
     $('#ausbildungDashboardOpen').onclick=()=>wechsleZuModul('ausbildung');
     return;
   }
@@ -2684,10 +2744,10 @@ function vDash(){
   const begruessung=hour<11?'Guten Morgen':hour<18?'Guten Tag':'Guten Abend';
   const datum=new Date().toLocaleDateString('de-DE',
     {weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  const willkommen='<section class="hello"><span class="eyebrow">IdentityValley · Dienstübersicht</span>'+
+  const willkommen='<section class="hello hello--jonas"><div class="hello-copy"><span class="eyebrow">IdentityValley · Dienstübersicht</span>'+
     '<h1>'+begruessung+', '+esc(ME.anzeigename)+'.</h1>'+
     '<p>Schön, dass du wieder da bist. Einen erfolgreichen Dienst und gutes Gelingen bei deinen Aufgaben!</p>'+
-    '<span class="hello-date">'+esc(datum)+'</span></section>';
+    '<span class="hello-date">'+esc(datum)+'</span></div>'+dashboardJonasHtml()+'</section>';
   return willkommen+(dashboardEditierbar()&&!bearbeiten?
     '<div class="dash-toolbar"><span class="mut">Deine Dienstübersicht</span>'+
     '<button type="button" id="dashEdit">Dashboard anpassen</button></div>':'')+
