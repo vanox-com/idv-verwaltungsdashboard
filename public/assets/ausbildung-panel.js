@@ -59,6 +59,7 @@ function setTab(next,nextTrack){
 async function load(){
  try{
    data=await request('bootstrap');
+   if(Array.isArray(data.pmaHinweise))window.IDVPMA?.observe(data.pmaHinweise);
    if(data.unterrichtBereit){
      try{data.raeume=(await request('unterricht')).raeume||[]}catch(_){data.raeume=[]}
    }else data.raeume=[];
@@ -217,9 +218,16 @@ function overview(){
 function monitorMatches(laufbahn,monitor){
  return monitor==='PMA'?laufbahn==='PMA':['PKA','KKA'].includes(laufbahn);
 }
+function pmaReminderSection(){
+ const hints=data.pmaHinweise||[];
+ const labels={hinweis:'Frühhinweis',warnung:'Zieltermin nähert sich',stimmen:'Nur Stimmen fehlen',dringend:'10-Tage-Ziel erreicht'};
+ if(!hints.length)return '';
+ return '<section class="card" style="border-color:#a4656d;margin-bottom:14px"><div class="flex space"><h2>PMA · Offene Stimmen</h2><span class="pill warn">'+hints.length+' offen</span></div><p class="muted">Ziel: innerhalb von zehn Tagen genügend gewichtete Stimmen sammeln. Eine Stimme wird weiterhin ausschließlich nach eigener Beurteilung abgegeben.</p>'+
+ hints.map(h=>'<div class="modrow" style="border-left:3px solid '+(h.stufe==='dringend'?'#ef858c':h.stufe==='stimmen'?'#c66b77':h.stufe==='warnung'?'#d1a062':'#778ba3')+';padding-left:12px"><div><b>'+esc(h.name)+'</b><br><small>DN '+esc(h.dienstnummer)+'</small></div><div><b>'+esc(labels[h.stufe]||'Hinweis')+'</b><div class="muted">'+(h.tage===null?'Eintrittsdatum fehlt':h.tage+' Tage seit Eintritt')+' · '+Number(h.fehlendePunkte).toLocaleString('de-DE')+' Punkte fehlen · '+h.modulFertig+'/'+h.modulGesamt+' Module · RSA '+(h.rsa?'erledigt':'offen')+'</div><small>'+ (h.eigeneStimme?'Eigene Stimme bereits abgegeben · Teamstand offen':'Eigene Stimme noch offen')+'</small></div>'+(h.id?'<button class="compact" data-action="open" data-id="'+Number(h.id)+'">Anwärter öffnen</button>':'')+'</div>').join('')+'</section>';
+}
 function monitors(){
  let list=data.anwaerter.filter(a=>monitorMatches(a.laufbahn,track)).sort((a,b)=>String(a.name).localeCompare(String(b.name),'de'));
- let html='<div class="card"><div class="flex space"><div class="flex">'+['PMA','PKA-KKA'].map(t=>'<button data-track="'+t+'" class="'+(track===t?'primary':'')+'">'+(t==='PMA'?'PMA':'PKA / KKA')+' ('+data.anwaerter.filter(x=>monitorMatches(x.laufbahn,t)).length+')</button>').join('')+'</div>'+
+ let html=(track==='PMA'?pmaReminderSection():'')+'<div class="card"><div class="flex space"><div class="flex">'+['PMA','PKA-KKA'].map(t=>'<button data-track="'+t+'" class="'+(track===t?'primary':'')+'">'+(t==='PMA'?'PMA':'PKA / KKA')+' ('+data.anwaerter.filter(x=>monitorMatches(x.laufbahn,t)).length+')</button>').join('')+'</div>'+
  '<span class="pill good">Live aus dem zentralen Personalstamm</span></div><div class="tablewrap"><table><thead><tr><th>Dienstnr.</th><th>Anwärter</th>'+(track!=='PMA'?'<th>Laufbahn</th>':'')+'<th>Beginn</th><th>Module</th>'+(track==='PMA'?'<th>RSA</th>':'<th>DGL-Praxis</th><th>DGL-Prüfung</th>')+'<th>Prüfungsstand</th><th></th></tr></thead><tbody>'+
  list.map(x=>'<tr><td>'+esc(x.personalnummer??'—')+'</td><td><b>'+esc(x.name)+'</b><br><small>'+esc(x.nebenberuf||'')+'</small></td>'+(track!=='PMA'?'<td><span class="exam-row '+esc(x.laufbahn.toLowerCase())+'" style="display:inline-block;padding:0;border:0;background:none"><span class="exam-track">'+esc(x.laufbahn)+'</span></span></td>':'')+'<td>'+fmt(x.beginn)+'</td><td>'+x.fortschritt.moduleFertig+'/'+x.fortschritt.moduleGesamt+meter(x.fortschritt.moduleFertig,x.fortschritt.moduleGesamt)+'</td>'+(track==='PMA'?'<td><span class="exam-status '+(x.fortschritt.rsa?'ready':'incomplete')+'">'+(x.fortschritt.rsa?'Erhalten':'Offen')+'</span></td>':'<td>'+dglBadge(x.fortschritt.dgl?.pruefungMoeglich,((x.fortschritt.dgl?.dgl?1:0)+(x.fortschritt.dgl?.assistenz?1:0))+' / 2')+'</td><td>'+dglBadge(x.fortschritt.dgl?.pruefung,x.fortschritt.dgl?.pruefung?'Abgeschlossen':'Offen')+'</td>')+'<td>'+pill(x.fortschritt.status)+'</td><td><button class="compact" data-action="open" data-id="'+x.id+'">Öffnen</button></td></tr>').join('')+
  '</tbody></table></div>'+(list.length?'':'<p class="muted">Für diese Laufbahn sind noch keine Datensätze angelegt.</p>')+'</div>';

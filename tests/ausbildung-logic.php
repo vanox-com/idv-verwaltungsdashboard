@@ -66,4 +66,12 @@ $weighted=IDV\ausbildungStatus('PMA',$modules,$modules,[
 checkAus($weighted['stimmenSaldo']===2.5 && $weighted['jaPunkte']===3.0 &&
  $weighted['neinPunkte']===0.5 && $weighted['stimmenJa']===2 && $weighted['stimmenNein']===1,
  'PMA weight sum and counts displayed separately');
+$base=['stimmenSaldo'=>1.0,'moduleGesamt'=>7,'moduleFertig'=>3,'rsa'=>false];
+checkAus(IDV\ausbildungPmaHinweis('2026-11-22',$base,'2026-11-25')===null,'no reminder before day 4');
+checkAus(IDV\ausbildungPmaHinweis('2026-11-21',$base,'2026-11-25')['stufe']==='hinweis','day 4');
+checkAus(IDV\ausbildungPmaHinweis('2026-11-18',$base,'2026-11-25')['stufe']==='warnung','day 7');
+checkAus(IDV\ausbildungPmaHinweis('2026-11-15',$base,'2026-11-25')['stufe']==='dringend','day 10');
+$almost=array_replace($base,['moduleFertig'=>7,'rsa'=>true]);
+checkAus(IDV\ausbildungPmaHinweis('2026-11-25',$almost,'2026-11-25')['stufe']==='stimmen','immediate after modules and RSA');
+checkAus(IDV\ausbildungPmaHinweis('2026-11-15',array_replace($base,['stimmenSaldo'=>2.5]),'2026-11-25')===null,'no reminder once vote threshold reached');
 echo "Ausbildung: isolated roles, PMA votes, PKA/KKA module rules OK\n";

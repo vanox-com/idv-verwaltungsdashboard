@@ -115,6 +115,53 @@ function ausbildungStatus(string $laufbahn,array $required,array $completed,arra
         'jaPunkte'=>round($jaPunkte,2),'neinPunkte'=>round($neinPunkte,2),
         'schwelle'=>$laufbahn==='PMA'?2.5:null];
 }
+/** Calendar days since the personnel entry date, in Germany. No dates are invented. */
+function ausbildungPmaHinweis(?string $beginn,array $f,?string $heute=null): ?array {
+    $missing=round(max(0,2.5-(float)($f['stimmenSaldo']??0)),2);
+    if($missing<=0)return null;
+    $tz=new \DateTimeZone('Europe/Berlin');
+    $now=$heute!==null?new \DateTimeImmutable($heute,$tz):new \DateTimeImmutable('today',$tz);
+    $start=$beginn?\DateTimeImmutable::createFromFormat('!Y-m-d',$beginn,$tz):false;
+    $days=$start&&$start->format('Y-m-d')===$beginn&&$start<=$now?(int)$start->diff($now)->days:null;
+    $onlyVotes=(int)($f['moduleGesamt']??0)>0&&(int)$f['moduleFertig']===(int)$f['moduleGesamt']&&!empty($f['rsa']);
+    $stage=$days!==null&&$days>=10?'dringend':($onlyVotes?'stimmen':($days!==null&&$days>=7?'warnung':($days!==null&&$days>=4?'hinweis':null)));
+    if($stage===null)return null;
+    return ['stufe'=>$stage,'tage'=>$days,'nurStimmen'=>$onlyVotes,'fehlendePunkte'=>$missing,
+        'stimmenSaldo'=>(float)($f['stimmenSaldo']??0),'modulFertig'=>(int)($f['moduleFertig']??0),
+        'modulGesamt'=>(int)($f['moduleGesamt']??0),'rsa'=>(bool)($f['rsa']??false)];
+}
+/** Read-only reminders, based on current personnel identity and the same weighted vote rules. */
+function ausbildungPmaHinweise(array $u): array {
+    $module=ausbildungModule('PMA');$required=array_column($module,'code');
+    $records=[];
+    foreach(sql("SELECT id,personal_quelle FROM ausbildung_anwaerter WHERE laufbahn='PMA' AND personal_quelle IS NOT NULL") as $row)
+        $records[$row['personal_quelle']]=(int)$row['id'];
+    $done=[];$votes=[];$own=[];
+    foreach(sql("SELECT c.anwaerter_id,c.modul_code FROM ausbildung_abschluesse c JOIN ausbildung_anwaerter a ON a.id=c.anwaerter_id WHERE a.laufbahn='PMA' AND c.abgeschlossen=1") as $row)
+        $done[(int)$row['anwaerter_id']][]=$row['modul_code'];
+    foreach(sql("SELECT s.anwaerter_id,s.ausbilder_user_id,s.stimme,s.gewicht AS gespeichert_gewicht,u.rolle,t.funktion
+        FROM ausbildung_stimmen s JOIN ausbildung_anwaerter a ON a.id=s.anwaerter_id
+        JOIN users u ON u.id=s.ausbilder_user_id LEFT JOIN ausbildung_ausbilder t ON t.user_id=s.ausbilder_user_id
+        WHERE a.laufbahn='PMA'") as $row){
+        $id=(int)$row['anwaerter_id'];$votes[$id][]=['stimme'=>$row['stimme'],'gewicht'=>ausbildungStimmgewicht($row)];
+        if((int)$row['ausbilder_user_id']===(int)$u['id'])$own[$id]=true;
+    }
+    $items=[];$today=(new \DateTimeImmutable('today',new \DateTimeZone('Europe/Berlin')))->format('Y-m-d');
+    foreach(ausbildungPersonalZeilen() as $p){
+        // Pause reminders while absent, inactive or suspended.
+        if($p['status']!=='Aktiv'||ausbildungPersonalLaufbahn((string)$p['dienstgrad'])!=='PMA')continue;
+        $source=ausbildungPersonalQuelle((int)$p['personalnummer'],(int)$p['belegungen']);
+        $id=$records[$source]??null;
+        $f=ausbildungStatus('PMA',$required,$done[$id]??[],$votes[$id]??[],ausbildungRsaErhalten($p['rsa']??null));
+        $h=ausbildungPmaHinweis($p['eintrittsdatum']??null,$f,$today);
+        if(!$h)continue;
+        $items[]=$h+['key'=>$source,'id'=>$id,'dienstnummer'=>(int)$p['personalnummer'],
+            'name'=>trim($p['vorname'].' '.$p['nachname']),'eigeneStimme'=>isset($own[$id])];
+    }
+    $priority=['dringend'=>0,'stimmen'=>1,'warnung'=>2,'hinweis'=>3];
+    usort($items,static fn($a,$b)=>($priority[$a['stufe']]<=>$priority[$b['stufe']])?: (($b['tage']??-1)<=>($a['tage']??-1))?:strcasecmp($a['name'],$b['name']));
+    return ['hinweise'=>$items,'datum'=>$today];
+}
 function ausbildungFortschritt(array $a,bool $details=false): array {
     $id=(int)$a['id'];
     $modules=ausbildungModule((string)$a['laufbahn']);
@@ -342,6 +389,9 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             .'Ein Administrator kann sie im Ausbildungsbereich nach einer Sicherung einrichten.');
     if(!ausbildungSchemaStatus()['personalbindungBereit'])
         fail(503,'Die Verbindung zum zentralen Personalstamm muss nach einer Datenbanksicherung noch eingerichtet werden.');
+    if($method==='GET'&&$uri==='/api/ausbildung/pma-hinweise'){
+        respond(200,ausbildungPmaHinweise($u));
+    }
     ausbildungOnboardingAktualisieren($u);
     // Weiterbildung is a separate classroom category, never a PMA/PKA requirement.
     sql("INSERT IGNORE INTO ausbildung_module(code,laufbahn,titel,sortierung) VALUES('WB','WB','Weiterbildungen',99)");
@@ -381,6 +431,7 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         respond(200,['leitung'=>$leitung,'user'=>['id'=>(int)$u['id'],'rolle'=>$u['rolle'],
             'name'=>userName($u)],'module'=>$module,'ausbilder'=>$trainers,
             'anwaerter'=>$trainees,'materialien'=>$materials,
+            'pmaHinweise'=>ausbildungPmaHinweise($u)['hinweise'],
             'ausbilderKandidaten'=>(int)(rights($u)['ausbildung']??0)>=2?ausbildungTrainerKandidaten():[],
             'unterrichtBereit'=>ausbildungSchemaStatus()['unterrichtBereit'],
             'stimmenDetailsBereit'=>ausbildungStimmenDetailsVerfuegbar(),'dglBereit'=>ausbildungDglSchemaBereit(),
