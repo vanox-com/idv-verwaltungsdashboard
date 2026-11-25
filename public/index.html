@@ -1729,6 +1729,27 @@ body{overflow-x:clip}
 <style>
 .notify-settings{max-width:940px}.notify-settings .ns-heading{margin:0 0 18px}.notify-settings .ns-heading p{color:var(--mut);max-width:720px}.ns-group{padding:18px 20px;margin:0 0 16px;border:1px solid var(--line,#34455c);background:var(--panel,#192536);border-radius:12px}.ns-group h2{font-size:17px;margin:0 0 4px}.ns-group>p{font-size:12px;color:var(--mut);margin:0 0 12px}.ns-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px 0;border-top:1px solid #9caec326}.ns-row strong{display:block;font-size:14px}.ns-row small{display:block;color:var(--mut);font-size:12px;margin-top:4px}.ns-control{display:flex;align-items:center;gap:8px;font-size:12px;white-space:nowrap}.ns-control button{position:relative;width:42px;height:24px;padding:0;border:1px solid #687787;border-radius:999px;background:#526070;cursor:pointer;flex-shrink:0}.ns-control button::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;background:white;border-radius:50%;transition:transform .15s}.ns-control button[aria-checked="true"]{background:#338265;border-color:#6abf9d}.ns-control button[aria-checked="true"]::after{transform:translateX(18px)}.ns-control button:disabled{opacity:.5;cursor:wait}.ns-control button:focus-visible{outline:2px solid #8fb5ed;outline-offset:3px}.ns-status{color:var(--mut);font-size:12px;min-height:20px;margin:8px 0}.ns-status.error{color:#f18e98}.ns-legend{font-size:12px;color:var(--mut)}@media(max-width:480px){.ns-group{padding:12px}.ns-row{gap:8px}.ns-control span{display:none}}
 </style>
+<style>
+/* Subtle category accents; reuse the topbar palette, without changing layout. */
+#appSidebar .sidebar-gruppe[data-sidebar-group="uebersicht"]{--group-accent:#89c7e7;--group-light:#326988;--group-rgb:102,200,249}
+#appSidebar .sidebar-gruppe[data-sidebar-group="personal"]{--group-accent:#98baf0;--group-light:#3c5e99;--group-rgb:112,164,255}
+#appSidebar .sidebar-gruppe[data-sidebar-group="organisation"]{--group-accent:#c1a9e4;--group-light:#77509e;--group-rgb:196,160,252}
+#appSidebar .sidebar-gruppe[data-sidebar-group="vorgaenge"]{--group-accent:#e4bb91;--group-light:#98602e;--group-rgb:255,189,120}
+#appSidebar .sidebar-gruppe[data-sidebar-group="ausbildung"]{--group-accent:#99c9a6;--group-light:#3b7650;--group-rgb:130,196,148}
+#appSidebar .sidebar-gruppe[data-sidebar-group="verwaltung"]{--group-accent:#8dcfc6;--group-light:#337b72;--group-rgb:112,221,203}
+html[data-portal-mode="hell"] #appSidebar .sidebar-gruppe[data-sidebar-group]{--group-accent:var(--group-light)}
+html:not([data-design-preset="flori"]):not([data-design-preset="schulzi"]):not([data-design-preset="chem"]) #appSidebar .sidebar-gruppe[data-sidebar-group]>.sidebar-gruppe-taste{color:var(--group-accent);background:rgba(var(--group-rgb),.045);border:1px solid rgba(var(--group-rgb),.075)}
+html:not([data-design-preset="flori"]):not([data-design-preset="schulzi"]):not([data-design-preset="chem"]) #appSidebar .sidebar-gruppe[data-sidebar-group]>.sidebar-gruppe-taste>span:first-child{display:flex;align-items:center;gap:8px;text-align:left}
+html:not([data-design-preset="flori"]):not([data-design-preset="schulzi"]):not([data-design-preset="chem"]) #appSidebar .sidebar-gruppe[data-sidebar-group]>.sidebar-gruppe-taste>span:first-child::before{content:"";display:inline-block;width:5px;height:12px;border-radius:3px;background:var(--group-accent);opacity:.8;flex-shrink:0}
+html:not([data-design-preset="flori"]):not([data-design-preset="schulzi"]):not([data-design-preset="chem"]) #appSidebar .sidebar-gruppe[data-sidebar-group]>.sidebar-gruppe-taste:is(:hover,.active){background:rgba(var(--group-rgb),.10);border-color:rgba(var(--group-rgb),.16)}
+html:not([data-design-preset="flori"]):not([data-design-preset="schulzi"]):not([data-design-preset="chem"]) #appSidebar .sidebar-gruppe[data-sidebar-group] .sidebar-gruppe-chevron{color:var(--group-accent);opacity:.8}
+html:not([data-design-preset="flori"]):not([data-design-preset="schulzi"]):not([data-design-preset="chem"]) #appSidebar .sidebar-gruppe[data-sidebar-group] .sidebar-gruppe-inhalt .nav-icon{color:var(--group-accent);opacity:.78}
+html:not([data-design-preset="flori"]):not([data-design-preset="schulzi"]):not([data-design-preset="chem"]) #appSidebar .sidebar-gruppe[data-sidebar-group] .sidebar-gruppe-inhalt a:hover{background:rgba(var(--group-rgb),.09)}
+html:not([data-design-preset="flori"]):not([data-design-preset="schulzi"]):not([data-design-preset="chem"]) #appSidebar .sidebar-gruppe[data-sidebar-group] .sidebar-gruppe-inhalt a.on{background:linear-gradient(96deg,rgba(var(--group-rgb),.17),rgba(var(--group-rgb),.06));border-color:rgba(var(--group-rgb),.21);border-left-color:var(--group-accent)}
+html:not([data-design-preset="flori"]):not([data-design-preset="schulzi"]):not([data-design-preset="chem"]) #appSidebar .sidebar-gruppe[data-sidebar-group] .sidebar-gruppe-inhalt a.on .nav-icon{color:var(--group-accent);opacity:1}
+html[data-portal-mode="hell"] #appSidebar .sidebar-gruppe[data-sidebar-group] .sidebar-gruppe-inhalt a.on{color:var(--txt)}
+.workspace-topbar-icon[data-group="ausbildung"]{--module-accent:#99c9a6;--module-soft:rgba(89,153,108,.26);--module-border:rgba(130,196,148,.42)}
+</style>
 </head>
 <body>
 
@@ -2213,7 +2234,7 @@ function zeichneMenue() {
     const sichtbar=g.module.filter(id=>module.has(id)&&can(id));
     if(!sichtbar.length)return ''; // Keine leeren Kategorien ohne Berechtigung.
     const offen=NAV_OFFEN.has(g.id),hatAktiv=sichtbar.includes(tab);
-    return '<section class="sidebar-gruppe" aria-label="'+esc(g.titel)+'">'+
+    return '<section class="sidebar-gruppe" data-sidebar-group="'+g.id+'" aria-label="'+esc(g.titel)+'">'+
       '<button type="button" class="sidebar-gruppe-taste'+(hatAktiv?' active':'')+
       '" data-nav-group="'+g.id+'" aria-expanded="'+offen+
       '" aria-controls="nav-items-'+g.id+'">'+
