@@ -176,6 +176,7 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
     if($method==='PATCH'&&preg_match('#^/api/rollen/([^/]+)/recht/([^/]+)$#D',$uri,$m)){
         needAdmin($u);$role=rawurldecode($m[1]);$mod=rawurldecode($m[2]);$b=body();$level=$b['stufe']??null;
         if($role==='Administrator')fail(403,'Administratorrechte sind fest');
+        if($mod==='rechtesimulator')fail(403,'Der Berechtigungs-Simulator ist fest Administratoren vorbehalten');
         if(!in_array($mod,$allowed,true)||!in_array($level,[0,1,2],true))fail(400,'Ungültiges Modul oder Berechtigungsstufe');
         if(in_array($role,['Ausbildungsleitung','Ausbilder'],true))fail(403,'Ausbildungszugänge haben feste, isolierte Rollenrechte');
         if($mod==='ausbildung'){
@@ -193,6 +194,7 @@ function dispatchSettings(array $u,string $method,string $uri): bool {
         $target=sql('SELECT rolle,dienstnummer FROM users WHERE id=?',[$id]);
         if(!$target||ausbildungsZugangArchiviert((string)$target[0]['dienstnummer']))fail(404,'Aktiver Zugang nicht gefunden');
         if($target[0]['rolle']==='Administrator')fail(403,'Administratorrechte sind fest');
+        if($mod==='rechtesimulator')fail(403,'Der Berechtigungs-Simulator ist fest Administratoren vorbehalten');
         if(in_array($target[0]['rolle'],['Ausbildungsleitung','Ausbilder'],true))
             fail(403,'Ausbildungszugänge haben feste, isolierte Rollenrechte');
         if($mod==='ausbildung'&&in_array($target[0]['rolle'],['Leitungsdienst','Ausbildungsleitung','Ausbilder'],true))

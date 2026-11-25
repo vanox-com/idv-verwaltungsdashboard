@@ -43,13 +43,32 @@ function dispatchReferenceLists(array $u,string $method,string $uri): bool {
     if($method==='GET'&&$uri==='/api/geburtstage'){needRight($u,'geb');respond(200,anniversaries('geb'));}
     if($method==='GET'&&$uri==='/api/dienstjubilaeen'){needRight($u,'jub');respond(200,anniversaries('jub'));}
     if($method==='GET'&&$uri==='/api/rechtesimulator'){
-        needRight($u,'rechtesimulator');
-        respond(200,sql('SELECT id,anzeigename,dienstnummer,rolle,gesperrt FROM users ORDER BY anzeigename'));
+        needAdmin($u);
+        respond(200,sql("SELECT id,anzeigename,dienstnummer,rolle,gesperrt FROM users WHERE LOWER(dienstnummer) NOT LIKE 'archiv-aus-%' ORDER BY anzeigename"));
+    }
+    if($method==='GET'&&$uri==='/api/rechtesimulator/rollen'){
+        needAdmin($u);
+        respond(200,['rollen'=>array_map(fn($r)=>['name'=>$r['name'],'login'=>hasPanelLoginRole($r['name'])],sql('SELECT name FROM roles ORDER BY name'))]);
+    }
+    if($method==='GET'&&preg_match('#^/api/rechtesimulator/rolle/([^/]+)$#D',$uri,$m)){
+        needAdmin($u);$role=rawurldecode($m[1]);
+        if(!sql('SELECT 1 FROM roles WHERE name=?',[$role]))fail(404,'Rolle nicht gefunden');
+        respond(200,['modus'=>'rolle','user'=>['rolle'=>$role,'anzeigename'=>$role,'gesperrt'=>false,'mussPasswortAendern'=>false],
+            'login'=>hasPanelLoginRole($role),'rechte'=>rights(['rolle'=>$role],true)]);
     }
     if($method==='GET'&&preg_match('#^/api/rechtesimulator/([1-9][0-9]*)$#D',$uri,$m)){
-        needRight($u,'rechtesimulator');$rows=sql('SELECT id,anzeigename,dienstnummer,rolle,gesperrt FROM users WHERE id=?',[cleanId($m[1])]);
+        needAdmin($u);$rows=sql("SELECT id,anzeigename,dienstnummer,rolle,gesperrt,muss_passwort_aendern FROM users WHERE id=? AND LOWER(dienstnummer) NOT LIKE 'archiv-aus-%'",[cleanId($m[1])]);
         if(!$rows)fail(404,'Konto nicht gefunden');
-        respond(200,['user'=>$rows[0],'rechte'=>rights($rows[0])]);
+        $target=$rows[0];$target['gesperrt']=(bool)$target['gesperrt'];
+        $target['mussPasswortAendern']=(bool)$target['muss_passwort_aendern'];unset($target['muss_passwort_aendern']);
+        $permissions=rights($target);
+        $kompetenzen=[];
+        if(($permissions['ausbildung']??0)===1){
+            try{$profile=sql('SELECT kompetenzen FROM ausbildung_ausbilder WHERE user_id=? AND aktiv=1 LIMIT 1',[(int)$target['id']]);
+                $kompetenzen=json_decode((string)($profile[0]['kompetenzen']??'[]'),true)??[];
+            }catch(\Throwable $e){}
+        }
+        respond(200,['modus'=>'konto','user'=>$target,'login'=>hasPanelLoginRole($target['rolle']),'rechte'=>$permissions,'kompetenzen'=>$kompetenzen]);
     }
     if($method==='GET'&&$uri==='/api/personalentwicklung'){
         needRight($u,'pers');

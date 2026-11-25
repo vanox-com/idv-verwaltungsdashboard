@@ -17,7 +17,9 @@ if(!index.includes('/assets/ausbildung-panel.js'))
  throw Error('Embedded module script not loaded by police panel');
 if(index.includes("location.assign('/ausbildung.html')"))
  throw Error('Training must stay in the normal dashboard without redirects');
-const navigation=index.slice(index.indexOf('const NAV_GRUPPEN'),index.indexOf('const NAV_OFFEN'));
+const sharedNav=readFileSync('public/assets/panel-navigation.js','utf8');
+new Script(sharedNav,{filename:'panel-navigation.js'});
+const navigation=sharedNav.slice(sharedNav.indexOf('const NAV_GRUPPEN'),sharedNav.indexOf('const AUSB_NAV'));
 if(navigation.indexOf("id:'ausbildung'")<0 || navigation.indexOf("id:'verwaltung'")<0 || navigation.indexOf("id:'ausbildung'")>=navigation.indexOf("id:'verwaltung'"))
  throw Error('Ausbildung must appear above Administration in the main navigation');
 if(embedded.includes('Zum Login</a>'))throw Error('Training database failure must not redirect to Login');
@@ -106,10 +108,10 @@ console.log('Ausbildung native integration, no extra admin page and public AuLK 
 for(const key of ['ausbildung-pma','ausbildung-pka','ausbildung-ausbilder','ausbildung-materialien','ausbildung-unterricht']){
  if(!navigation.includes("'"+key+"'"))throw Error('Missing sidebar item '+key);
 }
-if(!embedded.includes('allowedRoute')||!embedded.includes("['ausbilder','materialien'].includes(next)")||!index.includes("m==='dash'||m==='design'"))
+if(!embedded.includes('allowedRoute')||!embedded.includes("['ausbilder','materialien'].includes(next)")||!sharedNav.includes("m==='dash'||m==='design'"))
  throw Error('Training administration visibility and personal design access must be role-aware');
 
-if(navigation.includes("'ausbildung-kka'")||!index.includes("track:'PKA-KKA'")||!embedded.includes("monitorMatches(selected.anwaerter.laufbahn,track)")||!embedded.includes('<th>Laufbahn</th>'))
+if(navigation.includes("'ausbildung-kka'")||!sharedNav.includes("track:'PKA-KKA'")||!embedded.includes("monitorMatches(selected.anwaerter.laufbahn,track)")||!embedded.includes('<th>Laufbahn</th>'))
  throw Error('PKA and KKA must share a monitor while retaining their track identity and detail views');
 if(!embedded.includes('data-action="rsa"')||!embedded.includes("a.laufbahn==='PMA'")||!aulk.includes('RSA-Schulung (Pflicht)'))
  throw Error('PMA RSA control or public status missing');

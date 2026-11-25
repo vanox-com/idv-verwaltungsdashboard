@@ -136,23 +136,25 @@ function ausbildungRechtsstufe(string $rolle,int $rollenstufe,?int $einzelrecht,
     if($einzelrecht!==null)return max(0,min(2,$einzelrecht));
     return $leitungsprofil?2:max(0,min(1,$rollenstufe));
 }
-function rights(array $u): array {
+function rights(array $u,bool $nurRolle=false): array {
     if(in_array($u['rolle'],['Ausbilder','Ausbildungsleitung'],true))
-        return ['ausbildung'=>ausbildungLeitungsprofil($u)?2:1,'dash'=>1,'design'=>1];
+        return ['ausbildung'=>($nurRolle?$u['rolle']==='Ausbildungsleitung':ausbildungLeitungsprofil($u))?2:1,'dash'=>1,'design'=>1];
     ensureDNApprovalPermissions();
     $rights=[];
     foreach(sql("SELECT modul,stufe FROM role_perms WHERE rolle=?",[$u['rolle']]) as $row)
         $rights[$row['modul']] = (int)$row['stufe'];
     $ausbildungRolle=(int)($rights['ausbildung']??0);
     $ausbildungEinzel=null;
-    if ($u['rolle']!=='Administrator') {
+    if (!$nurRolle&&$u['rolle']!=='Administrator') {
         foreach(sql("SELECT modul,stufe FROM user_perms WHERE user_id=?",[$u['id']]) as $row){
             $rights[$row['modul']] = (int)$row['stufe'];
             if($row['modul']==='ausbildung')$ausbildungEinzel=(int)$row['stufe'];
         }
     }
     $rights['ausbildung']=ausbildungRechtsstufe((string)$u['rolle'],$ausbildungRolle,$ausbildungEinzel,
-        !in_array($u['rolle'],['Administrator','Leitungsdienst'],true)&&$ausbildungEinzel===null&&ausbildungLeitungsprofil($u));
+        !$nurRolle&&!in_array($u['rolle'],['Administrator','Leitungsdienst'],true)&&$ausbildungEinzel===null&&ausbildungLeitungsprofil($u));
+    // Never delegate the simulator via saved role permissions or overrides.
+    $rights['rechtesimulator']=$u['rolle']==='Administrator'?2:0;
     return $rights;
 }
 /* Neues, eigenständiges Entscheidungsrecht. Fügt fehlende Rollenstandards hinzu,

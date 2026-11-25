@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>Berechtigungsvorschau · IdentityValley</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1520;--panel:#192536;--edge:#314256;--text:#e7eff7;--mut:#a3b4c6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,sans-serif}button,a{font:inherit}a{color:#a7c9f5}button{cursor:pointer}button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a7c9f5;outline-offset:3px}button[disabled]{cursor:default;opacity:.6}h1,h2,h3,p{margin:0}.notice{padding:11px 20px;background:#3b3021;border-bottom:1px solid #96734b;color:#f4d49e;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.notice strong{font-size:13px}.notice small{color:#e2c7a5}.notice a{color:#ffe2b5;font-size:12px}.gate{margin:60px auto;max-width:620px;padding:24px;background:var(--panel);border:1px solid var(--edge);border-radius:13px}.shell{display:grid;grid-template-columns:252px minmax(0,1fr);min-height:calc(100dvh - 48px)}[hidden]{display:none!important}aside{background:#101a27;border-right:1px solid var(--edge);display:flex;flex-direction:column;gap:16px;padding:19px 12px;position:sticky;top:0;height:calc(100dvh - 48px);overflow:auto}.brand{text-align:center}.brand img{width:184px;max-width:100%;object-fit:contain}.brand small{display:block;letter-spacing:.12em;color:var(--mut);font-size:9px}.target{padding:12px;border:1px solid var(--edge);border-radius:9px;background:#ffffff03;overflow-wrap:anywhere}.target strong,.target span{display:block}.target span{font-size:12px;color:var(--mut)}
+.nav-group{--accent:#a8b8ca;--tint:160,180,200;margin-bottom:8px}.nav-group[data-group="uebersicht"]{--accent:#89c7e7;--tint:102,200,249}.nav-group[data-group="personal"]{--accent:#98baf0;--tint:112,164,255}.nav-group[data-group="organisation"]{--accent:#c1a9e4;--tint:196,160,252}.nav-group[data-group="vorgaenge"]{--accent:#e4bb91;--tint:255,189,120}.nav-group[data-group="ausbildung"]{--accent:#99c9a6;--tint:130,196,148}.nav-group[data-group="verwaltung"]{--accent:#8dcfc6;--tint:112,221,203}.nav-group summary{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:rgba(var(--tint),.05);border:1px solid rgba(var(--tint),.10);padding:9px 10px;border-radius:7px;cursor:pointer}.nav-group button{display:flex;width:100%;align-items:center;gap:10px;text-align:left;border:1px solid transparent;border-left:3px solid transparent;background:none;color:var(--mut);padding:8px 10px;margin:3px 0;border-radius:7px;font-size:13px}.nav-group button.on{color:var(--text);background:rgba(var(--tint),.13);border-color:rgba(var(--tint),.18);border-left-color:var(--accent)}.nav-group button:hover{background:rgba(var(--tint),.08)}.nav-icon{width:18px;height:18px;flex-shrink:0;color:var(--accent,#8fb5ed)}
+main{min-width:0;padding:24px 30px 42px;background:radial-gradient(ellipse at top right,#22354a 0,transparent 48%)}.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:23px}.topbar small{color:var(--mut)}.topbar button{border:1px solid var(--edge);border-radius:7px;background:#25374c;color:var(--text);padding:7px 11px}.hero,.card{border:1px solid var(--edge);background:var(--panel);border-radius:12px;padding:20px;margin:0 0 16px}.hero h1{margin:5px 0;font-size:26px;letter-spacing:-.025em}.hero p,.card p{color:var(--mut);margin:6px 0 12px}.eyebrow{font-size:10px;font-weight:700;letter-spacing:.13em;color:#a5bfdf}.statgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}.stat{padding:14px;border:1px solid var(--edge);border-radius:9px;background:#122030}.stat span{display:block;font-size:12px;color:var(--mut)}.stat strong{font-size:23px}.card h2{font-size:17px;margin:0 0 12px}.features{display:grid;gap:8px}.feature{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--edge);border-radius:7px;padding:10px 12px}.feature span:last-child{font-size:11px;color:#9fe0ba;text-align:right}.feature.denied span:last-child{color:var(--mut)}.module-link{border:1px solid #40566d;border-radius:7px;background:#22364b;color:inherit;padding:9px 12px;text-align:left;display:flex;align-items:center;gap:10px}.module-link:hover{background:#304760}.demo-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.demo-toolbar button{border:1px solid #526d8e;border-radius:7px;background:#27435d;color:#d2e4f8;padding:8px 10px}.card table{width:100%;border-collapse:collapse;table-layout:fixed}.card td,.card th{text-align:left;border-bottom:1px solid var(--edge);padding:10px;overflow-wrap:anywhere}.card th{font-size:11px;color:var(--mut)}.card td{font-size:12px}.foot{font-size:12px;color:var(--mut)}.rights-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.right-item{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--edge);padding:7px 2px;font-size:12px}.right-item span:last-child{color:var(--mut)}.right-item.granted span:last-child{color:#9fe0ba}.rights-details summary{cursor:pointer;font-weight:650;margin-bottom:10px}
+@media(max-width:720px){.shell{grid-template-columns:1fr}aside{position:static;height:auto;max-height:330px}main{padding:16px}.statgrid,.rights-list{grid-template-columns:1fr}.brand img{width:135px}}
+</style></head><body>
+<div id="gate" class="gate" role="status">Administratorberechtigung wird geprüft …</div>
+<div id="preview" hidden><div class="notice"><div><strong>SIMULATION · Nur Vorschau</strong> <small>Keine fremde Anmeldung, keine echten Akten, keine Änderungen.</small></div><a href="/" target="_blank" rel="noopener noreferrer">Zum echten Panel ↗</a></div><div class="shell"><aside><div class="brand"><img src="/assets/idv-polizei-logo-transparent.svg" alt="Polizei IdentityValley"><small>VERWALTUNGSPORTAL · VORSCHAU</small></div><div id="target" class="target"></div><nav id="menu" aria-label="Simulierte Navigation"></nav></aside><main><div class="topbar"><small id="breadcrumb">VERWALTUNGSZENTRALE</small><button id="refresh" type="button">Rechte neu laden ↻</button></div><div id="content"></div><p class="foot">Die Navigation verwendet die Regeln des echten Panels. Moduloberflächen und Aktionsbeispiele sind schematisch, nicht vollständig; die Anzeige lädt keine echten Personal- oder Vorgangsdaten.</p></main></div></div>
+<script src="/assets/panel-navigation.js?v=20261125-1"></script>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=String(text);if(cls)n.className=cls;return n;};
+let subject=null,active='',shown=[],busy=false,signature='';
+const params=new URLSearchParams(location.search),account=params.get('konto'),role=params.get('rolle');
+const endpoint=account&&/^[1-9][0-9]*$/.test(account)&&!role?'/api/rechtesimulator/'+account:role&&!account?'/api/rechtesimulator/rolle/'+encodeURIComponent(role):null;
+const can=(m,l=1)=>panelCan(subject?.user,m,l);
+const groupFor=id=>NAV_GRUPPEN.find(g=>g.module.includes(id));
+const nameFor=id=>MODS.find(m=>m[0]===id)?.[1]||id;
+const labels={por:'POR-Freigabe',dnfreigabe:'DN-Anträge entscheiden',rlbearb:'Disziplinarrichtlinien bearbeiten',kuearchiv:'Kündigungsarchiv',ranghistorie:'Rangänderungs-Historie',routarchiv:'Routinearchiv',mitteilungen:'Mitteilungen verwalten'};
+function feature(parent,label,allowed=true,note='Verfügbar'){
+ const row=node('div',undefined,'feature'+(allowed?'':' denied'));row.append(node('span',label),node('span',allowed?note:'Nicht verfügbar'));parent.append(row);
+}
+function card(title){const s=node('section',undefined,'card');s.append(node('h2',title));return s;}
+function selectModule(id){if(!shown.includes(id))return;active=id;renderMenu();renderContent();}
+function renderMenu(){
+ const menu=$('menu');const old=[...menu.querySelectorAll('details')],open=new Set(old.filter(x=>x.open).map(x=>x.dataset.group));menu.replaceChildren();
+ for(const g of NAV_GRUPPEN){const ids=g.module.filter(id=>shown.includes(id));if(!ids.length)continue;const d=node('details',undefined,'nav-group');d.dataset.group=g.id;d.open=open.has(g.id)||ids.includes(active)||(!old.length&&['uebersicht','personal','ausbildung'].includes(g.id));d.append(node('summary',g.titel));
+ for(const id of ids){const b=node('button',undefined,id===active?'on':'');b.type='button';b.innerHTML=navIcon(id);b.append(node('span',nameFor(id)));if(id===active)b.setAttribute('aria-current','page');b.onclick=()=>selectModule(id);d.append(b);}menu.append(d);}
+}
+function renderRights(root){
+ const d=node('details',undefined,'card rights-details');d.append(node('summary','Effektive Berechtigungen (technische Übersicht)'));
+ const list=node('div',undefined,'rights-list'),rights=subject.user.rechte;
+ for(const id of [...new Set([...Object.keys(rights),'rechtesimulator'])].sort((a,b)=>(labels[a]||nameFor(a)).localeCompare(labels[b]||nameFor(b),'de'))){
+  const level=Number(rights[id]||0),row=node('div',undefined,'right-item'+(level?' granted':''));
+  row.append(node('span',id==='ausbildung'?'Ausbildung':labels[id]||nameFor(id)),node('span',id==='ausbildung'?['Kein Zugriff','Ausbilder','Vollzugriff'][level]||'–':['Kein Zugriff','Lesen','Bearbeiten'][level]||'–'));list.append(row);
+ }
+ d.append(list);root.append(d);
+}
+function renderContent(){
+ const root=$('content');root.replaceChildren();const u=subject.user;
+ $('breadcrumb').textContent='VERWALTUNGSZENTRALE / '+(active?nameFor(active):'Zugang');
+ if(!active){const c=card('Kein regulärer Panel-Zugang');c.append(node('p',!subject.login?'Diese Rolle ist nicht für den Panel-Login zugelassen.':u.gesperrt?'Der Zugang ist gesperrt.':u.mussPasswortAendern?'Vor dem Zugriff muss das Startpasswort geändert werden.':'Keine Module freigegeben.'));root.append(c);renderRights(root);return;}
+ const hero=node('section',undefined,'hero');hero.append(node('div',groupFor(active)?.titel||'Verwaltung','eyebrow'),node('h1',active==='dash'?'Willkommen, '+u.anzeigename+'.':nameFor(active)),node('p','Schematische Ansicht aus Sicht '+(subject.modus==='rolle'?'der Rolle ':'des Zugangs ')+u.rolle+'.'));root.append(hero);
+ if(active==='dash'||active==='ausbildung'){
+ const stats=node('div',undefined,'statgrid');for(const [label,num] of [['Sichtbare Menüpunkte',shown.length],['Sichtbare Kategorien',NAV_GRUPPEN.filter(g=>g.module.some(id=>shown.includes(id))).length],['Ausbildungsstufe',Number(u.rechte.ausbildung||0)]]){const s=node('div',undefined,'stat');s.append(node('span',label),node('strong',num));stats.append(s);}root.append(stats);
+ const c=card('Verfügbare Bereiche');const features=node('div',undefined,'features');for(const id of shown.filter(id=>active!=='ausbildung'||Object.hasOwn(AUSB_NAV,id))){const b=node('button',undefined,'module-link');b.type='button';b.innerHTML=navIcon(id);b.append(node('span',nameFor(id)));b.onclick=()=>selectModule(id);features.append(b);}c.append(features);root.append(c);renderRights(root);return;
+ }
+ const c=card('Berechtigungsabhängige Funktionen'),features=node('div',undefined,'features'),demo=card('Ansichtsvorschau'),actions=node('div',undefined,'demo-toolbar');
+ const action=(label,allowed=true,note='Verfügbar')=>{feature(features,label,allowed,note);if(allowed){const b=node('button',label);b.type='button';b.disabled=true;b.title='Nur Vorschau – keine Aktion';actions.append(b);}};
+ let write=can(active,2);
+ if(active==='ausbildung-pma'){write=true;for(const l of ['Anwärterakte öffnen','Pflichtmodule bestätigen / zurücksetzen','RSA-Schulung bestätigen','Stimmen abgeben'])action(l);}
+ else if(active==='ausbildung-pka'){write=true;for(const l of ['Anwärterakte öffnen','Pflichtmodule bestätigen / zurücksetzen','DGL-Praxis bestätigen','DGL-Prüfung und Ergebnis erfassen'])action(l);}
+ else if(active==='ausbildung-unterricht'){const full=Number(u.rechte.ausbildung||0)>=2,codes=Array.isArray(subject.kompetenzen)?subject.kompetenzen:[];write=full||codes.length>0;action('Unterrichtsraum erstellen',write,full?'Alle aktiven Module':'Modulfreigaben: '+codes.join(', '));if(!full&&subject.modus==='rolle')c.append(node('p','Die konkreten Unterrichtskompetenzen hängen vom aktiven Ausbilderprofil ab.'));}
+ else if(active==='ausbildung-ausbilder')action('Ausbilder verwalten und Modulkompetenzen vergeben');
+ else if(active==='ausbildung-materialien')action('Unterlagen verwalten und öffentlich freigeben');
+ else if(['rechtesimulator','users','system'].includes(active))action('Administratorfunktionen',u.rolle==='Administrator');
+ else if(active==='benachrichtigungen'){write=true;action('Eigene Popup-Einstellungen ändern');}
+ else if(active==='design'){action('Persönliches Design ändern');action('Globales Design ändern',Number(u.rechte.design||0)>=2);}
+ else if(active==='meldungen')action('Mitteilungen verwalten',can('mitteilungen',2));
+ else {feature(features,'Bereich öffnen / einsehen');action('Allgemeine Bearbeitungsrechte',write);if(active==='bef'||active==='pers'){action('POR-Freigaben entscheiden',can('por',2));action('DN-Anträge entscheiden',can('dnfreigabe',2));}if(active==='rl')action('Disziplinarrichtlinien bearbeiten',can('rlbearb',2));if(active==='rout')feature(features,'Routinearchiv einsehen',can('routarchiv'));if(active==='kue')feature(features,'Kündigungsarchiv einsehen',can('kuearchiv'));}
+ c.append(features);root.append(c);
+ demo.append(node('p','Nur Beispieldaten und deaktivierte Beispielaktionen. Nicht alle Unterfunktionen sind hier dargestellt.'),actions);
+ const table=node('table'),header=node('tr'),row=node('tr');for(const v of ['Eintrag','Status','Zugriff'])header.append(node('th',v));row.append(node('td','Beispieldatensatz'),node('td','Vorschau'),node('td',write?'Bearbeiten':'Einsehen'));const th=node('thead'),tb=node('tbody');th.append(header);tb.append(row);table.append(th,tb);demo.append(table);root.append(demo);renderRights(root);
+}
+function clearPreview(message){subject=null;shown=[];active='';signature='';$('menu').replaceChildren();$('target').replaceChildren();$('content').replaceChildren();$('preview').hidden=true;$('gate').hidden=false;$('gate').textContent=message;}
+async function load(){
+ if(busy)return;busy=true;$('refresh').disabled=true;
+ try{
+ if(!endpoint)throw Error('Bitte eine Rolle oder einen Zugang im Berechtigungs-Simulator auswählen.');
+ const res=await fetch(endpoint,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}});
+ if(!res.ok){if(res.status===401||res.status===403)throw Error('Nur angemeldete Administratoren dürfen diese Vorschau öffnen.');throw Error('Die ausgewählte Rolle oder der Zugang ist nicht verfügbar.');}
+ const payload=await res.json();if(!payload.user||!payload.rechte||typeof payload.login!=='boolean')throw Error('Ungültige Antwort des Servers.');
+ const next=JSON.stringify(payload);if(next===signature&&subject)return;
+ signature=next;subject={...payload,user:{...payload.user,rechte:payload.rechte}};const u=subject.user;
+ shown=subject.login&&!u.gesperrt&&!u.mussPasswortAendern?NAV_GRUPPEN.flatMap(g=>g.module).filter(m=>can(m)):[];
+ if(!shown.includes(active))active=shown.includes('dash')?'dash':shown[0]||'';
+ $('target').replaceChildren(node('strong',u.anzeigename),node('span',(subject.modus==='rolle'?'Rollenstandard':'Benutzerzugang')+' · '+u.rolle+(u.dienstnummer?' · DN '+u.dienstnummer:'')));
+ $('gate').hidden=true;$('preview').hidden=false;renderMenu();renderContent();
+ }catch(e){clearPreview(e.message);}finally{busy=false;$('refresh').disabled=false;}
+}
+$('refresh').onclick=load;document.addEventListener('visibilitychange',()=>{if(!document.hidden)void load();});void load();setInterval(()=>{if(!document.hidden)void load();},30000);
+</script></body></html>
