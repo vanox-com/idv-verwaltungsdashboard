@@ -19,7 +19,7 @@ function examIcon(key){
  const e=node('span',undefined,'exam-icon');e.setAttribute('aria-hidden','true');e.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(paths[key]||'')+'</svg>';return e;
 }
 const date=s=>s?new Date(s.replace(' ','T')+'Z').toLocaleString('de-DE'):'—';
-async function api(path='',data,signal){const r=await fetch(root+path,{credentials:'same-origin',cache:'no-store',signal,headers:{'Content-Type':'application/json','Accept':'application/json','X-Requested-With':'XMLHttpRequest'},...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)})});const j=await r.json().catch(()=>null);if(!j)throw Error('Der Server lieferte keine JSON-Antwort (HTTP '+r.status+'). Bitte Serverprotokoll prüfen.');if(!r.ok)throw Error((j.error||'HTTP '+r.status)+(j.referenz?' · Referenz '+j.referenz:''));return j;}
+async function api(path='',data,signal){const r=await fetch(root+path,{credentials:'same-origin',cache:'no-store',signal,headers:{'Content-Type':'application/json','Accept':'application/json','X-Requested-With':'XMLHttpRequest'},...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)})});const j=await r.json().catch(()=>null);if(!j)throw Error('Der Server lieferte keine JSON-Antwort (HTTP '+r.status+'). Bitte Serverprotokoll prüfen.');if(!r.ok){const e=Error((j.error||'HTTP '+r.status)+(j.referenz?' · Referenz '+j.referenz:''));e.status=r.status;throw e;}return j;}
 function examModelAnswer(explicit,feedback){
  const answer=String(explicit??'').trim(),original=String(feedback??'').trim();
  if(!answer)return original;
@@ -175,12 +175,12 @@ function open(host){
  }
  async function kiSettings(){
  const c=card('KI-Verbindung · nur Administratoren');c.classList.add('exam-form');main.append(c);
- c.append(node('p','Die Vorkorrektur verwendet einen OpenAI-API-Projektschlüssel. Keine Einrichtung im Hosting-Menü erforderlich. Der Schlüssel wird verschlüsselt in MySQL gespeichert und niemals wieder angezeigt.','mut'));
+ c.append(node('p','Die Vorkorrektur verwendet GroqCloud mit GPT-OSS 120B. Der Free-Tarif benötigt kein kostenpflichtiges Abonnement. Keine Einrichtung im Hosting-Menü erforderlich. Der Schlüssel wird verschlüsselt in MySQL gespeichert und niemals wieder angezeigt.','mut'));
  const state=node('p','Verbindung wird geprüft …');state.setAttribute('role','status');c.append(state);
- const link=node('a','OpenAI API-Schlüssel erstellen');link.href='https://platform.openai.com/api-keys';link.target='_blank';link.rel='noopener noreferrer';c.append(link);
- const input=node('input');input.type='password';input.autocomplete='new-password';input.placeholder='sk-…';input.maxLength=483;field(c,'Neuer API-Schlüssel',input);
- c.append(node('p','Beim Speichern wird eine kleine kostenpflichtige Testanfrage ohne echte Prüfungsdaten gesendet. Die API wird separat vom ChatGPT-Abonnement abgerechnet.','mut'));
- const show=s=>{state.textContent=s.bereit?'KI-Verbindung eingerichtet ('+(s.quelle==='panel'?'Panel':'Hoster')+').':s.hinweis||'Noch keine KI-Verbindung eingerichtet.';state.style.color=s.bereit?'var(--ok)':'var(--mut)';};
+ const link=node('a','Kostenlosen Groq API-Schlüssel erstellen');link.href='https://console.groq.com/keys';link.target='_blank';link.rel='noopener noreferrer';c.append(link);
+ const input=node('input');input.type='password';input.autocomplete='new-password';input.placeholder='gsk_…';input.maxLength=484;field(c,'Neuer API-Schlüssel',input);
+ c.append(node('p','Beim Speichern wird eine Testanfrage ohne echte Prüfungsdaten gesendet. Im Free-Tarif gelten die Groq-Nutzungslimits. Es gibt keinen kostenpflichtigen OpenAI-Fallback.','mut'));
+ const show=s=>{state.textContent=s.bereit?'GroqCloud verbunden · GPT-OSS 120B':s.hinweis||'Noch keine KI-Verbindung eingerichtet.';state.style.color=s.bereit?'var(--ok)':'var(--mut)';};
  const save=btn('Verbindung testen und speichern',()=>run(async()=>{const key=input.value.trim();if(!key)throw Error('API-Schlüssel eingeben.');if(location.protocol!=='https:')throw Error('Nur über HTTPS möglich.');save.disabled=true;state.textContent='Verbindung wird getestet …';try{const s=await api('/ki-einstellungen',{aktion:'speichern',apiKey:key});input.value='';show(s);message('KI-Verbindung gespeichert. Prüfer können die Vorkorrektur jetzt verwenden.');}catch(e){state.textContent='Verbindung nicht gespeichert: '+e.message;throw e;}finally{save.disabled=false;}}),'p');
  const remove=btn('Gespeicherte Verbindung entfernen',()=>run(async()=>{if(!confirm('Gespeicherten API-Schlüssel aus dem Panel entfernen?'))return;const s=await api('/ki-einstellungen',{aktion:'entfernen'});input.value='';show(s);message('Gespeicherte Verbindung entfernt.');}),'danger');
  c.append(save,remove);show(await api('/ki-einstellungen'));

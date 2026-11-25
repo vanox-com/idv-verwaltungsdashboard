@@ -33,6 +33,7 @@ jobs:
           node --check public/assets/pruefungen-korrektur.js
           node tests/pruefungen-korrektur.mjs
           php tests/pruefungen-ereignisse.php
+          php tests/pruefungen-groq.php
           node --check public/assets/pruefungen-praxis.js
           php tests/pruefungen-praxis.php
           php tests/pruefungen-logic.php
