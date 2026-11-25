@@ -1260,6 +1260,11 @@ html[data-portal-mode="hell"][data-portal-wallpaper="ohne"]:not([data-design-pre
 }
 
 
+html[data-portal-wallpaper="winter-funkstreife"]{--idv-photo:url("/assets/idv-winter-funkstreife.webp");--idv-photo-position:60% center;}
+html[data-portal-wallpaper="winter-lagebesprechung"]{--idv-photo:url("/assets/idv-winter-lagebesprechung.webp");--idv-photo-position:center center;}
+html[data-portal-wallpaper="winter-verkehrskontrolle"]{--idv-photo:url("/assets/idv-winter-verkehrskontrolle.webp");--idv-photo-position:60% center;}
+html[data-portal-wallpaper="winter-funkwagen"]{--idv-photo:url("/assets/idv-winter-funkwagen.webp");--idv-photo-position:center center;}
+html[data-portal-wallpaper="winter-einsatzteam"]{--idv-photo:url("/assets/idv-winter-einsatzteam.webp");--idv-photo-position:70% center;}
 /* Zusätzliche auswählbare IDV-Polizeimotive: 3 Nutzeraufnahmen.
    Ein vorhandenes Einsatzfoto bleibt bis zum Upload neuer Dateien als sichere
    Fallback-Ebene sichtbar. Login-Motiv und Bestandsdesign bleiben unverändert. */
@@ -1283,7 +1288,12 @@ html:is(
  [data-portal-wallpaper="streife-nacht"],
  [data-portal-wallpaper="streife-einsatz"],
  [data-portal-wallpaper="polizeiweste"],
- [data-portal-wallpaper="streifenbesprechung"]
+ [data-portal-wallpaper="streifenbesprechung"],
+ [data-portal-wallpaper="winter-funkstreife"],
+ [data-portal-wallpaper="winter-lagebesprechung"],
+ [data-portal-wallpaper="winter-verkehrskontrolle"],
+ [data-portal-wallpaper="winter-funkwagen"],
+ [data-portal-wallpaper="winter-einsatzteam"]
 ):not([data-design-preset="flori"]) #app{
  background-color:#111c2b!important;
  background-image:
@@ -1299,7 +1309,12 @@ html[data-portal-mode="hell"]:is(
  [data-portal-wallpaper="streife-nacht"],
  [data-portal-wallpaper="streife-einsatz"],
  [data-portal-wallpaper="polizeiweste"],
- [data-portal-wallpaper="streifenbesprechung"]
+ [data-portal-wallpaper="streifenbesprechung"],
+ [data-portal-wallpaper="winter-funkstreife"],
+ [data-portal-wallpaper="winter-lagebesprechung"],
+ [data-portal-wallpaper="winter-verkehrskontrolle"],
+ [data-portal-wallpaper="winter-funkwagen"],
+ [data-portal-wallpaper="winter-einsatzteam"]
 ):not([data-design-preset="flori"]) #app{
  background-color:#e8edf5!important;
  background-image:
@@ -1312,7 +1327,12 @@ html[data-portal-mode="hell"]:is(
   [data-portal-wallpaper="streife-nacht"],
   [data-portal-wallpaper="streife-einsatz"],
   [data-portal-wallpaper="polizeiweste"],
- [data-portal-wallpaper="streifenbesprechung"]
+ [data-portal-wallpaper="streifenbesprechung"],
+ [data-portal-wallpaper="winter-funkstreife"],
+ [data-portal-wallpaper="winter-lagebesprechung"],
+ [data-portal-wallpaper="winter-verkehrskontrolle"],
+ [data-portal-wallpaper="winter-funkwagen"],
+ [data-portal-wallpaper="winter-einsatzteam"]
  ):not([data-design-preset="flori"]) #app{background-attachment:scroll!important}
 }
 
@@ -1326,6 +1346,22 @@ html[data-portal-blur-active="true"] #app::before{
  background-attachment:scroll!important;
 }
 html[data-portal-wallpaper="ohne"][data-portal-blur-active="true"] #app::before{display:none}
+
+.design-group{margin:22px 0 0;min-width:0}.design-group-heading{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:0 0 10px}
+.design-group-heading h4{margin:0;font-size:14px;color:var(--txt)}.design-group-heading small{color:var(--mut);font-size:11px}
+.design-motif-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));gap:12px}
+.design-motif-grid button,.design-preset-grid button{position:relative;min-width:0;min-height:0;padding:7px;display:flex;flex-direction:column;align-items:stretch;gap:8px;background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:10px;text-align:left;white-space:normal}
+.design-motif-grid button:hover:not(:disabled),.design-preset-grid button:hover{border-color:var(--acc)}
+.design-motif-grid button[aria-pressed="true"]{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+.design-motif-grid button:disabled{opacity:.55;cursor:not-allowed}
+.design-motif-image{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:6px;display:block;background-color:#152333}
+.design-motif-name{font-size:12px;font-weight:650;padding:0 4px 4px;line-height:1.35;overflow-wrap:anywhere}
+.design-motif-grid button[aria-pressed="true"] .design-motif-name::after{content:' · Aktiv';color:var(--acc);font-weight:700}
+.design-motif-grid button[data-motif-unavailable] .design-motif-name::after{content:' · Datei fehlt';color:var(--mut)}
+.design-preset-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,150px),1fr));margin-top:0}
+.design-preset-grid button strong{padding:0 4px 4px;font-size:12px}
+.design-special-audio{margin-top:14px}.design-special-audio summary{cursor:pointer;color:var(--mut);font-size:12px}
+
 .design-range-caption{display:flex;justify-content:space-between;gap:12px;font-size:11px;color:var(--mut);margin:0 0 16px}
 #designSchleier,#designBlur{width:100%;accent-color:var(--acc)}
 /* Beförderungsverwaltung: POR-Queue und auf Wunsch eingeblendete Historie. */
@@ -6195,7 +6231,7 @@ function applyPortalDesign(d){
 
  document.documentElement.style.setProperty('--portal-veil',String(Math.min(.97,Math.max(.65,Number(d.schleier)/100))));
  document.documentElement.style.setProperty('--portal-rgb',r+','+g+','+b);
- document.documentElement.dataset.portalWallpaper=['wappen','verlauf','ohne','nachtblau','stahl','raster','licht','minimal','einsatzszene','streife-nacht','streife-einsatz','polizeiweste','streifenbesprechung'].includes(d.hintergrund)?d.hintergrund:'wappen';
+ document.documentElement.dataset.portalWallpaper=['wappen','verlauf','ohne','nachtblau','stahl','raster','licht','minimal','einsatzszene','streife-nacht','streife-einsatz','polizeiweste','streifenbesprechung','winter-funkstreife','winter-lagebesprechung','winter-verkehrskontrolle','winter-funkwagen','winter-einsatzteam'].includes(d.hintergrund)?d.hintergrund:'wappen';
 }
 const PORTAL_PRESETS={
  klassisch:{name:'Polizei-Klassik',akzent:'#508ac9',hintergrund:'wappen',extras:{modus:'dunkel',flaeche:'#182333',seitenleiste:'#0b111a',rahmen:'#26354b',schrift:'#e6edf6',sekundaer:'#8ea0b8',highlight:'#203958'}},
@@ -6208,6 +6244,29 @@ const PORTAL_PRESETS={
   schulzi:{name:'📼 Schulzi-Modus (Retro)',akzent:'#e1e1e1',hintergrund:'ohne',extras:{preset:'schulzi',modus:'dunkel',flaeche:'#191919',seitenleiste:'#090909',rahmen:'#aaa9a8',schrift:'#f7f7f7',sekundaer:'#b2b2b2',highlight:'#303030'}},
   chem:{name:'🍗 Chem-Stil (Psychedelic)',akzent:'#e6ff28',hintergrund:'ohne',extras:{preset:'chem',modus:'dunkel',flaeche:'#4b188a',seitenleiste:'#48005d',rahmen:'#f4ff30',schrift:'#fff8d6',sekundaer:'#d2f7f0',highlight:'#b71793'}}
 };
+
+const PORTAL_MOTIV_GRUPPEN=[{"title":"Schlichte Hintergründe","items":[["ohne","Einfarbig",null,"#151d28"],["verlauf","Dezenter Farbverlauf",null,"linear-gradient(135deg,#101923,#1b2d40)"],["nachtblau","Nachtblau",null,"radial-gradient(ellipse at 80% 20%,#224a77,#091320)"],["stahl","Stahlgrau",null,"linear-gradient(120deg,#404a56,#141b26)"],["raster","Digitales Raster",null,"repeating-linear-gradient(0deg,transparent 0 23px,#49658255 24px 25px),repeating-linear-gradient(90deg,#142a40 0 23px,#49658255 24px 25px)"],["licht","Blaue Lichtakzente",null,"radial-gradient(ellipse at 85% 8%,#568cc6,#0b1728)"],["minimal","Minimalistischer Verlauf",null,"linear-gradient(115deg,#192635,#273749,#14202c)"]]},{"title":"Polizei & Einsatz","items":[["wappen","Original-Polizeiwappen","idv-police-wallpaper.svg"],["einsatzszene","Polizei-Einsatzszene","idv-polizei-einsatzszene.webp"],["streife-nacht","Streifenwagen bei Nacht & Regen","idv-streife-nacht.webp"],["streife-einsatz","Streifenwagen an der Einsatzstelle","idv-streife-einsatz.webp"],["polizeiweste","Polizeiweste – Nahaufnahme","idv-polizeiweste.webp"],["streifenbesprechung","Polizei – Einsatzbesprechung","idv-einsatzbesprechung.webp"]]},{"title":"Winteredition · Nachtschicht","items":[["winter-funkstreife","Funkkontakt","idv-winter-funkstreife.webp"],["winter-lagebesprechung","Lagebesprechung","idv-winter-lagebesprechung.webp"],["winter-verkehrskontrolle","Verkehrskontrolle","idv-winter-verkehrskontrolle.webp"],["winter-funkwagen","Im Funkwagen","idv-winter-funkwagen.webp"],["winter-einsatzteam","Einsatzteam","idv-winter-einsatzteam.webp"]]}];
+function designMotivGalerie(d){
+ return PORTAL_MOTIV_GRUPPEN.map(g=>'<div class="design-group"><div class="design-group-heading"><h4>'+esc(g.title)+'</h4><small>'+g.items.length+' Motive</small></div><div class="design-motif-grid">'+g.items.map(([id,name,file,bg])=>{
+  const neu=id.startsWith('winter-');
+  return '<button type="button" data-design-motif="'+id+'" aria-pressed="'+(d.hintergrund===id)+'"'+(neu?' disabled':'')+'>'+(file?'<img class="design-motif-image" src="/assets/'+file+'" alt="" decoding="async"'+(neu?' data-design-new-photo':'')+'>':'<span class="design-motif-image" style="background:'+bg+'" aria-hidden="true"></span>')+'<span class="design-motif-name">'+esc(name)+'</span></button>';
+ }).join('')+'</div></div>').join('');
+}
+function designMotivStatus(){
+ const id=$('#designMotiv')?.value;
+ document.querySelectorAll('[data-design-motif]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.designMotif===id)));
+}
+function designMotivBilderPruefen(){
+ document.querySelectorAll('[data-design-new-photo]').forEach(img=>{
+  const b=img.closest('button');
+  const fertig=()=>{const ok=img.naturalWidth>0;b.disabled=!ok;b.toggleAttribute('data-motif-unavailable',!ok);if(!ok)img.style.visibility='hidden';};
+  if(img.complete)fertig();else{img.addEventListener('load',fertig,{once:true});img.addEventListener('error',fertig,{once:true});}
+ });
+}
+function designPresetGruppe(spezial){
+ return '<div class="design-preset-grid">'+Object.entries(PORTAL_PRESETS).filter(([id])=>['flori','schulzi','chem'].includes(id)===spezial).map(([id,p])=>'<button type="button" data-design-preset="'+id+'" title="'+esc(p.name)+'"><span class="design-preset-swatch" style="background:linear-gradient(125deg,'+p.extras.seitenleiste+','+p.extras.flaeche+')"><i style="background:'+p.akzent+'"></i></span><strong>'+esc(p.name)+'</strong></button>').join('')+'</div>';
+}
+
 async function ladeDesign(){
  const area=$('#inhalt');
  area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p>Lade Gestaltung …</p>';
@@ -6216,21 +6275,22 @@ async function ladeDesign(){
   ausgewaehltesDesignPreset=['flori','schulzi','chem'].includes(d.extras?.preset)?d.extras.preset:'';
   area.innerHTML='<h1>Dashboard-Designverwaltung</h1><p class="mut">Du kannst dein eigenes Design speichern. Administratoren können zusätzlich den Standard für alle vorgeben.</p>'+
    '<section class="box"><h3>Farb-Presets</h3><p class="mut">Ein Preset übernimmt passende Farben. Über Vorschau testen und anschließend persönlich speichern.</p>'+
-   '<div class="design-preset-grid">'+Object.entries(PORTAL_PRESETS).map(([id,p])=>'<button type="button" data-design-preset="'+id+'" title="'+esc(p.name)+'"><span class="design-preset-swatch" style="background:linear-gradient(125deg,'+p.extras.seitenleiste+','+p.extras.flaeche+')"><i style="background:'+p.akzent+'"></i></span><strong>'+esc(p.name)+'</strong></button>').join('')+'</div>'+ 
-   '<div class="flori-audio-test"><button type="button" id="floriMuhTest">🐮 Kräftiges MUUUH testen 🔊</button><button type="button" id="schulziRetroTest">📼 80er-Computerstart testen 🔊</button><button type="button" id="chemMusikTest">🍗 Chem-Musik starten / pausieren 🔊</button>'+
-   '<small>Echte Kuhaufnahme: <a href="https://commons.wikimedia.org/wiki/File:Mudchute_cow_1.ogg" target="_blank" rel="noopener noreferrer">Secretlondon / Wikimedia Commons</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 3.0</a>. Im Florimodus muhende Klicks.</small></div></section>'+
+   '<div class="design-group"><div class="design-group-heading"><h4>Standarddesigns</h4><small>6 Stile</small></div>'+designPresetGruppe(false)+'</div><div class="design-group"><div class="design-group-heading"><h4>Sonderdesigns</h4><small>3 Stile mit Effekten</small></div>'+designPresetGruppe(true)+'</div>'+
+   '<details class="design-special-audio"><summary>Soundeffekte testen</summary><div class="flori-audio-test"><button type="button" id="floriMuhTest">🐮 Kräftiges MUUUH testen 🔊</button><button type="button" id="schulziRetroTest">📼 80er-Computerstart testen 🔊</button><button type="button" id="chemMusikTest">🍗 Chem-Musik starten / pausieren 🔊</button>'+
+   '<small>Echte Kuhaufnahme: <a href="https://commons.wikimedia.org/wiki/File:Mudchute_cow_1.ogg" target="_blank" rel="noopener noreferrer">Secretlondon / Wikimedia Commons</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 3.0</a>. Im Florimodus muhende Klicks.</small></div></details></section>'+
    '<section class="box"><h3>Portal-Design</h3>'+
    '<label for="designAkzent">Akzentfarbe</label><input id="designAkzent" type="color" value="'+esc(d.akzent)+'" style="width:110px;height:48px;padding:5px">'+
    '<label for="designSchleier">Hintergrundschleier ('+Number(d.schleier)+' %)</label><input id="designSchleier" type="range" min="65" max="97" value="'+Number(d.schleier)+'">'+
    '<div class="design-range-caption"><span>65 % · weniger Schleier</span><span>97 % · stärker</span></div>'+
    '<label for="designBlur">Hintergrund-Weichzeichnung ('+portalBlurValue(d.extras?.hintergrundBlur)+' px)</label><input id="designBlur" type="range" min="0" max="24" step="1" value="'+portalBlurValue(d.extras?.hintergrundBlur)+'">'+
    '<div class="design-range-caption"><span>0 px · scharf</span><span>24 px · stark weichgezeichnet</span></div><p class="mut">Die Vorschau reagiert sofort. Texte, Tabellen und Karten bleiben scharf.</p>'+
-   '<label for="designMotiv">Hintergrundmotiv</label><select id="designMotiv">'+
-   [['wappen','Original-Polizeiwappen'],['verlauf','Dezenter Farbverlauf'],['nachtblau','Nachtblau'],['stahl','Stahlgrau'],['raster','Digitales Raster'],['licht','Blaue Lichtakzente'],['minimal','Minimalistischer Verlauf'],['einsatzszene','Polizei-Einsatzszene (Foto)'],['streife-nacht','Streifenwagen bei Nacht & Regen'],['streife-einsatz','Streifenwagen an der Einsatzstelle'],['polizeiweste','Polizeiweste (Nahaufnahme)'],['streifenbesprechung','Polizei – Einsatzbesprechung'],['ohne','Einfarbig dunkel']].map(([v,t])=>'<option value="'+v+'"'+(d.hintergrund===v?' selected':'')+'>'+t+'</option>').join('')+
-   '</select><p class="mut" id="designSpeicherStatus" role="status" aria-live="polite">Motivwahl wird automatisch für dein Konto gespeichert.</p><h3>Farben &amp; Anzeigemodus</h3><label for="designModus">Anzeigemodus</label><select id="designModus"><option value="dunkel"'+((d.extras?.modus||'dunkel')==='dunkel'?' selected':'')+'>Dunkel</option><option value="hell"'+(d.extras?.modus==='hell'?' selected':'')+'>Hell</option></select>'+
+   '</section><section class="box"><h3>Hintergrundmotive</h3><p class="mut">Klicke auf ein Motiv, um es direkt für dein Konto zu übernehmen.</p>'+designMotivGalerie(d)+'<select id="designMotiv" hidden style="display:none" aria-label="Hintergrundmotiv">'+
+   PORTAL_MOTIV_GRUPPEN.flatMap(g=>g.items).map(([v,t])=>'<option value="'+v+'"'+(d.hintergrund===v?' selected':'')+'>'+esc(t)+'</option>').join('')+
+   '</select><p class="mut" id="designSpeicherStatus" role="status" aria-live="polite">Motivwahl wird automatisch für dein Konto gespeichert.</p></section><section class="box"><h3>Farben &amp; Anzeigemodus</h3><label for="designModus">Anzeigemodus</label><select id="designModus"><option value="dunkel"'+((d.extras?.modus||'dunkel')==='dunkel'?' selected':'')+'>Dunkel</option><option value="hell"'+(d.extras?.modus==='hell'?' selected':'')+'>Hell</option></select>'+
    '<div class="design-colors">'+[['flaeche','Karten und Flächen'],['seitenleiste','Seitenleiste'],['rahmen','Rahmen und Trennlinien'],['schrift','Schriftfarbe'],['sekundaer','Sekundärtext'],['highlight','Hervorhebungen']].map(([key,title])=>'<label>'+title+'<input type="color" data-design-color="'+key+'" value="'+esc(d.extras?.[key]||((d.extras?.modus==='hell'?{flaeche:'#ffffff',seitenleiste:'#e9eff7',rahmen:'#c6d1df',schrift:'#15253b',sekundaer:'#52677f',highlight:'#e6f0ff'}:{flaeche:'#182333',seitenleiste:'#0b111a',rahmen:'#26354b',schrift:'#e6edf6',sekundaer:'#8ea0b8',highlight:'#203958'})[key]))+'"></label>').join('')+'</div>'+
    '<div class="actions"><button type="button" id="designPreview">Vorschau</button><button type="button" class="p" id="designPersonalSave">Mein Design speichern</button><button type="button" id="designReset">Admin-Standard übernehmen</button>'+(ME.rolle==='Administrator'?'<button type="button" id="designSave">Standard für alle speichern</button>':'')+'</div>'+
    '<p class="mut">Das Hintergrundmotiv wird sofort für dein Konto gespeichert. Farben, Schleier und Weichzeichnung werden zunächst nur als Vorschau angezeigt. Über „Mein Design speichern“ übernimmst du auch diese dauerhaft.</p></section>';
+  designMotivStatus();designMotivBilderPruefen();
  }catch(err){area.textContent='Design konnte nicht geladen werden: '+err.message;}
 }
 let ausgewaehltesDesignPreset='';
@@ -6270,7 +6330,7 @@ function designEingabeVorschau(ev){
  if(!document.querySelector('#designMotiv')||!document.querySelector('#designModus'))return;
  if(el.matches('#designMotiv,#designModus'))ausgewaehltesDesignPreset='';
  applyPortalDesign(aktuelleDesignWerte());
- if(el.id==='designMotiv'&&ev.type==='change')void designMotivSofortSpeichern();
+ if(el.id==='designMotiv'){designMotivStatus();if(ev.type==='change')void designMotivSofortSpeichern();}
  if(el.id==='designSchleier'){
   const lbl=document.querySelector('label[for="designSchleier"]');
   if(lbl)lbl.textContent='Hintergrundschleier ('+Number(el.value)+' %)';
@@ -6286,13 +6346,15 @@ function aktuelleDesignWerte(){
  return {akzent:$('#designAkzent').value,schleier:Number($('#designSchleier').value),hintergrund:$('#designMotiv').value,extras:{...(['flori','schulzi','chem'].includes(ausgewaehltesDesignPreset)?{preset:ausgewaehltesDesignPreset}:{}),modus:$('#designModus').value,hintergrundBlur:portalBlurValue($('#designBlur')?.value),...Object.fromEntries([...document.querySelectorAll('[data-design-color]')].map(x=>[x.dataset.designColor,x.value]))}};
 }
 document.addEventListener('click',async ev=>{
+ const motiv=ev.target.closest('[data-design-motif]');
+ if(motiv&&!motiv.disabled&&$('#designMotiv')){$('#designMotiv').value=motiv.dataset.designMotif;$('#designMotiv').dispatchEvent(new Event('change',{bubbles:true}));return;}
  const preset=ev.target.closest('[data-design-preset]');
  if(preset){
   const p=PORTAL_PRESETS[preset.dataset.designPreset];if(!p)return;
   ausgewaehltesDesignPreset=preset.dataset.designPreset;
   $('#designAkzent').value=p.akzent;$('#designMotiv').value=p.hintergrund;$('#designModus').value=p.extras.modus;
   document.querySelectorAll('[data-design-color]').forEach(input=>{input.value=p.extras[input.dataset.designColor]||input.value;});
-  applyPortalDesign(aktuelleDesignWerte());return;
+  applyPortalDesign(aktuelleDesignWerte());designMotivStatus();return;
  }
  if(ev.target.closest('#designPreview'))applyPortalDesign(aktuelleDesignWerte());
  if(ev.target.closest('#designPersonalSave')){try{const d=aktuelleDesignWerte();await persoDesignSpeichern(d);applyPortalDesign(d);alert('Persönliches Design gespeichert.');}catch(err){alert(err.message);}}
