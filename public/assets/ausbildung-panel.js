@@ -15,6 +15,7 @@
     const style=document.createElement('style');style.textContent=css+"\n.exam-list{display:grid;gap:10px}\n.exam-row{--track:#83a9e3;--track-bg:#264266;--track-border:#486c9d;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 14px;border:1px solid #ffffff18;border-left:3px solid var(--track);border-radius:10px;background:linear-gradient(110deg,var(--track-bg),#192536 48%);transition:border-color .15s,background-color .15s}\n.exam-row.pka{--track:#6ddccc;--track-bg:#173f42;--track-border:#387a79}\n.exam-row.kka{--track:#c1a4f4;--track-bg:#342b51;--track-border:#725b9c}\n.exam-row:hover{border-color:var(--track)}\n.exam-name{font-size:14px;font-weight:750;overflow-wrap:anywhere;color:#eff5fc}\n.exam-meta{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:5px;font-size:12px;color:#b6c5d7}\n.exam-track{display:inline-block;color:var(--track);background:var(--track-bg);border:1px solid var(--track-border);border-radius:5px;padding:1px 7px;font-size:11px;font-weight:800;letter-spacing:.05em}\n.exam-meter{height:6px;background:#ffffff13;border-radius:99px;margin-top:9px;overflow:hidden;max-width:310px}\n.exam-meter i{display:block;height:100%;border-radius:99px;background:var(--track)}\n.exam-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid;border-radius:7px;font-size:11px;font-weight:700;line-height:1.4;max-width:150px}\n.exam-status::before{content:\"\";height:6px;width:6px;border-radius:50%;background:currentColor;flex-shrink:0}\n.exam-status.incomplete{color:#ffd28c;background:#61451f55;border-color:#936b39}\n.exam-status.ready{color:#9ce8bc;background:#235a3b66;border-color:#4a9168}\n.exam-status.not-ready{color:#ffb1b1;background:#682d3766;border-color:#a75d66}\n.exam-status.unknown{color:#c7d2df;background:#37475b55;border-color:#65788d}\n@media(max-width:540px){.exam-row{grid-template-columns:1fr;gap:8px}.exam-status{justify-self:start;max-width:none}}\n";
     style.textContent+="\nbutton.exam-row{width:100%;text-align:left;color:inherit;line-height:inherit;cursor:pointer}button.exam-row:hover{border-color:var(--track);filter:brightness(1.09)}button.exam-row:focus-visible{outline:2px solid var(--track);outline-offset:3px}button.exam-row .exam-name,button.exam-row .exam-meter{display:block}button.exam-row .exam-side{display:flex;align-items:center;gap:9px}button.exam-row .exam-arrow{font-size:20px;color:var(--track);line-height:1} @media(max-width:540px){button.exam-row .exam-side{justify-content:space-between}}";
     style.textContent+="\n.overview-grid{align-items:start}.overview-side{display:grid;gap:14px;min-width:0}.overview-side>.card{margin-bottom:0}.structure-compact{padding:16px!important}.structure-compact h2,.pma-reminders h2{font-size:17px;margin:0 0 10px}.structure-track{display:grid;grid-template-columns:74px minmax(0,1fr);gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #ffffff12;font-size:12px}.structure-track:last-of-type{border:0}.structure-track b{color:#a9c9f2;font-size:12px}.structure-track span{color:var(--mut)}.structure-compact .structure-link{display:inline-block;font-size:12px;margin-top:8px}\n.pma-reminders{padding:16px!important;border-color:#8d56644d!important}.pma-reminders .reminder-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:11px}.pma-reminders .reminder-head h2{margin:0}.reminder-count{color:#e9a2ad;border:1px solid #b46f8055;border-radius:6px;padding:2px 7px;font-size:11px;white-space:nowrap}.reminder-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:12px}.reminder-stat{display:grid;gap:2px;padding:8px;border:1px solid #ffffff14;border-radius:8px;background:#ffffff03}.reminder-stat strong{font-size:19px;line-height:1.2;color:#e9c1cc;font-variant-numeric:tabular-nums}.reminder-stat span{font-size:10px;color:var(--mut)}.reminder-list{display:grid;gap:7px}.reminder-row{--urgency:#8095ab;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;text-align:left;width:100%;border:1px solid #ffffff16;border-left:3px solid var(--urgency);border-radius:8px;background:#101c2c;padding:9px 10px;color:var(--text);line-height:1.4}.reminder-row[data-stage=\"dringend\"]{--urgency:#ed8293}.reminder-row[data-stage=\"stimmen\"]{--urgency:#cc8496}.reminder-row[data-stage=\"warnung\"]{--urgency:#d4ac73}button.reminder-row:hover{border-color:var(--urgency);background:#1b293c}button.reminder-row:focus-visible{outline:2px solid var(--urgency);outline-offset:2px}.reminder-row .reminder-person{min-width:0;display:grid;gap:3px}.reminder-name{font-size:13px;font-weight:700;overflow-wrap:anywhere}.reminder-meta{font-size:11px;color:var(--mut)}.reminder-stage{font-size:10px;color:var(--urgency);font-weight:650}.reminder-right{display:grid;justify-items:end;align-content:center;gap:3px;min-width:0}.reminder-right strong{font-size:15px;color:#f0c4ce;font-variant-numeric:tabular-nums;white-space:nowrap}.reminder-own{font-size:10px;color:var(--mut);text-align:right}.reminder-note{font-size:11px;color:var(--mut);margin:10px 0 0}.reminder-empty{font-size:12px;color:#99d7bd;margin:0}\n@media(max-width:480px){.reminder-stat{padding:6px}.reminder-row{gap:6px}.structure-track{grid-template-columns:66px minmax(0,1fr)}}\n";
+    style.textContent+="\n.roomlog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}\n.roomlog-head h2{margin-bottom:4px}.roomlog-head p{margin:0 0 12px}\n.roomlog-filters{display:grid;grid-template-columns:minmax(0,2fr) minmax(140px,1fr);gap:10px;margin:12px 0}\n.roomlog-list{display:grid;gap:9px}.roomlog-entry{border:1px solid var(--edge);border-radius:10px;background:#ffffff03;overflow:hidden}\n.roomlog-entry[open]{border-color:#6385a8}.roomlog-entry summary{cursor:pointer;list-style:none;padding:13px 15px;display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) auto;gap:12px;align-items:center}\n.roomlog-entry summary::-webkit-details-marker{display:none}.roomlog-entry summary:hover{background:#ffffff07}.roomlog-entry summary:focus-visible{outline:2px solid var(--blue);outline-offset:-3px}\n.roomlog-cell{display:grid;gap:3px;min-width:0;overflow-wrap:anywhere}.roomlog-cell b{font-size:13px}.roomlog-cell small{font-size:11px}.roomlog-side{display:grid;justify-items:end;gap:5px}.roomlog-arrow{color:var(--blue)}.roomlog-entry[open] .roomlog-arrow{transform:rotate(90deg)}\n.roomlog-events{padding:0 15px 12px;border-top:1px solid var(--edge)}.roomlog-event{display:grid;grid-template-columns:145px minmax(0,1fr);gap:12px;padding:10px 0;border-bottom:1px solid #ffffff12}.roomlog-event:last-child{border:0}.roomlog-event p{margin:4px 0 0;overflow-wrap:anywhere;font-size:12px}.roomlog-event time{font-size:12px;color:var(--mut)}\n@media(max-width:850px){.roomlog-entry summary{grid-template-columns:repeat(2,minmax(0,1fr))}.roomlog-side{justify-items:start}}@media(max-width:480px){.roomlog-filters,.roomlog-event{grid-template-columns:1fr}.roomlog-entry summary{gap:9px;padding:11px}.roomlog-events{padding:0 11px 9px}}\n";
     shadow.append(style);
     const surface=document.createElement('div');surface.innerHTML=template;
     shadow.append(surface);
@@ -190,7 +191,7 @@ function render(){
  if(tab==='monitore'){r.innerHTML=monitors();updateVoteForm();}
  if(tab==='ausbilder')r.innerHTML=trainers();
  if(tab==='materialien')r.innerHTML=materials();
- if(tab==='unterricht'){r.innerHTML=classroom();const deck=r.querySelector('#lessonDeck'),person=r.querySelector('#lessonParticipant');if(deck&&person){const sync=()=>{const code=deck.selectedOptions[0]?.dataset.code;for(const opt of person.options){if(!opt.value)continue;const allowed=lessonParticipantFits(code,opt.dataset.track);opt.hidden=!allowed;opt.disabled=!allowed;}if(person.selectedOptions[0]?.disabled)person.value='';};deck.addEventListener('change',sync);sync();}}
+ if(tab==='unterricht'){r.innerHTML=classroom();filterClassroomLog();const deck=r.querySelector('#lessonDeck'),person=r.querySelector('#lessonParticipant');if(deck&&person){const sync=()=>{const code=deck.selectedOptions[0]?.dataset.code;for(const opt of person.options){if(!opt.value)continue;const allowed=lessonParticipantFits(code,opt.dataset.track);opt.hidden=!allowed;opt.disabled=!allowed;}if(person.selectedOptions[0]?.disabled)person.value='';};deck.addEventListener('change',sync);sync();}}
  if(data.stimmenDetailsBereit===false){
    const warning='<section class="card" style="border-color:#aa8051"><h3>Erweiterung für Stimmabgaben fehlt noch</h3>'+
      '<p>Für die neuen Pflichtangaben (Streifenfahrt, Datum, sonstige Leistungen, Bemerkung) muss ein Administrator nach einer gesicherten Datenbanksicherung eine rein additive SQL-Erweiterung installieren. Bestehende Stimmen bleiben erhalten.</p>'+
@@ -370,6 +371,65 @@ function materials(){
  '<label class="full">Google-Docs-, Slides-, Drive- oder Sites-Link<input type="url" name="url" required placeholder="https://docs.google.com/…"></label><div class="full flex"><button class="primary" type="submit">Verlinken</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></div>':'')+
  (editing?.type==='upload'?'<div class="card"><h2>Interne Datei hochladen</h2><p class="muted">PDF-, DOCX-, PPTX- oder XLSX-Dateien bis 40 MB. Dateien bleiben außerhalb des Webroots und sind nur nach Anmeldung abrufbar. Die große ZIP bitte zuerst entpacken und die Module einzeln hochladen.</p><form id="uploadForm" class="formgrid" enctype="multipart/form-data"><label>Modul<select name="modul_code"><option value="">Allgemein / Weiterbildung</option>'+data.module.map(m=>'<option value="'+esc(m.code)+'">'+esc(modName(m))+'</option>').join('')+'</select></label><label>Dokumenttyp<select name="typ"><option>Präsentation</option><option>Leitfaden</option><option>Prüfungsunterlage</option><option>Handout</option></select></label><label>Bezeichnung<input name="titel" required maxlength="200"></label><label class="full">Datei<input type="file" name="datei" accept=".pdf,.pptx,.docx,.xlsx" required></label><div class="full flex"><button class="primary" type="submit">Geschützt hochladen</button><button type="button" data-action="cancel-edit">Abbrechen</button></div></form></div>':'');
 }
+
+let roomLogSearch='',roomLogStatus='all';
+const roomLogOpen=new Set();
+function roomLogGroups(rows){
+ const groups=new Map();
+ for(const x of rows){
+   const raw=String(x.aktion||'');
+   const start=raw.match(/^Unterricht für (\S+) gestartet; Sitzungs-ID (\d+);?\s*/);
+   const other=raw.match(/^Unterrichtssitzung (\d+)\s*(?:·\s*)?/);
+   const id=start?.[2]||other?.[1]||'';
+   const key=id?'room-'+id:'event-'+String(x.id??groups.size);
+   let g=groups.get(key);
+   if(!g){g={key,id,events:[],code:'',trainer:'',person:'',topic:'',started:'',ended:false,joined:false,noJoin:false};groups.set(key,g);}
+   const type=start?'start':other&&/^beendet;/.test(raw.slice(other[0].length))?'end':other&&/^Einladungsplatz belegt;/.test(raw.slice(other[0].length))?'join':'other';
+   const payload=start?raw.slice(start[0].length):other?raw.slice(other[0].length):raw;
+   const snapshot=payload.match(/Teilnehmer:\s*(.*?);\s*Thema:\s*(.+)$/);
+   if(snapshot){
+     if(!g.person||type==='start')g.person=snapshot[1];
+     if(!g.topic||type==='start')g.topic=snapshot[2].replace(type==='join'?/ \(Identität nicht verifiziert\)$/:type==='end'?/; (?:Einladungsplatz belegt|Kein Beitritt erfasst)$/:/$^/,'');
+   }
+   if(type==='start'){g.code=start[1];g.trainer=x.benutzer||'';g.started=x.zeit||'';}
+   if(type==='end'){g.ended=true;if(!g.trainer)g.trainer=x.benutzer||'';if(/; Einladungsplatz belegt$/.test(raw))g.joined=true;if(/; Kein Beitritt erfasst$/.test(raw))g.noJoin=true;}
+   if(type==='join')g.joined=true;
+   g.events.push({...x,type});
+ }
+ return [...groups.values()];
+}
+function classroomLog(){
+ const groups=roomLogGroups(data.raumProtokoll||[]);
+ const labels={start:'Unterricht gestartet',join:'Einladungsplatz belegt',end:'Unterricht beendet',other:'Weiterer Vorgang'};
+ return '<section class="card" id="roomLog"><div class="roomlog-head"><div><h2>Unterrichtsraum-Protokoll</h2><p class="muted">Nach Unterrichtsräumen gruppiert · letzte 500 dokumentierte Vorgänge · Zeiten in deutscher Ortszeit</p></div><span class="pill">'+groups.length+' Räume / Gruppen · '+(data.raumProtokoll||[]).length+' Vorgänge</span></div>'+
+ '<div class="roomlog-filters"><label>Suche nach Teilnehmer, Ausbilder, Thema, Modul oder Raum-ID<input id="roomLogSearch" type="search" placeholder="Protokoll durchsuchen …" value="'+esc(roomLogSearch)+'"></label><label>Vorgangsstatus<select id="roomLogStatus">'+[['all','Alle Vorgänge'],['ended','Beendet'],['joined','Beitritt erfasst'],['nojoin','Beendet ohne Beitritt'],['open','Kein Ende protokolliert']].map(([value,label])=>'<option value="'+value+'"'+(roomLogStatus===value?' selected':'')+'>'+label+'</option>').join('')+'</select></label></div>'+
+ '<p class="muted" style="font-size:12px">Ein belegter Einladungsplatz bestätigt nicht die Identität des Teilnehmers. Ein fehlender Endeintrag bedeutet nicht, dass der Raum noch aktiv ist. Ältere Ereignisse können außerhalb des Anzeigelimits liegen.</p>'+
+ '<p id="roomLogCount" class="muted" aria-live="polite"></p><div class="roomlog-list">'+groups.map(g=>{
+   const state=g.ended?'Beendet':g.joined?'Beitritt erfasst':g.started?'Erstellt':'Vorgang erfasst';
+   const participant=g.person||'Nicht erfasst';
+   const join=g.joined?'Einladungsplatz belegt':g.noJoin?'Kein Beitritt erfasst':'Kein Beitritt dokumentiert';
+   const search=[g.id,g.code,g.topic,g.trainer,g.person,...g.events.map(e=>e.aktion+' '+e.benutzer)].join(' ').toLocaleLowerCase('de-DE');
+   return '<details class="roomlog-entry" data-roomlog-key="'+esc(g.key)+'" data-roomlog-search="'+esc(search)+'" data-ended="'+Number(g.ended)+'" data-joined="'+Number(g.joined)+'" data-nojoin="'+Number(g.noJoin&&!g.joined)+'"'+(roomLogOpen.has(g.key)?' open':'')+'><summary>'+
+     '<span class="roomlog-cell"><small>'+esc(g.code?lessonCodeLabel(g.code):'Modul nicht erfasst')+(g.id?' · Raum #'+esc(g.id):'')+'</small><b>'+esc(g.topic||'Thema nicht erfasst')+'</b></span>'+
+     '<span class="roomlog-cell"><small>Teilnehmerzuordnung</small><b>'+esc(participant)+'</b><small>'+esc(join)+'</small></span>'+
+     '<span class="roomlog-cell"><small>Ausbilder</small><b>'+esc(g.trainer||'Nicht erfasst')+'</b><small>'+esc(g.started?'Start: '+fmtTimestamp(g.started):'Letzter Vorgang: '+fmtTimestamp(g.events[0]?.zeit))+'</small></span>'+
+     '<span class="roomlog-side"><span class="pill '+(g.ended?'':g.joined?'good':'warn')+'">'+esc(state)+'</span><small>'+g.events.length+' Vorgänge <span class="roomlog-arrow" aria-hidden="true">›</span></small></span></summary>'+
+     '<div class="roomlog-events">'+[...g.events].reverse().map(e=>'<div class="roomlog-event"><time>'+esc(fmtTimestamp(e.zeit))+'</time><div><b>'+esc(labels[e.type])+'</b> <small>· '+esc(e.benutzer||'Unbekannt')+'</small><p class="muted">'+esc(e.aktion)+'</p></div></div>').join('')+'</div></details>';
+ }).join('')+'</div><p id="roomLogEmpty" class="muted" hidden>Keine passenden protokollierten Vorgänge.</p></section>';
+}
+function filterClassroomLog(){
+ const log=el('#roomLog');if(!log)return;
+ const query=roomLogSearch.trim().toLocaleLowerCase('de-DE');let count=0;
+ const entries=log.querySelectorAll('.roomlog-entry');
+ for(const entry of entries){
+   const d=entry.dataset;
+   const match=(!query||d.roomlogSearch.includes(query))&&(roomLogStatus==='all'||(roomLogStatus==='ended'&&d.ended==='1')||(roomLogStatus==='joined'&&d.joined==='1')||(roomLogStatus==='nojoin'&&d.nojoin==='1')||(roomLogStatus==='open'&&d.ended==='0'));
+   entry.hidden=!match;if(match)count++;
+ }
+ el('#roomLogCount').textContent=count+' von '+entries.length+' Gruppen angezeigt';
+ el('#roomLogEmpty').hidden=count!==0;
+}
+
 function classroom(){
  const decks=(data.materialien||[]).filter(d=>d.modul_code && /^https:\/\/docs\.google\.com\/presentation\//.test(d.url||'') &&
    (data.leitung||data.eigeneKompetenzen.includes(d.modul_code)));
@@ -397,7 +457,7 @@ function classroom(){
  '<td>'+esc(String(r.ablauf||'').slice(0,16))+'</td><td>'+esc(r.zuordnung||'Teilnehmer nicht erfasst')+'<br><small class="muted">'+(Number(r.teilnehmer)?'Einladungsplatz belegt':'Wartet')+'</small></td><td>'+(!Number(r.aktiv)?'<span class="pill">Abgeschlossen</span>':'<span class="pill good">Aktiv</span>')+'</td>'+
  '<td>'+(Number(r.aktiv)?'<button class="compact" data-action="open-room" data-id="'+Number(r.id)+'">Öffnen</button> <button class="compact danger" data-action="end-room" data-id="'+Number(r.id)+'">Beenden</button>':'')+'</td></tr>').join('')+
  '</tbody></table></div>'+(data.raeume?.length?'':'<p class="muted">Keine aktiven Unterrichtsräume.</p>')+'</div>';
- if(data.raumProtokollErlaubt)out+='<div class="card"><h2>Unterrichtsraum-Protokoll</h2><p class="muted">Nur Leitung und Administratoren · letzte 500 dokumentierte Raumvorgänge. Teilnehmerzuordnung und Beitritt werden getrennt protokolliert; Einladungslinks verifizieren keine Identität.</p><div class="tablewrap"><table><thead><tr><th>Zeit (UTC)</th><th>Ausbilder</th><th>Vorgang / Raum-ID / Teilnehmer / Thema</th></tr></thead><tbody>'+ (data.raumProtokoll||[]).map(x=>'<tr><td>'+esc(String(x.zeit||'').slice(0,19))+'</td><td>'+esc(x.benutzer)+'</td><td>'+esc(x.aktion)+'</td></tr>').join('')+'</tbody></table></div>'+(!data.raumProtokoll?.length?'<p class="muted">Keine protokollierten Vorgänge.</p>':'')+'</div>';
+ if(data.raumProtokollErlaubt)out+=classroomLog();
  return out;
 }
 async function act(fn){
@@ -554,7 +614,10 @@ el('#reload').addEventListener('click',()=>{
  if(voteDraftDirty()&&!confirm('Nicht gespeicherte Prüfungs- oder Stimmangaben verwerfen und aktuelle Daten laden?'))return;
  void act(refreshSelected);
 });
+shadow.addEventListener('input',e=>{if(e.target?.id==='roomLogSearch'){roomLogSearch=e.target.value;filterClassroomLog();}});
+shadow.addEventListener('toggle',e=>{const key=e.target?.dataset?.roomlogKey;if(key&&e.target.isConnected){if(e.target.open)roomLogOpen.add(key);else roomLogOpen.delete(key);}},true);
 shadow.addEventListener('change',e=>{
+ if(e.target?.id==='roomLogStatus'){roomLogStatus=e.target.value;filterClassroomLog();}
  if(['vote','voteReason'].includes(e.target?.id))updateVoteForm();
  if(e.target?.id==='trainerPerson'){
    const f=e.target.form;
@@ -569,7 +632,7 @@ shadow.addEventListener('change',e=>{
 
 load();
 const refreshTimer=setInterval(()=>{
- if(host.isConnected && document.visibilityState==='visible' && !busy && !editing && !selected && !(tab==='unterricht'&&(el('#lessonParticipant')?.value||el('#lessonCreateForm')?.contains(document.activeElement))) && ['uebersicht','monitore','unterricht'].includes(tab))
+ if(host.isConnected && document.visibilityState==='visible' && !busy && !editing && !selected && !(tab==='unterricht'&&(el('#lessonParticipant')?.value||el('#lessonCreateForm')?.contains(shadow.activeElement)||el('#roomLog')?.contains(shadow.activeElement))) && ['uebersicht','monitore','unterricht'].includes(tab))
    void load();
 },25000);
 const selectedTimer=setInterval(()=>{
