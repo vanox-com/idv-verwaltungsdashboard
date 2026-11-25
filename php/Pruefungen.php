@@ -65,8 +65,9 @@ function pruefungVorlage(array $b): array {
     $fragen=$b['fragen']??null;
     if(!is_array($fragen)||!array_is_list($fragen)||!count($fragen)||count($fragen)>200)fail(400,'1 bis 200 Fragen erforderlich');
     $out=[];$sum=0;$bildBudget=1000000;
-    foreach($fragen as $f){
-        if(!is_array($f))fail(400,'Ungültige Frage');
+    foreach($fragen as $index=>$f){
+        $prefix='Frage '.($index+1).': ';
+        if(!is_array($f))fail(400,$prefix.'Ungültige Frage');
         $typ=$f['typ']??'';if(!in_array($typ,['single','multiple','text','praxis'],true)||($art==='praxis')!==($typ==='praxis'))fail(400,'Unzulässiger Fragetyp');
         $punkte=pruefungNum($f['punkte']??null,0,1000);$sum+=$punkte;
         $q=['typ'=>$typ,'titel'=>pruefungText($f['titel']??null,12000),'punkte'=>$punkte,'muster'=>pruefungText($f['muster']??'',16000,false),'optionen'=>[],'richtig'=>[]];
@@ -78,14 +79,14 @@ function pruefungVorlage(array $b): array {
         foreach($images as $img){$valid=pruefungBild($img,$bildBudget);if($valid!==null)$q['bilder'][]=$valid;}
         if(in_array($typ,['single','multiple'],true)){
             $opt=$f['optionen']??null;$correct=$f['richtig']??null;
-            if(!is_array($opt)||!array_is_list($opt)||count($opt)<2||count($opt)>50||!is_array($correct)||!array_is_list($correct)||($punkte>0&&!count($correct))||($typ==='single'&&count($correct)>1))fail(400,'Antwortmöglichkeiten oder Lösung fehlen');
+            if(!is_array($opt)||!array_is_list($opt)||count($opt)<2||count($opt)>50||!is_array($correct)||!array_is_list($correct)||($punkte>0&&!count($correct))||($typ==='single'&&count($correct)>1))fail(400,$prefix.'Antwortmöglichkeiten oder Lösung fehlen');
             foreach($opt as $o)$q['optionen'][]=pruefungText($o,3000);
             $ob=$f['optionBilder']??[];
-            if(!is_array($ob)||!array_is_list($ob)||($ob&&count($ob)!==count($opt)))fail(400,'Antwortbilder passen nicht zu Optionen');
+            if(!is_array($ob)||!array_is_list($ob)||($ob&&count($ob)!==count($opt)))fail(400,$prefix.'Antwortbilder passen nicht zu Optionen');
             foreach($opt as $i=>$o)$q['optionBilder'][]=pruefungBild($ob[$i]??null,$bildBudget);
-            foreach($correct as $i){if(!is_int($i)||!isset($opt[$i])||in_array($i,$q['richtig'],true))fail(400,'Ungültiger Lösungsschlüssel');$q['richtig'][]=$i;}
+            foreach($correct as $i){if(!is_int($i)||!isset($opt[$i])||in_array($i,$q['richtig'],true))fail(400,$prefix.'Ungültiger Lösungsschlüssel');$q['richtig'][]=$i;}
             sort($q['richtig']);
-        }elseif($punkte>0&&$q['muster']==='')fail(400,'Musterlösung bzw. Bewertungsmaßstab fehlt');
+        }elseif($punkte>0&&$q['muster']==='')fail(400,$prefix.'Musterlösung bzw. Bewertungsmaßstab fehlt');
         $out[]=$q;
     }
     if($sum<=0||$sum>99999)fail(400,'Gesamtpunktzahl muss größer als 0 und höchstens 99999 sein');
