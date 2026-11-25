@@ -15,7 +15,7 @@ $leiter=['id'=>3,'rolle'=>'Ausbildungsleitung'];
 checkAus(IDV\hasPanelLoginRole('Ausbilder'),'trainer login enabled');
 checkAus(IDV\hasPanelLoginRole('Ausbildungsleitung'),'lead login enabled');
 checkAus(!IDV\hasPanelLoginRole('Mitarbeiter'),'normal staff still cannot sign in');
-checkAus(IDV\rights($role)===['ausbildung'=>1,'dash'=>1,'design'=>1],'trainer must have isolated training and personal design rights');
+checkAus(IDV\rights($role)===['ausbildung'=>1,'dash'=>1,'design'=>1,'assessment'=>0],'trainer must have isolated training and personal design rights');
 checkAus(IDV\rights($leiter)===['ausbildung'=>2,'dash'=>1,'design'=>1],'lead must have isolated training management and personal design rights');
 checkAus(IDV\ausbildungRechtsstufe('Leitungsdienst',0,null)===2,'Leitungsdienst always full training access');
 checkAus(IDV\ausbildungRechtsstufe('Leitungsdienst',0,0)===2,'Leitungsdienst training access is fixed');
@@ -80,3 +80,8 @@ $almost=array_replace($base,['moduleFertig'=>7,'rsa'=>true]);
 checkAus(IDV\ausbildungPmaHinweis('2026-11-25',$almost,'2026-11-25')['stufe']==='stimmen','immediate after modules and RSA');
 checkAus(IDV\ausbildungPmaHinweis('2026-11-15',array_replace($base,['stimmenSaldo'=>2.5]),'2026-11-25')===null,'no reminder once vote threshold reached');
 echo "Ausbildung: isolated roles, PMA votes, PKA/KKA module rules OK\n";
+
+// Recruiting trainers is based on rank, not the personnel group.
+foreach(['Polizeiobermeister','Polizeihauptmeister','Polizeihauptmeister AZ','Polizeihauptmeister mit Amtszulage','Polizeikommissar','Kriminalkommissar','Polizeioberkommissar','Kriminaloberkommissar','Polizeioberkommissar der Leitung','Polizeihauptkommissar','Kriminalhauptkommissar','Polizeihauptkommissar A12','Erster Polizeihauptkommissar','Polizeiratanwärter','Polizeirat','Polizeioberrat','Polizeidirektor','Leitender Polizeidirektor','Polizeivizepräsident','Polizeipräsident'] as $rang)checkAus(IDV\ausbildungTrainerRangErlaubt($rang),'eligible trainer '.$rang);
+foreach(['Polizeimeisteranwärter','Polizeimeister','Polizeikommissaranwärter','Kriminalkommissaranwärter',''] as $rang)checkAus(!IDV\ausbildungTrainerRangErlaubt($rang),'ineligible trainer '.$rang);
+checkAus(IDV\ausbildungTrainerRangErlaubt(' POLIZEIOBERMEISTER '),'normalized trainer rank');

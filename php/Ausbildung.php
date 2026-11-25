@@ -239,8 +239,12 @@ function ausbildungKompetenzen($value): array {
     }
     return array_keys($result);
 }
+function ausbildungTrainerRangErlaubt(string $rang): bool {
+    $ranks=['polizeiobermeister','polizeihauptmeister','polizeihauptmeister az','polizeihauptmeister mit amtszulage','polizeikommissar','kriminalkommissar','polizeioberkommissar','kriminaloberkommissar','polizeioberkommissar der leitung','polizeihauptkommissar','kriminalhauptkommissar','polizeihauptkommissar a12','erster polizeihauptkommissar','polizeiratanwärter','polizeirat','polizeioberrat','polizeidirektor','leitender polizeidirektor','polizeivizepräsident','polizeipräsident'];
+    $normal=strtolower(trim(preg_replace('/\\s+/u',' ',$rang)??$rang));
+    return in_array($normal,$ranks,true);
+}
 function ausbildungTrainerPersonal(?int $nr=null,bool $lock=false): array {
-    $ranks=['Polizeiobermeister','Polizeihauptmeister','Polizeihauptmeister AZ','Polizeihauptmeister mit Amtszulage','Polizeikommissar','Kriminalkommissar','Polizeioberkommissar','Kriminaloberkommissar','Polizeihauptkommissar','Kriminalhauptkommissar','Polizeihauptkommissar A12','Erster Polizeihauptkommissar','Polizeiratanwärter','Polizeirat','Polizeioberrat','Polizeidirektor','Leitender Polizeidirektor','Polizeivizepräsident','Polizeipräsident'];
     $cols=array_column(sql("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='personal' AND COLUMN_NAME IN ('email','e_mail','mail','email_adresse')"),'COLUMN_NAME');
     $emailExpr="''";
     foreach(['email','e_mail','mail','email_adresse'] as $col)if(in_array($col,$cols,true)){$emailExpr='p.`'.$col.'`';break;}
@@ -250,7 +254,7 @@ function ausbildungTrainerPersonal(?int $nr=null,bool $lock=false): array {
         ($nr!==null?' AND p.personalnummer=?':'')." ORDER BY p.nachname,p.vorname,p.personalnummer".($lock?' FOR UPDATE':''),$nr!==null?[$nr]:[]);
     $result=[];
     foreach($rows as $p){
-        if(!in_array(trim((string)$p['dienstgrad']),$ranks,true))continue;
+        if(!ausbildungTrainerRangErlaubt((string)$p['dienstgrad']))continue;
         $first=trim((string)$p['vorname']);$last=trim((string)$p['nachname']);$n=(int)$p['personalnummer'];
         if($n<1||$first===''||$last===''||$first==='-'||$last==='-')continue;
         preg_match('/^./u',$first,$a);preg_match('/^./u',$last,$b);

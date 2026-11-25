@@ -336,10 +336,14 @@ function trainerForm(t){
  const preset=(!t&&editing?.personal)||{};
  const candidates=data.ausbilderKandidaten||[];
  const chosen=!t?candidates.find(p=>Number(p.personalnummer)===Number(preset.personalnummer??preset.dienstnummer)):null;
+ const presetNr=Number(preset.personalnummer??preset.dienstnummer??0);
+ const existing=!t&&presetNr?data.ausbilder.find(x=>Number(x.dienstnummer)===presetNr):null;
+ const missingPreset=!t&&presetNr>0&&!chosen;
+ const reason=existing?'Für DN '+presetNr+' gibt es bereits ein aktives Ausbilderprofil (Login: '+(existing.login_dienstnummer||'AUS-'+presetNr)+'). Bitte das bestehende Profil in der Liste bearbeiten.':'DN '+presetNr+' ist derzeit nicht für die Neuanlage verfügbar. Prüfe den Personalstatus, den Dienstgrad, die vollständigen Namensdaten und unter Benutzer & Rollen, ob bereits ein AUS-Zugang existiert (auch gesperrte Zugänge zählen).';
  const codes=data.module.map(m=>m.code),current=json(t?.kompetenzen);
  const funcs=['Ausbildungsleitung','stv. Ausbildungsleitung','Leitungsdienst','Ausbilder gehobener Dienst','Ausbilder mittlerer Dienst','Ausbilder auf Probe'];
- return '<div class="card"><h2>'+(t?'Ausbilder bearbeiten':'Neuen Ausbilderzugang anlegen')+'</h2><p class="muted">Die Personalakte bleibt unverändert. Für jeden Ausbilder wird ein neuer, eigenständiger Login erstellt: AUS-&lt;Dienstnummer&gt;. Beispielsweise bekommt die Ausbildungs-DN 13 den Login AUS-13. Vorhandene Polizeikonten, Dienstnummern, Passwörter und Berechtigungen bleiben unverändert.</p><form id="trainerForm" class="formgrid">'+
- (!t?'<label class="full">Person aus dem Personalstamm auswählen<select id="trainerPerson" name="personalnummer" required><option value="">Bitte auswählen · ab Polizeiobermeister</option>'+
+ return '<div class="card"><h2>'+(t?'Ausbilder bearbeiten':'Neuen Ausbilderzugang anlegen')+'</h2><p class="muted">Die Personalakte bleibt unverändert. Für jeden Ausbilder wird ein neuer, eigenständiger Login erstellt: AUS-&lt;Dienstnummer&gt;. Beispielsweise bekommt die Ausbildungs-DN 13 den Login AUS-13. Vorhandene Polizeikonten, Dienstnummern, Passwörter und Berechtigungen bleiben unverändert.</p>'+(missingPreset?'<p class="callout" role="status">'+esc(reason)+'</p>':'')+'<form id="trainerForm" class="formgrid">'+
+ (!t?'<label class="full">Person aus dem Personalstamm auswählen<select id="trainerPerson" name="personalnummer" required><option value="">Bitte auswählen · ab Polizeiobermeister (alle Gruppen)</option>'+
  candidates.map(p=>'<option value="'+Number(p.personalnummer)+'" '+(chosen&&Number(chosen.personalnummer)===Number(p.personalnummer)?'selected':'')+'>'+esc(p.dienstnummer+' · '+p.name+' · '+p.rang)+'</option>').join('')+
  '</select><small>'+ (candidates.length?candidates.length+' geeignete Personen ohne bestehenden AUS-Zugang.':'Keine geeigneten Personen ohne bestehenden Ausbildungszugang verfügbar.')+'</small></label><input type="hidden" name="personal_quelle" value="'+esc(chosen?.quelle||'')+'">':'')+
  '<label>Dienstnummer<input name="dienstnummer" required maxlength="32" value="'+esc(t?.dienstnummer||chosen?.dienstnummer||'')+'" readonly></label>'+
