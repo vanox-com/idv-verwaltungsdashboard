@@ -327,6 +327,11 @@ function run(): void {
 
         // Unknown routes must fail closed, and no PHP code may delegate to PostgreSQL.
         $u=requireLogin();
+        // Shared, read-only welcome content is available to every authenticated panel role.
+        if($method==='GET'&&$uri==='/api/dashboard-figur'){
+            require_once __DIR__.'/Settings.php';
+            dashboardFigurDispatch($u,$method,$uri);
+        }
         // Nur Ausbildungs-APIs sind für die isolierten Ausbildungsrollen zulässig.
         if(in_array($u['rolle'],['Ausbildungsleitung','Ausbilder'],true)){
             if($method==='GET'&&$uri==='/api/bootstrap'){
@@ -334,7 +339,7 @@ function run(): void {
                 // Polizeirat-, Disziplinar- oder sonstige Verwaltungsdaten.
                 require_once __DIR__.'/Settings.php';
                 respond(200,['user'=>sessionApiUser($u),'daten'=>['dashboard'=>['summary'=>new \stdClass(),
-                    'layout'=>['items'=>[],'version'=>0],'jonasSpruch'=>dashboardSpruchRead()]]]);
+                    'layout'=>['items'=>[],'version'=>0],'jonasSpruch'=>dashboardSpruchDefault(),'figur'=>dashboardFigurPublic()]]]);
             }
             $personalDesign=($method==='GET'&&$uri==='/api/portal-design')
                 ||(in_array($method,['PUT','DELETE'],true)&&$uri==='/api/portal-design/personal');

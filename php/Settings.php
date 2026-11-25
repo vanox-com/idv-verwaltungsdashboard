@@ -113,7 +113,10 @@ function dashboardSpruchSave(array $u): never {
     respond(200,['spruch'=>$spruch]);
 }
 
+require_once __DIR__.'/DashboardFigur.php';
+
 function dispatchSettings(array $u,string $method,string $uri): bool {
+    if(dashboardFigurDispatch($u,$method,$uri))return true;
     if($method==='PUT'&&$uri==='/api/dashboard-spruch')dashboardSpruchSave($u);
     if($method==='GET'&&$uri==='/api/benachrichtigungs-einstellungen'){
         if(!notificationSettingsAllowed($u))fail(403,'Keine Berechtigung für Benachrichtigungseinstellungen');

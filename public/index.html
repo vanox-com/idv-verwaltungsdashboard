@@ -991,6 +991,50 @@ aside #menu .sidebar-gruppe-inhalt a.on{text-decoration:none!important}
 /* The president is a separate transparent illustration, never baked into the editable text. */
 #inhalt>.hello.hello--jonas{display:grid;grid-template-columns:minmax(0,1fr) minmax(270px,38%);gap:20px;align-items:center;min-height:196px;padding-right:0}
 #inhalt>.hello.hello--jonas::after{display:none}
+
+/* Separate transparent portraits, cropped from the shared image atlas. */
+.hello-jonas-portrait.figur-sprite,.figur-thumb.figur-sprite{display:block;overflow:hidden;width:auto;aspect-ratio:var(--sprite-ratio);max-width:100%}
+.figur-sprite{position:relative;--sprite-offset:0%;--sprite-ratio:1}
+.figur-sprite--schneider{--sprite-ratio:765/724;--sprite-offset:0%}
+.figur-sprite--renner{--sprite-ratio:710/724;--sprite-offset:-35.2209945%}
+.figur-sprite--lou{--sprite-ratio:697/724;--sprite-offset:-67.9097606%}
+.figur-sprite>img{display:block;height:100%;width:auto;max-width:none;transform:translateX(var(--sprite-offset));pointer-events:none}
+.hello-jonas .figur-sprite{position:absolute;right:-8px;bottom:-26px}
+.hello-jonas-message{max-width:calc(100% - 155px);margin-right:155px}
+.figur-category{display:block;font-size:10px;font-weight:800;letter-spacing:.045em;text-transform:uppercase;color:#446ba0;margin-bottom:4px}
+.figur-bubble--denken{border-radius:24px}
+.figur-bubble--denken::after{border-radius:50%;width:10px;height:10px;right:-10px;bottom:3px;box-shadow:8px 7px 0 -2px #eaf1fb;transform:none;border:1px solid #a8c0de}
+.figur-bubble--kompakt{padding:7px 9px;border-radius:7px}
+.figur-bubble--kompakt::after{display:none}
+#dashboardFigurDialog{width:min(980px,95vw);max-height:90dvh;overflow:auto;background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:16px;padding:0;box-shadow:0 18px 65px #0008}
+#dashboardFigurDialog::backdrop{background:#0009}
+.figur-admin-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:20px 24px;border-bottom:1px solid var(--line)}
+.figur-admin-head h2,.figur-section h3{margin:0 0 5px}
+.figur-admin-head p,.figur-pool-head p{margin:0}
+.figur-admin-body{padding:18px 24px}
+.figur-admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.figur-section{border:1px solid var(--line);border-radius:12px;padding:15px;margin-bottom:14px;min-width:0}
+.figur-section select,.figur-section textarea{width:100%;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:7px;padding:8px;font:inherit;box-sizing:border-box}
+.figur-section textarea{resize:vertical}
+.figur-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+.figur-picker button{display:flex;flex-direction:column;align-items:center;justify-content:end;gap:5px;padding:8px 4px;min-width:0;white-space:normal;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:9px}
+.figur-picker button[aria-pressed=true]{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+.figur-thumb{height:92px;width:100%;max-width:100%;object-fit:contain;object-position:center bottom}
+.figur-picker strong{font-size:11px;text-align:center}
+.figur-checks{display:flex;gap:7px 16px;flex-wrap:wrap;margin:8px 0}
+.figur-checks label,.figur-pool-row label{display:flex;align-items:center;gap:5px;margin:0;font-size:12px}
+.figur-checks input,.figur-pool-row input{width:auto;margin:0}
+.figur-preview{margin:12px 0;background:#233248;border:1px solid var(--line);border-radius:10px;overflow:hidden;padding:10px 0 0 12px;max-width:440px;margin-left:auto}
+.figur-preview .hello-jonas{min-height:180px}
+.figur-pool-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+#figurPool{max-height:390px;overflow:auto;margin-top:8px;display:grid;gap:7px}
+.figur-pool-row{display:grid;grid-template-columns:140px minmax(0,1fr) 65px auto;align-items:center;gap:8px;padding:8px;border:1px solid var(--line);border-radius:8px}
+.figur-pool-row textarea{min-height:54px}
+.figur-admin-foot{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap;position:sticky;bottom:-18px;background:var(--panel);border-top:1px solid var(--line);padding:12px 0}
+#figurStatus{flex:1;min-width:140px;font-size:12px}
+@media(max-width:1150px){.hello-jonas-message{max-width:calc(100% - 135px);margin-right:135px}}
+@media(max-width:680px){.figur-admin-grid{grid-template-columns:1fr}.figur-admin-body,.figur-admin-head{padding:13px}.figur-pool-row{grid-template-columns:1fr 1fr}.figur-pool-row textarea{grid-column:1/-1;grid-row:2}.hello-jonas .figur-sprite{bottom:0;right:0}.hello-jonas-message{max-width:min(245px,calc(100% - 120px));margin-right:120px}.figur-preview .hello-jonas{margin-right:0}}
+
 .hello--jonas .hello-copy{position:relative;z-index:1;min-width:0}
 .hello-jonas{position:relative;isolation:isolate;align-self:stretch;min-height:155px;min-width:0;display:flex;align-items:flex-start;padding:5px 0 5px 0}
 .hello-jonas::before{content:"";position:absolute;right:18px;top:50%;width:132px;height:132px;transform:translateY(-50%);border:1px solid rgba(154,188,232,.24);border-radius:50%;box-shadow:0 0 0 20px rgba(154,188,232,.035);background:radial-gradient(circle,rgba(96,153,222,.13),transparent 72%);z-index:-1}
@@ -2222,6 +2266,7 @@ async function starten() {
     $('#app').classList.remove('hide');
     if(!bereitsOffen||JSON.stringify(ME.rechte||{})!==letzteRechte)zeichneMenue();
     if(!bereitsOffen||!window.IDVLive?.updateView?.())zeichne();
+    window.IDVDashboardFigur?.start();
     window.IDVNotificationSettings?.start();
     window.IDVPMA?.start();
     // Isolierte Ausbildungsrollen dürfen keine Live-Personal-APIs abfragen.
@@ -2275,6 +2320,7 @@ function wechsleZuModul(id,optionen={}){
   if(!MODS.some(m=>m[0]===id)||!can(id))return false;
   if(id==='kue'&&!optionen.fokus){KUE_FOKUS_NR=null;KUE_VIEW_MODE='aktuell';}
   tab=id;
+  if(id==='dash')void window.IDVDashboardFigur?.refresh();
   const gruppe=NAV_GRUPPEN.find(g=>g.module.includes(id));
   if(gruppe)NAV_OFFEN.add(gruppe.id);
   zeichneMenue();
@@ -2328,43 +2374,7 @@ function zeichneMenue() {
 }
 
 
-const JONAS_DEFAULT_SPRUCH="Schon wieder hier? Na dann, ran an die Arbeit!";
-function jonasSpruch(){return typeof D?.dashboard?.jonasSpruch==='string'?D.dashboard.jonasSpruch:JONAS_DEFAULT_SPRUCH;}
-function dashboardJonasHtml(){
- return '<div class="hello-jonas"><img class="hello-jonas-portrait" src="/assets/idv-jonas-schulz-dashboard.png" alt="Polizeipräsident Jonas Schulz" decoding="async"><div class="hello-jonas-message"><div class="hello-jonas-bubble"><span class="hello-jonas-byline">Polizeipräsident Jonas Schulz</span><span class="hello-jonas-quote" data-jonas-quote>'+esc(jonasSpruch())+'</span></div>'+(ME?.rolle==='Administrator'?'<button type="button" class="hello-jonas-edit" data-jonas-edit>✎ Spruch bearbeiten</button>':'')+'</div></div>';
-}
-function jonasSpruchDialog(){
- if(ME?.rolle!=='Administrator')return;
- if(document.getElementById('jonasSpruchDialog')?.open)return;
- document.getElementById('jonasSpruchDialog')?.remove();
- const expected=jonasSpruch(),actor=ME.id;
- const dialog=document.createElement('dialog');dialog.id='jonasSpruchDialog';dialog.setAttribute('aria-labelledby','jonasSpruchTitel');
- dialog.innerHTML='<form><h2 id="jonasSpruchTitel">Spruch des Polizeipräsidenten</h2><p class="mut">Der Text gilt für alle angemeldeten Nutzer auf der Startseite.</p><label for="jonasSpruchText">Sprechblase (max. 180 Zeichen)</label><textarea id="jonasSpruchText" maxlength="180" required></textarea><p class="mut" id="jonasSpruchStatus" role="status"></p><div class="jonas-dialog-actions"><button type="button" data-jonas-default>Standardspruch</button><button type="button" data-jonas-cancel>Abbrechen</button><button type="submit" class="p">Speichern</button></div></form>';
- document.body.append(dialog);
- const form=dialog.querySelector('form'),field=dialog.querySelector('textarea'),status=dialog.querySelector('[role="status"]'),save=dialog.querySelector('[type="submit"]');
- field.value=expected;
- let saving=false;
- dialog.querySelector('[data-jonas-default]').onclick=()=>{field.value=JONAS_DEFAULT_SPRUCH;field.focus();};
- dialog.querySelector('[data-jonas-cancel]').onclick=()=>{if(!saving)dialog.close();};
- dialog.addEventListener('cancel',e=>{if(saving)e.preventDefault();});
- dialog.addEventListener('close',()=>dialog.remove(),{once:true});
- form.addEventListener('submit',async e=>{
-  e.preventDefault();if(saving||ME?.rolle!=='Administrator'||ME.id!==actor)return;
-  const spruch=field.value.trim();if(!spruch){status.textContent='Bitte einen Spruch eingeben.';return;}
-  saving=true;save.disabled=true;status.textContent='Wird gespeichert …';
-  try{
-   const result=await api('/dashboard-spruch',{method:'PUT',body:JSON.stringify({spruch,erwartet:expected})});
-   if(ME?.id===actor&&D?.dashboard&&typeof result.spruch==='string'){
-    D.dashboard.jonasSpruch=result.spruch;
-    document.querySelectorAll('[data-jonas-quote]').forEach(el=>el.textContent=result.spruch);
-   }
-   dialog.close();
-  }catch(err){status.textContent='Speichern fehlgeschlagen: '+err.message;}
-  finally{saving=false;save.disabled=false;}
- });
- dialog.showModal();field.focus();
-}
-document.addEventListener('click',e=>{if(e.target.closest('[data-jonas-edit]'))jonasSpruchDialog();});
+function dashboardJonasHtml(){return window.IDVDashboardFigur?.render()||'<div class="hello-jonas"><img class="hello-jonas-portrait" src="/assets/idv-jonas-schulz-dashboard.png" alt="Jonas Schulz"><div class="hello-jonas-message"><div class="hello-jonas-bubble">'+esc(D?.dashboard?.jonasSpruch||'Schon wieder hier? Na dann, ran an die Arbeit!')+'</div></div></div>';}
 
 function zeichne() {
   if(tab==='ausbildung-pruefungen'){
@@ -5780,6 +5790,7 @@ async function ladeSystemoptionen(){
  try{
   const data=await api('/system-optionen');
   el.innerHTML='<h1>Zentrale Systemverwaltung</h1><p class="mut">Zusätzliche Auswahlwerte hinzufügen. Die Standardwerte bleiben geschützt.</p>'+
+  '<section class="box"><h3>Dashboard-Figur &amp; Sprechblase</h3><p class="mut">Leitungsmitglieder, Wechselintervalle und Spruchpool zentral verwalten.</p><button type="button" class="p" data-figur-settings>Figuren &amp; Inhalte verwalten</button></section>'+
   Object.entries(data).map(([key,values])=>'<section class="box"><h3>'+esc(key==='mitarbeitergruppen'?'Mitarbeitergruppen':'Beschäftigungsarten')+'</h3><textarea rows="7" style="width:100%;background:var(--panel);color:var(--txt)" id="option-'+esc(key)+'">'+esc(values.join('\n'))+'</textarea><button type="button" data-save-options="'+esc(key)+'">Änderungen speichern</button></section>').join('');
  }catch(e){el.textContent='Einstellungen konnten nicht geladen werden: '+e.message;}
 }
@@ -6704,6 +6715,7 @@ document.addEventListener('click',async e=>{
 <script src="/befRichtUI.js"></script>
 <script src="/liveUpdates.js?v=20261125-exam-oauth"></script>
 <script src="/notificationSettings.js?v=20261125-3"></script>
+<script src="/assets/dashboard-figur.js?v=20261125-1"></script>
 <script src="/porHinweise.js?v=20261125-3"></script>
 <script src="/pmaHinweise.js?v=20261125-3"></script>
 <script src="/aktenFeatures.js"></script>
