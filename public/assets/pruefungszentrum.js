@@ -123,7 +123,7 @@ function open(host){
  const top=node('div',undefined,'exam-heading');const copy=node('div');copy.append(node('div','AUSBILDUNG / PRÜFUNGSWESEN','exam-kicker'),node('h1','Prüfungszentrum'),node('p','Prüfungen durchführen, bewerten und Ergebnisse freigeben.','mut'));top.append(copy);
  const actions=node('div',undefined,'exam-heading-actions');
  const refresh=btn('Aktualisieren',()=>{if(busy||!canLeave())return;dirty=false;run(load)},'exam-refresh');refresh.prepend(examIcon('refresh'));actions.append(refresh);
- const createButton=btn('Neue Prüfung',()=>navigate('create'),'p exam-new');createButton.prepend(examIcon('plus'));createButton.setAttribute('aria-pressed',String(view==='create'));if(data.verwaltung)actions.append(createButton);top.append(actions);wrap.append(top);
+ const createButton=btn('Neue Prüfung',()=>navigate('create'),'p exam-new');createButton.prepend(examIcon('plus'));createButton.setAttribute('aria-pressed',String(view==='create'));if(data.anlegen)actions.append(createButton);top.append(actions);wrap.append(top);
  const bar=node('nav',undefined,'exam-nav');bar.setAttribute('aria-label','Prüfungszentrum');
  const selected=view==='detail'?lastList:view.startsWith('practice-')?'practice':view;
  const groups=data.verwaltung?[['ÜBERBLICK',['overview','running','practice']],['KORREKTUR & FREIGABE',['first','second','release','results']],['VERWALTUNG',['archive',...(data.vorlagenBearbeiten?['templates']:[]),...(data.importAdmin?['ki']:[])]]]:[['MEINE PRÜFUNGEN',['overview','running','first','second','practice','results']]];
@@ -142,7 +142,8 @@ function open(host){
  if(!data.bereit){const b=card('Datenbank-Erweiterung erforderlich');b.append(node('p','Das Prüfungszentrum ist vorbereitet. Nach einer aktuellen verschlüsselten Datensicherung kann der Administrator die additive Erweiterung direkt einrichten. Alternativ kann der Hoster die SQL-Migration 2026-11-25-pruefungszentrum.sql einspielen. Bestehende Ausbildungsdaten werden nicht verändert.'),btn('Erneut prüfen',()=>run(load)));if(data.admin)b.append(btn('Nach Backup einrichten',()=>run(async()=>{if(!confirm('Aktuelles verschlüsseltes Datenbankbackup erstellt und heruntergeladen?'))return;await api('/setup',{bestaetigung:'BACKUP_ERSTELLT_PRUEFUNGEN'});await load();message('Prüfungszentrum eingerichtet.');})));main.append(node('h1','Prüfungszentrum'),b);return}
  if(['templates','practice-template'].includes(view)&&!data.vorlagenBearbeiten){view='overview';templateDraft=null;}
  if(view==='ki'&&!data.importAdmin)view='overview';
- if(!data.verwaltung&&['create','practice-create','practice-template','archive','release'].includes(view))view='overview';
+ if(!data.anlegen&&['create','practice-create'].includes(view))view='overview';
+ if(!data.verwaltung&&['practice-template','archive','release'].includes(view))view='overview';
  main.append(nav());
  if(view==='ki'){void kiSettings().catch(e=>message(e.message,true));return}
  if(view==='practice-create'){main.append(btn('← PM-Praxisprüfung',()=>navigate('practice'),'exam-back'));void window.IDVPractice.create(main,{api,data,run,open:async id=>{data=await api();lastList='practice';await details(id);}}).catch(e=>message(e.message,true));return}if(view==='create'){create(false);return}if(view==='practice-template'){view='practice';}if(view==='templates'){templates(false);return}
@@ -150,7 +151,7 @@ function open(host){
  const title=node('div',undefined,'exam-section-heading');title.append(node('h2',selected[0]),node('p',selected[1],'mut'));main.append(title);
  if(view==='results')main.append(node('p','Abgeschlossene Prüfungen werden spätestens 24 Stunden nach Freigabe bzw. Praxisabschluss automatisch archiviert. Du kannst sie auch vorher archivieren. Danach ist der Zugriff auf die Leitung beschränkt.','mut'));
  if(view==='practice'){
- const panel=card('Praktische Prüfung');panel.classList.add('exam-practice-tools');const desc=node('div');desc.append(node('p','Bewertung durch Prüfer · kein externer Prüfungslink','mut'),node('p',count('practice')+' praktische Prüfungen · '+'fester Bewertungsbogen','mut'));const actions=node('div',undefined,'exam-practice-actions');if(data.verwaltung)actions.append(btn('Neue Praxisprüfung',()=>navigate('practice-create'),'p'));actions.append(node('span','Excel-Schema · 5 Module','mut'));panel.append(desc,actions);main.append(panel);
+ const panel=card('Praktische Prüfung');panel.classList.add('exam-practice-tools');const desc=node('div');desc.append(node('p','Bewertung durch Prüfer · kein externer Prüfungslink','mut'),node('p',count('practice')+' praktische Prüfungen · '+'fester Bewertungsbogen','mut'));const actions=node('div',undefined,'exam-practice-actions');if(data.anlegen)actions.append(btn('Neue Praxisprüfung',()=>navigate('practice-create'),'p'));actions.append(node('span','Excel-Schema · 5 Module','mut'));panel.append(desc,actions);main.append(panel);
  }
  if(view==='overview'){
   const stats=node('div',undefined,'exam-stats');
@@ -198,13 +199,13 @@ function open(host){
  function create(practice=false){if(practice)main.append(btn('← PM-Praxisprüfung',()=>navigate('practice'),'exam-back'));const c=card(practice?'PM-Praxisprüfung anlegen':'Prüfung vorbereiten');c.classList.add('exam-form');
  const choices=(data.pruefungsauswahl||[]).filter(x=>practice?x.art==='praxis':x.art!=='praxis');
  if(!choices.length){c.append(node('p','Zuerst muss die berechtigte Leitung oder ein Administrator eine geprüfte Prüfungsvorlage hinterlegen.'));if(practice&&data.vorlagenBearbeiten)c.append(btn('Bewertungsbogen erstellen',()=>navigate('practice-template'),'p'));main.append(c);return}
- const grid=node('div',undefined,'exam-form-grid');c.append(node('p','Wähle die Prüfungsart, den Prüfling und zwei unterschiedliche Prüfer.','mut'),grid);
+ const grid=node('div',undefined,'exam-form-grid');c.append(node('p',data.leitung?'Wähle die Prüfungsart, den Prüfling und zwei unterschiedliche Prüfer.':'Du bist Erstprüfer. Wähle die Prüfungsvorlage, den Prüfling und einen anderen berechtigten Zweitprüfer.','mut'),grid);
  const v=field(grid,'Prüfungsvorlage',select(choices.map(x=>[x.id,x.titel+' · Version #'+x.id])));
  const a=field(grid,'Anwärter',select(data.anwaerter.filter(x=>!practice||x.laufbahn==='PMA').map(x=>[x.id,x.name+' · DN '+x.personalnummer+' · '+x.laufbahn])));
  const options=data.pruefer.map(x=>[x.id,x.anzeigename+' · '+x.dienstnummer]);
- const first=field(grid,'Erstprüfer',select(options)),second=field(grid,'Zweitprüfer',select([['','Bitte wählen'],...options]));first.value=String(data.user);first.disabled=!data.leitung;
+ const first=field(grid,'Erstprüfer',select(options)),second=field(grid,'Zweitprüfer',select([['','Bitte wählen'],...options.filter(x=>data.leitung||Number(x[0])!==Number(data.user))]));first.value=String(data.user);first.disabled=!data.leitung;
  c.append(node('p',practice?'Die Praxisprüfung wird zur Erstbewertung angelegt. Kein Prüflingslink und kein Zeitlimit.':'Einmaliger Prüfungsversuch. Der Link kann vor dem Start erneuert werden und gilt 24 Stunden für den Prüfungsbeginn.','mut'),
- btn('Prüfung anlegen',()=>run(async()=>{const j=await api('',{vorlage:Number(v.value),anwaerter:Number(a.value),erst:Number(first.value),zweit:Number(second.value)});view=practice?'practice':'overview';await load();linkBox(j.link);message(j.link?'Prüfung erstellt. Link jetzt kopieren.':'Praxisbewertung zur Erstkorrektur angelegt.');})));main.append(c);
+ btn('Prüfung anlegen',()=>run(async()=>{if(!v.value||!a.value||!first.value||!second.value||first.value===second.value)throw Error('Prüfungsvorlage, Anwärter und zwei unterschiedliche Prüfer auswählen.');const j=await api('',{vorlage:Number(v.value),anwaerter:Number(a.value),erst:Number(first.value),zweit:Number(second.value)});view=practice?'practice':'overview';await load();linkBox(j.link);message(j.link?'Prüfung erstellt. Link jetzt kopieren.':'Praxisbewertung zur Erstkorrektur angelegt.');})));main.append(c);
  }
  function templates(practice=false){
  if(!data.vorlagenBearbeiten)return;

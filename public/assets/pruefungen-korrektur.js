@@ -46,7 +46,7 @@ function render(host,r,ctx){
  const actions=el('div',undefined,'review-top-actions');header.append(actions);
  if(p.status==='freigegeben'&&!p.archiviert){actions.append(btn('Prüfung archivieren',()=>ctx.archive(p)));if(p.archivAb)header.append(el('p','Automatische Archivierung: '+date(p.archivAb)+' · danach nur Leitung zugriffsberechtigt.','mut'));}
  function runAction(action,body){return ctx.run(async()=>{const result=await ctx.api('/'+id+'/'+action,{revision:Number(p.revision),...body});await ctx.reload(id);if(result.link)ctx.link(result.link);ctx.message('Änderung gespeichert.');});}
- if(r.verwaltung&&p.status==='bereit')actions.append(btn('Prüfungslink erneuern',()=>runAction('link',{})));
+ if(r.linkErneuern&&p.status==='bereit')actions.append(btn('Prüfungslink erneuern',()=>runAction('link',{})));
  if(r.leitung&&p.status!=='annulliert')actions.append(btn('Annullieren',()=>{const why=prompt('Begründung für die Annullierung:');if(why?.trim())runAction('annullieren',{notiz:why});},'danger'));
  if(r.leitung&&p.status==='zweitkorrigiert')actions.append(btn('Ergebnis freigeben',()=>{if(confirm('Endgültiges Ergebnis freigeben?'))runAction('freigabe',{});},'p'));
  if(p.status==='erstkorrigiert'&&!second){const notice=box('Zweitkorrektur · Zuständigkeit');notice.append(el('p',r.korrekturRechte?.eigeneErstkorrektur?'Du hast die Erstkorrektur durchgeführt. Die verbindliche Zweitkorrektur muss eine andere Person übernehmen. Leitungsberichtigungen bleiben möglich.':'Zuständig: '+reviewer(p.zweit)+'. Die Leitung kann die Prüferzuteilung ändern.'));host.append(notice);}

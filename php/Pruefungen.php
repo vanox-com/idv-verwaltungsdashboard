@@ -198,6 +198,18 @@ function pruefungReviewer(int $id): bool {
     if($r[0]['rolle']==='Ausbilder'&&!sql('SELECT 1 FROM ausbildung_ausbilder WHERE user_id=? AND aktiv=1',[$id]))return false;
     return (int)(rights($r[0])['ausbildung']??0)>=1;
 }
+// Creation is a reviewer capability, independent of leadership/template/archive privileges.
+function pruefungAnlegenDarf(array $u): bool {
+    $uid=(int)($u['id']??0);
+    return $uid>0&&pruefungReviewer($uid);
+}
+function pruefungZuteilungErlaubt(int $uid,int $first,bool $leitung): bool {
+    return $uid>0&&$first>0&&($leitung||$first===$uid);
+}
+function pruefungLinkErneuernDarf(array $p,int $uid,bool $leitung): bool {
+    return $uid>0&&($p['status']??'')==='bereit'&&($p['art']??'')!=='praxis'
+        &&pruefungZuteilungErlaubt($uid,(int)($p['erst']??0),$leitung);
+}
 function pruefungPublicFragen(array $fragen): array {
     return array_map(fn($q)=>array_intersect_key($q,array_flip(['typ','titel','punkte','optionen','kontext','bilder','optionBilder'])),$fragen);
 }
@@ -306,9 +318,10 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
     if($method==='GET'&&$uri===$root){
         $rows=pruefungListenZeilen($uid,$lead);
         $reviewers=[];foreach(sql("SELECT id,anzeigename,dienstnummer FROM users WHERE gesperrt=0 AND muss_passwort_aendern=0 ORDER BY anzeigename") as $r)if(pruefungReviewer((int)$r['id']))$reviewers[]=$r;
-        if($verwaltung)ausbildungSynchronisierePersonal();
-        $trainees=$verwaltung?array_map(fn($a)=>array_intersect_key($a,array_flip(['id','name','laufbahn','personalnummer'])),ausbildungAktuelleAnwaerter()):[];
-        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM ausbildung_pruefung_vorlagen WHERE JSON_TYPE(fragen)=\'ARRAY\' ORDER BY id DESC'):[]),'pruefungsauswahl'=>($verwaltung?sql('SELECT id,art,titel FROM ausbildung_pruefung_vorlagen WHERE art<>\'praxis\' ORDER BY id DESC'):[]),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
+        $anlegen=pruefungAnlegenDarf($u);
+        if($anlegen)ausbildungSynchronisierePersonal();
+        $trainees=$anlegen?array_map(fn($a)=>array_intersect_key($a,array_flip(['id','name','laufbahn','personalnummer'])),ausbildungAktuelleAnwaerter()):[];
+        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'anlegen'=>$anlegen,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM ausbildung_pruefung_vorlagen WHERE JSON_TYPE(fragen)=\'ARRAY\' ORDER BY id DESC'):[]),'pruefungsauswahl'=>($anlegen?sql('SELECT id,art,titel FROM ausbildung_pruefung_vorlagen WHERE art<>\'praxis\' ORDER BY id DESC'):[]),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
     }
     if($method==='GET'&&preg_match('#^/api/ausbildung/pruefungen/vorlagen/([1-9][0-9]*)$#D',$uri,$vMatch)){
         if(!$verwaltung)fail(403,'Nur berechtigte Leitung und Administratoren dürfen Prüfungsvorlagen einsehen und bearbeiten');
@@ -327,9 +340,9 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         respond(201,['id'=>(int)db()->lastInsertId()]);
     }
     if($method==='POST'&&$uri===$root){
-        if(!$verwaltung)fail(403,'Nur die Leitung darf Prüfungen anlegen und Prüfer einteilen');
+        if(!pruefungAnlegenDarf($u))fail(403,'Nur berechtigte Ausbilder und Ausbildungsleitung dürfen Prüfungen anlegen');
         $b=body();$vid=(int)($b['vorlage']??0);$aid=(int)($b['anwaerter']??0);$first=(int)($b['erst']??0);$second=(int)($b['zweit']??0);
-        if($first===$second||(!$lead&&$first!==$uid)||!pruefungReviewer($first)||!pruefungReviewer($second))fail(400,'Zwei verschiedene berechtigte Prüfer erforderlich');
+        if($first===$second||!pruefungZuteilungErlaubt($uid,$first,$lead)||!pruefungReviewer($first)||!pruefungReviewer($second))fail(400,'Zwei verschiedene berechtigte Prüfer erforderlich');
         $v=sql('SELECT * FROM ausbildung_pruefung_vorlagen WHERE id=?',[$vid]);
         $a=sql('SELECT * FROM ausbildung_anwaerter WHERE id=?',[$aid]);
         if(!$v||!$a||!ausbildungPersonalQuelleGueltig($a[0]))fail(400,'Vorlage oder aktueller Anwärter fehlt');
@@ -355,7 +368,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
             unset($p['fragen'],$p['antworten'],$p['bewertung']);
         }else $p['automatisch']=array_map(fn($q,$i)=>pruefungAuto($q,$p['antworten'][$i]??null),$p['fragen'],array_keys($p['fragen']));
         require_once __DIR__.'/PruefungenKIConfig.php';
-        respond(200,['pruefung'=>$p,'user'=>$uid,'leitung'=>$lead,'verwaltung'=>$verwaltung,'korrekturRechte'=>pruefungKorrekturRechte($p,$uid,$verwaltung),'erstBearbeiter'=>in_array($p['status'],['erstkorrigiert','zweitkorrigiert','freigegeben'],true)?pruefungErstBearbeiter($p):null,'kiBereit'=>examAiStatus()['bereit']]);
+        respond(200,['pruefung'=>$p,'user'=>$uid,'leitung'=>$lead,'verwaltung'=>$verwaltung,'korrekturRechte'=>pruefungKorrekturRechte($p,$uid,$verwaltung),'linkErneuern'=>pruefungLinkErneuernDarf($p,$uid,$verwaltung),'erstBearbeiter'=>in_array($p['status'],['erstkorrigiert','zweitkorrigiert','freigegeben'],true)?pruefungErstBearbeiter($p):null,'kiBereit'=>examAiStatus()['bereit']]);
     }
     if($method!=='POST'||$action==='')fail(405,'Nicht erlaubt');
     $b=body();$pdo=db();$pdo->beginTransaction();
@@ -368,8 +381,8 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
             if(($b['bestaetigen']??false)!==true)fail(400,'Archivierung ausdrücklich bestätigen.');
             sql('UPDATE ausbildung_pruefungen SET revision=revision+1,protokoll=? WHERE id=?',[pruefungJson($history),$id]);
         }elseif($action==='link'){
-            if(!$verwaltung)fail(403,'Nur die Leitung darf Prüfungslinks erneuern');
             if($status!=='bereit'||$p['art']==='praxis')fail(409,'Link nur vor Prüfungsbeginn erneuerbar');
+            if(!pruefungLinkErneuernDarf($p,$uid,$verwaltung))fail(403,'Nur der zugeteilte Erstprüfer oder die Leitung darf den Link erneuern');
             $token=bin2hex(random_bytes(32));sql('UPDATE ausbildung_pruefungen SET token_hash=?,token_ablauf=TIMESTAMPADD(HOUR,24,UTC_TIMESTAMP(6)),revision=revision+1,protokoll=? WHERE id=?',[hash('sha256',$token),pruefungJson($history),$id]);$link='/pruefung.html#'.$token;
         }elseif($action==='annullieren'){
             if(!$lead||$status==='annulliert'||$note==='')fail(403,'Nur die Leitung, mit Begründung');

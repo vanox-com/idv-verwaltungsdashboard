@@ -74,3 +74,24 @@ foreach(['pm','praxis'] as $art){
     assertExam(!IDV\pruefungSichtbar($p,10,false),'manual archive blocked '.$art);
     assertExam(IDV\pruefungSichtbar($p,50,true),'lead archive access '.$art);
 }
+
+// A regular trainer may create and review their own attempt, but cannot assign another first reviewer.
+assertExam(IDV\pruefungZuteilungErlaubt(10,10,false),'trainer self assignment');
+assertExam(!IDV\pruefungZuteilungErlaubt(10,20,false),'trainer cannot assign foreign first reviewer');
+assertExam(IDV\pruefungZuteilungErlaubt(10,20,true),'lead assignment');
+assertExam(!IDV\pruefungZuteilungErlaubt(0,10,true),'no unauthenticated assignment');
+assertExam(!IDV\pruefungZuteilungErlaubt(10,0,true),'no empty assignment');
+$pending=['art'=>'pm','status'=>'bereit','erst'=>10,'zweit'=>20];
+assertExam(IDV\pruefungLinkErneuernDarf($pending,10,false),'first reviewer can renew own link');
+assertExam(!IDV\pruefungLinkErneuernDarf($pending,20,false),'second reviewer cannot renew link');
+assertExam(IDV\pruefungLinkErneuernDarf($pending,30,true),'lead can renew link');
+$pending['status']='laufend';
+assertExam(!IDV\pruefungLinkErneuernDarf($pending,10,false),'no renewal after start');
+$pending=['art'=>'praxis','status'=>'bereit','erst'=>10];
+assertExam(!IDV\pruefungLinkErneuernDarf($pending,10,false),'no external practice link');
+$practiceSource=file_get_contents(dirname(__DIR__).'/php/PruefungenPraxis.php');
+assertExam(substr_count($practiceSource,'if(!pruefungAnlegenDarf($u))')===2,'practice GET and POST creation capability');
+assertExam(str_contains($examSource,"'anlegen'=>\$anlegen"),'separate create permission in bootstrap');
+assertExam(str_contains($examUi,"if(data.anlegen)actions.append(createButton)"),'trainer create action');
+assertExam(str_contains($examUi,"if(data.anlegen)actions.append(btn('Neue Praxisprüfung'"),'trainer practice action');
+assertExam(str_contains($examUi,"if(!data.verwaltung&&['practice-template','archive','release'].includes(view))"),'archive and release remain restricted');
