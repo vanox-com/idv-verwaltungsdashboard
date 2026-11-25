@@ -123,3 +123,6 @@ const notificationCan=new Function(sharedNav+'\nreturn panelCan;')();
 for(const [rolle,ausbildung,expected] of [["Administrator",0,true],["Leitungsdienst",0,true],["Polizeirat",0,true],["Ausbildungsleitung",0,true],["Ausbilder",1,false],["Ausbilder",2,true],["Mitarbeiter",2,false],["Unbekannt",2,false]]){
  if(notificationCan({rolle,rechte:{ausbildung,por:2}},'benachrichtigungen')!==expected)throw Error('Wrong notification settings permission: '+rolle+'/'+ausbildung);
 }
+
+// Both types of login must start on the shared welcome dashboard unless returning to a training view.
+if(!index.includes("else if(can('dash'))tab='dash';")||!index.includes("if(tab==='dash'&&ausbildungKonto())")||!index.includes("dashboardJonasHtml()+'</section><div class=\"box\"><h3>Ausbildung"))throw Error('Shared welcome dashboard missing for training logins');

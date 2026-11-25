@@ -2198,6 +2198,9 @@ async function starten() {
       try{returnRoom=sessionStorage.getItem('idvAusbildungReturn')==='unterricht';}catch(_){}
       if(returnRoom&&can('ausbildung-unterricht'))tab='ausbildung-unterricht';
       else if(Object.hasOwn(AUSB_NAV,requested)&&can(requested))tab=requested;
+      // Every account starts on the shared welcome dashboard, including isolated AUS accounts.
+      // Explicit training deep links and classroom returns above keep their behavior.
+      else if(can('dash'))tab='dash';
       else if(ausbildungKonto()&&can('ausbildung'))tab='ausbildung';
     }
     if(!can(tab))tab=can('ausbildung')?'ausbildung':MODS.find(m=>can(m[0]))?.[0]||'dash';
