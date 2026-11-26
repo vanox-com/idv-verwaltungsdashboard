@@ -167,6 +167,11 @@ function pruefungArchivInfo(array $p,?int $now=null): array {
     // Legacy records without a trustworthy release timestamp remain archived.
     $out['archiviert']=true;return $out;
 }
+function pruefungLoeschenDarf(array $u,array $p,?int $now=null): bool {
+    return ($u['rolle']??'')==='Administrator'
+        &&in_array($p['status']??'', ['freigegeben','annulliert'],true)
+        &&pruefungArchivInfo($p,$now)['archiviert'];
+}
 function pruefungSichtbar(array $p,int $uid,bool $leitung): bool {
     if($leitung)return true;
     if(pruefungArchivInfo($p)['archiviert'])return false;
@@ -336,7 +341,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         $anlegen=pruefungAnlegenDarf($u);
         if($anlegen)ausbildungSynchronisierePersonal();
         $trainees=$anlegen?array_map(fn($a)=>array_intersect_key($a,array_flip(['id','name','laufbahn','personalnummer']))+['mindestzeit'=>pruefungKommissarMindestzeit($a)],ausbildungAktuelleAnwaerter()):[];
-        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'anlegen'=>$anlegen,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM ausbildung_pruefung_vorlagen WHERE JSON_TYPE(fragen)=\'ARRAY\' ORDER BY id DESC'):[]),'pruefungsauswahl'=>($anlegen?sql('SELECT id,art,titel FROM ausbildung_pruefung_vorlagen WHERE art<>\'praxis\' ORDER BY id DESC'):[]),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
+        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'loeschenAdmin'=>($u['rolle']==='Administrator'),'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'anlegen'=>$anlegen,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM ausbildung_pruefung_vorlagen WHERE JSON_TYPE(fragen)=\'ARRAY\' ORDER BY id DESC'):[]),'pruefungsauswahl'=>($anlegen?sql('SELECT id,art,titel FROM ausbildung_pruefung_vorlagen WHERE art<>\'praxis\' ORDER BY id DESC'):[]),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
     }
     if($method==='GET'&&preg_match('#^/api/ausbildung/pruefungen/vorlagen/([1-9][0-9]*)$#D',$uri,$vMatch)){
         if(!$verwaltung)fail(403,'Nur berechtigte Leitung und Administratoren dürfen Prüfungsvorlagen einsehen und bearbeiten');
@@ -374,7 +379,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         require_once __DIR__.'/PruefungenKI.php';
         pruefungKiEndpoint($u,$method,(int)$aiMatch[1]);
     }
-    if(!preg_match('#^/api/ausbildung/pruefungen/([1-9][0-9]*)(?:/(korrektur|freigabe|annullieren|link|berichtigen|wiedereroeffnen|zweitpruefer|pruefer|archivieren))?$#D',$uri,$m))fail(404,'Nicht gefunden');
+    if(!preg_match('#^/api/ausbildung/pruefungen/([1-9][0-9]*)(?:/(korrektur|freigabe|annullieren|link|berichtigen|wiedereroeffnen|zweitpruefer|pruefer|archivieren|loeschen))?$#D',$uri,$m))fail(404,'Nicht gefunden');
     $id=(int)$m[1];$action=$m[2]??'';
     if($method==='GET'&&$action===''){
         $p=pruefungRow($id);pruefungAccess($p,$u);if(praxisMarker($p))fail(400,'Bitte den festen Praxisbogen öffnen');
@@ -387,12 +392,20 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         respond(200,['pruefung'=>$p,'user'=>$uid,'leitung'=>$lead,'verwaltung'=>$verwaltung,'korrekturRechte'=>pruefungKorrekturRechte($p,$uid,$verwaltung),'linkErneuern'=>pruefungLinkErneuernDarf($p,$uid,$verwaltung),'erstBearbeiter'=>in_array($p['status'],['erstkorrigiert','zweitkorrigiert','freigegeben'],true)?pruefungErstBearbeiter($p):null,'kiBereit'=>examAiStatus()['bereit']]);
     }
     if($method!=='POST'||$action==='')fail(405,'Nicht erlaubt');
+    if($action==='loeschen'&&($u['rolle']??'')!=='Administrator')fail(403,'Nur Administratoren dürfen Prüfungen löschen.');
     $b=body();$pdo=db();$pdo->beginTransaction();
     try{
-        $p=pruefungRow($id,true);pruefungAccess($p,$u);if($action!=='archivieren'&&praxisMarker($p))fail(400,'Bitte den festen Praxisbogen verwenden');
+        $p=pruefungRow($id,true);pruefungAccess($p,$u);if(!in_array($action,['archivieren','loeschen'],true)&&praxisMarker($p))fail(400,'Bitte den festen Praxisbogen verwenden');
         if(($b['revision']??null)!==(int)$p['revision'])fail(409,'Prüfung wurde zwischenzeitlich geändert. Neu laden.');
         $status=$p['status'];$note=pruefungText($b['notiz']??'',4000,false);$link=null;$history=pruefungHistorie($p,$action,$uid,$note);
-        if($action==='archivieren'){
+        if($action==='loeschen'){
+            if(!pruefungLoeschenDarf($u,$p))fail(409,'Nur archivierte oder annullierte Prüfungen dürfen gelöscht werden.');
+            if(($b['bestaetigen']??false)!==true)fail(400,'Endgültiges Löschen ausdrücklich bestätigen.');
+            sql('DELETE FROM ausbildung_pruefungen WHERE id=? AND revision=?',[$id,(int)$p['revision']]);
+            $pdo->commit();
+            error_log('IDV ausbildung_pruefungen: Prüfung #'.$id.' endgültig gelöscht durch Administrator #'.$uid);
+            respond(200,['ok'=>true,'geloescht'=>true]);
+        }elseif($action==='archivieren'){
             if($status!=='freigegeben'||pruefungArchivInfo($p)['archiviert'])fail(409,'Nur abgeschlossene, noch nicht archivierte Prüfungen können archiviert werden.');
             if(($b['bestaetigen']??false)!==true)fail(400,'Archivierung ausdrücklich bestätigen.');
             sql('UPDATE ausbildung_pruefungen SET revision=revision+1,protokoll=? WHERE id=?',[pruefungJson($history),$id]);

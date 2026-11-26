@@ -95,3 +95,14 @@ assertExam(str_contains($examSource,"'anlegen'=>\$anlegen"),'separate create per
 assertExam(str_contains($examUi,"if(data.anlegen)actions.append(createButton)"),'trainer create action');
 assertExam(str_contains($examUi,"if(data.anlegen)actions.append(btn('Neue Praxisprüfung'"),'trainer practice action');
 assertExam(str_contains($examUi,"if(!data.verwaltung&&['practice-template','archive','release'].includes(view))"),'archive and release remain restricted');
+
+// Deletion is restricted to administrators and genuinely archived records.
+$deleteNow=strtotime('2026-11-27T00:00:00Z');
+$oldExam=['status'=>'freigegeben','protokoll'=>[['aktion'=>'freigabe','am'=>'2026-11-25T00:00:00Z']]];
+$freshExam=['status'=>'freigegeben','protokoll'=>[['aktion'=>'freigabe','am'=>'2026-11-26T23:00:00Z']]];
+foreach(['Administrator','Leitungsdienst','Polizeirat','Ausbildungsleitung','Ausbilder',''] as $role){
+ assertExam(IDV\pruefungLoeschenDarf(['rolle'=>$role],$oldExam,$deleteNow)===($role==='Administrator'),'archive deletion role '.$role);
+ assertExam(!IDV\pruefungLoeschenDarf(['rolle'=>$role],$freshExam,$deleteNow),'unarchived release protected '.$role);
+ foreach(['bereit','laufend','abgegeben','erstkorrigiert','zweitkorrigiert'] as $status)assertExam(!IDV\pruefungLoeschenDarf(['rolle'=>$role],['status'=>$status],$deleteNow),'active exam protected '.$status);
+}
+assertExam(IDV\pruefungLoeschenDarf(['rolle'=>'Administrator'],['status'=>'annulliert'],$deleteNow),'cancelled exam can be deleted');

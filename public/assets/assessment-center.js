@@ -113,6 +113,12 @@ function open(host){
  async function run(fn){if(busy)return;busy=true;try{await fn()}catch(e){message(e.message,true)}finally{busy=false}}
  async function load(){try{data=await api();if(connected()){message('');if(view==='detail'&&detailId!==null){await details(detailId);}else render();}}catch(e){if(connected()&&!data){main.replaceChildren();const b=card('Assessment Center konnte nicht geladen werden');b.append(node('p',e.message),node('p','Die übrigen Panel-Funktionen bleiben verfügbar. Prüfe die Meldung oder gib sie an die Administration weiter.','mut'),btn('Erneut versuchen',()=>run(load)));main.append(b);}throw e;}}
  function linkBox(url){if(!url)return;const box=card('Prüfungslink · vertraulich weitergeben');const i=text();i.value=location.origin+url;i.readOnly=true;box.append(i,btn('Link kopieren',async()=>{try{await navigator.clipboard.writeText(i.value);message('Link kopiert.')}catch{ i.select();message('Bitte markierten Link manuell kopieren.')}}));main.prepend(box);}
+ function deleteExam(p){
+  if(data.loeschenAdmin!==true||!examMatchesView(p,'archive')||busy||!canLeave())return;
+  const warning='Prüfung #'+p.id+' · '+p.kandidat+' · '+p.titel+' endgültig löschen?\n\nAntworten, Bewertung, Ergebnis und Prüfungsprotokoll werden unwiderruflich entfernt. Die Prüfungsvorlage bleibt erhalten.';
+  if(!confirm(warning))return;
+  run(async()=>{await api('/'+p.id+'/loeschen',{revision:Number(p.revision),bestaetigen:true});dirty=false;detailId=null;view='archive';kind='';await load();message('Prüfung endgültig gelöscht.');});
+ }
  function archiveExam(p){
   if(busy||!canLeave())return;
   if(!confirm('Prüfung endgültig archivieren? Alle Polizeiräte, Leitungsdienst und Administratoren behalten Zugriff im Archiv. Die Prüfung wird nicht gelöscht.'))return;
@@ -176,7 +182,7 @@ function open(host){
    const status=node('td');const pill=node('span',p.art==='praxis'&&p.status==='abgegeben'?'In Bewertung':p.art==='praxis'&&p.status==='freigegeben'?'Abgeschlossen':states[p.status]||p.status,'exam-status');pill.dataset.status=p.status;status.append(pill);if(p.status==='freigegeben'&&!p.archiviert&&p.archivAb)status.append(node('small','Archiv ab '+new Date(p.archivAb).toLocaleString('de-DE')));tr.append(status);
    const progress=node('td');if(p.art==='praxis')progress.textContent=p.status==='freigegeben'&&p.ergebnis!=null?Number(p.ergebnis).toLocaleString('de-DE',{maximumFractionDigits:2})+' %':p.status==='abgegeben'?'In Bewertung':'—';else{const total=Number(p.fragenGesamt)||0,done=Number(p.bearbeitet)||0,percent=total?Math.min(100,Math.max(0,done/total*100)):0;const meter=node('div',undefined,'exam-meter'),fill=node('i');fill.style.width=percent+'%';meter.append(fill);progress.append(node('span',done+' / '+total,'exam-progress-label'),meter);}tr.append(progress);
    if(view!=='practice'){tr.append(node('td',date(p.ende_am)));const focus=node('td');const f=node('span',String(p.tabwechsel??0),'exam-focus-count');if(Number(p.tabwechsel)>0)f.classList.add('has-events');focus.append(f);tr.append(focus);}
-   const td=node('td');const openButton=btn('Öffnen',()=>run(async()=>{lastList=view;await details(p.id)}),'exam-open');openButton.append(examIcon('arrow'));td.append(openButton);if(p.status==='freigegeben'&&!p.archiviert){const archive=btn('Archivieren',()=>archiveExam(p),'exam-open');archive.prepend(examIcon('archive'));td.append(archive);}tr.append(td);body.append(tr);
+   const td=node('td');const openButton=btn('Öffnen',()=>run(async()=>{lastList=view;await details(p.id)}),'exam-open');openButton.append(examIcon('arrow'));td.append(openButton);if(p.status==='freigegeben'&&!p.archiviert){const archive=btn('Archivieren',()=>archiveExam(p),'exam-open');archive.prepend(examIcon('archive'));td.append(archive);}if(view==='archive'&&data.loeschenAdmin===true&&examMatchesView(p,'archive')){const remove=btn('Löschen',()=>deleteExam(p),'exam-open');remove.style.color='#fca5a5';remove.style.borderColor='#9b4e56';remove.style.marginLeft='6px';remove.title='Prüfung endgültig löschen (nur Administratoren)';td.append(remove);}tr.append(td);body.append(tr);
   }
  }
  s.oninput=()=>{search=s.value;renderRows()};k.onchange=()=>{kind=k.value;renderRows()};renderRows();

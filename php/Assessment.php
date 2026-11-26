@@ -168,6 +168,11 @@ function assessmentArchivInfo(array $p,?int $now=null): array {
     // Legacy records without a trustworthy release timestamp remain archived.
     $out['archiviert']=true;return $out;
 }
+function assessmentLoeschenDarf(array $u,array $p,?int $now=null): bool {
+    return ($u['rolle']??'')==='Administrator'
+        &&in_array($p['status']??'', ['freigegeben','annulliert'],true)
+        &&assessmentArchivInfo($p,$now)['archiviert'];
+}
 function assessmentSichtbar(array $p,int $uid,bool $leitung): bool {
     return $uid>0&&$leitung; // Every authorised council member sees every attempt, including archives.
 }
@@ -296,7 +301,7 @@ function dispatchAssessment(array $u,string $method,string $uri): bool {
     if($method==='GET'&&$uri===$root){
         $rows=assessmentListenZeilen($uid,$lead);
         $reviewers=[];foreach(sql("SELECT id,anzeigename,dienstnummer FROM users WHERE gesperrt=0 AND muss_passwort_aendern=0 ORDER BY anzeigename") as $r)if(assessmentReviewer((int)$r['id']))$reviewers[]=$r;
-        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'user'=>$uid,'arten'=>ASSESSMENT_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM assessment_pruefung_vorlagen WHERE JSON_TYPE(fragen)=\'ARRAY\' ORDER BY id DESC'):[]),'pruefungsauswahl'=>($verwaltung?sql('SELECT id,art,titel FROM assessment_pruefung_vorlagen WHERE art<>\'praxis\' ORDER BY id DESC'):[]),'pruefungen'=>$rows,'pruefer'=>$reviewers,'kiAdmin'=>($u['rolle']==='Administrator')]);
+        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'loeschenAdmin'=>($u['rolle']==='Administrator'),'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'user'=>$uid,'arten'=>ASSESSMENT_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM assessment_pruefung_vorlagen WHERE JSON_TYPE(fragen)=\'ARRAY\' ORDER BY id DESC'):[]),'pruefungsauswahl'=>($verwaltung?sql('SELECT id,art,titel FROM assessment_pruefung_vorlagen WHERE art<>\'praxis\' ORDER BY id DESC'):[]),'pruefungen'=>$rows,'pruefer'=>$reviewers,'kiAdmin'=>($u['rolle']==='Administrator')]);
     }
     if($method==='GET'&&preg_match('#^/api/assessment/vorlagen/([1-9][0-9]*)$#D',$uri,$vMatch)){
         if(!$verwaltung)fail(403,'Nur berechtigte Leitung und Administratoren dürfen Prüfungsvorlagen einsehen und bearbeiten');
@@ -331,7 +336,7 @@ function dispatchAssessment(array $u,string $method,string $uri): bool {
         require_once __DIR__.'/AssessmentKI.php';
         assessmentKiEndpoint($u,$method,(int)$aiMatch[1]);
     }
-    if(!preg_match('#^/api/assessment/([1-9][0-9]*)(?:/(korrektur|annullieren|link|berichtigen|wiedereroeffnen|archivieren))?$#D',$uri,$m))fail(404,'Nicht gefunden');
+    if(!preg_match('#^/api/assessment/([1-9][0-9]*)(?:/(korrektur|annullieren|link|berichtigen|wiedereroeffnen|archivieren|loeschen))?$#D',$uri,$m))fail(404,'Nicht gefunden');
     $id=(int)$m[1];$action=$m[2]??'';
     if($method==='GET'&&$action===''){
         $p=assessmentRow($id);assessmentAccess($p,$u);
@@ -344,12 +349,20 @@ function dispatchAssessment(array $u,string $method,string $uri): bool {
         respond(200,['pruefung'=>$p,'user'=>$uid,'leitung'=>$lead,'verwaltung'=>$verwaltung,'korrekturRechte'=>assessmentKorrekturRechte($p,$uid,$verwaltung),'erstBearbeiter'=>in_array($p['status'],['erstkorrigiert','zweitkorrigiert','freigegeben'],true)?assessmentErstBearbeiter($p):null,'kiBereit'=>examAiStatus()['bereit']]);
     }
     if($method!=='POST'||$action==='')fail(405,'Nicht erlaubt');
+    if($action==='loeschen'&&($u['rolle']??'')!=='Administrator')fail(403,'Nur Administratoren dürfen Prüfungen löschen.');
     $b=body();$pdo=db();$pdo->beginTransaction();
     try{
         $p=assessmentRow($id,true);assessmentAccess($p,$u);
         if(($b['revision']??null)!==(int)$p['revision'])fail(409,'Prüfung wurde zwischenzeitlich geändert. Neu laden.');
         $status=$p['status'];$note=assessmentText($b['notiz']??'',4000,false);$link=null;$history=assessmentHistorie($p,$action,$uid,$note);
-        if($action==='archivieren'){
+        if($action==='loeschen'){
+            if(!assessmentLoeschenDarf($u,$p))fail(409,'Nur archivierte oder annullierte Prüfungen dürfen gelöscht werden.');
+            if(($b['bestaetigen']??false)!==true)fail(400,'Endgültiges Löschen ausdrücklich bestätigen.');
+            sql('DELETE FROM assessment_pruefungen WHERE id=? AND revision=?',[$id,(int)$p['revision']]);
+            $pdo->commit();
+            error_log('IDV assessment_pruefungen: Prüfung #'.$id.' endgültig gelöscht durch Administrator #'.$uid);
+            respond(200,['ok'=>true,'geloescht'=>true]);
+        }elseif($action==='archivieren'){
             if($status!=='freigegeben'||assessmentArchivInfo($p)['archiviert'])fail(409,'Nur abgeschlossene, noch nicht archivierte Prüfungen können archiviert werden.');
             if(($b['bestaetigen']??false)!==true)fail(400,'Archivierung ausdrücklich bestätigen.');
             sql('UPDATE assessment_pruefungen SET revision=revision+1,protokoll=? WHERE id=?',[assessmentJson($history),$id]);
