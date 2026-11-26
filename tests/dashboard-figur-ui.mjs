@@ -16,7 +16,7 @@ for(const rolle of ['Administrator','Leitungsdienst','Polizeirat','Ausbildungsle
  for(const [person,image] of [['tobias-schneider','idv-tobias-schneider-dashboard.webp'],['lou-beckenbauer','idv-lou-beckenbauer-dashboard.webp']]){
   D.dashboard.figur.person=person;
   const portrait=module.render();
-  assert.ok(portrait.includes('src="/assets/'+image+'"'));
+  assert.ok(portrait.includes('src="/assets/'+image+'?v=20261126-4"'));
   assert.ok(!portrait.includes('figur-sprite'));
   const bytes=readFileSync('public/assets/'+image);
   assert.equal(bytes.subarray(0,4).toString(),'RIFF');
