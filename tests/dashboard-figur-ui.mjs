@@ -13,6 +13,15 @@ for(const rolle of ['Administrator','Leitungsdienst','Polizeirat','Ausbildungsle
  assert.ok(markup.includes('&lt;script&gt;'));
  assert.ok(!markup.includes('<script>'));
  assert.equal(markup.includes('data-jonas-edit'),rolle==='Administrator');
+ for(const [person,image] of [['tobias-schneider','idv-tobias-schneider-dashboard.webp'],['lou-beckenbauer','idv-lou-beckenbauer-dashboard.webp']]){
+  D.dashboard.figur.person=person;
+  const portrait=module.render();
+  assert.ok(portrait.includes('src="/assets/'+image+'"'));
+  assert.ok(!portrait.includes('figur-sprite'));
+  const bytes=readFileSync('public/assets/'+image);
+  assert.equal(bytes.subarray(0,4).toString(),'RIFF');
+  assert.equal(bytes.subarray(8,12).toString(),'WEBP');
+ }
  D.dashboard.figur.nameAnzeigen=false;D.dashboard.figur.rolleAnzeigen=false;
  assert.ok(!module.render().includes('hello-jonas-byline'));
 }

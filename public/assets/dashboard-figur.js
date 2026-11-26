@@ -2,9 +2,9 @@
 (()=>{
 const people={
  'jonas-schulz':{name:'Jonas Schulz',rolle:'Polizeipräsident',image:'/assets/idv-jonas-schulz-dashboard.png'},
- 'tobias-schneider':{name:'Tobias Schneider',rolle:'Leitungsdienst',sprite:'schneider'},
+ 'tobias-schneider':{name:'Tobias Schneider',rolle:'Leitungsdienst',image:'/assets/idv-tobias-schneider-dashboard.webp'},
  'tobias-renner':{name:'Tobias Renner',rolle:'Leitungsdienst',sprite:'renner'},
- 'lou-beckenbauer':{name:'Lou Beckenbauer',rolle:'Leitungsdienst',sprite:'lou'}
+ 'lou-beckenbauer':{name:'Lou Beckenbauer',rolle:'Leitungsdienst',image:'/assets/idv-lou-beckenbauer-dashboard.webp'}
 };
 const cats={humor:'Lustige Sprüche',philosophie:'Philosophie',fakten:'Random Facts',motivation:'Motivation',dienst:'Diensthumor',polizei:'Polizei-Humor'};
 const fallback='Schon wieder hier? Na dann, ran an die Arbeit!';
