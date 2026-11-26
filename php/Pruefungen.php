@@ -167,13 +167,21 @@ function pruefungArchivInfo(array $p,?int $now=null): array {
     // Legacy records without a trustworthy release timestamp remain archived.
     $out['archiviert']=true;return $out;
 }
+// Store only inactive markers in the existing system options table. Questions remain immutable.
+function pruefungVorlageAktiv(int $id): bool {
+    return !sql('SELECT 1 FROM system_optionen WHERE schluessel=?',['exam_template_inactive_'.$id]);
+}
+function pruefungVorlageStatusDarf(array $u): bool {
+    return ($u['rolle']??'')==='Administrator';
+}
 function pruefungVorlageLoeschenDarf(array $u,int $verwendungen): bool {
     return ($u['rolle']??'')==='Administrator'&&$verwendungen===0;
 }
 function pruefungLoeschenDarf(array $u,array $p,?int $now=null): bool {
     return ($u['rolle']??'')==='Administrator'
-        &&in_array($p['status']??'', ['freigegeben','annulliert'],true)
-        &&pruefungArchivInfo($p,$now)['archiviert'];
+        &&($p['status']??'')==='annulliert'
+        &&($p['art']??'')!=='praxis'
+        &&empty($p['start_am'])&&empty($p['abgabe_am']);
 }
 function pruefungSichtbar(array $p,int $uid,bool $leitung): bool {
     if($leitung)return true;
@@ -344,7 +352,23 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         $anlegen=pruefungAnlegenDarf($u);
         if($anlegen)ausbildungSynchronisierePersonal();
         $trainees=$anlegen?array_map(fn($a)=>array_intersect_key($a,array_flip(['id','name','laufbahn','personalnummer']))+['mindestzeit'=>pruefungKommissarMindestzeit($a)],ausbildungAktuelleAnwaerter()):[];
-        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'loeschenAdmin'=>($u['rolle']==='Administrator'),'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'anlegen'=>$anlegen,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT v.id,v.art,v.titel,v.minuten,v.grenze,v.erstellt_am,(SELECT COUNT(*) FROM ausbildung_pruefungen p WHERE p.vorlage_id=v.id) AS verwendungen FROM ausbildung_pruefung_vorlagen v WHERE JSON_TYPE(v.fragen)=\'ARRAY\' ORDER BY v.id DESC'):[]),'pruefungsauswahl'=>($anlegen?sql('SELECT id,art,titel FROM ausbildung_pruefung_vorlagen WHERE art<>\'praxis\' ORDER BY id DESC'):[]),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
+        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'loeschenAdmin'=>($u['rolle']==='Administrator'),'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'anlegen'=>$anlegen,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT v.id,v.art,v.titel,v.minuten,v.grenze,v.erstellt_am,NOT EXISTS (SELECT 1 FROM system_optionen o WHERE o.schluessel=CONCAT(\'exam_template_inactive_\',v.id)) AS aktiv,(SELECT COUNT(*) FROM ausbildung_pruefungen p WHERE p.vorlage_id=v.id) AS verwendungen FROM ausbildung_pruefung_vorlagen v WHERE JSON_TYPE(v.fragen)=\'ARRAY\' ORDER BY v.id DESC'):[]),'pruefungsauswahl'=>($anlegen?sql('SELECT v.id,v.art,v.titel FROM ausbildung_pruefung_vorlagen v WHERE v.art<>\'praxis\' AND NOT EXISTS (SELECT 1 FROM system_optionen o WHERE o.schluessel=CONCAT(\'exam_template_inactive_\',v.id)) ORDER BY v.id DESC'):[]),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
+    }
+    if($method==='POST'&&preg_match('#^/api/ausbildung/pruefungen/vorlagen/([1-9][0-9]*)/status$#D',$uri,$vMatch)){
+        if(!pruefungVorlageStatusDarf($u))fail(403,'Nur Administratoren dürfen Vorlagen aktivieren oder deaktivieren.');
+        $b=body();$aktiv=$b['aktiv']??null;
+        if(!is_bool($aktiv))fail(400,'Aktivstatus muss eindeutig angegeben werden.');
+        $vid=(int)$vMatch[1];$pdo=db();$pdo->beginTransaction();
+        try{
+            $row=sql("SELECT id FROM ausbildung_pruefung_vorlagen WHERE id=? AND JSON_TYPE(fragen)='ARRAY' FOR UPDATE",[$vid]);
+            if(!$row){$pdo->rollBack();fail(404,'Verwaltbare Vorlage nicht gefunden.');}
+            $key='exam_template_inactive_'.$vid;
+            if($aktiv)sql('DELETE FROM system_optionen WHERE schluessel=?',[$key]);
+            else sql("INSERT INTO system_optionen(schluessel,werte) VALUES(?,'[false]') ON DUPLICATE KEY UPDATE werte=VALUES(werte),aktualisiert=UTC_TIMESTAMP(6)",[$key]);
+            $pdo->commit();
+        }catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
+        error_log('IDV ausbildung_pruefung_vorlagen: Vorlage #'.$vid.($aktiv?' aktiviert':' deaktiviert').' durch Administrator #'.$uid);
+        respond(200,['ok'=>true,'aktiv'=>$aktiv]);
     }
     if($method==='POST'&&preg_match('#^/api/ausbildung/pruefungen/vorlagen/([1-9][0-9]*)/loeschen$#D',$uri,$vMatch)){
         if(($u['rolle']??'')!=='Administrator')fail(403,'Nur Administratoren dürfen Vorlagen löschen.');
@@ -384,7 +408,10 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         if(!pruefungAnlegenDarf($u))fail(403,'Nur berechtigte Ausbilder und Ausbildungsleitung dürfen Prüfungen anlegen');
         $b=body();$vid=(int)($b['vorlage']??0);$aid=(int)($b['anwaerter']??0);$first=(int)($b['erst']??0);$second=(int)($b['zweit']??0);
         if($first===$second||!pruefungZuteilungErlaubt($uid,$first,$lead)||!pruefungReviewer($first)||!pruefungReviewer($second))fail(400,'Zwei verschiedene berechtigte Prüfer erforderlich');
-        $v=sql('SELECT * FROM ausbildung_pruefung_vorlagen WHERE id=?',[$vid]);
+        $pdo=db();$pdo->beginTransaction();
+        try{
+        $v=sql('SELECT * FROM ausbildung_pruefung_vorlagen WHERE id=? FOR UPDATE',[$vid]);
+        if($v&&!pruefungVorlageAktiv($vid)){$pdo->rollBack();fail(409,'Diese Prüfungsvorlage ist inaktiv. Bitte eine aktive Vorlage auswählen.');}
         $a=sql('SELECT * FROM ausbildung_anwaerter WHERE id=?',[$aid]);
         if(!$v||!$a||!ausbildungPersonalQuelleGueltig($a[0]))fail(400,'Vorlage oder aktueller Anwärter fehlt');
         $v=$v[0];$a=$a[0];$track=$a['laufbahn'];if($v['art']==='praxis')fail(400,'Praxisprüfungen ausschließlich über den festen PM-Praxisbogen anlegen');
@@ -394,7 +421,9 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         $answers=array_map(fn($q)=>$q['typ']==='text'?'':[],pruefungRead($v['fragen']));
         sql("INSERT INTO ausbildung_pruefungen(vorlage_id,anwaerter_id,kandidat,laufbahn,erst,zweit,status,token_hash,token_ablauf,antworten,bewertung,protokoll,fokus) VALUES(?,?,?,?,?,?,?,?,TIMESTAMPADD(HOUR,24,UTC_TIMESTAMP(6)),?,?,?,?)",
             [$vid,$aid,$a['name'],$track,$first,$second,$practice?'abgegeben':'bereit',hash('sha256',$token),pruefungJson($answers),'[]',pruefungJson([['am'=>gmdate('c'),'aktion'=>'erstellt','user'=>$uid]]),'{"wechsel":0,"events":[]}']);
-        respond(201,['id'=>(int)db()->lastInsertId(),'link'=>$practice?null:'/pruefung.html#'.$token]);
+        $newId=(int)$pdo->lastInsertId();$pdo->commit();
+        }catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
+        respond(201,['id'=>$newId,'link'=>$practice?null:'/pruefung.html#'.$token]);
     }
     if(preg_match('#^/api/ausbildung/pruefungen/([1-9][0-9]*)/ki$#D',$uri,$aiMatch)){
         require_once __DIR__.'/PruefungenKI.php';
@@ -420,7 +449,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         if(($b['revision']??null)!==(int)$p['revision'])fail(409,'Prüfung wurde zwischenzeitlich geändert. Neu laden.');
         $status=$p['status'];$note=pruefungText($b['notiz']??'',4000,false);$link=null;$history=pruefungHistorie($p,$action,$uid,$note);
         if($action==='loeschen'){
-            if(!pruefungLoeschenDarf($u,$p))fail(409,'Nur archivierte oder annullierte Prüfungen dürfen gelöscht werden.');
+            if(!pruefungLoeschenDarf($u,$p))fail(409,'Nur annullierte, nie begonnene Theorieprüfungen dürfen gelöscht werden. Abgelegte und abgeschlossene Prüfungen bleiben erhalten.');
             if(($b['bestaetigen']??false)!==true)fail(400,'Endgültiges Löschen ausdrücklich bestätigen.');
             sql('DELETE FROM ausbildung_pruefungen WHERE id=? AND revision=?',[$id,(int)$p['revision']]);
             $pdo->commit();

@@ -168,13 +168,21 @@ function assessmentArchivInfo(array $p,?int $now=null): array {
     // Legacy records without a trustworthy release timestamp remain archived.
     $out['archiviert']=true;return $out;
 }
+// Store only inactive markers in the existing system options table. Questions remain immutable.
+function assessmentVorlageAktiv(int $id): bool {
+    return !sql('SELECT 1 FROM system_optionen WHERE schluessel=?',['assessment_template_inactive_'.$id]);
+}
+function assessmentVorlageStatusDarf(array $u): bool {
+    return ($u['rolle']??'')==='Administrator';
+}
 function assessmentVorlageLoeschenDarf(array $u,int $verwendungen): bool {
     return ($u['rolle']??'')==='Administrator'&&$verwendungen===0;
 }
 function assessmentLoeschenDarf(array $u,array $p,?int $now=null): bool {
     return ($u['rolle']??'')==='Administrator'
-        &&in_array($p['status']??'', ['freigegeben','annulliert'],true)
-        &&assessmentArchivInfo($p,$now)['archiviert'];
+        &&($p['status']??'')==='annulliert'
+        &&($p['art']??'')!=='praxis'
+        &&empty($p['start_am'])&&empty($p['abgabe_am']);
 }
 function assessmentSichtbar(array $p,int $uid,bool $leitung): bool {
     return $uid>0&&$leitung; // Every authorised council member sees every attempt, including archives.
@@ -304,7 +312,23 @@ function dispatchAssessment(array $u,string $method,string $uri): bool {
     if($method==='GET'&&$uri===$root){
         $rows=assessmentListenZeilen($uid,$lead);
         $reviewers=[];foreach(sql("SELECT id,anzeigename,dienstnummer FROM users WHERE gesperrt=0 AND muss_passwort_aendern=0 ORDER BY anzeigename") as $r)if(assessmentReviewer((int)$r['id']))$reviewers[]=$r;
-        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'loeschenAdmin'=>($u['rolle']==='Administrator'),'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'user'=>$uid,'arten'=>ASSESSMENT_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT v.id,v.art,v.titel,v.minuten,v.grenze,v.erstellt_am,(SELECT COUNT(*) FROM assessment_pruefungen p WHERE p.vorlage_id=v.id) AS verwendungen FROM assessment_pruefung_vorlagen v WHERE JSON_TYPE(v.fragen)=\'ARRAY\' ORDER BY v.id DESC'):[]),'pruefungsauswahl'=>($verwaltung?sql('SELECT id,art,titel FROM assessment_pruefung_vorlagen WHERE art<>\'praxis\' ORDER BY id DESC'):[]),'pruefungen'=>$rows,'pruefer'=>$reviewers,'kiAdmin'=>($u['rolle']==='Administrator')]);
+        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'loeschenAdmin'=>($u['rolle']==='Administrator'),'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'user'=>$uid,'arten'=>ASSESSMENT_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT v.id,v.art,v.titel,v.minuten,v.grenze,v.erstellt_am,NOT EXISTS (SELECT 1 FROM system_optionen o WHERE o.schluessel=CONCAT(\'assessment_template_inactive_\',v.id)) AS aktiv,(SELECT COUNT(*) FROM assessment_pruefungen p WHERE p.vorlage_id=v.id) AS verwendungen FROM assessment_pruefung_vorlagen v WHERE JSON_TYPE(v.fragen)=\'ARRAY\' ORDER BY v.id DESC'):[]),'pruefungsauswahl'=>($verwaltung?sql('SELECT v.id,v.art,v.titel FROM assessment_pruefung_vorlagen v WHERE v.art<>\'praxis\' AND NOT EXISTS (SELECT 1 FROM system_optionen o WHERE o.schluessel=CONCAT(\'assessment_template_inactive_\',v.id)) ORDER BY v.id DESC'):[]),'pruefungen'=>$rows,'pruefer'=>$reviewers,'kiAdmin'=>($u['rolle']==='Administrator')]);
+    }
+    if($method==='POST'&&preg_match('#^/api/assessment/vorlagen/([1-9][0-9]*)/status$#D',$uri,$vMatch)){
+        if(!assessmentVorlageStatusDarf($u))fail(403,'Nur Administratoren dürfen Vorlagen aktivieren oder deaktivieren.');
+        $b=body();$aktiv=$b['aktiv']??null;
+        if(!is_bool($aktiv))fail(400,'Aktivstatus muss eindeutig angegeben werden.');
+        $vid=(int)$vMatch[1];$pdo=db();$pdo->beginTransaction();
+        try{
+            $row=sql("SELECT id FROM assessment_pruefung_vorlagen WHERE id=? AND JSON_TYPE(fragen)='ARRAY' FOR UPDATE",[$vid]);
+            if(!$row){$pdo->rollBack();fail(404,'Verwaltbare Vorlage nicht gefunden.');}
+            $key='assessment_template_inactive_'.$vid;
+            if($aktiv)sql('DELETE FROM system_optionen WHERE schluessel=?',[$key]);
+            else sql("INSERT INTO system_optionen(schluessel,werte) VALUES(?,'[false]') ON DUPLICATE KEY UPDATE werte=VALUES(werte),aktualisiert=UTC_TIMESTAMP(6)",[$key]);
+            $pdo->commit();
+        }catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
+        error_log('IDV assessment_pruefung_vorlagen: Vorlage #'.$vid.($aktiv?' aktiviert':' deaktiviert').' durch Administrator #'.$uid);
+        respond(200,['ok'=>true,'aktiv'=>$aktiv]);
     }
     if($method==='POST'&&preg_match('#^/api/assessment/vorlagen/([1-9][0-9]*)/loeschen$#D',$uri,$vMatch)){
         if(($u['rolle']??'')!=='Administrator')fail(403,'Nur Administratoren dürfen Vorlagen löschen.');
@@ -345,13 +369,18 @@ function dispatchAssessment(array $u,string $method,string $uri): bool {
         $b=body();$vid=(int)($b['vorlage']??0);$candidate=assessmentText($b['bewerber']??null,200);
         // Existing schema columns are retained for non-destructive compatibility; no reviewer assignment.
         $first=$uid;$second=0;
-        $v=sql('SELECT * FROM assessment_pruefung_vorlagen WHERE id=?',[$vid]);
+        $pdo=db();$pdo->beginTransaction();
+        try{
+        $v=sql('SELECT * FROM assessment_pruefung_vorlagen WHERE id=? FOR UPDATE',[$vid]);
+        if($v&&!assessmentVorlageAktiv($vid)){$pdo->rollBack();fail(409,'Diese Prüfungsvorlage ist inaktiv. Bitte eine aktive Vorlage auswählen.');}
         if(!$v||!isset(ASSESSMENT_ARTEN[$v[0]['art']]))fail(400,'Gültige Assessment-Vorlage fehlt');
         $v=$v[0];$token=bin2hex(random_bytes(32));
         $answers=array_map(fn($q)=>$q['typ']==='text'?'':[],assessmentRead($v['fragen']));
         sql("INSERT INTO assessment_pruefungen(vorlage_id,kandidat,erst,zweit,status,token_hash,token_ablauf,antworten,bewertung,protokoll,fokus) VALUES(?,?,?,?,?,?,TIMESTAMPADD(HOUR,24,UTC_TIMESTAMP(6)),?,?,?,?)",
             [$vid,$candidate,$first,$second,'bereit',hash('sha256',$token),assessmentJson($answers),'[]',assessmentJson([['am'=>gmdate('c'),'aktion'=>'erstellt','user'=>$uid]]),'{"wechsel":0,"events":[]}']);
-        respond(201,['id'=>(int)db()->lastInsertId(),'link'=>'/assessment.html#'.$token]);
+        $newId=(int)$pdo->lastInsertId();$pdo->commit();
+        }catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
+        respond(201,['id'=>$newId,'link'=>'/assessment.html#'.$token]);
     }
     if(preg_match('#^/api/assessment/([1-9][0-9]*)/ki$#D',$uri,$aiMatch)){
         require_once __DIR__.'/AssessmentKI.php';
@@ -377,7 +406,7 @@ function dispatchAssessment(array $u,string $method,string $uri): bool {
         if(($b['revision']??null)!==(int)$p['revision'])fail(409,'Prüfung wurde zwischenzeitlich geändert. Neu laden.');
         $status=$p['status'];$note=assessmentText($b['notiz']??'',4000,false);$link=null;$history=assessmentHistorie($p,$action,$uid,$note);
         if($action==='loeschen'){
-            if(!assessmentLoeschenDarf($u,$p))fail(409,'Nur archivierte oder annullierte Prüfungen dürfen gelöscht werden.');
+            if(!assessmentLoeschenDarf($u,$p))fail(409,'Nur annullierte, nie begonnene Theorieprüfungen dürfen gelöscht werden. Abgelegte und abgeschlossene Prüfungen bleiben erhalten.');
             if(($b['bestaetigen']??false)!==true)fail(400,'Endgültiges Löschen ausdrücklich bestätigen.');
             sql('DELETE FROM assessment_pruefungen WHERE id=? AND revision=?',[$id,(int)$p['revision']]);
             $pdo->commit();

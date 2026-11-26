@@ -30,7 +30,9 @@ $deleteNow=strtotime('2026-11-27T00:00:00Z');
 $oldExam=['status'=>'freigegeben','protokoll'=>[['aktion'=>'freigabe','am'=>'2026-11-25T00:00:00Z']]];
 $freshExam=['status'=>'freigegeben','protokoll'=>[['aktion'=>'freigabe','am'=>'2026-11-26T23:00:00Z']]];
 foreach(['Administrator','Leitungsdienst','Polizeirat','Ausbildungsleitung','Ausbilder',''] as $role){
- checkAssessment(assessmentLoeschenDarf(['rolle'=>$role],$oldExam,$deleteNow)===($role==='Administrator'),'archive deletion role '.$role);
+ checkAssessment(!assessmentLoeschenDarf(['rolle'=>$role],$oldExam,$deleteNow),'completed exams protected '.$role);
+ checkAssessment(assessmentLoeschenDarf(['rolle'=>$role],['status'=>'annulliert','art'=>'pm'],$deleteNow)===($role==='Administrator'),'unstarted cancelled deletion role '.$role);
+ checkAssessment(assessmentVorlageStatusDarf(['rolle'=>$role])===($role==='Administrator'),'template status role '.$role);
  checkAssessment(!assessmentLoeschenDarf(['rolle'=>$role],$freshExam,$deleteNow),'unarchived release protected '.$role);
  foreach(['bereit','laufend','abgegeben','erstkorrigiert','zweitkorrigiert'] as $status)checkAssessment(!assessmentLoeschenDarf(['rolle'=>$role],['status'=>$status],$deleteNow),'active exam protected '.$status);
 }
@@ -40,3 +42,7 @@ foreach(['Administrator','Leitungsdienst','Polizeirat','Ausbildungsleitung','Aus
  checkAssessment(assessmentVorlageLoeschenDarf(['rolle'=>$role],0)===($role==='Administrator'),'template deletion role '.$role);
  checkAssessment(!assessmentVorlageLoeschenDarf(['rolle'=>$role],1),'referenced template protected '.$role);
 }
+
+checkAssessment(!assessmentLoeschenDarf(['rolle'=>'Administrator'],['status'=>'annulliert','start_am'=>'2026-11-26'],$deleteNow),'started cancellation retained');
+checkAssessment(!assessmentLoeschenDarf(['rolle'=>'Administrator'],['status'=>'annulliert','abgabe_am'=>'2026-11-26'],$deleteNow),'submitted cancellation retained');
+checkAssessment(!assessmentLoeschenDarf(['rolle'=>'Administrator'],['status'=>'annulliert','art'=>'praxis'],$deleteNow),'practice retained');

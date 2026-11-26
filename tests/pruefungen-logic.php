@@ -101,7 +101,9 @@ $deleteNow=strtotime('2026-11-27T00:00:00Z');
 $oldExam=['status'=>'freigegeben','protokoll'=>[['aktion'=>'freigabe','am'=>'2026-11-25T00:00:00Z']]];
 $freshExam=['status'=>'freigegeben','protokoll'=>[['aktion'=>'freigabe','am'=>'2026-11-26T23:00:00Z']]];
 foreach(['Administrator','Leitungsdienst','Polizeirat','Ausbildungsleitung','Ausbilder',''] as $role){
- assertExam(IDV\pruefungLoeschenDarf(['rolle'=>$role],$oldExam,$deleteNow)===($role==='Administrator'),'archive deletion role '.$role);
+ assertExam(!IDV\pruefungLoeschenDarf(['rolle'=>$role],$oldExam,$deleteNow),'completed exams protected '.$role);
+ assertExam(IDV\pruefungLoeschenDarf(['rolle'=>$role],['status'=>'annulliert','art'=>'pm'],$deleteNow)===($role==='Administrator'),'unstarted cancelled deletion role '.$role);
+ assertExam(IDV\pruefungVorlageStatusDarf(['rolle'=>$role])===($role==='Administrator'),'template status role '.$role);
  assertExam(!IDV\pruefungLoeschenDarf(['rolle'=>$role],$freshExam,$deleteNow),'unarchived release protected '.$role);
  foreach(['bereit','laufend','abgegeben','erstkorrigiert','zweitkorrigiert'] as $status)assertExam(!IDV\pruefungLoeschenDarf(['rolle'=>$role],['status'=>$status],$deleteNow),'active exam protected '.$status);
 }
@@ -111,3 +113,7 @@ foreach(['Administrator','Leitungsdienst','Polizeirat','Ausbildungsleitung','Aus
  assertExam(IDV\pruefungVorlageLoeschenDarf(['rolle'=>$role],0)===($role==='Administrator'),'template deletion role '.$role);
  assertExam(!IDV\pruefungVorlageLoeschenDarf(['rolle'=>$role],1),'referenced template protected '.$role);
 }
+
+assertExam(!IDV\pruefungLoeschenDarf(['rolle'=>'Administrator'],['status'=>'annulliert','start_am'=>'2026-11-26'],$deleteNow),'started cancellation retained');
+assertExam(!IDV\pruefungLoeschenDarf(['rolle'=>'Administrator'],['status'=>'annulliert','abgabe_am'=>'2026-11-26'],$deleteNow),'submitted cancellation retained');
+assertExam(!IDV\pruefungLoeschenDarf(['rolle'=>'Administrator'],['status'=>'annulliert','art'=>'praxis'],$deleteNow),'practice retained');

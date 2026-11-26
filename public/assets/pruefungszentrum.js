@@ -13,6 +13,7 @@ const area=(ph='')=>{const t=node('textarea');t.placeholder=ph;t.rows=4;t.style.
 const card=(title)=>{const s=node('section',undefined,'box');s.style.marginBottom='14px';s.append(node('h3',title));return s;};
 const EXAM_FILTERS={running:['bereit','laufend'],first:['abgegeben'],second:['erstkorrigiert'],release:['zweitkorrigiert'],results:['freigegeben']};
 function examLiveChanges(before,after){const old=new Map(before.map(p=>[String(p.id),p]));return {changed:JSON.stringify(before)!==JSON.stringify(after),submitted:after.filter(p=>p.art!=='praxis'&&p.status==='abgegeben'&&['bereit','laufend'].includes(old.get(String(p.id))?.status))};}
+function examCanDelete(p){return p.status==='annulliert'&&p.art!=='praxis'&&!p.start_am&&!p.abgabe_am;}
 function examMatchesView(p,view){const practice=p.art==='praxis',archived=p.archiviert===true||p.status==='annulliert';if(view==='archive')return archived;if(archived)return false;if(view==='results')return p.status==='freigegeben';if(view==='practice')return practice&&p.status!=='freigegeben';if(practice)return view==='overview';return !EXAM_FILTERS[view]||EXAM_FILTERS[view].includes(p.status);}
 const EXAM_VIEWS={ki:['KI-Einstellungen','KI-Verbindung für die Vorkorrektur verwalten','settings'],practice:['PM-Praxisprüfung','Praktische Prüfung vorbereiten und bewerten','clipboard'],overview:['Übersicht','Alle Prüfungen im Überblick','dashboard'],running:['Durchführung','Erstellte Links und laufende Prüfungen','clock'],first:['Erstkorrektur','Abgegebene Prüfungen bewerten','clipboard'],second:['Zweitkorrektur','Erstbewertungen kontrollieren','check'],release:['Freigabe','Zweitkorrigierte Ergebnisse freigeben','unlock'],results:['Abgeschlossene Prüfungen','Ergebnisse bis zur Archivierung, maximal 24 Stunden','check'],archive:['Archiv','Archivierte und annullierte Prüfungen','archive'],templates:['Vorlagen','Fragenkatalog und Google-Import','settings'],create:['Neue Prüfung','Prüfling und Prüfer auswählen','plus']};
 function examIcon(key){
@@ -114,7 +115,7 @@ function open(host){
  async function load(){try{data=await api();if(connected()){message('');if(view==='detail'&&detailId!==null){await details(detailId);}else render();}}catch(e){if(connected()&&!data){main.replaceChildren();const b=card('Prüfungszentrum konnte nicht geladen werden');b.append(node('p',e.message),node('p','Die übrigen Panel-Funktionen bleiben verfügbar. Prüfe die Meldung oder gib sie an die Administration weiter.','mut'),btn('Erneut versuchen',()=>run(load)));main.append(b);}throw e;}}
  function linkBox(url){if(!url)return;const box=card('Prüfungslink · vertraulich weitergeben');const i=text();i.value=location.origin+url;i.readOnly=true;box.append(i,btn('Link kopieren',async()=>{try{await navigator.clipboard.writeText(i.value);message('Link kopiert.')}catch{ i.select();message('Bitte markierten Link manuell kopieren.')}}));main.prepend(box);}
  function deleteExam(p){
-  if(data.loeschenAdmin!==true||!examMatchesView(p,'archive')||busy||!canLeave())return;
+  if(data.loeschenAdmin!==true||!examCanDelete(p)||busy||!canLeave())return;
   const warning='Prüfung #'+p.id+' · '+p.kandidat+' · '+p.titel+' endgültig löschen?\n\nAntworten, Bewertung, Ergebnis und Prüfungsprotokoll werden unwiderruflich entfernt. Die Prüfungsvorlage bleibt erhalten.'+(p.art==='pm'&&p.status==='freigegeben'?'\n\nAchtung: Eine offene oder zukünftige PM-Praxisprüfung kann dadurch ihre Theoriegrundlage verlieren oder auf ein älteres Ergebnis zurückgreifen. Bereits abgeschlossene Praxisbewertungen bleiben erhalten.':'');
   if(!confirm(warning))return;
   run(async()=>{await api('/'+p.id+'/loeschen',{revision:Number(p.revision),bestaetigen:true});dirty=false;detailId=null;view='archive';kind='';await load();message('Prüfung endgültig gelöscht.');});
@@ -184,7 +185,7 @@ function open(host){
    const status=node('td');const pill=node('span',p.art==='praxis'&&p.status==='abgegeben'?'In Bewertung':p.art==='praxis'&&p.status==='freigegeben'?'Abgeschlossen':states[p.status]||p.status,'exam-status');pill.dataset.status=p.status;status.append(pill);if(p.status==='freigegeben'&&!p.archiviert&&p.archivAb)status.append(node('small','Archiv ab '+new Date(p.archivAb).toLocaleString('de-DE')));tr.append(status);
    const progress=node('td');if(p.art==='praxis')progress.textContent=p.status==='freigegeben'&&p.ergebnis!=null?Number(p.ergebnis).toLocaleString('de-DE',{maximumFractionDigits:2})+' %':p.status==='abgegeben'?'In Bewertung':'—';else{const total=Number(p.fragenGesamt)||0,done=Number(p.bearbeitet)||0,percent=total?Math.min(100,Math.max(0,done/total*100)):0;const meter=node('div',undefined,'exam-meter'),fill=node('i');fill.style.width=percent+'%';meter.append(fill);progress.append(node('span',done+' / '+total,'exam-progress-label'),meter);}tr.append(progress);
    if(view!=='practice'){tr.append(node('td',date(p.ende_am)));const focus=node('td');const f=node('span',String(p.tabwechsel??0),'exam-focus-count');if(Number(p.tabwechsel)>0)f.classList.add('has-events');focus.append(f);tr.append(focus);}
-   const td=node('td');const openButton=btn('Öffnen',()=>run(async()=>{lastList=view;await details(p.id)}),'exam-open');openButton.append(examIcon('arrow'));td.append(openButton);if(p.status==='freigegeben'&&!p.archiviert){const archive=btn('Archivieren',()=>archiveExam(p),'exam-open');archive.prepend(examIcon('archive'));td.append(archive);}if(view==='archive'&&data.loeschenAdmin===true&&examMatchesView(p,'archive')){const remove=btn('Löschen',()=>deleteExam(p),'exam-open');remove.style.color='#fca5a5';remove.style.borderColor='#9b4e56';remove.style.marginLeft='6px';remove.title='Prüfung endgültig löschen (nur Administratoren)';td.append(remove);}tr.append(td);body.append(tr);
+   const td=node('td');const openButton=btn('Öffnen',()=>run(async()=>{lastList=view;await details(p.id)}),'exam-open');openButton.append(examIcon('arrow'));td.append(openButton);if(p.status==='freigegeben'&&!p.archiviert){const archive=btn('Archivieren',()=>archiveExam(p),'exam-open');archive.prepend(examIcon('archive'));td.append(archive);}if(view==='archive'&&data.loeschenAdmin===true&&examCanDelete(p)){const remove=btn('Löschen',()=>deleteExam(p),'exam-open');remove.style.color='#fca5a5';remove.style.borderColor='#9b4e56';remove.style.marginLeft='6px';remove.title='Prüfung endgültig löschen (nur Administratoren)';td.append(remove);}tr.append(td);body.append(tr);
   }
  }
  s.oninput=()=>{search=s.value;renderRows()};k.onchange=()=>{kind=k.value;renderRows()};renderRows();
@@ -204,7 +205,7 @@ function open(host){
  }
  function create(practice=false){if(practice)main.append(btn('← PM-Praxisprüfung',()=>navigate('practice'),'exam-back'));const c=card(practice?'PM-Praxisprüfung anlegen':'Prüfung vorbereiten');c.classList.add('exam-form');
  const choices=(data.pruefungsauswahl||[]).filter(x=>practice?x.art==='praxis':x.art!=='praxis');
- if(!choices.length){c.append(node('p','Zuerst muss die berechtigte Leitung oder ein Administrator eine geprüfte Prüfungsvorlage hinterlegen.'));if(practice&&data.vorlagenBearbeiten)c.append(btn('Bewertungsbogen erstellen',()=>navigate('practice-template'),'p'));main.append(c);return}
+ if(!choices.length){c.append(node('p','Keine aktive Prüfungsvorlage verfügbar. Bitte eine Vorlage aktivieren oder neu hinterlegen lassen.'));if(practice&&data.vorlagenBearbeiten)c.append(btn('Bewertungsbogen erstellen',()=>navigate('practice-template'),'p'));main.append(c);return}
  const grid=node('div',undefined,'exam-form-grid');c.append(node('p',data.leitung?'Wähle die Prüfungsart, den Prüfling und zwei unterschiedliche Prüfer.':'Du bist Erstprüfer. Wähle die Prüfungsvorlage, den Prüfling und einen anderen berechtigten Zweitprüfer.','mut'),grid);
  const v=field(grid,'Prüfungsvorlage',select(choices.map(x=>[x.id,x.titel+' · Version #'+x.id])));
  const a=field(grid,'Anwärter',select([]));
@@ -386,18 +387,25 @@ function open(host){
  }));
  savebar.append(save);c.append(savebar);
  if(draft)c.append(btn('Neue Vorlage statt Bearbeitung',()=>{if(confirm('Entwurf verwerfen?')){templateDraft=null;render()}},''));
- const l=card('Vorhandene Versionen');for(const x of data.vorlagen.filter(x=>practice?x.art==='praxis':x.art!=='praxis')){const line=node('div');line.style.display='flex';line.style.justifyContent='space-between';line.style.alignItems='center';line.style.gap='8px';line.style.margin='8px 0';line.append(node('span','#'+x.id+' · '+x.titel+' · '+x.grenze+' % · '+x.minuten+' Min.'),btn('Bearbeiten',()=>run(async()=>{if(questions.length&&!confirm('Aktuellen Entwurf verwerfen und Vorlage laden?'))return;templateDraft=(await api('/vorlagen/'+x.id)).vorlage;render();}),''));
+ const l=card('Vorhandene Versionen');l.append(node('p','Inaktive Vorlagen sind nicht mehr für neue Prüfungen auswählbar. Bestehende Prüfungen, Antworten, Musterlösungen und Ergebnisse bleiben erhalten.','mut'));for(const x of data.vorlagen.filter(x=>practice?x.art==='praxis':x.art!=='praxis')){const line=node('div');line.style.display='flex';line.style.justifyContent='space-between';line.style.alignItems='center';line.style.gap='8px';line.style.margin='8px 0';line.append(node('span','#'+x.id+' · '+x.titel+' · '+x.grenze+' % · '+x.minuten+' Min. · '+(Number(x.aktiv)===0?'Inaktiv':'Aktiv')),btn('Bearbeiten',()=>run(async()=>{if(questions.length&&!confirm('Aktuellen Entwurf verwerfen und Vorlage laden?'))return;templateDraft=(await api('/vorlagen/'+x.id)).vorlage;render();}),''));
  if(data.loeschenAdmin===true){
   const count=Number(x.verwendungen),known=x.verwendungen!=null&&Number.isInteger(count)&&count>=0;
   const actions=node('div');actions.style.display='flex';actions.style.flexWrap='wrap';actions.style.alignItems='center';actions.style.gap='8px';
   actions.append(line.lastChild);
+  const active=Number(x.aktiv)!==0;
+  const toggle=btn(active?'Deaktivieren':'Aktivieren',()=>{
+   if(busy||!canLeave())return;
+   if(!confirm(active?'Vorlage für neue Prüfungen deaktivieren? Bereits erstellte Prüfungen und Ergebnisse bleiben erhalten.':'Vorlage wieder für neue Prüfungen freigeben?'))return;
+   run(async()=>{await api('/vorlagen/'+x.id+'/status',{aktiv:!active});templateDraft=null;dirty=false;await load();message(active?'Vorlage deaktiviert. Bestehende Prüfungen bleiben erhalten.':'Vorlage aktiviert.');});
+  },'exam-open');
+  actions.append(toggle);
   const remove=btn('Löschen',()=>{
    if(busy||!canLeave())return;
    if(!confirm('Vorlage #'+x.id+' · '+x.titel+' endgültig löschen? Die Fragen und Musterlösungen dieser Version werden entfernt.'))return;
    run(async()=>{await api('/vorlagen/'+x.id+'/loeschen',{bestaetigen:true});templateDraft=null;dirty=false;await load();message('Vorlage endgültig gelöscht.');});
   },'danger');
   remove.disabled=!known||count>0;
-  remove.title=known&&count>0?'Noch von '+count+' Prüfung(en) verwendet':known?'Vorlagenversion endgültig löschen':'Bitte Vorlagenliste neu laden';
+  remove.title=known&&count>0?'Noch von '+count+' Prüfung(en) verwendet – stattdessen deaktivieren':known?'Vorlagenversion endgültig löschen':'Bitte Vorlagenliste neu laden';
   if(known&&count>0)actions.append(node('small',count+' Prüfung(en) verknüpft','mut'));
   actions.append(remove);line.append(actions);
  }
