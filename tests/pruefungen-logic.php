@@ -106,3 +106,8 @@ foreach(['Administrator','Leitungsdienst','Polizeirat','Ausbildungsleitung','Aus
  foreach(['bereit','laufend','abgegeben','erstkorrigiert','zweitkorrigiert'] as $status)assertExam(!IDV\pruefungLoeschenDarf(['rolle'=>$role],['status'=>$status],$deleteNow),'active exam protected '.$status);
 }
 assertExam(IDV\pruefungLoeschenDarf(['rolle'=>'Administrator'],['status'=>'annulliert'],$deleteNow),'cancelled exam can be deleted');
+
+foreach(['Administrator','Leitungsdienst','Polizeirat','Ausbildungsleitung','Ausbilder',''] as $role){
+ assertExam(IDV\pruefungVorlageLoeschenDarf(['rolle'=>$role],0)===($role==='Administrator'),'template deletion role '.$role);
+ assertExam(!IDV\pruefungVorlageLoeschenDarf(['rolle'=>$role],1),'referenced template protected '.$role);
+}

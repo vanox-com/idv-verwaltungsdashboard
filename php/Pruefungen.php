@@ -167,6 +167,9 @@ function pruefungArchivInfo(array $p,?int $now=null): array {
     // Legacy records without a trustworthy release timestamp remain archived.
     $out['archiviert']=true;return $out;
 }
+function pruefungVorlageLoeschenDarf(array $u,int $verwendungen): bool {
+    return ($u['rolle']??'')==='Administrator'&&$verwendungen===0;
+}
 function pruefungLoeschenDarf(array $u,array $p,?int $now=null): bool {
     return ($u['rolle']??'')==='Administrator'
         &&in_array($p['status']??'', ['freigegeben','annulliert'],true)
@@ -341,7 +344,25 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         $anlegen=pruefungAnlegenDarf($u);
         if($anlegen)ausbildungSynchronisierePersonal();
         $trainees=$anlegen?array_map(fn($a)=>array_intersect_key($a,array_flip(['id','name','laufbahn','personalnummer']))+['mindestzeit'=>pruefungKommissarMindestzeit($a)],ausbildungAktuelleAnwaerter()):[];
-        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'loeschenAdmin'=>($u['rolle']==='Administrator'),'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'anlegen'=>$anlegen,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM ausbildung_pruefung_vorlagen WHERE JSON_TYPE(fragen)=\'ARRAY\' ORDER BY id DESC'):[]),'pruefungsauswahl'=>($anlegen?sql('SELECT id,art,titel FROM ausbildung_pruefung_vorlagen WHERE art<>\'praxis\' ORDER BY id DESC'):[]),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
+        respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'loeschenAdmin'=>($u['rolle']==='Administrator'),'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'anlegen'=>$anlegen,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT v.id,v.art,v.titel,v.minuten,v.grenze,v.erstellt_am,(SELECT COUNT(*) FROM ausbildung_pruefungen p WHERE p.vorlage_id=v.id) AS verwendungen FROM ausbildung_pruefung_vorlagen v WHERE JSON_TYPE(v.fragen)=\'ARRAY\' ORDER BY v.id DESC'):[]),'pruefungsauswahl'=>($anlegen?sql('SELECT id,art,titel FROM ausbildung_pruefung_vorlagen WHERE art<>\'praxis\' ORDER BY id DESC'):[]),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
+    }
+    if($method==='POST'&&preg_match('#^/api/ausbildung/pruefungen/vorlagen/([1-9][0-9]*)/loeschen$#D',$uri,$vMatch)){
+        if(($u['rolle']??'')!=='Administrator')fail(403,'Nur Administratoren dürfen Vorlagen löschen.');
+        $b=body();if(($b['bestaetigen']??false)!==true)fail(400,'Endgültiges Löschen ausdrücklich bestätigen.');
+        $vid=(int)$vMatch[1];
+        // An atomic conditional delete plus the existing foreign key protects concurrent exam creation.
+        $stmt=db()->prepare("DELETE FROM ausbildung_pruefung_vorlagen WHERE id=? AND JSON_TYPE(fragen)='ARRAY' AND NOT EXISTS (SELECT 1 FROM ausbildung_pruefungen p WHERE p.vorlage_id=ausbildung_pruefung_vorlagen.id)");
+        try{$stmt->execute([$vid]);}
+        catch(\PDOException $e){if(($e->errorInfo[1]??null)==1451)fail(409,'Vorlage wird noch von Prüfungen verwendet.');throw $e;}
+        if($stmt->rowCount()!==1){
+            $rows=sql("SELECT JSON_TYPE(fragen) AS typ,(SELECT COUNT(*) FROM ausbildung_pruefungen p WHERE p.vorlage_id=v.id) AS verwendungen FROM ausbildung_pruefung_vorlagen v WHERE v.id=?",[$vid]);
+            if(!$rows)fail(404,'Vorlage nicht gefunden.');
+            if($rows[0]['typ']!=='ARRAY')fail(409,'Fest eingebauter Bewertungsbogen kann nicht gelöscht werden.');
+            if(!pruefungVorlageLoeschenDarf($u,(int)$rows[0]['verwendungen']))fail(409,'Vorlage wird noch von '.(int)$rows[0]['verwendungen'].' Prüfung(en) verwendet. Bestehende Prüfungen bleiben geschützt.');
+            fail(409,'Vorlage wurde zwischenzeitlich geändert. Bitte neu laden.');
+        }
+        error_log('IDV ausbildung_pruefung_vorlagen: Vorlage #'.$vid.' endgültig gelöscht durch Administrator #'.$uid);
+        respond(200,['ok'=>true,'geloescht'=>true]);
     }
     if($method==='GET'&&preg_match('#^/api/ausbildung/pruefungen/vorlagen/([1-9][0-9]*)$#D',$uri,$vMatch)){
         if(!$verwaltung)fail(403,'Nur berechtigte Leitung und Administratoren dürfen Prüfungsvorlagen einsehen und bearbeiten');

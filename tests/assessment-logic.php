@@ -35,3 +35,8 @@ foreach(['Administrator','Leitungsdienst','Polizeirat','Ausbildungsleitung','Aus
  foreach(['bereit','laufend','abgegeben','erstkorrigiert','zweitkorrigiert'] as $status)checkAssessment(!assessmentLoeschenDarf(['rolle'=>$role],['status'=>$status],$deleteNow),'active exam protected '.$status);
 }
 checkAssessment(assessmentLoeschenDarf(['rolle'=>'Administrator'],['status'=>'annulliert'],$deleteNow),'cancelled exam can be deleted');
+
+foreach(['Administrator','Leitungsdienst','Polizeirat','Ausbildungsleitung','Ausbilder',''] as $role){
+ checkAssessment(assessmentVorlageLoeschenDarf(['rolle'=>$role],0)===($role==='Administrator'),'template deletion role '.$role);
+ checkAssessment(!assessmentVorlageLoeschenDarf(['rolle'=>$role],1),'referenced template protected '.$role);
+}

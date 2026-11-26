@@ -382,6 +382,20 @@ function open(host){
  savebar.append(save);c.append(savebar);
  if(draft)c.append(btn('Neue Vorlage statt Bearbeitung',()=>{if(confirm('Entwurf verwerfen?')){templateDraft=null;render()}},''));
  const l=card('Vorhandene Versionen');for(const x of data.vorlagen.filter(x=>practice?x.art==='praxis':x.art!=='praxis')){const line=node('div');line.style.display='flex';line.style.justifyContent='space-between';line.style.alignItems='center';line.style.gap='8px';line.style.margin='8px 0';line.append(node('span','#'+x.id+' · '+x.titel+' · '+x.grenze+' % · '+x.minuten+' Min.'),btn('Bearbeiten',()=>run(async()=>{if(questions.length&&!confirm('Aktuellen Entwurf verwerfen und Vorlage laden?'))return;templateDraft=(await api('/vorlagen/'+x.id)).vorlage;render();}),''));
+ if(data.loeschenAdmin===true){
+  const count=Number(x.verwendungen),known=x.verwendungen!=null&&Number.isInteger(count)&&count>=0;
+  const actions=node('div');actions.style.display='flex';actions.style.flexWrap='wrap';actions.style.alignItems='center';actions.style.gap='8px';
+  actions.append(line.lastChild);
+  const remove=btn('Löschen',()=>{
+   if(busy||!canLeave())return;
+   if(!confirm('Vorlage #'+x.id+' · '+x.titel+' endgültig löschen? Die Fragen und Musterlösungen dieser Version werden entfernt.'))return;
+   run(async()=>{await api('/vorlagen/'+x.id+'/loeschen',{bestaetigen:true});templateDraft=null;dirty=false;await load();message('Vorlage endgültig gelöscht.');});
+  },'danger');
+  remove.disabled=!known||count>0;
+  remove.title=known&&count>0?'Noch von '+count+' Prüfung(en) verwendet':known?'Vorlagenversion endgültig löschen':'Bitte Vorlagenliste neu laden';
+  if(known&&count>0)actions.append(node('small',count+' Prüfung(en) verknüpft','mut'));
+  actions.append(remove);line.append(actions);
+ }
  l.append(line)}main.append(c,l);renderQuestions();
  }
  async function details(id){refreshList=null;if(data.pruefungen.some(p=>Number(p.id)===Number(id)&&p.praxisSchema==='pm-praxis-v1')||lastList==='practice'&&!data.pruefungen.some(p=>Number(p.id)===Number(id))){detailId=id;view='detail';dirty=false;main.replaceChildren(nav());const back=btn('← Zurück zur Prüfungsliste',()=>navigate(lastList),'exam-back');main.append(back);await window.IDVPractice.open(main,id,{api,run,message,dirty:()=>{dirty=true;},clean:()=>{dirty=false;},manager:data.verwaltung,archive:archiveExam,afterHandoff:async()=>{detailId=null;dirty=false;view='results';kind='';await load();message('Praxisprüfung abgeschlossen. Das Ergebnis bleibt bis zur Archivierung abrufbar.');},reload:async id=>{data=await api();await details(id);}});return;}const result=await api('/'+id);if(!connected())return;detailId=id;view='detail';dirty=false;main.replaceChildren(nav());const back=btn('Zurück zur Prüfungsliste',()=>navigate(lastList),'exam-back');back.prepend(examIcon('back'));main.append(back);
