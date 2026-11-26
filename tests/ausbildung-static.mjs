@@ -126,3 +126,14 @@ for(const [rolle,ausbildung,expected] of [["Administrator",0,true],["Leitungsdie
 
 // Both types of login must start on the shared welcome dashboard unless returning to a training view.
 if(!index.includes("else if(can('dash'))tab='dash';")||!index.includes("if(tab==='dash'&&ausbildungKonto())")||!index.includes("dashboardJonasHtml()+'</section><div class=\"box\"><h3>Ausbildung"))throw Error('Shared welcome dashboard missing for training logins');
+
+// Both public monitor pages must show the same server-calculated seven-day duration.
+for(const path of ['public/aulk.html','public/ausbildung-status.html']){
+ const page=readFileSync(path,'utf8');
+ const start=page.indexOf('function minimumView('),end=page.indexOf('function minimumCard(',start);
+ if(start<0||end<0||!page.includes('mindestzeit'))throw Error(path+': minimum time display missing');
+ const view=new Function(page.slice(start,end)+';return minimumView;')();
+ const cases=[[{tage:4,resttage:3,erfuellt:false,ab:'2026-11-29'},4,false,'Noch 3 Tage'],[{tage:7,resttage:0,erfuellt:true},7,true,'Mindestzeit erfüllt'],[{tage:12,resttage:0,erfuellt:true},7,true,'Mindestzeit erfüllt'],[null,null,false,'Laufbahnbeginn nicht verfügbar']];
+ for(const [m,days,ready,label] of cases){const v=view(m);if(v.days!==days||v.ready!==ready||v.label!==label)throw Error(path+': minimum status mismatch');}
+ if(view(cases[0][0]).date!=='29.11.2026')throw Error(path+': minimum date format');
+}

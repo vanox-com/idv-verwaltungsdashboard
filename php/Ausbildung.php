@@ -365,7 +365,7 @@ function ausbildungExtern(): never {
     if($a['laufbahn']==='PMA'){
         $result['stimmenAnzahl']=$s['stimmenJa']+$s['stimmenNein'];
         $result['rsa']=$s['rsa'];
-    }else {$result['dgl']=array_intersect_key($s['dgl']??[],array_flip(['dgl','assistenz','pruefung','pruefungMoeglich']));$result['mindestzeit']=array_intersect_key($s['mindestzeit'],array_flip(['erfuellt','resttage']));}
+    }else {$result['dgl']=array_intersect_key($s['dgl']??[],array_flip(['dgl','assistenz','pruefung','pruefungMoeglich']));$result['mindestzeit']=array_intersect_key($s['mindestzeit'],array_flip(['erfuellt','resttage','tage','ab']));}
     respond(200,$result);
 }
 /** Only explicitly approved AuLK materials may be seen without a login. */

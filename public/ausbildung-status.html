@@ -15,6 +15,7 @@ img{width:185px;max-width:90%;height:auto}h1{font-size:clamp(24px,5vw,31px);marg
 .vote-total strong{font-size:30px;color:var(--txt);font-variant-numeric:tabular-nums}
 .vote-total span{color:var(--mut)}
 .progress{height:11px;border-radius:10px;background:#42536b;overflow:hidden}.progress i{height:100%;display:block;background:linear-gradient(90deg,#67a6e6,#78d6b3)}
+.minimum-card{margin:20px 0 12px;border:1px solid var(--edge);background:#142438;border-radius:12px;padding:14px 18px}.minimum-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-weight:700}.minimum-card .progress{margin:10px 0}.minimum-card .progress i{background:#e2b665}.minimum-card.done .progress i{background:var(--good)}.minimum-card p{margin:5px 0 0;font-size:13px}.minimum-card .minimum-state{color:#f4d28f}.minimum-card.done .minimum-state{color:var(--good)}
 .row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 2px;border-bottom:1px solid #ffffff19}
 .code{font-weight:700;color:#aacbed;min-width:58px}.label{flex:1}.state{white-space:nowrap;font-size:13px}footer{color:var(--mut);font-size:12px;margin-top:28px;border-top:1px solid var(--edge);padding-top:15px}
 button{margin-top:18px;background:#30547c;color:#fff;border:1px solid #5d81ac;border-radius:8px;padding:9px 13px;cursor:pointer}
@@ -31,6 +32,25 @@ button{margin-top:18px;background:#30547c;color:#fff;border:1px solid #5d81ac;bo
 const box=document.querySelector('#content');
 const text=(s)=>document.createTextNode(String(s==null?'':s));
 const make=(tag,cls,value)=>{let n=document.createElement(tag);if(cls)n.className=cls;if(value!==undefined)n.append(text(value));return n};
+function minimumView(m){
+ const known=Number.isInteger(m?.tage)&&m.tage>=0&&typeof m.erfuellt==='boolean';
+ const days=known?Math.min(7,m.tage):null;
+ const ready=known&&m.erfuellt===true;
+ const date=typeof m?.ab==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(m.ab)?m.ab.split('-').reverse().join('.'):null;
+ const remaining=known&&Number.isInteger(m.resttage)&&m.resttage>=0?m.resttage:null;
+ const label=ready?'Mindestzeit erfüllt':remaining!==null&&remaining>0?'Noch '+remaining+' '+(remaining===1?'Tag':'Tage'):'Laufbahnbeginn nicht verfügbar';
+ return {days,ready,date,label,percent:days===null?0:days/7*100};
+}
+function minimumCard(m){
+ const v=minimumView(m),card=make('section','minimum-card'+(v.ready?' done':''));
+ const head=make('div','minimum-head');head.append(make('span','','Mindestzeit im Dienstgrad'),make('strong','',v.days===null?'– / 7 Tage':v.days+' / 7 Tage'));
+ const bar=make('div','progress'),fill=make('i');fill.style.width=v.percent+'%';bar.append(fill);
+ if(v.days!==null){bar.setAttribute('role','progressbar');bar.setAttribute('aria-label','Mindestzeit in Tagen');bar.setAttribute('aria-valuemin','0');bar.setAttribute('aria-valuemax','7');bar.setAttribute('aria-valuenow',String(v.days));}
+ card.append(head,bar,make('p','minimum-state',v.label));
+ if(v.date)card.append(make('p','','Zeitvoraussetzung erfüllt ab '+v.date));
+ card.append(make('p','','Die übrigen Prüfungszulassungsvoraussetzungen müssen ebenfalls erfüllt sein.'));
+ return card;
+}
 async function refresh(){
  box.replaceChildren(make('p','','Ausbildungsstand wird abgerufen …'));
  const token=location.hash.replace(/^#/,'').trim();
@@ -55,6 +75,7 @@ async function refresh(){
     box.append(votes);
   }else{
     const dgl=d.dgl||{};
+    if(['PKA','KKA'].includes(d.laufbahn))box.append(minimumCard(d.mindestzeit));
     box.append(make('h2','','DGL-Praxis und Prüfung'));
     for(const [key,label] of [['dgl','2 Stunden DGL'],['assistenz','2 Stunden Führungsassistenz'],['pruefung','DGL-Prüfung']]){
       const row=make('div','row');

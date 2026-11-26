@@ -260,7 +260,7 @@ function ausbildungOeffentlicheMonitore(): never {
             // und verantwortliche Ausbilder werden NIEMALS ausgegeben.
             $entry['stimmenAnzahl']=$result['stimmenJa']+$result['stimmenNein'];
             $entry['rsa']=$person['rsa'];
-        }else {$entry['dgl']=$result['dgl'];$entry['mindestzeit']=array_intersect_key($result['mindestzeit'],array_flip(['erfuellt','resttage']));}
+        }else {$entry['dgl']=$result['dgl'];$entry['mindestzeit']=array_intersect_key($result['mindestzeit'],array_flip(['erfuellt','resttage','tage','ab']));}
         $output[$track]['personen'][]=$entry;
         $output[$track]['anzahl']++;
         $output[$track]['moduleAbgeschlossen']+=$result['moduleFertig'];
