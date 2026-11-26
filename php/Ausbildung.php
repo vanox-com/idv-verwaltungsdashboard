@@ -91,8 +91,20 @@ function ausbildungDglStatus(array $row=[]): array {
     return ['dgl'=>$dgl,'assistenz'=>$assistenz,'pruefungMoeglich'=>$dgl&&$assistenz,
         'pruefung'=>$dgl&&$assistenz&&!empty($row['pruefung_am'])&&isset($row['punkte'],$row['prozent'])];
 }
+/** Seven completed calendar days in the current PKA/KKA rank (German local date). */
+function ausbildungMindestzeit(string $laufbahn,?string $beginn,?string $heute=null): array {
+    $required=in_array($laufbahn,['PKA','KKA'],true);
+    $tz=new \DateTimeZone('Europe/Berlin');
+    $now=$heute!==null?\DateTimeImmutable::createFromFormat('!Y-m-d',$heute,$tz):new \DateTimeImmutable('today',$tz);
+    $start=$beginn!==null?\DateTimeImmutable::createFromFormat('!Y-m-d',$beginn,$tz):false;
+    $valid=$start&&$now&&$start->format('Y-m-d')===$beginn&&$start<=$now;
+    $days=$valid?(int)$start->diff($now)->days:null;
+    return ['pflicht'=>$required,'erfuellt'=>!$required||($days!==null&&$days>=7),
+        'tage'=>$days,'resttage'=>$required&&$days!==null?max(0,7-$days):null,
+        'ab'=>$required&&$start&&$start->format('Y-m-d')===$beginn?$start->modify('+7 days')->format('Y-m-d'):null];
+}
 /** Training status rules. */
-function ausbildungStatus(string $laufbahn,array $required,array $completed,array $votes,bool $rsa=false,array $dgl=[]): array {
+function ausbildungStatus(string $laufbahn,array $required,array $completed,array $votes,bool $rsa=false,array $dgl=[],?string $beginn=null,?string $heute=null): array {
     $required=array_values(array_unique($required));
     $done=count(array_intersect($required,array_values(array_unique($completed))));
     $all=count($required)>0&&$done===count($required);
@@ -105,10 +117,12 @@ function ausbildungStatus(string $laufbahn,array $required,array $completed,arra
     $rsaPflicht=$laufbahn==='PMA';
     $dglPflicht=in_array($laufbahn,['PKA','KKA'],true);
     $dglStatus=ausbildungDglStatus($dgl);
-    $ready=$all&&(!$rsaPflicht||($rsa&&$score>=2.5))&&(!$dglPflicht||$dglStatus['pruefung']);
+    $minimum=ausbildungMindestzeit($laufbahn,$beginn,$heute);
+    $ready=$all&&(!$rsaPflicht||($rsa&&$score>=2.5))&&(!$dglPflicht||$dglStatus['pruefung'])&&$minimum['erfuellt'];
     $status=!$all?'Module unvollständig':($ready?'Zugelassen':($rsaPflicht?(!$rsa?'RSA ausstehend':'Nicht bereit'):
         (!$dglStatus['pruefungMoeglich']?'DGL-Praxis ausstehend':'DGL-Prüfung ausstehend')));
-    return ['status'=>$status,'dglPflicht'=>$dglPflicht,'dgl'=>$dglPflicht?$dglStatus:null,
+    if(!$minimum['erfuellt'])$status=$minimum['tage']===null?'Mindestzeit: Laufbahnbeginn prüfen':'Mindestzeit: noch '.$minimum['resttage'].' Tag(e)';
+    return ['status'=>$status,'mindestzeit'=>$minimum,'dglPflicht'=>$dglPflicht,'dgl'=>$dglPflicht?$dglStatus:null,
         'rsaPflicht'=>$rsaPflicht,'rsa'=>$rsaPflicht&&$rsa,
         'bereit'=>$ready,'moduleGesamt'=>count($required),'moduleFertig'=>$done,
         'stimmenJa'=>$yes,'stimmenNein'=>$no,'stimmenSaldo'=>round($score,2),
@@ -187,11 +201,11 @@ function ausbildungFortschritt(array $a,bool $details=false): array {
     }
     unset($vote);
     // Read the current personnel value even for a public token with an old mirror.
-    $source=$a['laufbahn']==='PMA'?ausbildungPersonalQuelleLesen($a):null;
+    $source=ausbildungPersonalQuelleLesen($a);
     $rsa=ausbildungRsaErhalten($source['rsa']??null);
     $dgl=in_array($a['laufbahn'],['PKA','KKA'],true)&&ausbildungDglSchemaBereit()
         ?(sql('SELECT * FROM ausbildung_dgl WHERE anwaerter_id=?',[$id])[0]??[]):[];
-    $s=ausbildungStatus((string)$a['laufbahn'],array_column($modules,'code'),$done,$votes,$rsa,$dgl);
+    $s=ausbildungStatus((string)$a['laufbahn'],array_column($modules,'code'),$done,$votes,$rsa,$dgl,$source?ausbildungLaufbahnBeginn($source):null);
     if($details&&$s['dglPflicht'])$s['dgl']+=array_intersect_key($dgl,array_flip(['dgl_am','dgl_von','assistenz_am','assistenz_von','pruefung_am','pruefung_von','punkte','prozent']));
     if($details){
         $s['module']=array_map(static function($m)use($doneRows){
@@ -351,7 +365,7 @@ function ausbildungExtern(): never {
     if($a['laufbahn']==='PMA'){
         $result['stimmenAnzahl']=$s['stimmenJa']+$s['stimmenNein'];
         $result['rsa']=$s['rsa'];
-    }else $result['dgl']=array_intersect_key($s['dgl']??[],array_flip(['dgl','assistenz','pruefung','pruefungMoeglich']));
+    }else {$result['dgl']=array_intersect_key($s['dgl']??[],array_flip(['dgl','assistenz','pruefung','pruefungMoeglich']));$result['mindestzeit']=array_intersect_key($s['mindestzeit'],array_flip(['erfuellt','resttage']));}
     respond(200,$result);
 }
 /** Only explicitly approved AuLK materials may be seen without a login. */

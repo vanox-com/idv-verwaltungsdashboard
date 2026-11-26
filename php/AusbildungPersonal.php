@@ -19,7 +19,7 @@ function ausbildungPersonalQuelle(int $nummer,int $belegungen): string {
 }
 /** Quelle: lebende Personaldatensätze, nicht separat erfasste Ausbildungspersonen. */
 function ausbildungPersonalZeilen(): array {
-    return sql("SELECT p.personalnummer,p.vorname,p.nachname,p.dienstgrad,p.eintrittsdatum,
+    return sql("SELECT p.personalnummer,p.vorname,p.nachname,p.dienstgrad,p.eintrittsdatum,p.letzte_befoerderung,
             p.beschaeftigungsart,p.status,p.rsa,
             COALESCE(h.anzahl,0) AS belegungen
         FROM personal p
@@ -30,6 +30,17 @@ function ausbildungPersonalZeilen(): array {
           AND p.status IN ('Aktiv','Abgemeldet','Inaktiv','Suspendiert')
         ORDER BY p.personalnummer");
 }
+/** Current rank start; direct entrants may not have a promotion date. */
+function ausbildungLaufbahnBeginn(array $p): ?string {
+    $dates=[];
+    foreach(['eintrittsdatum','letzte_befoerderung'] as $key){
+        $value=$p[$key]??null;
+        if(!is_string($value)||!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$value))continue;
+        $d=\DateTimeImmutable::createFromFormat('!Y-m-d',$value,new \DateTimeZone('Europe/Berlin'));
+        if($d&&$d->format('Y-m-d')===$value)$dates[]=$value;
+    }
+    return $dates?max($dates):null;
+}
 /** Personal uses text ('Erhalten'/'Offen'), training uses a boolean mirror. */
 function ausbildungRsaErhalten($wert): bool {
     return in_array(strtolower(trim((string)$wert)),['erhalten','1','ja','true'],true);
@@ -37,7 +48,7 @@ function ausbildungRsaErhalten($wert): bool {
 function ausbildungPersonalQuelleLesen(array $a,bool $lock=false): ?array {
     $source=(string)($a['personal_quelle']??'');
     if($source===''||!isset($a['personalnummer']))return null;
-    $rows=sql("SELECT p.dienstgrad,p.status,p.rsa,p.administrativ_geloescht_am,
+    $rows=sql("SELECT p.dienstgrad,p.status,p.rsa,p.eintrittsdatum,p.letzte_befoerderung,p.administrativ_geloescht_am,
             COALESCE((SELECT COUNT(*) FROM personalnummer_neubelegungen h
                      WHERE h.personalnummer=p.personalnummer),0) AS belegungen
         FROM personal p WHERE p.personalnummer=? LIMIT 1".($lock?' FOR UPDATE':''),[(int)$a['personalnummer']]);
@@ -72,7 +83,7 @@ function ausbildungSynchronisierePersonal(): array {
             $nummer=(int)$p['personalnummer'];
             $quelle=ausbildungPersonalQuelle($nummer,(int)$p['belegungen']);
             $name=trim((string)$p['vorname'].' '.(string)$p['nachname']);
-            $beginn=$p['eintrittsdatum']??null;
+            $beginn=$laufbahn==='PMA'?($p['eintrittsdatum']??null):ausbildungLaufbahnBeginn($p);
             $neben=(string)($p['beschaeftigungsart']??'');
             $rsa=ausbildungRsaErhalten($p['rsa']??null)?1:0;
             $matched=sql('SELECT id,name,laufbahn,personalnummer FROM ausbildung_anwaerter WHERE personal_quelle=? LIMIT 1',[$quelle]);
@@ -165,6 +176,7 @@ function ausbildungOeffentlicheMonitore(): never {
         $key=ausbildungPersonalQuelle((int)$person['personalnummer'],(int)$person['belegungen']);
         $tracked[$key]=[
             'laufbahn'=>$track,
+            'beginn'=>ausbildungLaufbahnBeginn($person),
             'rsa'=>ausbildungRsaErhalten($person['rsa']??null),
             'name'=>trim((string)$person['vorname'].' '.(string)$person['nachname'])
         ];
@@ -218,7 +230,7 @@ function ausbildungOeffentlicheMonitore(): never {
         $track=$person['laufbahn'];
         $requiredCodes=array_column($required[$track],'code');
         $doneCodes=array_keys($completed[$key]??[]);
-        $result=ausbildungStatus($track,$requiredCodes,$doneCodes,$votes[$key]??[],$person['rsa'],$dglRows[$key]??[]);
+        $result=ausbildungStatus($track,$requiredCodes,$doneCodes,$votes[$key]??[],$person['rsa'],$dglRows[$key]??[],$person['beginn']);
         $modulesFinished=$result['moduleGesamt']>0
             && $result['moduleFertig']===$result['moduleGesamt'];
         $admitted=$result['bereit'];
@@ -248,7 +260,7 @@ function ausbildungOeffentlicheMonitore(): never {
             // und verantwortliche Ausbilder werden NIEMALS ausgegeben.
             $entry['stimmenAnzahl']=$result['stimmenJa']+$result['stimmenNein'];
             $entry['rsa']=$person['rsa'];
-        }else $entry['dgl']=$result['dgl'];
+        }else {$entry['dgl']=$result['dgl'];$entry['mindestzeit']=array_intersect_key($result['mindestzeit'],array_flip(['erfuellt','resttage']));}
         $output[$track]['personen'][]=$entry;
         $output[$track]['anzahl']++;
         $output[$track]['moduleAbgeschlossen']+=$result['moduleFertig'];

@@ -201,7 +201,15 @@ function open(host){
  if(!choices.length){c.append(node('p','Zuerst muss die berechtigte Leitung oder ein Administrator eine geprüfte Prüfungsvorlage hinterlegen.'));if(practice&&data.vorlagenBearbeiten)c.append(btn('Bewertungsbogen erstellen',()=>navigate('practice-template'),'p'));main.append(c);return}
  const grid=node('div',undefined,'exam-form-grid');c.append(node('p',data.leitung?'Wähle die Prüfungsart, den Prüfling und zwei unterschiedliche Prüfer.':'Du bist Erstprüfer. Wähle die Prüfungsvorlage, den Prüfling und einen anderen berechtigten Zweitprüfer.','mut'),grid);
  const v=field(grid,'Prüfungsvorlage',select(choices.map(x=>[x.id,x.titel+' · Version #'+x.id])));
- const a=field(grid,'Anwärter',select(data.anwaerter.filter(x=>!practice||x.laufbahn==='PMA').map(x=>[x.id,x.name+' · DN '+x.personalnummer+' · '+x.laufbahn])));
+ const a=field(grid,'Anwärter',select([]));
+ const refreshCandidates=()=>{
+   const selected=choices.find(x=>String(x.id)===v.value);a.replaceChildren();
+   const placeholder=node('option','Bitte auswählen');placeholder.value='';a.append(placeholder);
+   for(const x of data.anwaerter.filter(x=>(selected?.art==='pm'||practice)?x.laufbahn==='PMA':['PKA','KKA'].includes(x.laufbahn))){
+     const blocked=selected?.art==='pk'&&x.mindestzeit?.erfuellt!==true;
+     const o=node('option',x.name+' · DN '+x.personalnummer+' · '+x.laufbahn+(blocked?' · '+(x.mindestzeit?.ab?'frühestens '+x.mindestzeit.ab:'Laufbahnbeginn prüfen'):''));o.value=String(x.id);o.disabled=blocked;a.append(o);
+   }
+ };v.addEventListener('change',refreshCandidates);refreshCandidates();
  const options=data.pruefer.map(x=>[x.id,x.anzeigename+' · '+x.dienstnummer]);
  const first=field(grid,'Erstprüfer',select(options)),second=field(grid,'Zweitprüfer',select([['','Bitte wählen'],...options.filter(x=>data.leitung||Number(x[0])!==Number(data.user))]));first.value=String(data.user);first.disabled=!data.leitung;
  c.append(node('p',practice?'Die Praxisprüfung wird zur Erstbewertung angelegt. Kein Prüflingslink und kein Zeitlimit.':'Einmaliger Prüfungsversuch. Der Link kann vor dem Start erneuert werden und gilt 24 Stunden für den Prüfungsbeginn.','mut'),

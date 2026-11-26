@@ -236,6 +236,15 @@ function pruefungFokusMerge(array $f,array $events,int $questionCount): array {
     }
     return $f;
 }
+function pruefungKommissarMindestzeit(array $a): array {
+    require_once __DIR__.'/Ausbildung.php';
+    $source=ausbildungPersonalQuelleLesen($a);
+    return ausbildungMindestzeit((string)$a['laufbahn'],$source?ausbildungLaufbahnBeginn($source):null);
+}
+function pruefungPruefeKommissarMindestzeit(array $a): void {
+    $m=pruefungKommissarMindestzeit($a);
+    if(!$m['erfuellt'])fail(409,$m['resttage']===null?'Mindestzeit: Laufbahnbeginn im Personalstamm prüfen.':'Sieben Tage Mindestzeit noch nicht erfüllt. Prüfungszulassung frühestens am '.$m['ab'].'.');
+}
 function pruefungGuest(string $method,string $uri): bool {
     if(!str_starts_with($uri,'/api/pruefung-gast/'))return false;
     if($method!=='POST'||!in_array($uri,['/api/pruefung-gast/status','/api/pruefung-gast/start','/api/pruefung-gast/speichern','/api/pruefung-gast/abgeben','/api/pruefung-gast/fokus'],true))fail(404,'Nicht gefunden');
@@ -250,6 +259,12 @@ function pruefungGuest(string $method,string $uri): bool {
         if($p['status']==='bereit'&&strtotime($p['token_ablauf'].' UTC')<=time())fail(410,'Prüfungslink abgelaufen');
         if($action==='start'){
             if($p['status']==='bereit'){
+                if($p['art']==='pk'){
+                    require_once __DIR__.'/Ausbildung.php';
+                    $candidate=ausbildungAnwaerter((int)$p['anwaerter_id']);
+                    if(!in_array($candidate['laufbahn'],['PKA','KKA'],true))fail(409,'Laufbahn hat sich geändert.');
+                    pruefungPruefeKommissarMindestzeit($candidate);
+                }
                 if(($b['einverstanden']??false)!==true)fail(400,'Prüfungshinweise bestätigen');
                 sql("UPDATE ausbildung_pruefungen SET status='laufend',start_am=UTC_TIMESTAMP(6),ende_am=TIMESTAMPADD(MINUTE,?,UTC_TIMESTAMP(6)),revision=revision+1 WHERE id=?",[(int)$p['minuten'],$id]);
             }elseif($p['status']!=='laufend')fail(409,'Prüfung wurde bereits abgegeben');
@@ -320,7 +335,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         $reviewers=[];foreach(sql("SELECT id,anzeigename,dienstnummer FROM users WHERE gesperrt=0 AND muss_passwort_aendern=0 ORDER BY anzeigename") as $r)if(pruefungReviewer((int)$r['id']))$reviewers[]=$r;
         $anlegen=pruefungAnlegenDarf($u);
         if($anlegen)ausbildungSynchronisierePersonal();
-        $trainees=$anlegen?array_map(fn($a)=>array_intersect_key($a,array_flip(['id','name','laufbahn','personalnummer'])),ausbildungAktuelleAnwaerter()):[];
+        $trainees=$anlegen?array_map(fn($a)=>array_intersect_key($a,array_flip(['id','name','laufbahn','personalnummer']))+['mindestzeit'=>pruefungKommissarMindestzeit($a)],ausbildungAktuelleAnwaerter()):[];
         respond(200,['bereit'=>true,'leitung'=>$lead,'verwaltung'=>$verwaltung,'vorlagenBearbeiten'=>$verwaltung,'importAdmin'=>$importAdmin,'anlegen'=>$anlegen,'user'=>$uid,'arten'=>PRUEFUNG_ARTEN,'vorlagen'=>($verwaltung?sql('SELECT id,art,titel,minuten,grenze,erstellt_am FROM ausbildung_pruefung_vorlagen WHERE JSON_TYPE(fragen)=\'ARRAY\' ORDER BY id DESC'):[]),'pruefungsauswahl'=>($anlegen?sql('SELECT id,art,titel FROM ausbildung_pruefung_vorlagen WHERE art<>\'praxis\' ORDER BY id DESC'):[]),'pruefungen'=>$rows,'pruefer'=>$reviewers,'anwaerter'=>$trainees]);
     }
     if($method==='GET'&&preg_match('#^/api/ausbildung/pruefungen/vorlagen/([1-9][0-9]*)$#D',$uri,$vMatch)){
@@ -348,6 +363,7 @@ function dispatchPruefung(array $u,string $method,string $uri): bool {
         if(!$v||!$a||!ausbildungPersonalQuelleGueltig($a[0]))fail(400,'Vorlage oder aktueller Anwärter fehlt');
         $v=$v[0];$a=$a[0];$track=$a['laufbahn'];if($v['art']==='praxis')fail(400,'Praxisprüfungen ausschließlich über den festen PM-Praxisbogen anlegen');
         if(in_array($v['art'],['pm','praxis'],true)?$track!=='PMA':!in_array($track,['PKA','KKA'],true))fail(400,'Prüfung passt nicht zur Laufbahn');
+        if($v['art']==='pk')pruefungPruefeKommissarMindestzeit($a);
         $token=bin2hex(random_bytes(32));$practice=$v['art']==='praxis';
         $answers=array_map(fn($q)=>$q['typ']==='text'?'':[],pruefungRead($v['fragen']));
         sql("INSERT INTO ausbildung_pruefungen(vorlage_id,anwaerter_id,kandidat,laufbahn,erst,zweit,status,token_hash,token_ablauf,antworten,bewertung,protokoll,fokus) VALUES(?,?,?,?,?,?,?,?,TIMESTAMPADD(HOUR,24,UTC_TIMESTAMP(6)),?,?,?,?)",
