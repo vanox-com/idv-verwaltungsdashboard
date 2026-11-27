@@ -61,3 +61,14 @@ test('audit failure rolls back the targeted repair',async()=>{
   await assert.rejects(()=>repairMarkClarkStatus(db),/Audit unavailable/);
   assert.deepEqual(db.statements.slice(-2).map(x=>x.sql),['ROLLBACK','RELEASE']);
 });
+
+test('service duration includes all four employed statuses but excludes test names and reserved DNs',()=>{
+ const s=readFileSync(new URL('../php/Personnel.php',import.meta.url),'utf8');
+ const block=s.slice(s.indexOf('$tenure=sql('),s.indexOf('$promotions=personnelPromotionStats()'));
+ assert.match(block,/status IN \('Aktiv','Abgemeldet','Inaktiv','Suspendiert'\)/);
+ assert.match(block,/administrativ_geloescht_am IS NULL/);
+ assert.match(block,/NOT LIKE '%test%'/);
+ assert.match(block,/eintrittsdatum<=UTC_DATE\(\)/);
+ assert.doesNotMatch(block,/status='Aktiv'/);
+ assert.match(block,/row\['tage'\]!==null/);
+});

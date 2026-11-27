@@ -233,11 +233,21 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
         $ranks=sql("SELECT COALESCE(NULLIF(dienstgrad,''),'Nicht zugeordnet') AS rang,
             COUNT(*) AS anzahl FROM personal WHERE administrativ_geloescht_am IS NULL
             AND status<>'Gekündigt' AND LOWER(CONCAT_WS(' ',vorname,nachname)) NOT LIKE '%test%' GROUP BY 1 ORDER BY anzahl DESC,rang");
-        $tenure=sql("SELECT DATEDIFF(UTC_DATE(),eintrittsdatum) AS tage FROM personal
-            WHERE administrativ_geloescht_am IS NULL AND status='Aktiv'
-              AND eintrittsdatum IS NOT NULL AND eintrittsdatum<=UTC_DATE() AND LOWER(CONCAT_WS(' ',vorname,nachname)) NOT LIKE '%test%'");
+        // Service continues during absence, inactivity and suspension. Reserved DNs are not employees.
+        $tenure=sql("SELECT status,CASE WHEN eintrittsdatum IS NOT NULL AND eintrittsdatum<=UTC_DATE()
+              THEN DATEDIFF(UTC_DATE(),eintrittsdatum) ELSE NULL END AS tage FROM personal
+            WHERE administrativ_geloescht_am IS NULL AND status IN ('Aktiv','Abgemeldet','Inaktiv','Suspendiert')
+              AND LOWER(CONCAT_WS(' ',vorname,nachname)) NOT LIKE '%test%'");
+        $tenureDays=[];$tenureCoverage=[];
+        foreach(['Aktiv','Abgemeldet','Inaktiv','Suspendiert'] as $status)$tenureCoverage[$status]=['status'=>$status,'gesamt'=>0,'auswertbar'=>0];
+        foreach($tenure as $row){
+            $status=$row['status'];$tenureCoverage[$status]['gesamt']++;
+            if($row['tage']!==null&&is_numeric($row['tage'])&&(int)$row['tage']>=0){
+                $tenureDays[]=(int)$row['tage'];$tenureCoverage[$status]['auswertbar']++;
+            }
+        }
         $promotions=personnelPromotionStats();
-        $result=['dienstgrade'=>$ranks,'dienstzeiten'=>array_column($tenure,'tage'),'berechnet_am'=>gmdate('c'),
+        $result=['dienstgrade'=>$ranks,'dienstzeiten'=>$tenureDays,'dienstzeiten_abdeckung'=>array_values($tenureCoverage),'berechnet_am'=>gmdate('c'),
             ...$promotions,...personnelMovementStats()];
         db()->commit();
         }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}

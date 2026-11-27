@@ -5942,7 +5942,9 @@ function statBewegung(data,bestand){
   Number(quality.zurueckgenommen||0)+' zurückgenommene Kündigung(en), '+Number(quality.kuendigungen_ohne_datum||0)+' Kündigung(en) ohne auswertbares Datum und '+Number(quality.eintritte_ohne_datum||0)+' Person(en) ohne gültiges Eintrittsdatum sind nicht nach Monat zugeordnet. Prozentwerte verwenden den heutigen Bestand und sind keine rechnerisch rekonstruierte historische Fluktuationsrate.</p>';
 }
 function statDienstzeiten(data){
- const active=(data.dienstzeiten||[]).map(Number).filter(n=>Number.isFinite(n)&&n>=0);
+ const active=(data.dienstzeiten||[]).filter(v=>v!=null&&v!=='').map(Number).filter(n=>Number.isFinite(n)&&n>=0);
+ const coverage=Array.isArray(data.dienstzeiten_abdeckung)?data.dienstzeiten_abdeckung:[];
+ const eligible=coverage.reduce((s,x)=>s+Number(x.gesamt||0),0);
  const exits=data.kuendigungsdienstzeit||{anzahl:0,verteilung:[]};
  const activeAvg=active.length?active.reduce((a,b)=>a+b,0)/active.length:null;
  const days=n=>n===null||n===undefined?'Keine Daten':Math.round(Number(n)).toLocaleString('de-DE')+' Tage';
@@ -5953,12 +5955,13 @@ function statDienstzeiten(data){
   return values.map(v=>'<div class="stat-hist-row"><div class="dashboard-group-head"><span>'+esc(v.label)+'</span><strong>'+Number(v.anzahl)+'</strong></div><div class="dashboard-progress"><i style="width:'+(Number(v.anzahl)/max*100)+'%;background:'+color+'"></i></div></div>').join('');
  };
  return '<div class="stat-section" id="stat-dienstzeiten"><h2>Dienstzeiten &amp; Personalbindung</h2><p>Wie lange sind Mitarbeiter bereits im Dienst – und nach welcher Zeit endeten dokumentierte Beschäftigungen?</p></div>'+
- '<div class="stat-kpi-grid"><div class="stat-kpi"><strong>'+days(activeAvg)+'</strong><span>Ø bisherige Dienstzeit aktiver Mitarbeiter</span><small>'+active.length+' gültige Eintrittsdaten</small></div>'+
+ '<div class="stat-kpi-grid"><div class="stat-kpi"><strong>'+days(activeAvg)+'</strong><span>Ø bisherige Dienstzeit im Polizeidienst</span><small>'+active.length+(coverage.length?' von '+eligible:'')+' gültige Eintrittsdaten</small></div>'+
  '<div class="stat-kpi"><strong>'+days(exits.durchschnitt_tage)+'</strong><span>Ø Dienstzeit bis zur Kündigung</span><small>'+Number(exits.anzahl||0)+' gültige Kündigungsakten</small></div>'+
  '<div class="stat-kpi"><strong>'+days(exits.median_tage)+'</strong><span>Median bis zur Kündigung</span><small>Weniger empfindlich gegenüber Ausreißern</small></div>'+
  '<div class="stat-kpi"><strong>'+days(exits.maximum_tage)+'</strong><span>Längste dokumentierte Dienstzeit bis zur Kündigung</span><small>Nur aus gültigen datierten Kündigungen</small></div></div>'+
- '<div class="personalstat-grid"><section class="box"><h3>Aktuelle Mitarbeiter nach Dienstzeit</h3><p class="mut">'+active.length+' aktive Mitarbeiter mit auswertbarem Eintrittsdatum</p>'+hist(current,'#36bda1')+'</section>'+
+ '<div class="personalstat-grid"><section class="box"><h3>Aktuelle Mitarbeiter nach Dienstzeit</h3><p class="mut">'+active.length+' Mitarbeiter im Polizeidienst mit auswertbarem Eintrittsdatum</p>'+hist(current,'#36bda1')+'</section>'+
  '<section class="box"><h3>Kündigungen nach Beschäftigungsdauer</h3><p class="mut">'+Number(exits.anzahl||0)+' gültige beendete Beschäftigungen</p>'+hist(exits.verteilung||[],'#ed8a77')+'</section></div>'+
+ (coverage.length?'<section class="box"><h3>Datenbasis der bisherigen Dienstzeit</h3><p class="mut">Aktiv, abgemeldet, inaktiv und suspendiert zählen zum Polizeidienst. Testpersonen, gekündigte, freigehaltene und administrativ entfernte Akten sind ausgeschlossen. '+(eligible-active.length)+' Datensätze ohne auswertbares Eintrittsdatum.</p>'+tabelle(['Personalstatus','Gesamt','Auswertbar','Ohne gültiges Datum'],coverage.map(x=>[esc(x.status),Number(x.gesamt),Number(x.auswertbar),Number(x.gesamt)-Number(x.auswertbar)]))+'</section>':'')+
  '<p class="stat-note">Die Kündigungsdauer verwendet ausschließlich vorhandene Eintritts- und Kündigungsdaten. Zurückgenommene sowie identische doppelte Kündigungen zählen nicht. '+Number(data.bewegung_datenqualitaet?.kuendigungen_ohne_eintritt||0)+' datierte Kündigung(en) ohne gültiges Eintrittsdatum fehlen in der Dauerberechnung. Die Verteilung enthält alle historisch auswertbaren Kündigungen, nicht nur die letzten zwölf Monate.</p>';
 }
 function statErweitert(data){
@@ -6754,7 +6757,7 @@ document.addEventListener('click',async e=>{
 <script src="/responsiveNav.js"></script>
 <script src="/assets/ausbildung-panel.js?v=20261126-23" defer></script>
 <script src="/assets/ausbildung-statistik.js?v=2" defer></script>
-<script src="/assets/personal-statistik-diagramme.js?v=2" defer></script>
+<script src="/assets/personal-statistik-diagramme.js?v=3" defer></script>
 <script src="/assets/pruefungen-praxis.js?v=5" defer></script>
 <script src="/assets/pruefungen-korrektur.js?v=8" defer></script>
 <script src="/assets/pruefungszentrum.js?v=25" defer></script>
