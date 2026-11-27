@@ -26,3 +26,11 @@ $test=$a;$test['name']='TEST Anwärter';
 statCheck(IDV\ausbildungStatistikAktuell([$a,$test],$today)['gesamt']===1,'test trainee excluded from all current aggregates');
 $test=$r;$test['kandidat']='Test Kandidat';
 statCheck(IDV\ausbildungStatistikPruefungen([$r,$test],$today->modify('-6 days'),$today,7)['anzahl']===1,'test exam excluded from all outcomes');
+
+$accounts=[['id'=>1,'name'=>'Max Muster','profilname'=>'Max Muster','funktion'=>'Ausbilder','aktiv'=>1],['id'=>2,'name'=>'Lisa Muster','aktiv'=>1],['id'=>3,'name'=>'Test Ausbilder','aktiv'=>1],['id'=>4,'name'=>'Ehemaliger','aktiv'=>0]];
+$events=[['uid'=>1,'datum'=>'2026-11-26 23:30:00','typ'=>'module','detail'=>'PM.1'],['uid'=>1,'datum'=>'2026-11-27 12:00:00','typ'=>'stimmen','detail'=>'Ja'],['uid'=>1,'datum'=>'2026-11-27 12:30:00','typ'=>'pruefungen','detail'=>'Freigabe'],['uid'=>3,'datum'=>'2026-11-27 12:00:00','typ'=>'module','detail'=>'PM.1'],['uid'=>4,'datum'=>'2026-11-27 10:00:00','typ'=>'unterricht','detail'=>'WB'],['uid'=>1,'datum'=>'2026-11-28 12:00:00','typ'=>'module','detail'=>'PM.2']];
+$profiles=IDV\ausbildungStatistikAusbilder($accounts,$events,$today->modify('-6 days'),$today,7);
+statCheck(count($profiles)===3,'test profile excluded, zero and historical included');
+statCheck($profiles[0]['gesamt']===3&&$profiles[0]['tage']===1&&$profiles[0]['ja']===1,'local day aggregation and exam action');
+statCheck($profiles[0]['verlauf'][6]['module']===1&&$profiles[0]['details']['module']['PM.1']===1,'module detail and timeline');
+statCheck($profiles[2]['gesamt']===0,'zero activity profile visible');

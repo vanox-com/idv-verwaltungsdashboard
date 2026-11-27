@@ -73,6 +73,42 @@ function ausbildungStatistikPruefungen(array $rows,\DateTimeImmutable $from,\Dat
     foreach($groups as &$g){$g['quote']=ausbildungStatistikProzent($g['bestanden'],$g['bewertbar']);$g['schnitt']=$g['bewertbar']?round($g['summe']/$g['bewertbar'],1):null;unset($g['summe']);}unset($g);
     return ['anzahl'=>$n,'bewertbar'=>$valid,'bestanden'=>$passed,'quote'=>ausbildungStatistikProzent($passed,$valid),'schnitt'=>$valid?round($sum/$valid,1):null,'arten'=>array_values($groups),'verteilung'=>$hist,'verlauf'=>$timeline,'intervall'=>$step];
 }
+/** Count documented records, not hours or the entire lifetime of each record. */
+function ausbildungStatistikAusbilder(array $accounts,array $events,\DateTimeImmutable $from,\DateTimeImmutable $today,int $days): array {
+    $types=['module','stimmen','unterricht','pruefungen'];$step=$days<=30?1:7;$people=[];
+    foreach($accounts as $a){
+        if(statistikTestPerson($a)||statistikTestName((string)($a['profilname']??'')))continue;
+        $id=(int)$a['id'];if(!$id)continue;
+        $people[$id]=['id'=>$id,'name'=>trim((string)($a['profilname']??''))?:((string)($a['name']??'')?:'Unbekannt'),
+            'funktion'=>(string)($a['funktion']??$a['rolle']??'Bearbeiter'),'aktiv'=>(bool)($a['aktiv']??false),
+            'module'=>0,'stimmen'=>0,'unterricht'=>0,'pruefungen'=>0,'gesamt'=>0,'ja'=>0,'nein'=>0,'tage'=>0,'zuletzt'=>null,'verlauf'=>[],'details'=>[],'aktivtage'=>[]];
+    }
+    foreach($events as $e){
+        $id=(int)($e['uid']??0);$type=$e['typ']??'';
+        if(!isset($people[$id])||!in_array($type,$types,true)||empty($e['datum']))continue;
+        try{$dt=(new \DateTimeImmutable((string)$e['datum'],new \DateTimeZone('UTC')))->setTimezone($today->getTimezone());}
+        catch(\Throwable $error){continue;}
+        $day=$dt->setTime(0,0);if($day<$from||$day>$today)continue;
+        $p=&$people[$id];$p[$type]++;$p['gesamt']++;
+        if($type==='stimmen'&&in_array($e['detail']??'',['Ja','Nein'],true))$p[strtolower($e['detail'])]++;
+        $key=$day->format('Y-m-d');$p['aktivtage'][$key]=true;
+        $last=$dt->format('Y-m-d\TH:i:sP');if(!$p['zuletzt']||strtotime($last)>strtotime($p['zuletzt']))$p['zuletzt']=$last;
+        $idx=intdiv((int)$from->diff($day)->days,$step);
+        if(!isset($p['verlauf'][$idx]))$p['verlauf'][$idx]=array_fill_keys($types,0);
+        $p['verlauf'][$idx][$type]++;
+        $detail=(string)($e['detail']??'');if($detail!=='')$p['details'][$type][$detail]=($p['details'][$type][$detail]??0)+1;
+        unset($p);
+    }
+    $result=[];
+    foreach($people as $p){
+        if(!$p['aktiv']&&!$p['gesamt'])continue;
+        $p['tage']=count($p['aktivtage']);unset($p['aktivtage']);
+        $timeline=[];for($i=0;$i<$days;$i+=$step){$idx=intdiv($i,$step);$timeline[]=['datum'=>$from->modify('+'.$i.' days')->format('Y-m-d')]+($p['verlauf'][$idx]??array_fill_keys($types,0));}
+        $p['verlauf']=$timeline;$result[]=$p;
+    }
+    usort($result,static fn($a,$b)=>$b['gesamt']<=>$a['gesamt']?:strnatcasecmp($a['name'],$b['name']));
+    return $result;
+}
 function ausbildungStatistikEndpoint(array $u,string $method): never {
     // Level 2 means actual training leadership, including individual leadership grants.
     if(!ausbildungVerwaltungsleitung($u))fail(403,'Ausbildungsstatistiken nur für Ausbildungsleitung, Leitungsdienst und Administratoren.');
@@ -84,20 +120,40 @@ function ausbildungStatistikEndpoint(array $u,string $method): never {
     $people=array_values(array_filter(ausbildungAktuelleAnwaerter(),static fn($a)=>!statistikTestPerson($a)));foreach($people as &$a)$a['fortschritt']=ausbildungFortschritt($a,true);unset($a);
     $current=ausbildungStatistikAktuell($people,$today);
     $trainer=sql("SELECT a.funktion,COUNT(*) AS anzahl FROM ausbildung_ausbilder a JOIN users u ON u.id=a.user_id WHERE a.aktiv=1 AND u.gesperrt=0 AND LOWER(COALESCE(a.name,'')) NOT LIKE '%test%' AND LOWER(COALESCE(u.anzeigename,'')) NOT LIKE '%test%' GROUP BY a.funktion ORDER BY a.funktion");
-    $activity=sql("SELECT u.id,u.anzeigename AS name,COALESCE(m.n,0) AS module,COALESCE(s.n,0) AS stimmen,COALESCE(l.n,0) AS unterricht
-        FROM users u
-        LEFT JOIN (SELECT c.ausbilder_user_id,COUNT(*) n FROM ausbildung_abschluesse c JOIN ausbildung_anwaerter a ON a.id=c.anwaerter_id WHERE c.abgeschlossen=1 AND c.aktualisiert>=? AND c.aktualisiert<? AND LOWER(COALESCE(a.name,'')) NOT LIKE '%test%' GROUP BY c.ausbilder_user_id) m ON m.ausbilder_user_id=u.id
-        LEFT JOIN (SELECT s.ausbilder_user_id,COUNT(*) n FROM ausbildung_stimmen s JOIN ausbildung_anwaerter a ON a.id=s.anwaerter_id WHERE s.aktualisiert>=? AND s.aktualisiert<? AND LOWER(COALESCE(a.name,'')) NOT LIKE '%test%' GROUP BY s.ausbilder_user_id) s ON s.ausbilder_user_id=u.id
-        LEFT JOIN (SELECT user_id,COUNT(*) n FROM log WHERE zeit>=? AND zeit<? AND aktion LIKE 'Unterricht für % gestartet; Sitzungs-ID %' AND (LOCATE('Teilnehmer: ',aktion)=0 OR LOWER(SUBSTRING_INDEX(SUBSTRING_INDEX(aktion,'Teilnehmer: ',-1),'; Thema:',1)) NOT LIKE '%test%') GROUP BY user_id) l ON l.user_id=u.id
-        WHERE LOWER(COALESCE(u.anzeigename,'')) NOT LIKE '%test%' AND NOT EXISTS (SELECT 1 FROM ausbildung_ausbilder t WHERE t.user_id=u.id AND LOWER(COALESCE(t.name,'')) LIKE '%test%') AND COALESCE(m.n,0)+COALESCE(s.n,0)+COALESCE(l.n,0)>0 ORDER BY COALESCE(m.n,0)+COALESCE(s.n,0)+COALESCE(l.n,0) DESC,u.anzeigename",[$start,$end,$start,$end,$start,$end]);
+    $accounts=sql("SELECT u.id,u.anzeigename AS name,u.rolle,t.name AS profilname,t.funktion,
+        CASE WHEN t.aktiv=1 AND u.gesperrt=0 THEN 1 ELSE 0 END AS aktiv
+        FROM users u LEFT JOIN ausbildung_ausbilder t ON t.user_id=u.id");
+    $events=sql("SELECT c.ausbilder_user_id AS uid,c.aktualisiert AS datum,'module' AS typ,c.modul_code AS detail
+        FROM ausbildung_abschluesse c JOIN ausbildung_anwaerter a ON a.id=c.anwaerter_id
+        WHERE c.abgeschlossen=1 AND c.aktualisiert>=? AND c.aktualisiert<? AND LOWER(COALESCE(a.name,'')) NOT LIKE '%test%'
+        UNION ALL
+        SELECT s.ausbilder_user_id,s.aktualisiert,'stimmen',s.stimme
+        FROM ausbildung_stimmen s JOIN ausbildung_anwaerter a ON a.id=s.anwaerter_id
+        WHERE s.aktualisiert>=? AND s.aktualisiert<? AND LOWER(COALESCE(a.name,'')) NOT LIKE '%test%'
+        UNION ALL
+        SELECT user_id,zeit,'unterricht',SUBSTRING_INDEX(SUBSTRING_INDEX(aktion,' gestartet; Sitzungs-ID ',1),'Unterricht für ',-1)
+        FROM log WHERE zeit>=? AND zeit<? AND aktion LIKE 'Unterricht für % gestartet; Sitzungs-ID %'
+        AND (LOCATE('Teilnehmer: ',aktion)=0 OR LOWER(SUBSTRING_INDEX(SUBSTRING_INDEX(aktion,'Teilnehmer: ',-1),'; Thema:',1)) NOT LIKE '%test%')",[$start,$end,$start,$end,$start,$end]);
+    $examActivityAvailable=false;
     $exam=null;$statuses=[];$examError=null;
     try{
         require_once __DIR__.'/Pruefungen.php';
         if(pruefungSchema()){
             $rows=sql("SELECT p.kandidat,p.status,p.ergebnis,v.art,v.grenze,v.fragen,COALESCE(p.abgabe_am,p.erstellt_am) AS datum FROM ausbildung_pruefungen p JOIN ausbildung_pruefung_vorlagen v ON v.id=p.vorlage_id WHERE p.status='freigegeben' AND LOWER(COALESCE(p.kandidat,'')) NOT LIKE '%test%' AND COALESCE(p.abgabe_am,p.erstellt_am)>=? AND COALESCE(p.abgabe_am,p.erstellt_am)<?",[$start,$end]);
             $exam=ausbildungStatistikPruefungen($rows,$from,$today,$days);
+            // Use the actor and timestamp actually recorded in the protocol, not the assigned reviewer.
+            $actions=['erstellt'=>'Prüfung angelegt','Praxisprüfung angelegt'=>'Praxisprüfung angelegt','korrektur'=>'Korrektur abgegeben','freigabe'=>'Freigabe','berichtigen'=>'Berichtigung','abschliessen'=>'Praxisabschluss','abschließen'=>'Praxisabschluss'];
+            foreach(sql("SELECT p.protokoll FROM ausbildung_pruefungen p WHERE p.erstellt_am<? AND LOWER(COALESCE(p.kandidat,'')) NOT LIKE '%test%'",[$end]) as $record){
+                $history=json_decode((string)$record['protokoll'],true);if(!is_array($history))continue;
+                foreach($history as $ev){
+                    if(!is_array($ev)||!isset($actions[$ev['aktion']??''])||empty($ev['user'])||empty($ev['am']))continue;
+                    $events[]=['uid'=>(int)$ev['user'],'datum'=>$ev['am'],'typ'=>'pruefungen','detail'=>$actions[$ev['aktion']]];
+                }
+            }
+            $examActivityAvailable=true;
             $statuses=sql("SELECT status,COUNT(*) AS anzahl FROM ausbildung_pruefungen WHERE LOWER(COALESCE(kandidat,'')) NOT LIKE '%test%' GROUP BY status");
         }else $examError='Prüfungszentrum noch nicht eingerichtet.';
     }catch(\Throwable $e){error_log('IDV Ausbildungsstatistik Prüfungen: '.$e->getMessage());$examError='Prüfungszahlen momentan nicht verfügbar.';}
-    respond(200,['stand'=>gmdate('c'),'tage'=>$days,'von'=>$from->format('Y-m-d'),'bis'=>$today->format('Y-m-d'),'aktuell'=>$current,'ausbilder'=>$trainer,'aktivitaet'=>$activity,'pruefungen'=>$exam,'pruefungsstatus'=>$statuses,'pruefungsfehler'=>$examError]);
+    $activity=ausbildungStatistikAusbilder($accounts,$events,$from,$today,$days);
+    respond(200,['pruefungsaktivitaetBereit'=>$examActivityAvailable,'stand'=>gmdate('c'),'tage'=>$days,'von'=>$from->format('Y-m-d'),'bis'=>$today->format('Y-m-d'),'aktuell'=>$current,'ausbilder'=>$trainer,'aktivitaet'=>$activity,'pruefungen'=>$exam,'pruefungsstatus'=>$statuses,'pruefungsfehler'=>$examError]);
 }
