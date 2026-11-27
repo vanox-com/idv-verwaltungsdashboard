@@ -137,3 +137,8 @@ for(const path of ['public/aulk.html','public/ausbildung-status.html']){
  for(const [m,days,ready,label] of cases){const v=view(m);if(v.days!==days||v.ready!==ready||v.label!==label)throw Error(path+': minimum status mismatch');}
  if(view(cases[0][0]).date!=='29.11.2026')throw Error(path+': minimum date format');
 }
+
+const deckSource=readFileSync('php/AusbildungDecks.php','utf8');
+for(const id of ['10N4qSdER6y7qLKGPlDf4qFQI7fDi1lc8eWIBvgYC75U','1OF_AHUD5lPD2yxlUCTuBv-Qja7Pbz_2MNqujqOTkISM','1AqXgOrLXX7dogqjQEbS10qaqdEyglpno60WQ00a6a_I'])if(!deckSource.includes(id))throw Error('Missing updated Weiterbildung '+id);
+if(!deckSource.includes('ausbildung_decks_v20261127')||!deckSource.includes('FOR UPDATE'))throw Error('One-time safe seed marker missing');
+if(!embedded.includes('data-action="edit-material"')||!embedded.includes("method:id?'PATCH':'POST'"))throw Error('Direct editing of material links missing');

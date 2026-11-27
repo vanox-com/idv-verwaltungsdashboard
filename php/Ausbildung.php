@@ -489,7 +489,7 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
         foreach($trainees as &$a)$a['fortschritt']=ausbildungFortschritt($a);unset($a);
         // Kein erneuter Datei-Upload: die Präsentationen aus der gelieferten ZIP
         // sind mit den bereits vorhandenen Google-Slides-Originalen abgeglichen.
-        // Ergänzt nur fehlende, private Verweise (kein Überschreiben/Freigeben).
+        // Einmalige Ergänzung bzw. gezielte Fortbildungsaktualisierung.
         if($leitung){
             require_once __DIR__.'/AusbildungDecks.php';
             ausbildungSeedZipDecks($u);
@@ -786,6 +786,26 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
     if($method==='GET'&&preg_match('#^/api/ausbildung/materialien/([1-9]\\d*)/datei$#D',$uri,$fileMatch)){
         require_once __DIR__.'/AusbildungFiles.php';
         ausbildungDateiDownload($u,cleanId($fileMatch[1]));
+    }
+    if(preg_match('#^/api/ausbildung/materialien/([1-9]\\d*)$#D',$uri,$m)&&$method==='PATCH'){
+        ausbildungRecht($u,2);$id=cleanId($m[1]);$b=body();
+        $titel=ausbildungString($b['titel']??null,200,'Titel',true);
+        $typ=ausbildungString($b['typ']??'Präsentation',50,'Typ',true);
+        $code=$b['modul_code']??null;
+        if($code!==null&&!in_array($code,array_column(sql('SELECT code FROM ausbildung_module WHERE aktiv=1'),'code'),true))
+            fail(400,'Unbekanntes Modul');
+        $url=ausbildungLink($b['url']??'');
+        if($url==='')fail(400,'Bitte einen Google-Dokumentlink hinterlegen');
+        db()->beginTransaction();
+        try{
+            $rows=sql('SELECT id,titel,url,public_aktiv FROM ausbildung_materialien WHERE id=? AND aktiv=1 AND dateipfad IS NULL FOR UPDATE',[$id]);
+            if(!$rows){db()->rollBack();fail(404,'Verlinkte Ausbildungsunterlage nicht gefunden');}
+            // Editing a link preserves ID, history and the current publication setting.
+            sql('UPDATE ausbildung_materialien SET modul_code=?,titel=?,typ=?,url=?,aktualisiert=UTC_TIMESTAMP(6) WHERE id=?',[$code,$titel,$typ,$url,$id]);
+            auditAction($u,'Ausbildungsunterlage bearbeitet: '.$rows[0]['titel'].' → '.$titel,'edit');
+            db()->commit();
+        }catch(\Throwable $e){if(db()->inTransaction())db()->rollBack();throw $e;}
+        respond(200,['ok'=>true]);
     }
     if($uri==='/api/ausbildung/materialien'&&$method==='POST'){
         ausbildungRecht($u,2);$b=body();
