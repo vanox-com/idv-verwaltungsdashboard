@@ -18,3 +18,11 @@ $c=IDV\ausbildungStatistikAktuell([$a],$today);
 statCheck($c['gesamt']===1&&$c['bereit']===0&&$c['tage']===5.0,'current rank duration');
 statCheck(array_sum(array_column($c['huerden'],'anzahl'))===1,'minimum time hurdle');
 echo "Training statistics OK\n";
+
+statCheck(IDV\statistikTestName('TeStperson'),'case insensitive test');
+statCheck(IDV\statistikTestPerson(['vorname'=>'Max','nachname'=>'Testmann']),'test surname');
+statCheck(!IDV\statistikTestPerson(['kandidat'=>'Max Muster','titel'=>'Einstellungstest']),'ordinary test title retained');
+$test=$a;$test['name']='TEST Anwärter';
+statCheck(IDV\ausbildungStatistikAktuell([$a,$test],$today)['gesamt']===1,'test trainee excluded from all current aggregates');
+$test=$r;$test['kandidat']='Test Kandidat';
+statCheck(IDV\ausbildungStatistikPruefungen([$r,$test],$today->modify('-6 days'),$today,7)['anzahl']===1,'test exam excluded from all outcomes');

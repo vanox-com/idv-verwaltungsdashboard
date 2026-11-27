@@ -6018,7 +6018,7 @@ async function ladeStatistik(){
     '<div class="dashboard-group"><div class="dashboard-group-head"><span>'+esc(name)+'</span><strong>'+num+' <small class="mut">('+(total?(num/total*100).toLocaleString('de-DE',{maximumFractionDigits:1}):0)+' %)</small></strong></div>'+
     '<div class="dashboard-progress"><i style="width:'+Math.round(num/max*100)+'%"></i></div></div>').join('')+'</section>';};
   const kpi=(label,value)=>'<div class="kachel"><b>'+value+'</b><small>'+esc(label)+'</small></div>';
-  el.innerHTML='<h1>Personalstatistiken</h1><p class="mut">Personalbestand, Zu- und Abgänge, Laufbahnen und Beförderungen – aus den dokumentierten Vorgängen berechnet.</p>'+
+  el.innerHTML='<h1>Personalstatistiken</h1><p class="mut">Personalbestand, Zu- und Abgänge, Laufbahnen und Beförderungen – aus den dokumentierten Vorgängen berechnet. Personen mit „Test“ im Namen werden nicht mitgezählt.</p>'+
     '<div class="rl-actions"><button type="button" data-statistik-refresh>Auswertung jetzt aktualisieren</button><span class="mut">Berechnet: '+esc(new Date(extended.berechnet_am).toLocaleString('de-DE'))+'</span></div>'+
     '<nav class="stat-nav" aria-label="Statistikbereiche"><a href="#stat-ueberblick">Überblick</a><a href="#stat-bewegung">Zu- &amp; Abgänge</a><a href="#stat-dienstzeiten">Dienstzeiten</a><a href="#stat-struktur">Personalstruktur</a><a href="#stat-laufbahn">Laufbahnen &amp; Beförderungen</a></nav>'+
     '<div class="stat-section" id="stat-ueberblick"><h2>Personal im Überblick</h2><p>Aktueller Bestand ohne gekündigte oder administrativ entfernte Personalakten.</p></div>'+
@@ -6751,7 +6751,7 @@ document.addEventListener('click',async e=>{
 <script src="/botKonfiguration.js"></script>
 <script src="/responsiveNav.js"></script>
 <script src="/assets/ausbildung-panel.js?v=20261126-23" defer></script>
-<script src="/assets/ausbildung-statistik.js?v=1" defer></script>
+<script src="/assets/ausbildung-statistik.js?v=2" defer></script>
 <script src="/assets/pruefungen-praxis.js?v=5" defer></script>
 <script src="/assets/pruefungen-korrektur.js?v=8" defer></script>
 <script src="/assets/pruefungszentrum.js?v=25" defer></script>

@@ -2,6 +2,8 @@
 declare(strict_types=1);
 namespace IDV;
 
+require_once __DIR__.'/StatistikFilter.php';
+
 /* Read-only PHP/MySQL bootstrap pilot.
  * Uses the existing JS data model while preserving module permission checks.
  * All write modules MUST be ported before a productive PHP switch.
@@ -163,8 +165,9 @@ function handleBootstrap(array $user): never {
             ' ORDER BY k.nachname,k.id DESC'));
         foreach($d['kuendigungen'] as &$k)$k['_revision']=(string)$k['_revision'];
         unset($k);
-        $d['dashboard']['summary']['kuendigungen']=count($d['kuendigungen']);
-        $d['dashboard']['summary']['offeneRueckgaben']=count(array_filter($d['kuendigungen'],function($p){
+        $statKue=array_values(array_filter($d['kuendigungen'],static fn($k)=>!statistikTestPerson($k)));
+        $d['dashboard']['summary']['kuendigungen']=count($statKue);
+        $d['dashboard']['summary']['offeneRueckgaben']=count(array_filter($statKue,function($p){
             foreach(['waffe','copnet','emd','ic','discord','dienstgegenstaende'] as $field)
                 if(stripos((string)($p[$field]??''),'offen')!==false)return true;
             return false;

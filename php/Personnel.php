@@ -2,6 +2,8 @@
 declare(strict_types=1);
 namespace IDV;
 
+require_once __DIR__.'/StatistikFilter.php';
+
 function dnEmployment(int $n): string { return $n>=50&&$n<=60?'Nebenberuf':'Hauptberuf'; }
 function personnelStatusAllowed(mixed $value,bool $creating=false): bool {
     return is_string($value) &&
@@ -28,6 +30,7 @@ function personnelPromotionStats(): array {
     $valid=[];$total=0;$unassigned=0;$lastYear=0;
     $today=gmdate('Y-m-d');$yearAgo=gmdate('Y-m-d',strtotime('-12 months'));
     foreach(sql('SELECT id,personalnummer,vorname,nachname,rang,neu_rang,am FROM befoerderungen') as $event){
+        if(statistikTestPerson($event))continue;
         $total++;
         $date=(string)($event['am']??'');
         $rank=trim((string)($event['rang']??''));$next=trim((string)($event['neu_rang']??''));
@@ -59,16 +62,18 @@ function personnelMovementStats(): array {
         $months[$m]=['monat'=>$m,'zugang'=>0,'abgang'=>0];
     }
     $today=gmdate('Y-m-d');$missingEntries=0;$missingExits=0;$withdrawn=0;$missingExitEntry=0;$durations=[];
-    $people=sql('SELECT eintrittsdatum FROM personal');
+    $people=sql('SELECT vorname,nachname,eintrittsdatum FROM personal');
     foreach(normalizedRows('SELECT vorher FROM personalnummer_neubelegungen',[],['vorher']) as $row)
         if(is_array($row['vorher']??null))$people[]=$row['vorher'];
     foreach($people as $p){
+        if(statistikTestPerson($p))continue;
         $entry=(string)($p['eintrittsdatum']??'');
         if(!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$entry)||!checkdate((int)substr($entry,5,2),(int)substr($entry,8,2),(int)substr($entry,0,4))||$entry>$today){$missingEntries++;continue;}
         $m=substr($entry,0,7);if(isset($months[$m]))$months[$m]['zugang']++;
     }
     $used=[];
     foreach(normalizedRows('SELECT personalnummer,vorname,nachname,eintritt,kuendigungsdatum,personal_snapshot FROM kuendigungen',[],['personal_snapshot']) as $k){
+        if(statistikTestPerson($k)||statistikTestPerson($k['personal_snapshot']['personal']??[]))continue;
         if(!empty($k['personal_snapshot']['ruecknahme'])){$withdrawn++;continue;}
         $date=(string)($k['kuendigungsdatum']??'');
         if(!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$date)||!checkdate((int)substr($date,5,2),(int)substr($date,8,2),(int)substr($date,0,4))||$date>$today){$missingExits++;continue;}
@@ -215,9 +220,9 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
     }
     if($method==='GET'&&$uri==='/api/personalstatistik'){
         needRight($u,'pers');
-        $groups=sql("SELECT COALESCE(NULLIF(gruppe,''),'Nicht zugeordnet') AS gruppe,beschaeftigungsart,status,COUNT(*) AS anzahl FROM personal WHERE administrativ_geloescht_am IS NULL AND status<>'Gekündigt' GROUP BY 1,2,3");
+        $groups=sql("SELECT COALESCE(NULLIF(gruppe,''),'Nicht zugeordnet') AS gruppe,beschaeftigungsart,status,COUNT(*) AS anzahl FROM personal WHERE administrativ_geloescht_am IS NULL AND status<>'Gekündigt' AND LOWER(CONCAT_WS(' ',vorname,nachname)) NOT LIKE '%test%' GROUP BY 1,2,3");
         $months=sql("SELECT DATE_FORMAT(eintrittsdatum,'%Y-%m') AS monat,COUNT(*) AS anzahl FROM personal
-          WHERE eintrittsdatum>=DATE_SUB(UTC_DATE(),INTERVAL 12 MONTH) GROUP BY 1 ORDER BY 1");
+          WHERE eintrittsdatum>=DATE_SUB(UTC_DATE(),INTERVAL 12 MONTH) AND LOWER(CONCAT_WS(' ',vorname,nachname)) NOT LIKE '%test%' GROUP BY 1 ORDER BY 1");
         respond(200,['gruppen'=>$groups,'eintritte'=>$months]);
     }
     if($method==='GET'&&$uri==='/api/personalstatistik/erweitert'){
@@ -227,10 +232,10 @@ function dispatchPersonnel(array $u,string $method,string $uri): bool {
         try{
         $ranks=sql("SELECT COALESCE(NULLIF(dienstgrad,''),'Nicht zugeordnet') AS rang,
             COUNT(*) AS anzahl FROM personal WHERE administrativ_geloescht_am IS NULL
-            AND status<>'Gekündigt' GROUP BY 1 ORDER BY anzahl DESC,rang");
+            AND status<>'Gekündigt' AND LOWER(CONCAT_WS(' ',vorname,nachname)) NOT LIKE '%test%' GROUP BY 1 ORDER BY anzahl DESC,rang");
         $tenure=sql("SELECT DATEDIFF(UTC_DATE(),eintrittsdatum) AS tage FROM personal
             WHERE administrativ_geloescht_am IS NULL AND status='Aktiv'
-              AND eintrittsdatum IS NOT NULL AND eintrittsdatum<=UTC_DATE()");
+              AND eintrittsdatum IS NOT NULL AND eintrittsdatum<=UTC_DATE() AND LOWER(CONCAT_WS(' ',vorname,nachname)) NOT LIKE '%test%'");
         $promotions=personnelPromotionStats();
         $result=['dienstgrade'=>$ranks,'dienstzeiten'=>array_column($tenure,'tage'),'berechnet_am'=>gmdate('c'),
             ...$promotions,...personnelMovementStats()];

@@ -2,6 +2,8 @@
 declare(strict_types=1);
 namespace IDV;
 
+require_once __DIR__.'/StatistikFilter.php';
+
 /** Match original dashboard aggregates without exposing restricted personnel fields. */
 function metricsDate(mixed $x): ?string {
     if(!is_string($x)||!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$x))return null;
@@ -51,6 +53,8 @@ function bootstrapMetrics(array &$d,array $people,array $current,array $rights):
         }unset($case);
     }
     if(!$has('dash'))return;
+    $current=array_values(array_filter($current,static fn($p)=>!statistikTestPerson($p)));
+    $testDN=[];foreach($people as $p)if(statistikTestPerson($p))$testDN[(int)$p['personalnummer']]=true;
     $today=new \DateTimeImmutable('today',new \DateTimeZone('Europe/Berlin'));
     $todayIso=$today->format('Y-m-d');
     $sortCounts=static function(array $counts): array{
@@ -99,6 +103,7 @@ function bootstrapMetrics(array &$d,array $people,array $current,array $rights):
     $disciplinary=0;
     if($has('dis')){
         foreach($d['disziplin'] as $case){
+            if(isset($testDN[(int)($case['nr']??0)]))continue;
             $some=!empty($case['massnahmen']);
             foreach($case['slots'] as $slot)
                 if(is_array($slot)&&(!empty($slot['done'])||!empty($slot['t'])||!empty($slot['u'])||!empty($slot['d'])))
