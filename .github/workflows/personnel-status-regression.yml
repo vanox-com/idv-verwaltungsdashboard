@@ -9,6 +9,8 @@ on:
       - 'src/db.js'
       - 'src/personalStatus.js'
       - 'public/index.html'
+      - 'public/assets/personal-statistik-diagramme.js'
+      - 'tests/personal-statistik-diagramme.mjs'
       - 'php/Personnel.php'
       - 'php/Bootstrap.php'
       - 'tests/personal-status-regression.test.mjs'
@@ -24,3 +26,5 @@ jobs:
           node-version: '22'
       - name: Node personnel status and one-time repair regression
         run: node --test tests/personal-status-regression.test.mjs
+      - name: Personnel chart aggregates
+        run: node tests/personal-statistik-diagramme.mjs

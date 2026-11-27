@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const js=fs.readFileSync(new URL('../public/assets/personal-statistik-diagramme.js',import.meta.url),'utf8');
+const sandbox={window:{}};vm.runInNewContext(js,sandbox);
+const {model}=sandbox.window.IDVPersonalDiagramme;
+const data={gruppen:[{gruppe:'A',status:'Aktiv',beschaeftigungsart:'Hauptberuf',anzahl:3},{gruppe:'A',status:'Inaktiv',beschaeftigungsart:'Nebenberuf',anzahl:1},{gruppe:'B',status:'Aktiv',beschaeftigungsart:'Hauptberuf',anzahl:2}]};
+const e={personalbewegung:[{monat:'2026-07',zugang:8,abgang:0},{monat:'2026-08',zugang:1,abgang:3},{monat:'2026-09',zugang:0,abgang:0},{monat:'2026-10',zugang:4,abgang:1}],befoerderungen:[{am:'2026-07-02',rang:'PMA',neu_rang:'PM'},{am:'2026-10-01',rang:'PMA',neu_rang:'PM'}],dienstzeiten:[0,29,30,730,null],kuendigungsdienstzeit:{verteilung:[{anzahl:2},{anzahl:1},{anzahl:0},{anzahl:0},{anzahl:0},{anzahl:1}]},dienstgrade:[{rang:'PM',anzahl:4},{rang:'POM',anzahl:2}]};
+const m=model(data,e,3);
+assert.equal(m.total,6);assert.equal(m.inCount,5);assert.equal(m.outCount,4);assert.equal(m.befCount,1);assert.equal(m.monthly.length,3);assert.equal(m.monthly[0].saldo,-2);assert.equal(m.monthly[2].kumuliert,1);
+assert.equal(m.employment[0].n,5);assert.equal(m.stateMatrix[0].total,4);assert.equal(m.activeN,4);assert.equal(m.exitN,4);assert.equal(m.earlyPct,50);assert.equal(m.tenure[0].aktivPct,50);assert.equal(m.tenure[5].aktiv,1);assert.equal(m.transitions[0].n,1);
+assert.equal(model(data,e,12).befCount,2);
+const empty=model({},{});assert.equal(empty.total,0);assert.equal(empty.earlyPct,null);assert.equal(empty.tenure[0].aktivPct,null);
+console.log('Personnel chart aggregates OK');
