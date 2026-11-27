@@ -34,7 +34,12 @@ assert.ok(bar,'interactive SVG bar exists');
 bar.events.pointerenter({clientX:40,clientY:100});assert.ok(doc.body.children.some(x=>x.attrs.role==='tooltip'),'hover shows tooltip');
 bar.events.click();assert.equal(bar.attrs['aria-describedby'],'idv-personal-chart-tooltip');
 bar.events.keydown({key:'Escape'});assert.equal(bar.attrs['aria-describedby'],undefined);
-const button=nodes.find(x=>x.tag==='button'&&x.attrs['aria-pressed']==='true');
+const button=nodes.find(x=>x.tag==='button'&&x.className==='pv-toggle'&&x.attrs['aria-pressed']==='true');
 assert.ok(button,'series legend toggle exists');button.events.click();assert.equal(button.attrs['aria-pressed'],'false');button.events.click();assert.equal(button.attrs['aria-pressed'],'true');
 assert.ok(nodes.some(x=>x.tag==='circle'&&x.events.pointerenter),'interactive ring exists');
 console.log('Personnel chart interaction smoke tests OK');
+
+const tabs=nodes.filter(x=>x.tag==='button'&&x.className==='stat-polish-tab');
+assert.equal(tabs.length,4);assert.equal(tabs[0].attrs['aria-pressed'],'true');tabs[1].events.click();assert.equal(tabs[1].attrs['aria-pressed'],'true');assert.equal(tabs[0].attrs['aria-pressed'],'false');
+const panels=nodes.filter(x=>x.className==='stat-polish-panel');assert.equal(panels[0].hidden,true);assert.equal(panels[1].hidden,false);
+console.log('Personnel section tabs OK');
