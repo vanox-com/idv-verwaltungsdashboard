@@ -12,3 +12,29 @@ assert.equal(m.employment[0].n,5);assert.equal(m.stateMatrix[0].total,4);assert.
 assert.equal(model(data,e,12).befCount,2);
 const empty=model({},{});assert.equal(empty.total,0);assert.equal(empty.earlyPct,null);assert.equal(empty.tenure[0].aktivPct,null);
 console.log('Personnel chart aggregates OK');
+// Smoke test the actual rendering with a minimal DOM implementation.
+class FakeNode{
+ constructor(tag){this.tag=tag;this.children=[];this.attrs={};this.events={};this.style={};this.textContent='';this.classList={add:()=>{},remove:()=>{},contains:()=>false};}
+ append(...nodes){this.children.push(...nodes);}
+ replaceChildren(...nodes){this.children=nodes;}
+ setAttribute(k,v){this.attrs[k]=String(v);}
+ removeAttribute(k){delete this.attrs[k];}
+ addEventListener(k,v){this.events[k]=v;}
+ getBoundingClientRect(){return {left:20,right:40,top:60,bottom:80};}
+ remove(){this.removed=true;}
+ contains(x){return this===x||this.children.some(c=>c?.contains?.(x));}
+}
+const doc={createElement:t=>new FakeNode(t),createElementNS:(_,t)=>new FakeNode(t),createTextNode:t=>new FakeNode('text'),head:new FakeNode('head'),body:new FakeNode('body'),addEventListener(){}};
+const ui={window:{innerWidth:1000,innerHeight:800,addEventListener(){}},document:doc};vm.runInNewContext(js,ui);
+const host=new FakeNode('div');ui.window.IDVPersonalDiagramme.mount(host,data,e);
+const all=(node)=>[node,...node.children.flatMap(all)];
+const nodes=all(host);
+const bar=nodes.find(x=>x.tag==='g'&&x.events.pointerenter);
+assert.ok(bar,'interactive SVG bar exists');
+bar.events.pointerenter({clientX:40,clientY:100});assert.ok(doc.body.children.some(x=>x.attrs.role==='tooltip'),'hover shows tooltip');
+bar.events.click();assert.equal(bar.attrs['aria-describedby'],'idv-personal-chart-tooltip');
+bar.events.keydown({key:'Escape'});assert.equal(bar.attrs['aria-describedby'],undefined);
+const button=nodes.find(x=>x.tag==='button'&&x.attrs['aria-pressed']==='true');
+assert.ok(button,'series legend toggle exists');button.events.click();assert.equal(button.attrs['aria-pressed'],'false');button.events.click();assert.equal(button.attrs['aria-pressed'],'true');
+assert.ok(nodes.some(x=>x.tag==='circle'&&x.events.pointerenter),'interactive ring exists');
+console.log('Personnel chart interaction smoke tests OK');

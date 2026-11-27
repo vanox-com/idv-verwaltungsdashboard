@@ -6035,7 +6035,7 @@ async function ladeStatistik(){
     '<section class="box"><h3>Verteilung nach Mitarbeitergruppe und Beschäftigung</h3>'+
     tabelle(['Mitarbeitergruppe','Hauptberuf','Nebenberuf','Gesamt'],gruppen.map(g=>[esc(g),sum(x=>x.gruppe===g&&x.beschaeftigungsart!=='Nebenberuf'),sum(x=>x.gruppe===g&&x.beschaeftigungsart==='Nebenberuf'),sum(x=>x.gruppe===g)]))+'</section>'+
     '<div id="statistikExtra">'+statErweitert(extended)+'</div>';
-  if(window.IDVPersonalDiagramme){try{window.IDVPersonalDiagramme.mount(el.querySelector('#personalStatDiagramme'),data,extended);}catch(e){el.querySelector('#personalStatDiagramme').textContent='Zusatzdiagramme konnten nicht geladen werden: '+e.message;}}
+  if(window.IDVPersonalDiagramme){try{window.IDVPersonalDiagramme.mount(el.querySelector('#personalStatDiagramme'),data,extended);window.IDVPersonalDiagramme.enhanceLegacy(el);}catch(e){el.querySelector('#personalStatDiagramme').textContent='Zusatzdiagramme konnten nicht geladen werden: '+e.message;}}
  }catch(err){el.textContent='Personalstatistiken konnten nicht geladen werden: '+err.message;}
 }
 document.addEventListener('click',e=>{
@@ -6754,7 +6754,7 @@ document.addEventListener('click',async e=>{
 <script src="/responsiveNav.js"></script>
 <script src="/assets/ausbildung-panel.js?v=20261126-23" defer></script>
 <script src="/assets/ausbildung-statistik.js?v=2" defer></script>
-<script src="/assets/personal-statistik-diagramme.js?v=1" defer></script>
+<script src="/assets/personal-statistik-diagramme.js?v=2" defer></script>
 <script src="/assets/pruefungen-praxis.js?v=5" defer></script>
 <script src="/assets/pruefungen-korrektur.js?v=8" defer></script>
 <script src="/assets/pruefungszentrum.js?v=25" defer></script>
