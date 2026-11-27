@@ -109,7 +109,7 @@ function dispatchRecordFeatures(array $u,string $method,string $uri): bool {
         if(!$scope)respond(200,[]);
         $filter=(string)($_GET['bereich']??'');$view=$_GET['ansicht']??null;
         if($filter!==''&&!in_array($filter,$scope,true))fail(403,'Kein Zugriff auf diesen Bereich');
-        if($view!==null&&!in_array($view,['aktuell','archiv'],true))fail(400,'Ungültige Protokollansicht');
+        if($view!==null&&!in_array($view,['aktuell','archiv','alle'],true))fail(400,'Ungültige Protokollansicht');
         $page=filter_var($_GET['seite']??1,FILTER_VALIDATE_INT);
         if(!$page||$page<1||$page>100000)fail(400,'Ungültige Protokollseite');
         $limit=$view!==null?101:filter_var($_GET['limit']??80,FILTER_VALIDATE_INT);
@@ -120,7 +120,7 @@ function dispatchRecordFeatures(array $u,string $method,string $uri): bool {
                      us.anzeigename AS benutzer
               FROM idv_aenderungen a LEFT JOIN users us ON us.id=a.user_id
               WHERE a.bereich IN (".$marks.")";
-        if($view!==null)$sql.=" AND a.zeit ".($view==='archiv'?'<':'>=')." DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 3 DAY)";
+        if($view!==null&&$view!=='alle')$sql.=" AND a.zeit ".($view==='archiv'?'<':'>=')." DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 3 DAY)";
         $search=$_GET['suche']??'';
         if(!is_string($search)||strlen($search)>400)fail(400,'Ungültiger Suchbegriff');
         $search=trim($search);

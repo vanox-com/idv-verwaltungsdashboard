@@ -23,3 +23,16 @@ const table=ui.window.IDVProtokoll.renderTable([p]);const all=x=>[x,...x.childre
 const detail=nodes.find(x=>x.className==='pl-detail-row'),button=nodes.find(x=>x.className==='pl-detail-button');
 assert.equal(detail.hidden,true);assert.equal(button.textContent,'Ansehen');button.events.click();assert.equal(detail.hidden,false);assert.equal(button.attrs['aria-expanded'],'true');button.events.click();assert.equal(detail.hidden,true);
 console.log('Plain language descriptions and expandable table OK');
+
+const {mergedPage}=sandbox.window.IDVProtokoll;
+const sources=['/personal-audit','/log','/aenderungsvergleich'];
+const journal=Object.fromEntries(sources.map((s,i)=>[s,Array.from({length:i===0?215:i===1?101:4},(_,j)=>({zeit:new Date(Date.UTC(2026,10,27,12,0,0)-1000*(j*3+i)).toISOString(),personalnummer:j,aktion:'system '+j,bereich:'personal',schluessel:j}))]));
+const readPage=async(s,n)=>journal[s].slice((n-1)*100,n*100+1);
+let pos=[0,0,0],total=0,allRows=[],more=true;
+while(more){const page=await mergedPage(readPage,pos);allRows.push(...page.rows);total+=page.rows.length;pos=page.positions;more=page.more;}
+assert.equal(total,320);assert.equal(Array.from(pos).join(','),'215,101,4');
+assert.equal(allRows.slice(0,3).map(r=>r.kind).join(','),'personal,system,vergleich');
+for(let i=1;i<allRows.length;i++)assert.ok(allRows[i-1].time>=allRows[i].time);
+assert.equal((await mergedPage(async()=>[],[0,0,0])).more,false);
+for(const name of ['ReadOnly','AktenFeatures']){const php=fs.readFileSync(new URL('../php/'+name+'.php',import.meta.url),'utf8');assert.ok(php.includes("['aktuell','archiv','alle']"));assert.ok(php.includes("$view!==null&&$view!=='alle'"));}
+console.log('Combined protocol pagination and unfiltered date selection OK');

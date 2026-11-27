@@ -27,7 +27,7 @@ function handleProtocol(array $user,string $kind): never {
     $rights=rights($user);
     if(($rights['log']??0)<1)fail(403,'Keine Berechtigung für das Protokoll');
     $view=$_GET['ansicht']??null;
-    if($view!==null&&!in_array($view,['aktuell','archiv'],true))
+    if($view!==null&&!in_array($view,['aktuell','archiv','alle'],true))
         fail(400,'Ungültige Protokollansicht');
     $page=filter_var($_GET['seite']??1,FILTER_VALIDATE_INT,
         ['options'=>['min_range'=>1,'max_range'=>100000]]);
@@ -40,7 +40,7 @@ function handleProtocol(array $user,string $kind): never {
           FROM log l LEFT JOIN users u ON u.id=l.user_id";
     $conditions=[];$params=[];
     if(!$isAudit&&!ausbildungVerwaltungsleitung($user))$conditions[]="NOT (l.aktion LIKE 'Unterricht für % gestartet; Sitzungs-ID %' OR l.aktion LIKE 'Unterrichtssitzung %')";
-    if($view!==null){
+    if($view!==null&&$view!=='alle'){
         $column=$isAudit?'a.zeit':'l.zeit';
         $comparison=$view==='archiv'?'<':'>=';
         $conditions[]="{$column} {$comparison} DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 3 DAY)";
