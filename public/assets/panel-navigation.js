@@ -1,7 +1,7 @@
 /* Shared real panel navigation and role checks. No API calls or credentials. */
 const MODS = [
   ['dash','Dashboard','📊'],['pers','Personal','👥'],['assessment','Assessment Center','📝'],['bef','Beförderungen','⭐'],
-  ['ausbildung','Übersicht','🎓'],['ausbildung-pma','PMA-Monitor','📋'],['ausbildung-pka','PKA-/KKA-Monitor','📋'],['ausbildung-ausbilder','Ausbilderverwaltung','👥'],['ausbildung-materialien','Ausbildungsunterlagen','📚'],['ausbildung-unterricht','Unterrichtsräume','📽️'],['ausbildung-pruefungen','Prüfungszentrum','📝'],['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
+  ['ausbildung','Übersicht','🎓'],['ausbildung-pma','PMA-Monitor','📋'],['ausbildung-pka','PKA-/KKA-Monitor','📋'],['ausbildung-ausbilder','Ausbilderverwaltung','👥'],['ausbildung-materialien','Ausbildungsunterlagen','📚'],['ausbildung-unterricht','Unterrichtsräume','📽️'],['ausbildung-pruefungen','Prüfungszentrum','📝'],['ausbildung-statistik','Ausbildungsstatistiken','📊'],['sonder','Sonderfunktionen','🎖️'],['praktika','Praktika','🎓'],['kue','Kündigungen','📤'],
   ['dis','Disziplinarmanagement','⚖️'],['rout','Routine','🗓️'],['abm','Abmeldungen','📅'],
   ['chk','Checklisten','✅'],['texte','Textbausteine','📝'],['rl','Richtlinie','📜'],['org','Organigramm','🏛️'],
   ['sperr','Sperrfristen','⏱️'],['geb','Geburtstage','🎂'],['jub','Dienstjubiläen','🏅'],['bl','Blacklist','⛔'],
@@ -14,11 +14,11 @@ const NAV_GRUPPEN = [
   {id:'personal',titel:'Personal & Dienst',module:['pers','assessment','bef','sonder','praktika','rout','abm','geb','jub' ,'statistik']},
   {id:'organisation',titel:'Organisation & Vorlagen',module:['org','chk','texte']},
   {id:'vorgaenge',titel:'Vorgänge & Regelwerk',module:['kue','dis','rl','sperr','bl']},
-  {id:'ausbildung',titel:'Ausbildung',module:['ausbildung','ausbildung-pma','ausbildung-pka','ausbildung-ausbilder','ausbildung-materialien','ausbildung-unterricht','ausbildung-pruefungen']},
+  {id:'ausbildung',titel:'Ausbildung',module:['ausbildung','ausbildung-pma','ausbildung-pka','ausbildung-ausbilder','ausbildung-materialien','ausbildung-unterricht','ausbildung-pruefungen','ausbildung-statistik']},
   {id:'verwaltung',titel:'Administration',module:['users','befricht','system','botcfg','meldungen','benachrichtigungen','rechtesimulator','design','backup','log','papierkorb']}
 ];
 const AUSB_NAV={
-  ausbildung:{route:'uebersicht'},'ausbildung-pma':{route:'monitore',track:'PMA'},'ausbildung-pka':{route:'monitore',track:'PKA-KKA'},'ausbildung-ausbilder':{route:'ausbilder',leitung:true},'ausbildung-materialien':{route:'materialien',leitung:true},'ausbildung-unterricht':{route:'unterricht'},'ausbildung-pruefungen':{route:'pruefungen'}
+  ausbildung:{route:'uebersicht'},'ausbildung-pma':{route:'monitore',track:'PMA'},'ausbildung-pka':{route:'monitore',track:'PKA-KKA'},'ausbildung-ausbilder':{route:'ausbilder',leitung:true},'ausbildung-materialien':{route:'materialien',leitung:true},'ausbildung-unterricht':{route:'unterricht'},'ausbildung-pruefungen':{route:'pruefungen'},'ausbildung-statistik':{route:'statistik',leitung:true}
 };
 function panelCan(user,m,l=1){
   if(!user)return false;
@@ -44,6 +44,7 @@ function navIcon(id) {
     'ausbildung-materialien':'<path d="M4 4h6a3 3 0 0 1 2 2 3 3 0 0 1 2-2h6v15h-6a3 3 0 0 0-2 2-3-2H4zM12 6v15"/>',
     'ausbildung-unterricht':'<rect x="3" y="3" width="18" height="13" rx="2"/><path d="m12 16-5 5m5-5 5 5M10 7l5 3-5 3z"/>',
     assessment:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v4H9zM8 11h8m-7 4 2 2 4-4"/>',
+    'ausbildung-statistik':'<path d="M4 19V5M4 19h16M8 16v-4m4 4V8m4 8V5m4 11V10"/>',
     'ausbildung-pruefungen':'<rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M8 10h8M8 14h4m1 3 2 2 3-4"/>',
     praktika: '<path d="m2 10 10-5 10 5-10 5z"/><path d="M6 12v5c3.5 3 8.5 3 12 0v-5M22 10v7"/>',
     kue: '<path d="M13 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M13 3v5h5M10 13h11m-4-4 4 4-4 4"/>',

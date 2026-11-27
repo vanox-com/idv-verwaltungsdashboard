@@ -459,6 +459,10 @@ function dispatchAusbildung(array $u,string $method,string $uri): bool {
             .'Ein Administrator kann sie im Ausbildungsbereich nach einer Sicherung einrichten.');
     if(!ausbildungSchemaStatus()['personalbindungBereit'])
         fail(503,'Die Verbindung zum zentralen Personalstamm muss nach einer Datenbanksicherung noch eingerichtet werden.');
+    if($uri==='/api/ausbildung/statistik'){
+        require_once __DIR__.'/AusbildungStatistik.php';
+        ausbildungStatistikEndpoint($u,$method);
+    }
     if($method==='GET'&&$uri==='/api/ausbildung/pma-hinweise'){
         respond(200,ausbildungPmaHinweise($u));
     }

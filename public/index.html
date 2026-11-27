@@ -1978,7 +1978,7 @@ html[data-portal-mode="hell"] [data-right-group]{--rights-accent:var(--txt)}
 </div>
 <dialog id="personalDialog" aria-label="Personalakte"></dialog><dialog id="sfDialog" aria-label="Sonderfunktionen bearbeiten"></dialog><dialog id="porDialog" aria-label="POR-Freigabe"></dialog>
 
-<script src="/assets/panel-navigation.js?v=20261125-6"></script>
+<script src="/assets/panel-navigation.js?v=20261127-7"></script>
 <script>
 const NAV_OFFEN = new Set(['uebersicht','personal','ausbildung']);
 let ME = null, D = null, tab = 'dash';
@@ -2387,6 +2387,11 @@ function zeichne() {
     if(!can(tab)){$('#inhalt').textContent='Kein Assessment-Recht.';return;}
     if(!window.IDVAssessment||!window.IDVAssessmentReview){$('#inhalt').textContent='Assessment Center konnte nicht geladen werden. Bitte Seite vollständig neu laden oder Deployment prüfen.';return;}
     window.IDVAssessment.open($('#inhalt'));return;
+  }
+  if(tab==='ausbildung-statistik'){
+    if(!can(tab)){$('#inhalt').textContent='Kein Recht für Ausbildungsstatistiken.';return;}
+    if(!window.IDVAusbildungStatistik){$('#inhalt').textContent='Ausbildungsstatistiken konnten nicht geladen werden.';return;}
+    window.IDVAusbildungStatistik.open($('#inhalt'));return;
   }
   if(tab==='ausbildung-pruefungen'){
     if(!can(tab)){$('#inhalt').textContent='Kein Ausbildungsrecht.';return;}
@@ -6746,6 +6751,7 @@ document.addEventListener('click',async e=>{
 <script src="/botKonfiguration.js"></script>
 <script src="/responsiveNav.js"></script>
 <script src="/assets/ausbildung-panel.js?v=20261126-23" defer></script>
+<script src="/assets/ausbildung-statistik.js?v=1" defer></script>
 <script src="/assets/pruefungen-praxis.js?v=5" defer></script>
 <script src="/assets/pruefungen-korrektur.js?v=8" defer></script>
 <script src="/assets/pruefungszentrum.js?v=25" defer></script>
