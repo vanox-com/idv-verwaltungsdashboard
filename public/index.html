@@ -5714,77 +5714,11 @@ document.addEventListener('click',e=>{
   if(perm)userRechtAendern(perm);
 });
 
-/* Das Protokoll wird nicht physisch verschoben: ein rollierendes 72-Stunden-
-   Fenster und ein seitenweises Archiv greifen auf dieselben Auditdaten zu. */
-const PROTOKOLL_SEITENGROESSE=100;
-const PROTOKOLL_SEITEN={
- aktuell:{system:1,personal:1,vergleich:1},
- archiv:{system:1,personal:1,vergleich:1}
-};
-let PROTOKOLL_ANSICHT='aktuell',PROTOKOLL_LADEVERSION=0;
-function protokollSeitenleiste(bereich,seite,hatWeitere){
- return '<div class="protokoll-pagination" aria-label="Protokollseiten">'+
-   '<span class="mut">Seite '+seite+' · bis zu '+PROTOKOLL_SEITENGROESSE+' Einträge pro Seite</span>'+
-   '<button type="button" data-protokoll-seite="'+bereich+'" data-protokoll-richtung="zurueck"'+
-   (seite===1?' disabled':'')+'>← Zurück</button>'+
-   '<button type="button" data-protokoll-seite="'+bereich+'" data-protokoll-richtung="weiter"'+
-   (hatWeitere?'':' disabled')+'>Weitere Einträge →</button></div>';
-}
+/* Protokoll: getrennte Ansichten, unveränderte Auditdaten und serverseitige Suche. */
 async function vLog_(){
- const ansicht=PROTOKOLL_ANSICHT,seiten=PROTOKOLL_SEITEN[ansicht],version=++PROTOKOLL_LADEVERSION;
- const parameter=bereich=>'ansicht='+ansicht+'&seite='+seiten[bereich];
- const [zeilen,audit]=await Promise.all([
-  api('/log?'+parameter('system')),
-  api('/personal-audit?'+parameter('personal'))
- ]);
- if(tab!=='log'||version!==PROTOKOLL_LADEVERSION||ansicht!==PROTOKOLL_ANSICHT)return;
- const systemMehr=zeilen.length>PROTOKOLL_SEITENGROESSE;
- const personalMehr=audit.length>PROTOKOLL_SEITENGROESSE;
- const label=ansicht==='aktuell'?'Letzte 3 Tage':'Archiv · ältere Einträge';
- $('#inhalt').innerHTML='<h1>Änderungsprotokoll</h1>'+
-  '<div class="protokoll-ansichten" role="group" aria-label="Protokollansicht">'+
-  '<button type="button" data-protokoll-ansicht="aktuell"'+(ansicht==='aktuell'?' class="active"':'')+'>Letzte 3 Tage</button>'+
-  '<button type="button" data-protokoll-ansicht="archiv"'+(ansicht==='archiv'?' class="active"':'')+'>Archiv</button></div>'+
-  '<p class="mut">Ansicht: '+label+'. Die letzten 72 Stunden bleiben im aktuellen Protokoll; frühere Einträge sind jederzeit im Archiv nachlesbar. Es werden keine Daten gelöscht.</p>'+
-  '<section class="protokoll-section"><h3>Systemereignisse</h3>'+
-  tabelle(['Zeit','Benutzer','Art','Aktion'],zeilen.slice(0,PROTOKOLL_SEITENGROESSE).map(z=>[
-    new Date(z.zeit).toLocaleString('de-DE'),esc(z.benutzer),esc(z.art),esc(z.aktion)]))+
-  protokollSeitenleiste('system',seiten.system,systemMehr)+'</section>'+
-  '<section class="protokoll-section"><h3>Personaländerungen (vorher / nachher)</h3>'+
-  tabelle(['Zeit','Personalnr.','Bearbeiter','Änderungen'],audit.slice(0,PROTOKOLL_SEITENGROESSE).map(a=>[
-    new Date(a.zeit).toLocaleString('de-DE'),Number(a.personalnummer),esc(a.benutzer),
-    Object.entries(a.aenderungen||{}).map(([feld,v])=>
-      esc(feld+': '+String(v?.alt??'–')+' → '+String(v?.neu??'–'))).join('<div class="kue-docsep"></div>')
-  ]))+protokollSeitenleiste('personal',seiten.personal,personalMehr)+'</section>'+
-  '<section class="box protokoll-section" id="idvVergleich"><h3>Feldänderungen werden geladen …</h3></section>';
- void window.IDVAkten?.vergleich({ansicht,seite:seiten.vergleich});
+ if(!window.IDVProtokoll){$('#inhalt').textContent='Protokoll konnte nicht geladen werden.';return;}
+ await window.IDVProtokoll.open($('#inhalt'),api,()=>tab==='log');
 }
-window.IDVProtokollSeiten={
- pager:protokollSeitenleiste,
- istAktuell:ansicht=>tab==='log'&&PROTOKOLL_ANSICHT===ansicht,
- limit:PROTOKOLL_SEITENGROESSE
-};
-document.addEventListener('click',event=>{
- if(tab!=='log')return;
- const ansichtKnopf=event.target.closest('[data-protokoll-ansicht]');
- if(ansichtKnopf){
-  const wert=ansichtKnopf.dataset.protokollAnsicht;
-  if(!['aktuell','archiv'].includes(wert)||wert===PROTOKOLL_ANSICHT)return;
-  PROTOKOLL_ANSICHT=wert;
- }else{
-  const seiteKnopf=event.target.closest('[data-protokoll-seite]');
-  if(!seiteKnopf||seiteKnopf.disabled)return;
-  const bereich=seiteKnopf.dataset.protokollSeite;
-  if(!['system','personal','vergleich'].includes(bereich))return;
-  const richtung=seiteKnopf.dataset.protokollRichtung;
-  const seiten=PROTOKOLL_SEITEN[PROTOKOLL_ANSICHT];
-  seiten[bereich]=Math.max(1,seiten[bereich]+(richtung==='weiter'?1:-1));
- }
- $('#inhalt').innerHTML='<h1>Änderungsprotokoll</h1><p>Lade Protokolleinträge …</p>';
- void vLog_().catch(err=>{
-  if(tab==='log')$('#inhalt').innerHTML='<h1>Änderungsprotokoll</h1><p class="fehler">Laden fehlgeschlagen: '+esc(err.message)+'</p>';
- });
-});
 
 
 /* Selbstverwaltungsbereiche – alle Änderungen werden im Server geprüft. */
@@ -6751,6 +6685,7 @@ document.addEventListener('click',async e=>{
 <script src="/porHinweise.js?v=20261125-3"></script>
 <script src="/pmaHinweise.js?v=20261125-3"></script>
 <script src="/aktenFeatures.js"></script>
+<script src="/assets/aenderungsprotokoll.js?v=1"></script>
 <script src="/kuendigungsArchiv.js"></script>
 <script src="/abmeldungen.js"></script>
 <script src="/botKonfiguration.js"></script>

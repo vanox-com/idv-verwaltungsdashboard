@@ -9,6 +9,10 @@ on:
       - 'src/db.js'
       - 'src/personalStatus.js'
       - 'public/index.html'
+      - 'public/assets/aenderungsprotokoll.js'
+      - 'php/ReadOnly.php'
+      - 'php/AktenFeatures.php'
+      - 'tests/aenderungsprotokoll.mjs'
       - 'public/assets/personal-statistik-diagramme.js'
       - 'tests/personal-statistik-diagramme.mjs'
       - 'php/Personnel.php'
@@ -28,3 +32,6 @@ jobs:
         run: node --test tests/personal-status-regression.test.mjs
       - name: Personnel chart aggregates
         run: node tests/personal-statistik-diagramme.mjs
+
+      - name: Protocol display and search regression
+        run: node tests/aenderungsprotokoll.mjs

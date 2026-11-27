@@ -121,11 +121,16 @@ function dispatchRecordFeatures(array $u,string $method,string $uri): bool {
               FROM idv_aenderungen a LEFT JOIN users us ON us.id=a.user_id
               WHERE a.bereich IN (".$marks.")";
         if($view!==null)$sql.=" AND a.zeit ".($view==='archiv'?'<':'>=')." DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 3 DAY)";
+        $search=$_GET['suche']??'';
+        if(!is_string($search)||strlen($search)>400)fail(400,'Ungültiger Suchbegriff');
+        $search=trim($search);
+        if($search!=='')$sql.=" AND LOCATE(LOWER(?),LOWER(CONCAT_WS(' ',us.anzeigename,a.bereich,a.schluessel,a.personalnummer,a.vorgang,CAST(a.felder AS CHAR))))>0";
         $sql.=$view!==null?' ORDER BY a.zeit DESC,a.id DESC':' ORDER BY a.id DESC';
         $sql.=' LIMIT ?';
         if($view!==null)$sql.=' OFFSET ?';
         $stmt=db()->prepare($sql);
         $index=1;foreach($scope as $s)$stmt->bindValue($index++,$s,\PDO::PARAM_STR);
+        if($search!=='')$stmt->bindValue($index++,$search,\PDO::PARAM_STR);
         $stmt->bindValue($index++,$limit,\PDO::PARAM_INT);
         if($view!==null)$stmt->bindValue($index,($page-1)*100,\PDO::PARAM_INT);
         $stmt->execute();

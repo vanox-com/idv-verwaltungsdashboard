@@ -38,20 +38,28 @@ function handleProtocol(array $user,string $kind): never {
           FROM personal_audit a LEFT JOIN users u ON u.id=a.user_id"
       :"SELECT l.zeit,l.aktion,l.art,COALESCE(u.anzeigename,'–') AS benutzer
           FROM log l LEFT JOIN users u ON u.id=l.user_id";
-    $conditions=[];
+    $conditions=[];$params=[];
     if(!$isAudit&&!ausbildungVerwaltungsleitung($user))$conditions[]="NOT (l.aktion LIKE 'Unterricht für % gestartet; Sitzungs-ID %' OR l.aktion LIKE 'Unterrichtssitzung %')";
     if($view!==null){
         $column=$isAudit?'a.zeit':'l.zeit';
         $comparison=$view==='archiv'?'<':'>=';
         $conditions[]="{$column} {$comparison} DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 3 DAY)";
     }
+    $search=$_GET['suche']??'';
+    if(!is_string($search)||strlen($search)>400)fail(400,'Ungültiger Suchbegriff');
+    $search=trim($search);
+    if($search!==''){
+        $fields=$isAudit?"CONCAT_WS(' ',u.anzeigename,a.personalnummer,CAST(a.aenderungen AS CHAR))":"CONCAT_WS(' ',u.anzeigename,l.art,l.aktion)";
+        $conditions[]="LOCATE(LOWER(?),LOWER({$fields}))>0";$params[]=$search;
+    }
     if($conditions)$query.=' WHERE '.implode(' AND ',$conditions);
     $query.= $isAudit?' ORDER BY a.zeit DESC,a.id DESC':' ORDER BY l.zeit DESC,l.id DESC';
     $limit=$view!==null?101:($isAudit?200:500);
     $offset=$view!==null?($page-1)*100:0;
     $stmt=db()->prepare($query.' LIMIT ? OFFSET ?');
-    $stmt->bindValue(1,$limit,PDO::PARAM_INT);
-    $stmt->bindValue(2,$offset,PDO::PARAM_INT);
+    $index=1;foreach($params as $param)$stmt->bindValue($index++,$param,PDO::PARAM_STR);
+    $stmt->bindValue($index++,$limit,PDO::PARAM_INT);
+    $stmt->bindValue($index,$offset,PDO::PARAM_INT);
     $stmt->execute();
     $rows=$stmt->fetchAll(PDO::FETCH_ASSOC);
     if($isAudit){
